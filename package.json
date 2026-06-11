@@ -1,13 +1,15 @@
 {
   "name": "ofbo",
   "private": true,
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "gen": "pnpm --filter @ofbo/contracts gen",
-    "build": "tsc -b",
+    "build": "pnpm -r --if-present build",
     "lint": "eslint .",
-    "typecheck": "tsc -b",
+    "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "db:apply": "pnpm --filter @ofbo/db apply",
@@ -15,6 +17,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/node": "^22",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
