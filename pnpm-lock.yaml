@@ -45,6 +45,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@ofbo/synthetic-data':
+        specifier: workspace:*
+        version: link:../synthetic-data
       pg:
         specifier: ^8.13.1
         version: 8.21.0
@@ -57,6 +60,8 @@ importers:
         version: 4.22.4
 
   packages/ports: {}
+
+  packages/synthetic-data: {}
 
   services/bff:
     dependencies:

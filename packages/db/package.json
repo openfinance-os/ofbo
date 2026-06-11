@@ -8,10 +8,12 @@
   },
   "scripts": {
     "apply": "tsx src/apply.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx src/seed.ts"
   },
   "dependencies": {
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "@ofbo/synthetic-data": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
