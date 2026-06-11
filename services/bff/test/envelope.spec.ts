@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ROUTES } from '@ofbo/contracts'
 import { createApp } from '../src/app.js'
-import { toConcrete, FAPI_HEADERS } from './helpers.js'
+import { toConcrete, FAPI_HEADERS, AUTHED_HEADERS } from './helpers.js'
 
 const app = createApp()
 
@@ -11,7 +11,7 @@ describe('binding envelopes on every stubbed route', () => {
     async (method, path) => {
       const res = await app.request(toConcrete(path), {
         method: method.toUpperCase(),
-        headers: FAPI_HEADERS
+        headers: AUTHED_HEADERS
       })
       expect(res.status).toBe(501)
       const body = (await res.json()) as {
@@ -28,7 +28,7 @@ describe('binding envelopes on every stubbed route', () => {
   )
 
   it('unknown path → 404 binding envelope', async () => {
-    const res = await app.request('/nope', { headers: FAPI_HEADERS })
+    const res = await app.request('/nope', { headers: AUTHED_HEADERS })
     expect(res.status).toBe(404)
     const body = (await res.json()) as { error: Record<string, string> }
     expect(body.error.code).toBe('BACKOFFICE.ROUTE_NOT_FOUND')
@@ -43,7 +43,7 @@ describe('binding envelopes on every stubbed route', () => {
   })
 
   it('echoes x-fapi-interaction-id back on the response', async () => {
-    const res = await app.request('/back-office/reconciliation/runs', { headers: FAPI_HEADERS })
+    const res = await app.request('/back-office/reconciliation/runs', { headers: AUTHED_HEADERS })
     expect(res.headers.get('x-fapi-interaction-id')).toBe(FAPI_HEADERS['x-fapi-interaction-id'])
   })
 })

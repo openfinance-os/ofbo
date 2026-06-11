@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ROUTES } from '@ofbo/contracts'
 import { createApp } from '../src/app.js'
-import { toConcrete, FAPI_HEADERS } from './helpers.js'
+import { toConcrete, AUTHED_HEADERS } from './helpers.js'
 
 const app = createApp()
 
@@ -16,7 +16,7 @@ describe('[contract-pending] every path awaits its story', () => {
     async (_name, route) => {
       const res = await app.request(toConcrete(route.path), {
         method: route.method.toUpperCase(),
-        headers: FAPI_HEADERS
+        headers: AUTHED_HEADERS
       })
       expect(res.status).not.toBe(501)
     }
