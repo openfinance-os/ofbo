@@ -1,9 +1,10 @@
 import { Hono } from 'hono'
-import { matchRoute } from '@ofbo/contracts'
+import { matchRoute, ROUTES } from '@ofbo/contracts'
 import type { IdentityProviderPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
+import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
 
 /**
  * Stub BFF: every contract path resolves (via the colon-action-safe matcher,
@@ -40,6 +41,7 @@ export function createApp(deps: AppDeps = {}) {
   })
 
   app.use('*', createAuthMiddleware(idp, audit))
+  app.use('*', createScopeMiddleware(audit))
 
   app.all('*', (c) => {
     const url = new URL(c.req.url)
@@ -55,6 +57,18 @@ export function createApp(deps: AppDeps = {}) {
         404
       )
     }
+    // Service-layer scope check (defence in depth, BACKOFFICE-43): the stub stands in
+    // for the story services, which must each call assertScope themselves.
+    const required = ROUTES.find((r) => r.method === match.method && r.path === match.path)?.scope ?? null
+    if (required !== null && !isDynamicScope(required)) {
+      try {
+        assertScope(c.get('principal'), required)
+      } catch (e) {
+        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(required), 403)
+        throw e
+      }
+    }
+
     return c.json(
       errorEnvelope(
         'BACKOFFICE.NOT_IMPLEMENTED',

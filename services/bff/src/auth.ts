@@ -46,11 +46,15 @@ export interface Principal {
 }
 
 export interface AuthAuditEvent {
-  event_type: 'signin_success' | 'signin_failure'
+  event_type: 'signin_success' | 'signin_failure' | 'scope_denied'
   acting_principal: string
   acting_persona: string | null
-  reason: 'missing_token' | 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona' | null
+  reason: 'missing_token' | 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona' | 'scope_not_held' | null
   trace_id: string
+  /** Set on scope_denied events (BACKOFFICE-43 acceptance: persona, attempted scope, reason). */
+  attempted_scope?: string | null
+  /** BACKOFFICE-43/-80: platform:superadmin satisfies any check but stamps the marker. */
+  superadmin_marker?: boolean
 }
 
 /** Sink for sign-in audit events. The DB-backed High-class emitter replaces the
@@ -122,7 +126,8 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       acting_principal: claims.subject,
       acting_persona: claims.persona,
       reason: null,
-      trace_id: traceId
+      trace_id: traceId,
+      superadmin_marker: scopes.includes('platform:superadmin')
     })
     c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes })
     await next()
