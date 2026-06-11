@@ -7,7 +7,7 @@
 | **Date** | June 2026 |
 | **Status** | Build baseline — bank-neutral; adopting bank completes the Bank Profile (§3) before build |
 | **Scope** | UAE Open Finance (CBUAE / Al Tareq / Nebras API Hub), bank operating **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic) |
-| **Companions** | `specs/backoffice-openapi.yaml` (API contract, 49 paths) · `CLAUDE.md` (build conventions) · `README.md` (build sequence) |
+| **Companions** | `specs/backoffice-openapi.yaml` (API contract, 57 paths) · `CLAUDE.md` (build conventions) · `README.md` (build sequence) |
 
 > **What this document is.** A complete, bank-neutral specification of the internal back office any UAE bank needs to *operate* Open Finance as a regulated business — not just pass certification. It was generalized from a production bank engagement: all institution-specific systems are expressed as **ports** (§3) that each adopting bank maps to its own estate. Everything anchored to the CBUAE scheme (Nebras, Al Tareq, RPSCS, liability framework, consent lifecycle) is kept verbatim because it applies identically to every licensed participant.
 
@@ -35,7 +35,7 @@ The Back Office is the surface where these two roles are operationally reconcile
 
 ## 2. Users & Personas
 
-Seven internal personas, written in role terms only. Scope hygiene is load-bearing for audit defensibility: Customer Care holds `consents:admin` / `disputes:admin`; Finance holds `finance:*` / `billing:*` but never consent-admin; Risk holds only the narrow `consents:admin:fraud-revoke`; Compliance is read-only across data classes plus report generation.
+Eight internal personas, written in role terms only. Scope hygiene is load-bearing for audit defensibility: Customer Care holds `consents:admin` / `disputes:admin`; Finance holds `finance:*` / `billing:*` but never consent-admin; Risk holds only the narrow `consents:admin:fraud-revoke`; Compliance is read-only across data classes plus report generation. The **single exception** is the Platform Super Administrator — a deliberately constrained do-everything role (guardrails below the table).
 
 | Persona | Surface | Core jobs | Key scopes |
 |---|---|---|---|
@@ -46,6 +46,9 @@ Seven internal personas, written in role terms only. Scope hygiene is load-beari
 | **OF Risk Analyst** | Internal Portal — Risk View | Consent/TPP anomalies, CoP mismatch trends, proactive Nebras-liability monitoring (500ms end-to-end API response SLA; the LFI's internal share is bank-configurable, default 250ms), fraud-flagged revocations, STR triggers | `risk:read`, `risk:investigations:write`, `consents:admin:fraud-revoke` |
 | **Commercial Desk Head** | Internal Portal — Executive Dashboard (Commercial angle) | Cross-fintech revenue/margin by product family, pipeline, onboarding funnel | `platform:analytics:read`, `commercial:read`, `pipeline:read` |
 | **OF Programme Manager** | Internal Portal — Executive Dashboard (Programme angle) + Ops Console | Adoption, LFI/TPP certification status, CBUAE mandatory-release calendar alignment, multi-entity group visibility | `platform:analytics:read`, `programme:read`, `certification:read` |
+| **Platform Super Administrator** | All surfaces | Full visibility and capability across every view and operation: platform administration, RBAC/user management, threshold and configuration management, incident recovery, demo/walkthrough driving | `platform:superadmin` (union of all scopes) + every scope individually |
+
+**Super Administrator guardrails (non-negotiable).** The role exists for platform administration, incident recovery, and demonstrations — not daily operations. (a) Assigned to at most two named individuals per environment, never to service accounts or automations. (b) `platform:superadmin` is a *marker* scope: every action it performs is High-class audited with the marker recorded, and any session under it auto-raises an informational ITSM ticket and a Risk View signal — super-admin activity is anomalous by definition. (c) **Four-eyes is never bypassed**: a super admin initiating a gated operation still requires a *different* principal to approve; self-approval is rejected at the approvals service regardless of scope. (d) Mutating actions require a recorded justification (≥20 chars). (e) Compliance reviews super-admin session logs monthly. (f) **Demo profile exception:** the super admin is the default pre-provisioned walkthrough login so every feature is showcasable from one account; guardrails (b)–(d) still run, which itself demonstrates the control story.
 
 Existing platform personas (fintech operators, relationship managers, AI agents, PSUs) are unchanged; RM surfaces may consume read-only back-office signals.
 
@@ -194,7 +197,7 @@ Conventions (binding, see `CLAUDE.md`): `{data, meta}` envelope; cursor paginati
 
 ---
 
-## 7. Functional Requirements (BACKOFFICE-01..79)
+## 7. Functional Requirements (BACKOFFICE-01..80)
 
 Priorities: **Must** (build scope), **Should** (fast-follow hardening), **Could/Phase 2** (deferred). IDs are stable and must appear in every commit, PR and test that implements them.
 
@@ -269,7 +272,7 @@ Priorities: **Must** (build scope), **Should** (fast-follow hardening), **Could/
 
 | ID | Requirement | Priority | Acceptance (condensed) |
 |---|---|---|---|
-| BACKOFFICE-43 | RBAC enforcement against the scope inventory | Must | Every action verified against required scope; 403 + audited denial (persona, attempted scope, reason) |
+| BACKOFFICE-43 | RBAC enforcement against the scope inventory | Must | Every action verified against required scope; 403 + audited denial (persona, attempted scope, reason). `platform:superadmin` (BACKOFFICE-80) satisfies any scope check but stamps the marker on the audit record |
 | BACKOFFICE-44 | Four-eyes approval flow for high-blast-radius operations | Must | Bulk revocation, CBUAE-bound report submission (+ any bank-policy additions): pending state, second authorised principal approves, bounded window (default 2 business hours), timeout reverts |
 | BACKOFFICE-45 | High-class audit trail, append-only | Must | `audit_high_sensitivity` INSERT-only RLS at every role incl. superuser; persona, target PSU, scope, timestamp, trace-id, PII-redacted body |
 | BACKOFFICE-46 | ITSM ticket-raising for anomalous audit patterns | Must | Threshold-crossed anomalies (PSU-lookup volume, repeated 403s, off-hours admin use) → ticket with team routing; session flagged in Risk View; optional parallel paging for severity-critical |
@@ -307,6 +310,7 @@ Derived from the Nebras Interaction Guide for LFIs/TPPs (v4, Mar 2025) and the T
 | BACKOFFICE-77 | Nebras fraud-incident reporting and scheme-imposed holds | Must | The fraud workflow (BACKOFFICE-22) includes a "report to Nebras helpdesk" step with case-reference capture; scheme-imposed holds/temporary revocations on the bank (systemic-fraud P1 events) are surfaced in Ops + Risk Views; customer operational-pause state tracked until fraud resolution; Nebras P1–P4 severity taxonomy mapped to the ITSM (P3) priority scheme |
 | BACKOFFICE-78 | Outbound downtime and change notifications | Must | Planned bank maintenance/version releases trigger a notification workflow to Nebras ≥10 days in advance with acknowledgment tracking; breaking changes additionally enforce the 30-day notice + dual-running checklist (mitigates the AED 5,000 liability class BACKOFFICE-36 only monitors); LFI downtime notices propagate to downstream TPP-aaS customers; Trust Framework status pages ingested into the Ops Console |
 | BACKOFFICE-79 | Nebras service-desk case tracking | Should | Any case raised with the Nebras service desk (incident, billing query, onboarding, general) is trackable in the Ops Console by Nebras case reference with type, priority, and the Interaction Guide SLA table applied; linked to the originating break, dispute, or signal where one exists |
+| BACKOFFICE-80 | Platform Super Administrator role with mandatory guardrails | Must | `platform:superadmin` grants the union of all scopes across all surfaces. Guardrails enforced in code, not policy: marker scope recorded on every High-class audit record; active super-admin session auto-raises an informational ITSM ticket + Risk View signal; four-eyes self-approval rejected at the approvals service regardless of scope; mutating actions require ≥20-char justification; role assignable only to named human principals (registration of a service account with this scope is rejected); monthly Compliance review query pre-built in the Compliance View. Demo profile: super admin is the default pre-provisioned walkthrough login with guardrails live |
 
 ---
 

@@ -1352,6 +1352,7 @@ components:
             certification:read: Certification tracker
             billing:read: TPP counterparty registry + invoice-run reads (Finance)
             billing:write: Financial-system registration + invoice-run initiation (Finance)
+            platform:superadmin: Union of all scopes (Platform Super Administrator, BACKOFFICE-80). Marker scope — satisfies any scope check but is stamped on every High-class audit record; sessions auto-raise an ITSM ticket + Risk signal; four-eyes self-approval still rejected; human principals only
 
   parameters:
     fapiInteractionId:
