@@ -1,0 +1,126 @@
+# OFBO build backlog — machine-readable work queue derived from PRD §7 + §9.
+# Consumed by .claude/skills/next-story (the autonomous build loop).
+#
+# Rules:
+#   - Items execute in file order within a milestone; milestones execute in file order.
+#   - status: pending | in-progress | done | blocked | deferred
+#   - An item is eligible when status=pending and every depends_on is done.
+#   - blocked items carry a `reason:` and wait for a HUMAN decision — the loop skips them.
+#   - Status changes ride the story PR (in-progress → done); blocker annotations may be
+#     committed straight to main.
+#   - id: BACKOFFICE-NN = PRD §7 requirement; M*-UPPER = infrastructure work item from §9.
+
+milestones:
+  - name: M0
+    items:
+      - { id: M0-FOUNDATION, title: Repo foundation (workspace, contracts, ports, schema, synthetic data, CI Q1-Q3), status: done, pr: 2 }
+
+  - name: M1
+    items:
+      - { id: BACKOFFICE-47, title: Mandatory MFA persona sign-in via IdP port + admin-scope minting, status: pending }
+      - { id: BACKOFFICE-43, title: RBAC scope enforcement (BFF middleware + service layer) with audited 403 denials, status: pending, depends_on: [BACKOFFICE-47] }
+      - { id: BACKOFFICE-45, title: High-class audit write path (INSERT-only) with PII redaction at emission, status: pending }
+      - { id: BACKOFFICE-51, title: Shared PII redaction library (Emirates ID, names, accounts, IBAN), status: pending, depends_on: [BACKOFFICE-45] }
+      - { id: BACKOFFICE-44, title: Four-eyes approval primitive (202 + approval_request, 2-business-hour expiry), status: pending, depends_on: [BACKOFFICE-43, BACKOFFICE-45] }
+      - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: pending, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
+      - { id: BACKOFFICE-48, title: OTel emission with x-fapi-interaction-id propagation end-to-end, status: pending }
+      - { id: BACKOFFICE-49, title: BCBS 239 lineage emission at write time (lineage_events via P7), status: pending, depends_on: [BACKOFFICE-45] }
+      - { id: BACKOFFICE-50, title: Retention lifecycle - deletion attempts denied and High-class logged, status: pending, depends_on: [BACKOFFICE-45] }
+      - { id: BACKOFFICE-54, title: Data-classification metadata on every record, status: pending }
+      - { id: M1-NEBRAS-SIM, title: Nebras simulator v1 service (consent + reports surfaces, fault-injection admin endpoint), status: pending }
+      - { id: M1-PORTAL-SHELL, title: Portal shell - persona login, DEMO banner, admin-scoped echo, audit visible, status: pending, depends_on: [BACKOFFICE-47, BACKOFFICE-43, BACKOFFICE-45] }
+      - { id: M1-DEMO-DEPLOY, title: Demo deployment pipeline (Cloudflare + Supabase + Railway, auto-deploy on merge), status: blocked, reason: needs BD-14 credentials from the user (Supabase project, Cloudflare account, Railway) }
+      - { id: BACKOFFICE-55, title: Region-parameterised IaC (Terraform skeleton, region as parameter), status: pending }
+      - { id: BACKOFFICE-57, title: Release evidence bundle committed per release tag, status: pending }
+      - { id: BACKOFFICE-56, title: Quality gates Q4 (security+deps) and Q4.5 (lineage validation) added to CI, status: pending, depends_on: [BACKOFFICE-49] }
+
+  - name: M2
+    items:
+      - { id: BACKOFFICE-16, title: PSU-centric consent search (<500ms p95, High-class audited), status: pending }
+      - { id: BACKOFFICE-19, title: 24-month per-PSU consent audit-trail timeline, status: pending, depends_on: [BACKOFFICE-16] }
+      - { id: BACKOFFICE-17, title: Single-consent revocation with reason code (<5s p99 to Nebras sim), status: pending, depends_on: [BACKOFFICE-16] }
+      - { id: BACKOFFICE-18, title: Emergency PSU-wide bulk revocation (four-eyes), status: pending, depends_on: [BACKOFFICE-17] }
+      - { id: SPEC-FRAUD-REVOKE-FOUREYES, title: Spec-change PR - add x-four-eyes + 202 to revoke-fraud per binding BD-03 default; clarify reports:approve 200-vs-202; approval id format (human-approved merge), status: pending }
+      - { id: BACKOFFICE-22, title: Fraud-suspected revocation (narrow Risk scope) + STR draft, status: pending, depends_on: [BACKOFFICE-17, SPEC-FRAUD-REVOKE-FOUREYES] }
+      - { id: BACKOFFICE-25, title: Care-surface token minting with act + sub claims (<=15 min), status: pending }
+      - { id: BACKOFFICE-20, title: Unauthorized-payment investigation workflow, status: pending, depends_on: [BACKOFFICE-16] }
+      - { id: BACKOFFICE-21, title: Next-business-day refund (four-eyes, SLA timer), status: pending, depends_on: [BACKOFFICE-20] }
+      - { id: BACKOFFICE-62, title: Refund via formal Ozone Connect refund flow (P6, 5 IPP status codes), status: pending, depends_on: [BACKOFFICE-21] }
+      - { id: BACKOFFICE-23, title: CBUAE inquiry response bundle per PSU (PDF+XLSX, <10 min), status: pending, depends_on: [BACKOFFICE-19] }
+
+  - name: M3
+    items:
+      - { id: BACKOFFICE-01, title: Daily three-way reconciliation run, status: pending }
+      - { id: BACKOFFICE-02, title: Break detection with configurable thresholds, status: pending, depends_on: [BACKOFFICE-01] }
+      - { id: BACKOFFICE-03, title: Break investigation workflow (claim, SLA clock), status: pending, depends_on: [BACKOFFICE-02] }
+      - { id: BACKOFFICE-04, title: Resolution outcomes + immutable audit + four-eyes reopen, status: pending, depends_on: [BACKOFFICE-03] }
+      - { id: BACKOFFICE-11, title: Three-source side-by-side diff view per break, status: pending, depends_on: [BACKOFFICE-02] }
+      - { id: BACKOFFICE-05, title: One-click Nebras dispute case from a break, status: pending, depends_on: [BACKOFFICE-03] }
+      - { id: BACKOFFICE-13, title: OTel traces per run per line, status: pending, depends_on: [BACKOFFICE-01] }
+      - { id: BACKOFFICE-06, title: Monthly reconciliation summary + Finance sign-off, status: pending, depends_on: [BACKOFFICE-04] }
+      - { id: BACKOFFICE-07, title: TPP-aaS pass-through billing and margin tracking, status: pending, depends_on: [BACKOFFICE-01] }
+      - { id: BACKOFFICE-08, title: CBUAE reconciliation export with integrity hashes, status: pending, depends_on: [BACKOFFICE-06] }
+      - { id: BACKOFFICE-14, title: Reconciliation retention lifecycle (hot/warm/immutable), status: pending, depends_on: [BACKOFFICE-01] }
+
+  - name: M3a
+    items:
+      - { id: BACKOFFICE-71, title: Consuming-TPP registry with Trust Framework Directory sync, status: pending }
+      - { id: BACKOFFICE-72, title: TPP financial-system onboarding workflow + unbilled-traffic alert, status: pending, depends_on: [BACKOFFICE-71] }
+      - { id: BACKOFFICE-73, title: Monthly TPP invoicing - reconcile before invoice (four-eyes, 409 if unreconciled), status: pending, depends_on: [BACKOFFICE-72] }
+      - { id: BACKOFFICE-75, title: Respondent-side Nebras dispute scheme clocks, status: pending }
+
+  - name: M4
+    items:
+      - { id: BACKOFFICE-32, title: Nebras TPP Reports + Dataset ingestion (Parquet, materialized aggregates), status: pending }
+      - { id: BACKOFFICE-33, title: Cross-fintech aggregation via bank_internal_view + query_purpose_registry, status: blocked, reason: BD-13 governance sign-off required before cross-fintech aggregation (PRD default - sequence single-fintech views first) }
+      - { id: BACKOFFICE-31, title: Finance View, status: pending, depends_on: [BACKOFFICE-32] }
+      - { id: BACKOFFICE-28, title: Operations Console (platform health, certification per role), status: pending }
+      - { id: BACKOFFICE-29, title: Compliance View, status: pending }
+      - { id: BACKOFFICE-30, title: Risk View, status: pending }
+      - { id: BACKOFFICE-27, title: Executive Dashboard (Commercial + Programme angles), status: pending, depends_on: [BACKOFFICE-31] }
+      - { id: BACKOFFICE-34, title: Onboarding funnel metrics (entry-path dimension), status: pending }
+      - { id: BACKOFFICE-35, title: Self-service CBUAE periodic report generation (four-eyes when CBUAE-bound), status: pending }
+      - { id: BACKOFFICE-36, title: Proactive Nebras-liability monitor (issue x liable party x AED), status: pending, depends_on: [BACKOFFICE-30] }
+      - { id: BACKOFFICE-37, title: Consent-pattern anomaly detection (streaming), status: pending, depends_on: [BACKOFFICE-30] }
+      - { id: BACKOFFICE-39, title: Programme-level reporting view, status: pending }
+      - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: pending }
+      - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: pending }
+      - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: pending, depends_on: [BACKOFFICE-37] }
+      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending }
+
+  - name: M4a
+    items:
+      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: pending }
+      - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: pending }
+
+  - name: M5
+    items:
+      - { id: BACKOFFICE-09, title: Reconciliation SLO dashboard, status: pending }
+      - { id: BACKOFFICE-10, title: Reconciliation replay (idempotent), status: pending }
+      - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: pending }
+      - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: pending }
+      - { id: BACKOFFICE-24, title: Complaint case management lifecycle, status: pending }
+      - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: pending }
+      - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: pending }
+      - { id: BACKOFFICE-64, title: Call/transcript linkage on dispute cases, status: pending }
+      - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: pending }
+      - { id: BACKOFFICE-41, title: Analytics exports (PDF/XLSX/CSV), status: pending }
+      - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: pending }
+      - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: pending }
+      - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: pending }
+      - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: pending }
+      - { id: BACKOFFICE-74, title: Trust Framework participant administration, status: pending }
+      - { id: BACKOFFICE-76, title: Cross-scheme dispute guard (Aani / Al Tareq), status: pending }
+      - { id: BACKOFFICE-79, title: Nebras service-desk case tracking, status: pending }
+      - { id: BACKOFFICE-70, title: LFI Ozone Connect health-check surfacing, status: pending }
+
+  - name: M6
+    items:
+      - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
+
+deferred: # Could / Phase 2 — not in build scope until promoted by the user
+  - { id: BACKOFFICE-53, title: Agentic spend-control for admin-scope MCP tools }
+  - { id: BACKOFFICE-59, title: Training environment for Customer Care }
+  - { id: BACKOFFICE-60, title: Programmatic admin-scope access (DCR automations) }
+  - { id: BACKOFFICE-63, title: AML GO portal submission for STR drafts }
+  - { id: BACKOFFICE-65, title: Predictive liability forecasting (regulated AI artefact) }
