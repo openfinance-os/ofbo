@@ -48,6 +48,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@ofbo/redaction':
+        specifier: workspace:*
+        version: link:../redaction
       '@ofbo/synthetic-data':
         specifier: workspace:*
         version: link:../synthetic-data
@@ -63,6 +66,8 @@ importers:
         version: 4.22.4
 
   packages/ports: {}
+
+  packages/redaction: {}
 
   packages/synthetic-data: {}
 

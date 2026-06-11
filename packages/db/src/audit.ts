@@ -1,5 +1,5 @@
 import pg from 'pg'
-import { redactPii } from './redact.js'
+import { redactPii } from '@ofbo/redaction'
 
 /**
  * BACKOFFICE-45: the DB-backed High-class audit emitter. INSERT-only by

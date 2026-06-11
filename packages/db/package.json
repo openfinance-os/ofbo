@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "pg": "^8.13.1",
-    "@ofbo/synthetic-data": "workspace:*"
+    "@ofbo/synthetic-data": "workspace:*",
+    "@ofbo/redaction": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
