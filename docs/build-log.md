@@ -37,3 +37,11 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Iteration lesson recorded: INSERT-only tables make test cleanup impossible BY DESIGN → audit tests must use unique per-run trace ids (a fixed trace id failed on re-run; fixed before merge — the premature "green" commit message was corrected by a follow-up commit with 2× consecutive green runs).
 - Numeric-identifier redaction noted as a BACKOFFICE-51 consideration (redactor inspects strings only).
 - Next eligible: BACKOFFICE-51 (shared PII redaction library).
+
+## 2026-06-11 — BACKOFFICE-51 (PR #6, loop iteration 4)
+
+- @ofbo/redaction extracted as the shared masking path (audit, logs, telemetry); numeric 15-digit Emirates-shaped values now redact; redactText helper added for log emission; db rewired + re-exports.
+- Evidence: 180 unit / 14 integration green; redaction 100% coverage; CI Q1–Q3 pass.
+- Review cycle worked as designed: hard-stop FAIL (real-shaped grouped-IBAN literal carried over in fixture source) → fixed (runtime-assembled), tree swept, scoped re-review PASS. Conformance CONFORMANT.
+- ACTION FOR THE USER (repeat): the PII-guard hook is still not loaded in the interactive session — run /hooks once or restart; review caught what the hook should have.
+- Next eligible: BACKOFFICE-44 (four-eyes approval primitive).
