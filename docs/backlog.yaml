@@ -18,7 +18,7 @@ milestones:
   - name: M1
     items:
       - { id: BACKOFFICE-47, title: Mandatory MFA persona sign-in via IdP port + admin-scope minting, status: done }
-      - { id: BACKOFFICE-43, title: RBAC scope enforcement (BFF middleware + service layer) with audited 403 denials, status: pending, depends_on: [BACKOFFICE-47] }
+      - { id: BACKOFFICE-43, title: RBAC scope enforcement (BFF middleware + service layer) with audited 403 denials, status: done, depends_on: [BACKOFFICE-47] }
       - { id: BACKOFFICE-45, title: High-class audit write path (INSERT-only) with PII redaction at emission, status: pending }
       - { id: BACKOFFICE-51, title: Shared PII redaction library (Emirates ID, names, accounts, IBAN), status: pending, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-44, title: Four-eyes approval primitive (202 + approval_request, 2-business-hour expiry), status: pending, depends_on: [BACKOFFICE-43, BACKOFFICE-45] }

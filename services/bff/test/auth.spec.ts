@@ -51,7 +51,8 @@ describe('BACKOFFICE-47 — mandatory MFA sign-in + admin-scope minting', () => 
 
   it('authenticates a demo persona, audits the sign-in, and the stub responds 501', async () => {
     const { app, audit } = await appWith()
-    const res = await app.request(PATH, {
+    // a route operations-analyst actually owns (platform:operations:read)
+    const res = await app.request('/back-office/analytics/operations-console', {
       headers: { ...FAPI_HEADERS, authorization: 'Bearer demo-token:operations-analyst' }
     })
     expect(res.status).toBe(501) // authenticated; route is a contract-pending stub
