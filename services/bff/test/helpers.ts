@@ -6,3 +6,9 @@ export function toConcrete(templatePath: string): string {
 }
 
 export const FAPI_HEADERS = { 'x-fapi-interaction-id': FIXED_UUID }
+
+/** Authenticated demo-persona headers (P2 sim tokens; BACKOFFICE-47). */
+export const AUTHED_HEADERS = {
+  ...FAPI_HEADERS,
+  authorization: 'Bearer demo-token:platform-super-admin'
+}

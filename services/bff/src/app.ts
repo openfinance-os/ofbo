@@ -1,14 +1,25 @@
 import { Hono } from 'hono'
 import { matchRoute } from '@ofbo/contracts'
+import type { IdentityProviderPort } from '@ofbo/ports'
+import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
+import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 
 /**
- * M0 stub BFF: every contract path resolves (via the colon-action-safe matcher,
+ * Stub BFF: every contract path resolves (via the colon-action-safe matcher,
  * NOT framework path syntax) and returns the binding 501 envelope. Stories
  * replace stubs route-by-route; the [contract-pending] it.fails suite enforces
- * that flip.
+ * that flip. Since BACKOFFICE-47, every request authenticates via the IdP
+ * port (P2) — MFA mandatory, scopes minted from the §2 persona matrix.
  */
-export function createApp() {
+export interface AppDeps {
+  idp?: IdentityProviderPort
+  audit?: AuthAuditSink
+}
+
+export function createApp(deps: AppDeps = {}) {
+  const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
+  const audit = deps.audit ?? new InMemoryAuthAuditSink()
   const app = new Hono()
 
   app.use('*', async (c, next) => {
@@ -27,6 +38,8 @@ export function createApp() {
     c.header('x-fapi-interaction-id', fapi)
     await next()
   })
+
+  app.use('*', createAuthMiddleware(idp, audit))
 
   app.all('*', (c) => {
     const url = new URL(c.req.url)
