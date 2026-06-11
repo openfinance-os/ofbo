@@ -23,9 +23,11 @@ describe('BACKOFFICE-51 — shared PII redaction library', () => {
   })
 
   it('masks IBAN shapes including grouped and lowercase variants', () => {
+    // grouped variant assembled at runtime, like every PII shape in this file
+    const grouped = REAL_SHAPED_IBAN.replace(/(.{4})/g, '$1 ').trim()
     const out = redactPii({
       a: REAL_SHAPED_IBAN,
-      b: 'AE07 0331 2345 6789 0123 456',
+      b: grouped,
       c: REAL_SHAPED_IBAN.toLowerCase()
     })
     for (const v of Object.values(out)) expect(v).toBe('[REDACTED:iban]')
