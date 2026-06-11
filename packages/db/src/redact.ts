@@ -15,9 +15,10 @@ const REDACTED_KEYS = new Set([
   'address'
 ])
 
-// Separator-tolerant identifier shapes (matching the repo pii-guard conventions).
-const EMIRATES_ID_RE = /\b\d{3}[- ]?\d{4}[- ]?\d{7}[- ]?\d\b/g
-const IBAN_RE = /\bAE\d{2}(?:[ -]?\d){19}\b/g
+// Separator-tolerant identifier shapes (matching the repo pii-guard conventions);
+// dots and case variants count — redaction errs toward masking.
+const EMIRATES_ID_RE = /\b\d{3}[-. ]?\d{4}[-. ]?\d{7}[-. ]?\d\b/g
+const IBAN_RE = /\bAE\d{2}(?:[ .-]?\d){19}\b/gi
 
 function redactString(value: string): string {
   return value.replace(EMIRATES_ID_RE, '[REDACTED:emirates_id]').replace(IBAN_RE, '[REDACTED:iban]')

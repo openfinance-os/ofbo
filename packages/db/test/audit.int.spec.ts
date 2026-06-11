@@ -75,12 +75,25 @@ describe('BACKOFFICE-45 — High-class audit write path', () => {
     expect(r.rows[0].body).toContain('[REDACTED:emirates_id]')
   })
 
-  it('the emitter cannot update or delete what it wrote (INSERT-only holds end-to-end)', async () => {
-    await expect(
-      emitter.dangerousRawQuery(`UPDATE audit_high_sensitivity SET response_status = 500 WHERE request_trace_id LIKE $1`, [`${TRACE}%`])
-    ).rejects.toThrow(/permission denied/)
-    await expect(
-      emitter.dangerousRawQuery(`DELETE FROM audit_high_sensitivity WHERE request_trace_id LIKE $1`, [`${TRACE}%`])
-    ).rejects.toThrow(/permission denied/)
+  it('the emitter role cannot update or delete what it wrote (INSERT-only holds end-to-end)', async () => {
+    // Same constrained-role context the emitter runs under (the emitter itself
+    // deliberately exposes no raw-SQL surface).
+    const asEmitterRole = async (sql: string) => {
+      const c = await admin.connect()
+      try {
+        await c.query('BEGIN')
+        await c.query('SET LOCAL ROLE ofbo_app')
+        await c.query(`SELECT set_config('app.bank_id', $1, true)`, [BANK])
+        await c.query(sql)
+        await c.query('COMMIT')
+      } catch (e) {
+        await c.query('ROLLBACK').catch(() => undefined)
+        throw e
+      } finally {
+        c.release()
+      }
+    }
+    await expect(asEmitterRole(`UPDATE audit_high_sensitivity SET response_status = 500`)).rejects.toThrow(/permission denied/)
+    await expect(asEmitterRole(`DELETE FROM audit_high_sensitivity`)).rejects.toThrow(/permission denied/)
   })
 })

@@ -106,11 +106,6 @@ export class PgAuditEmitter {
     })
   }
 
-  /** Test/diagnostics only: runs under the same constrained role — proves INSERT-only binds this emitter. */
-  async dangerousRawQuery(sql: string, params: unknown[]): Promise<unknown> {
-    return this.asApp((c) => c.query(sql, params))
-  }
-
   async close(): Promise<void> {
     await this.pool.end()
   }

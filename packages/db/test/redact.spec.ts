@@ -15,12 +15,21 @@ describe('BACKOFFICE-45 — PII redaction at emission', () => {
     expect(out.note).toContain('[REDACTED:emirates_id]')
   })
 
-  it('masks IBAN shapes including separator-grouped ones', () => {
+  it('masks IBAN shapes including separator-grouped and lowercase ones', () => {
     const grouped = 'AE07 0331 2345 6789 0123 456'
-    const out = redactPii({ iban: REAL_SHAPED_IBAN, grouped })
+    const lower = REAL_SHAPED_IBAN.toLowerCase()
+    const out = redactPii({ iban: REAL_SHAPED_IBAN, grouped, lower })
     expect(JSON.stringify(out)).not.toContain(REAL_SHAPED_IBAN)
+    expect(JSON.stringify(out)).not.toContain(lower)
     expect(out.iban).toBe('[REDACTED:iban]')
     expect(out.grouped).toBe('[REDACTED:iban]')
+  })
+
+  it('masks dot-separated Emirates-ID shapes', () => {
+    const dotted = EMIRATES_ID.replace(/-/g, '.')
+    const out = redactPii({ note: `id ${dotted}` })
+    expect(out.note).not.toContain(dotted)
+    expect(out.note).toContain('[REDACTED:emirates_id]')
   })
 
   it('redacts well-known PII keys entirely (names, account numbers)', () => {
