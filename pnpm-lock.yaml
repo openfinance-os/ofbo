@@ -43,6 +43,8 @@ importers:
         specifier: ^4.19.2
         version: 4.22.4
 
+  packages/ports: {}
+
   services/bff:
     dependencies:
       '@ofbo/contracts':
