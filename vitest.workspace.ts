@@ -12,7 +12,10 @@ export default defineWorkspace([
     test: {
       name: 'integration',
       include: ['packages/**/test/**/*.int.spec.ts', 'services/**/test/**/*.int.spec.ts'],
-      exclude: ['**/node_modules/**']
+      exclude: ['**/node_modules/**'],
+      // Integration suites share one database — run everything in one worker, sequentially.
+      pool: 'threads',
+      poolOptions: { threads: { singleThread: true } }
     }
   }
 ])
