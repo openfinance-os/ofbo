@@ -11,7 +11,11 @@
   },
   "dependencies": {
     "@ofbo/contracts": "workspace:*",
-    "hono": "^4.6.14",
-    "@ofbo/ports": "workspace:*"
+    "@ofbo/ports": "workspace:*",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.0.4",
+    "tsx": "^4.19.2"
   }
 }
