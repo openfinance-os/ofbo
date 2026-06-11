@@ -46,7 +46,14 @@ export interface Principal {
 }
 
 export interface AuthAuditEvent {
-  event_type: 'signin_success' | 'signin_failure' | 'scope_denied'
+  event_type:
+    | 'signin_success'
+    | 'signin_failure'
+    | 'scope_denied'
+    | 'approval_requested'
+    | 'approval_approved'
+    | 'approval_rejected'
+    | 'approval_timed_out'
   acting_principal: string
   acting_persona: string | null
   reason: 'missing_token' | 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona' | 'scope_not_held' | null
@@ -55,6 +62,8 @@ export interface AuthAuditEvent {
   attempted_scope?: string | null
   /** BACKOFFICE-43/-80: platform:superadmin satisfies any check but stamps the marker. */
   superadmin_marker?: boolean
+  /** Set on approval lifecycle events (BACKOFFICE-44). */
+  approval_request_id?: string
 }
 
 /** Sink for sign-in audit events. The DB-backed High-class emitter replaces the

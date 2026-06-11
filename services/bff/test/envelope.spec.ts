@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { ROUTES } from '@ofbo/contracts'
-import { createApp } from '../src/app.js'
+import { createApp, IMPLEMENTED_ROUTES } from '../src/app.js'
 import { toConcrete, FAPI_HEADERS, AUTHED_HEADERS } from './helpers.js'
 
 const app = createApp()
 
 describe('binding envelopes on every stubbed route', () => {
-  it.each(ROUTES.map((r) => [r.method, r.path] as const))(
+  it.each(ROUTES.filter((r) => !IMPLEMENTED_ROUTES.has(`${r.method} ${r.path}`)).map((r) => [r.method, r.path] as const))(
     '%s %s → 501 with binding error envelope',
     async (method, path) => {
       const res = await app.request(toConcrete(path), {

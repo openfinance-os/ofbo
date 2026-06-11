@@ -22,15 +22,17 @@ export interface HighClassAuditEvent {
   response_status: number
 }
 
-/** Structural match for the BFF AuthAuditSink event — no package dependency on the BFF. */
+/** Structural match for the BFF AuthAuditSink event — no package dependency on the BFF.
+ *  event_type stays open (string) so new BFF lifecycle events (approvals, …) flow through. */
 export interface AuthSinkEvent {
-  event_type: 'signin_success' | 'signin_failure' | 'scope_denied'
+  event_type: string
   acting_principal: string
   acting_persona: string | null
   reason: string | null
   trace_id: string
   attempted_scope?: string | null
   superadmin_marker?: boolean
+  approval_request_id?: string
 }
 
 export interface AuditEmitterConfig {
@@ -100,9 +102,11 @@ export class PgAuditEmitter {
       request_trace_id: event.trace_id,
       request_body: {
         reason: event.reason,
-        superadmin_marker: event.superadmin_marker ?? false
+        superadmin_marker: event.superadmin_marker ?? false,
+        ...(event.approval_request_id ? { approval_request_id: event.approval_request_id } : {})
       },
-      response_status: event.event_type === 'signin_success' ? 200 : event.event_type === 'scope_denied' ? 403 : 401
+      response_status:
+        event.event_type === 'signin_failure' ? 401 : event.event_type === 'scope_denied' ? 403 : 200
     })
   }
 
