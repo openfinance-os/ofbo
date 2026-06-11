@@ -61,7 +61,9 @@ describe('BACKOFFICE-43 — RBAC enforcement, both layers, audited denials', () 
     expect(isDynamicScope(dynamic!.scope)).toBe(true)
     const { app } = appWithAudit()
     const res = await app.request('/approvals/pending', { headers: asPersona('commercial-desk-head') })
-    expect(res.status).toBe(501) // enforcement is the owning story's service-layer job
+    // middleware lets dynamic scopes through; the approvals service (BACKOFFICE-44)
+    // enforces request-dependent access — an empty pending list, not a 403/501
+    expect(res.status).toBe(200)
   })
 
   it('service layer enforces independently of the middleware (defence in depth)', () => {

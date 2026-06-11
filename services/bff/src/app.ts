@@ -5,6 +5,18 @@ import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
+import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
+import { approvalRoutes } from './approvals/routes.js'
+
+/** Route keys (`method path`) handled by real story services — used by the test
+ *  suites to exclude them from the contract-pending it.fails layer. */
+export const IMPLEMENTED_ROUTES = new Set([
+  'post /approvals',
+  'get /approvals/pending',
+  'get /approvals/{approval_id}',
+  'post /approvals/{approval_id}:approve',
+  'post /approvals/{approval_id}:reject'
+])
 
 /**
  * Stub BFF: every contract path resolves (via the colon-action-safe matcher,
@@ -16,11 +28,15 @@ import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope
 export interface AppDeps {
   idp?: IdentityProviderPort
   audit?: AuthAuditSink
+  approvals?: ApprovalsDeps
 }
 
 export function createApp(deps: AppDeps = {}) {
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
+  const approvals = new ApprovalsService(audit, deps.approvals ?? {})
+  // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
+  const handlers = approvalRoutes(approvals)
   const app = new Hono()
 
   app.use('*', async (c, next) => {
@@ -43,7 +59,7 @@ export function createApp(deps: AppDeps = {}) {
   app.use('*', createAuthMiddleware(idp, audit))
   app.use('*', createScopeMiddleware(audit))
 
-  app.all('*', (c) => {
+  app.all('*', async (c) => {
     const url = new URL(c.req.url)
     const match = matchRoute(c.req.method, url.pathname)
     if (!match) {
@@ -68,6 +84,9 @@ export function createApp(deps: AppDeps = {}) {
         throw e
       }
     }
+
+    const handler = handlers[`${match.method} ${match.path}`]
+    if (handler) return handler(c, match.params)
 
     return c.json(
       errorEnvelope(
