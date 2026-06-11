@@ -6,8 +6,8 @@ A bank-neutral, build-ready specification for the internal back office a UAE ban
 
 | File | Purpose |
 |---|---|
-| `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 70 requirements (BACKOFFICE-01..70), data model, NFRs, build sequence (M0–M5), adopting-bank decision checklist (BD-01..13) |
-| `specs/backoffice-openapi.yaml` | API contract — 49 paths, 8 tags, admin-scoped. Ground truth for the build |
+| `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
+| `specs/backoffice-openapi.yaml` | API contract — 57 paths, 9 tags, admin-scoped. Ground truth for the build |
 | `CLAUDE.md` | Build conventions for AI-assisted delivery (Claude Code): stack defaults, API conventions, per-story workflow, hard stops |
 
 ## Seeding a new repo
@@ -24,7 +24,7 @@ claude   # start Claude Code at the repo root
 Work milestone by milestone (PRD §9), one story per session, one PR per story. **Deploy early:** the demo environment goes live at M1 and auto-deploys on every merge — the demo is the showcase of the gradual build.
 
 1. **Session 1 — canon read-back.** Ask Claude Code to read `CLAUDE.md`, the PRD, and the OpenAPI spec, and summarize scope + conventions. Correct any misreading before code exists.
-2. **M0 — foundation.** Monorepo scaffold; CI with gates Q1–Q3; generate the API client from `specs/backoffice-openapi.yaml`; failing contract stubs for all 49 paths; the 9-table relational schema with RLS and the INSERT-only audit policy; port interfaces + simulator stubs; seeded synthetic demo dataset.
+2. **M0 — foundation.** Monorepo scaffold; CI with gates Q1–Q3; generate the API client from `specs/backoffice-openapi.yaml`; failing contract stubs for all 57 paths; the 10-table relational schema with RLS and the INSERT-only audit policy; port interfaces + simulator stubs; seeded synthetic demo dataset.
 3. **M1 — substrate + demo live.** IdP (simulator) federation + admin-scope minting, scope middleware, audit write path + PII redaction, four-eyes primitive, Nebras simulator v1, auto-deploy pipeline. Exit: working demo URL with persona logins and a DEMO banner.
 4. **M2 — Customer Care (E2), the first feature.** PSU search → revocations → audit timeline → dispute + four-eyes refund. Demo walkthrough is the acceptance test.
 5. **M3–M4 — Reconciliation (E1), then Analytics (E3).** Fault injection in the Nebras simulator makes breaks and liability signals demonstrable on demand.
@@ -56,4 +56,4 @@ Implement BACKOFFICE-<NN> from docs/PRD_Open_Finance_Back_Office.md §7.
 
 ## Before M1: complete the Bank Profile
 
-PRD §3 (ports P1–P8) and §10 (decisions BD-01..13). BD-01 (IdP) blocks M1; most others have safe defaults the build proceeds on.
+PRD §3 (ports P1–P9) and §10 (decisions BD-01..16). BD-01 (IdP) blocks M1; most others have safe defaults the build proceeds on.
