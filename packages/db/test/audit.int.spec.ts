@@ -7,7 +7,9 @@ const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is required for integration tests')
 
 const BANK = '11111111-1111-4111-8111-111111111111'
-const TRACE = 'audit-int-4000-8000-000000000001'
+// Unique per run: audit_high_sensitivity is INSERT-only by design, so test rows
+// can never be cleaned up — a fixed trace id would accumulate across runs.
+const TRACE = `audit-int-${crypto.randomUUID()}`
 const EMIRATES_ID = ['784', '1990', '7654321', '9'].join('-') // assembled — see redact.spec.ts
 
 describe('BACKOFFICE-45 — High-class audit write path', () => {
