@@ -1,0 +1,1814 @@
+# Open Finance Back Office — OpenAPI delta (PRD §7, v1.0 build baseline)
+# Extends the platform contract (the platform core API contract). Conventions per CLAUDE.md:
+# kebab-case paths, snake_case JSON, cursor pagination, standard error envelope,
+# Idempotency-Key on mutating endpoints, x-fapi-interaction-id on every request.
+# Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
+openapi: 3.0.3
+info:
+  title: Open Finance Back Office API (delta)
+  version: 1.0.0
+  description: >
+    Admin-scoped endpoint families for the Open Finance Back Office (PRD v1.0 §7).
+    All endpoints require an admin scope from PRD §3.5.1; scopes are enforced
+    at Kong AND repeated at service layer (defence-in-depth, NFR-08).
+    Four-eyes-gated operations return 202 with an approval_request and execute
+    only after a second authorised principal approves (initiator != approver).
+
+servers:
+  - url: https://api.bank.example/v1
+
+security:
+  - adminOAuth: []
+
+tags:
+  - name: reconciliation
+  - name: consents-admin
+  - name: disputes
+  - name: analytics
+  - name: reports
+  - name: approvals
+  - name: audit
+  - name: risk-signals
+  - name: tpp-billing
+
+paths:
+  # ---------- 7.1 Reconciliation ----------
+  /back-office/reconciliation/runs:
+    get:
+      tags: [reconciliation]
+      summary: List reconciliation runs (paginated)
+      x-rate-limit-per-min: 200
+      x-required-scope: reconciliation:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - name: run_type
+          in: query
+          schema: { type: string, enum: [daily, monthly_close, replay, on_demand] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [running, completed, failed, partial] }
+      responses:
+        '200':
+          description: Paginated run list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReconciliationRun' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/runs/{run_id}:
+    get:
+      tags: [reconciliation]
+      summary: Get run summary with line counts
+      x-rate-limit-per-min: 500
+      x-required-scope: reconciliation:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: run_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationRun' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/runs:replay:
+    post:
+      tags: [reconciliation]
+      summary: Trigger replay over a date range (BACKOFFICE-10)
+      x-rate-limit-per-min: 5
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [window_start, window_end]
+              properties:
+                window_start: { type: string, format: date-time }
+                window_end: { type: string, format: date-time }
+      responses:
+        '202': { $ref: '#/components/responses/ReconciliationRun' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks:
+    get:
+      tags: [reconciliation]
+      summary: List breaks (filter by run_id, status, line_type, client_id)
+      x-rate-limit-per-min: 200
+      x-required-scope: reconciliation:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: run_id, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/BreakStatus' } }
+        - { name: line_type, in: query, schema: { $ref: '#/components/schemas/LineType' } }
+        - { name: client_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Paginated break list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReconciliationBreak' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks/{break_id}:
+    get:
+      tags: [reconciliation]
+      summary: Get break detail with three-source diff (BACKOFFICE-11)
+      x-rate-limit-per-min: 500
+      x-required-scope: reconciliation:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/breakId'
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationBreak' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks/{break_id}/claim:
+    post:
+      tags: [reconciliation]
+      summary: Claim a flagged break (BACKOFFICE-03)
+      x-rate-limit-per-min: 60
+      x-required-scope: finance:reconciliation:write
+      description: Consent-record breaks may alternatively be claimed with platform:operations:write.
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/breakId'
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationBreak' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks/{break_id}/resolve:
+    post:
+      tags: [reconciliation]
+      summary: Resolve with outcome + mandatory note (BACKOFFICE-04)
+      x-rate-limit-per-min: 60
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/breakId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution_outcome, resolution_note]
+              properties:
+                resolution_outcome:
+                  type: string
+                  enum: [resolved_matched, resolved_internal_correction, escalated_fintech_billing]
+                resolution_note:
+                  type: string
+                  minLength: 20
+      responses:
+        '200': { $ref: '#/components/responses/ReconciliationBreak' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks/{break_id}/escalate-nebras:
+    post:
+      tags: [reconciliation]
+      summary: Open a Nebras dispute case from a break (BACKOFFICE-05)
+      x-rate-limit-per-min: 30
+      x-required-scope: finance:disputes:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/breakId'
+      responses:
+        '200':
+          description: Break escalated; Nebras case ID persisted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          break_id: { type: string, format: uuid }
+                          status: { type: string, enum: [escalated_nebras_dispute] }
+                          nebras_dispute_case_id: { type: string }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/breaks/{break_id}/reopen:
+    post:
+      tags: [reconciliation]
+      summary: Reopen a resolved break (four-eyes; BACKOFFICE-04)
+      x-rate-limit-per-min: 10
+      x-required-scope: audit:read
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/breakId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [justification]
+              properties:
+                justification: { type: string, minLength: 20 }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/monthly-signoff:
+    post:
+      tags: [reconciliation]
+      summary: Generate + lock the monthly reconciliation summary (BACKOFFICE-06)
+      x-rate-limit-per-min: 5
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period]
+              properties:
+                period: { type: string, example: "2026-07", description: Calendar month YYYY-MM }
+      responses:
+        '200': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/thresholds:
+    get:
+      tags: [reconciliation]
+      summary: Read break thresholds by fee class (BACKOFFICE-12)
+      x-rate-limit-per-min: 100
+      x-required-scope: reconciliation:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/Thresholds' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [reconciliation]
+      summary: Update break thresholds (High-class audited)
+      x-rate-limit-per-min: 10
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/Threshold' }
+      responses:
+        '200': { $ref: '#/components/responses/Thresholds' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reconciliation/exports:cbuae:
+    get:
+      tags: [reconciliation]
+      summary: Generate CBUAE-format reconciliation export (BACKOFFICE-08)
+      x-rate-limit-per-min: 5
+      x-required-scope: compliance:reports:generate
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: period_start, in: query, required: true, schema: { type: string, format: date } }
+        - { name: period_end, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '202': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.2 Consent & dispute (Customer Care) ----------
+  /consents:search-psu:
+    get:
+      tags: [consents-admin]
+      summary: PSU-centric consent search (BACKOFFICE-16)
+      description: >
+        Unified search with identifier_type (BO-OQ-28 default). Every call writes a
+        High-class audit record with the searching agent's identity. < 500 ms p95.
+      x-rate-limit-per-min: 200
+      x-required-scope: consents:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: identifier_type
+          in: query
+          required: true
+          schema: { type: string, enum: [bank_customer_id, iban, emirates_id] }
+        - { name: identifier, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: PSU + consents across all TPPs (24 months)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PsuConsentSearchResult' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /consents/{consent_id}:admin:
+    get:
+      tags: [consents-admin]
+      summary: Admin view of a consent with cross-TPP context
+      x-rate-limit-per-min: 500
+      x-required-scope: consents:admin            # or audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/consentId'
+      responses:
+        '200':
+          description: Consent admin view (full 7-state lifecycle status)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ConsentAdminView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /consents/{consent_id}:revoke-admin:
+    post:
+      tags: [consents-admin]
+      summary: Single-consent revocation with reason code (BACKOFFICE-17)
+      x-rate-limit-per-min: 60
+      x-required-scope: consents:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/consentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason_code]
+              properties:
+                reason_code:
+                  type: string
+                  enum: [TPP_REQUEST, CLIENT_INSTRUCTION, REGULATORY]
+                  description: FRAUD_SUSPECTED is reserved for :revoke-fraud
+      responses:
+        '200': { $ref: '#/components/responses/RevocationResult' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /consents:revoke-bulk:
+    post:
+      tags: [consents-admin]
+      summary: Emergency PSU-wide bulk revocation (four-eyes; BACKOFFICE-18)
+      x-rate-limit-per-min: 5
+      x-required-scope: consents:admin
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [psu_identifier_type, psu_identifier, reason_code]
+              properties:
+                psu_identifier_type: { type: string, enum: [bank_customer_id, iban, emirates_id] }
+                psu_identifier: { type: string }
+                reason_code: { type: string, enum: [CLIENT_INSTRUCTION] }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /consents/{consent_id}:revoke-fraud:
+    post:
+      tags: [consents-admin]
+      summary: Risk Analyst narrow-scope fraud revocation (BACKOFFICE-22)
+      x-rate-limit-per-min: 30
+      x-required-scope: consents:admin:fraud-revoke
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/consentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [case_context]
+              properties:
+                case_context: { type: string, description: Investigation context carried into the STR draft }
+      responses:
+        '200': { $ref: '#/components/responses/RevocationResult' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /consents/{consent_id}/audit-trail:
+    get:
+      tags: [audit]
+      summary: 24-month audit trail for a consent (BACKOFFICE-19)
+      x-rate-limit-per-min: 200
+      x-required-scope: audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/consentId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': { $ref: '#/components/responses/ConsentEventList' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /psu/{psu_identifier}/audit-trail:
+    get:
+      tags: [audit]
+      summary: 24-month PSU-centric audit trail across all consents (BACKOFFICE-19)
+      x-rate-limit-per-min: 100
+      x-required-scope: audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: psu_identifier, in: path, required: true, schema: { type: string } }
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': { $ref: '#/components/responses/ConsentEventList' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /payments/{payment_id}:admin:
+    get:
+      tags: [disputes]
+      summary: Admin payment view with consent-validity-at-time-of-payment (BACKOFFICE-20; Phase 0 reuse)
+      x-rate-limit-per-min: 500
+      x-required-scope: disputes:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: payment_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Payment trace + Risk Information Block + CoP outcome
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PaymentAdminView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /disputes:
+    post:
+      tags: [disputes]
+      summary: Create unauthorised-payment dispute (BACKOFFICE-20)
+      x-rate-limit-per-min: 60
+      x-required-scope: disputes:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DisputeCreate' }
+      responses:
+        '201': { $ref: '#/components/responses/Dispute' }
+        default: { $ref: '#/components/responses/Error' }
+    get:
+      tags: [disputes]
+      summary: List disputes (filter by state, psu, client_id)
+      x-rate-limit-per-min: 200
+      x-required-scope: disputes:admin             # or audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: state, in: query, schema: { $ref: '#/components/schemas/DisputeState' } }
+        - { name: psu_identifier, in: query, schema: { type: string } }
+        - { name: client_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Paginated dispute list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/DisputeCase' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /disputes/{dispute_id}:
+    patch:
+      tags: [disputes]
+      summary: Update dispute state (per §6.3.1 state machine)
+      x-rate-limit-per-min: 100
+      x-required-scope: disputes:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/disputeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state: { $ref: '#/components/schemas/DisputeState' }
+                escalated_to: { type: string }
+                resolution_note: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/Dispute' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /disputes/{dispute_id}:initiate-refund:
+    post:
+      tags: [disputes]
+      summary: Initiate refund under the next-business-day SLA (four-eyes; BACKOFFICE-21/-62)
+      description: >
+        On approval, the refund dispatches via the existing Ozone Connect
+        GET /payment-consents/{consentId}/refund flow through the enterprise egress gateway
+        (Phase 0 reuse) and is tracked with the 5 IPP status codes.
+      x-rate-limit-per-min: 30
+      x-required-scope: disputes:admin
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/disputeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refund_amount]
+              properties:
+                refund_amount: { type: number, format: decimal, description: AED }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.3 Analytics ----------
+  /back-office/analytics/executive-dashboard:
+    get:
+      tags: [analytics]
+      summary: Aggregate adoption + commercial + pipeline (BACKOFFICE-27)
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:analytics:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/operations-console:
+    get:
+      tags: [analytics]
+      summary: Platform health snapshot (BACKOFFICE-28)
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:operations:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/compliance-view:
+    get:
+      tags: [analytics]
+      summary: Regulatory posture + report queue (BACKOFFICE-29)
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/risk-view:
+    get:
+      tags: [analytics]
+      summary: Anomaly signals + TPP behaviour (BACKOFFICE-30)
+      x-rate-limit-per-min: 200
+      x-required-scope: risk:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/finance-view:
+    get:
+      tags: [analytics]
+      summary: Fee accrual + margin + dispute queue (BACKOFFICE-31)
+      x-rate-limit-per-min: 100
+      x-required-scope: reconciliation:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/onboarding-funnel:
+    get:
+      tags: [analytics]
+      summary: Five funnel metrics from canonical PRD §4.0.3 (BACKOFFICE-34)
+      x-rate-limit-per-min: 100
+      x-required-scope: pipeline:read              # or programme:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/onboarding-handover-health:
+    get:
+      tags: [analytics]
+      summary: onboarding handover API success / latency / errors
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:operations:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/nebras-liability-monitor:
+    get:
+      tags: [analytics]
+      summary: Approaching Nebras liability triggers, keyed issue × liable party × AED (BACKOFFICE-36)
+      x-rate-limit-per-min: 100
+      x-required-scope: risk:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/analytics/exports:
+    post:
+      tags: [analytics]
+      summary: Export a view to PDF / XLSX / CSV (BACKOFFICE-41)
+      x-rate-limit-per-min: 30
+      x-required-scope: (scope of the exported view)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [view, format]
+              properties:
+                view: { type: string }
+                format: { type: string, enum: [pdf, xlsx, csv] }
+      responses:
+        '202': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.4 Reports & compliance ----------
+  /back-office/reports:generate:
+    post:
+      tags: [reports]
+      summary: Initiate periodic or ad-hoc report generation (BACKOFFICE-35)
+      description: CBUAE-bound reports require Programme Manager four-eyes approval before submission.
+      x-rate-limit-per-min: 10
+      x-required-scope: compliance:reports:generate
+      x-four-eyes: when CBUAE-bound
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [report_type, period_start, period_end]
+              properties:
+                report_type: { type: string, example: cbuae_monthly }
+                period_start: { type: string, format: date }
+                period_end: { type: string, format: date }
+                target_psu_identifier: { type: string }
+                target_client_id: { type: string, format: uuid }
+                output_formats:
+                  type: array
+                  items: { type: string, enum: [pdf, xlsx] }
+                  default: [pdf, xlsx]
+      responses:
+        '202': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reports:
+    get:
+      tags: [reports]
+      summary: List reports (filter by type, period, state)
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: report_type, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ReportStatus' } }
+      responses:
+        '200':
+          description: Paginated report list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ComplianceReport' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reports/{report_id}:
+    get:
+      tags: [reports]
+      summary: Get report metadata
+      x-rate-limit-per-min: 500
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/reportId'
+      responses:
+        '200': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reports/{report_id}/download:
+    get:
+      tags: [reports]
+      summary: Download report PDF / XLSX with integrity hash
+      x-rate-limit-per-min: 30
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/reportId'
+        - { name: format, in: query, required: true, schema: { type: string, enum: [pdf, xlsx] } }
+      responses:
+        '200':
+          description: Binary stream; X-Content-SHA256 header carries the integrity hash
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reports/{report_id}:approve:
+    post:
+      tags: [reports]
+      summary: Programme Manager approval for a CBUAE-bound report (four-eyes)
+      x-rate-limit-per-min: 10
+      x-required-scope: programme:read
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/reportId'
+      responses:
+        '200': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/reports/{report_id}:submit:
+    post:
+      tags: [reports]
+      summary: Mark report submitted to CBUAE (BO-OQ-29 default — status change after manual upload)
+      x-rate-limit-per-min: 5
+      x-required-scope: compliance:reports:generate
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/reportId'
+      responses:
+        '200': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/inquiries/psu:
+    post:
+      tags: [reports]
+      summary: Generate per-PSU CBUAE inquiry bundle (BACKOFFICE-23)
+      x-rate-limit-per-min: 10
+      x-required-scope: compliance:reports:generate
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [psu_identifier_type, psu_identifier]
+              properties:
+                psu_identifier_type: { type: string, enum: [bank_customer_id, iban, emirates_id] }
+                psu_identifier: { type: string }
+                period_months: { type: integer, default: 24, maximum: 24 }
+      responses:
+        '202': { $ref: '#/components/responses/Report' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.5 Approvals ----------
+  /approvals:
+    post:
+      tags: [approvals]
+      summary: Create an approval request (usually created implicitly by four-eyes endpoints)
+      x-rate-limit-per-min: 60
+      x-required-scope: (initiator scope)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operation_type, operation_payload]
+              properties:
+                operation_type: { type: string, example: bulk_consent_revoke }
+                operation_payload: { type: object, description: PII-redacted operation context }
+      responses:
+        '201': { $ref: '#/components/responses/Approval' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /approvals/pending:
+    get:
+      tags: [approvals]
+      summary: List approvals pending for the caller
+      x-rate-limit-per-min: 200
+      x-required-scope: (any internal scope)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Pending approvals where the caller holds approver_required_scope
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ApprovalRequest' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /approvals/{approval_id}:
+    get:
+      tags: [approvals]
+      summary: Get approval state
+      x-rate-limit-per-min: 500
+      x-required-scope: (initiator or approver scope)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/approvalId'
+      responses:
+        '200': { $ref: '#/components/responses/Approval' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /approvals/{approval_id}:approve:
+    post:
+      tags: [approvals]
+      summary: Approve a pending request (initiator ≠ approver enforced; executes the gated operation)
+      x-rate-limit-per-min: 60
+      x-required-scope: (approver_required_scope of the request)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/approvalId'
+      responses:
+        '200':
+          description: Approved; execution_result included
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/ApprovalRequest'
+                          - type: object
+                            properties:
+                              execution_result: { type: object }
+        '409': { description: 'Rejected: approver equals initiator, or request expired' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /approvals/{approval_id}:reject:
+    post:
+      tags: [approvals]
+      summary: Reject with mandatory reason
+      x-rate-limit-per-min: 60
+      x-required-scope: (approver_required_scope of the request)
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/approvalId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reject_reason]
+              properties:
+                reject_reason: { type: string, minLength: 10 }
+      responses:
+        '200': { $ref: '#/components/responses/Approval' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.6 Audit & admin ----------
+  /audit/events:
+    get:
+      tags: [audit]
+      summary: Query the High-class audit trail
+      x-rate-limit-per-min: 200
+      x-required-scope: audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: acting_principal, in: query, schema: { type: string } }
+        - { name: target_psu_identifier, in: query, schema: { type: string } }
+        - { name: event_type, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Paginated audit events (the drill-down itself is logged)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuditEvent' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /audit/events/{event_id}:
+    get:
+      tags: [audit]
+      summary: Get a single audit event
+      x-rate-limit-per-min: 500
+      x-required-scope: audit:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: event_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Audit event
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AuditEvent' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/risk-signals:
+    get:
+      tags: [risk-signals]
+      summary: List risk signals
+      x-rate-limit-per-min: 200
+      x-required-scope: risk:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: signal_type, in: query, schema: { type: string } }
+        - { name: severity, in: query, schema: { type: string, enum: [info, low, medium, high, critical] } }
+        - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, investigating, closed_actioned, closed_no_action, false_positive] } }
+      responses:
+        '200':
+          description: Paginated signal list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/RiskSignal' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/risk-signals/{signal_id}:
+    patch:
+      tags: [risk-signals]
+      summary: Update signal state (acknowledge, close, false positive)
+      x-rate-limit-per-min: 100
+      x-required-scope: risk:investigations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - { name: signal_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [acknowledged, investigating, closed_actioned, closed_no_action, false_positive] }
+      responses:
+        '200':
+          description: Updated signal
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RiskSignal' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/lineage/{table_name}:
+    get:
+      tags: [audit]
+      summary: BCBS 239 lineage for a Back Office table (via enterprise data catalogue)
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: table_name, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Column-level lineage tree
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------
+  /back-office/tpp-counterparties:
+    get:
+      tags: [tpp-billing]
+      summary: List consuming-TPP counterparties (directory-synced registry, BACKOFFICE-71)
+      x-rate-limit-per-min: 200
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - name: production_status
+          in: query
+          schema: { type: string, enum: [directory_only, active_traffic, dormant, decommissioned] }
+        - name: registration_state
+          in: query
+          schema: { type: string, enum: [unregistered, onboarding, registered, suspended] }
+        - name: unbilled_traffic
+          in: query
+          schema: { type: boolean }
+          description: Filter to the alert condition — traffic observed without completed financial-system registration
+      responses:
+        '200':
+          description: Paginated counterparty list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/TppCounterparty' }
+
+  /back-office/tpp-counterparties/{organisation_id}:
+    get:
+      tags: [tpp-billing]
+      summary: Counterparty detail — directory org data, registration state, fee accruals
+      x-rate-limit-per-min: 200
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/organisationId'
+      responses:
+        '200':
+          description: Counterparty detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCounterparty' }
+
+  /back-office/tpp-counterparties:sync-directory:
+    post:
+      tags: [tpp-billing]
+      summary: Trigger Trust Framework Directory sync (GET /participants + /organisations via egress gateway)
+      x-rate-limit-per-min: 10
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      responses:
+        '202':
+          description: Sync job accepted; new / changed / decommissioned TPPs flagged on completion
+
+  /back-office/tpp-counterparties/{organisation_id}:register-financial-system:
+    post:
+      tags: [tpp-billing]
+      summary: Register counterparty as invoiceable in the financial management system (port P9, BACKOFFICE-72)
+      x-rate-limit-per-min: 60
+      x-required-scope: billing:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/organisationId'
+      responses:
+        '202':
+          description: Registration task dispatched to the P9 adapter; registration_state transitions tracked on the counterparty
+
+  /back-office/billing-records:
+    get:
+      tags: [tpp-billing]
+      summary: List ingested Nebras billing-record sets with reconciliation status
+      x-rate-limit-per-min: 200
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - name: billing_period
+          in: query
+          schema: { type: string, description: 'YYYY-MM' }
+      responses:
+        '200':
+          description: Paginated record-set list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/BillingRecordSet' }
+    post:
+      tags: [tpp-billing]
+      summary: Ingest a Nebras monthly billing-record file (verified manual upload, BACKOFFICE-73 step 1)
+      description: >
+        Email-delivered Nebras billing records are uploaded here. Integrity hash computed
+        and stored, BCBS 239 lineage emitted, second-person verification recorded
+        (same pattern as the manual LFI-report ingest, BACKOFFICE-67).
+      x-rate-limit-per-min: 20
+      x-required-scope: billing:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, billing_period]
+              properties:
+                file: { type: string, format: binary }
+                billing_period: { type: string, description: 'YYYY-MM' }
+                source_note: { type: string, description: e.g. email received date / sender }
+      responses:
+        '201':
+          description: Record set ingested (status=ingested, integrity hash returned); reconciliation NOT yet run
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BillingRecordSet' }
+
+  /back-office/billing-records/{record_set_id}:reconcile:
+    post:
+      tags: [tpp-billing]
+      summary: Reconcile billing records against the bank's own API logs (BACKOFFICE-73 step 2-3 — reconcile BEFORE invoice)
+      description: >
+        Nebras figures are never blindly trusted. Variances above threshold create
+        reconciliation_break records (standard E1 workflow) and a Nebras billing query
+        within the 30-day dispute window. Invoice runs are blocked until this completes.
+      x-rate-limit-per-min: 20
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/recordSetId'
+      responses:
+        '202':
+          description: Reconciliation job accepted; record set transitions to reconciling, then reconciled_clean or reconciled_with_breaks
+
+  /back-office/invoice-runs:
+    get:
+      tags: [tpp-billing]
+      summary: List invoice runs
+      x-rate-limit-per-min: 200
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Paginated invoice-run list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/InvoiceRun' }
+    post:
+      tags: [tpp-billing]
+      summary: Create an invoice run for a billing period (BACKOFFICE-73 step 4 — four-eyes gated)
+      description: >
+        Rejected with 409 unless the period's billing-record set is reconciled_clean or all
+        breaks are resolved/escalated. Only clean or resolved lines flow into invoice
+        instructions; disputed lines are withheld. Returns 202 + approval_request;
+        dispatch to P9 happens only after second-person approval.
+      x-rate-limit-per-min: 10
+      x-required-scope: billing:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billing_period, record_set_id]
+              properties:
+                billing_period: { type: string, description: 'YYYY-MM' }
+                record_set_id: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Invoice run pending four-eyes approval
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ApprovalRequest' }
+        '409':
+          description: Billing-record set not reconciled, or unresolved breaks block the run
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /back-office/invoice-runs/{invoice_run_id}:
+    get:
+      tags: [tpp-billing]
+      summary: Invoice-run detail — per-TPP instructions, withheld lines, settlement status (incl. net-settlement effects)
+      x-rate-limit-per-min: 200
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/invoiceRunId'
+      responses:
+        '200':
+          description: Invoice-run detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/InvoiceRun' }
+
+
+components:
+  securitySchemes:
+    adminOAuth:
+      type: oauth2
+      description: Platform Auth Service tokens (enterprise IdP OIDC exchange or care-surface connected-app client_credentials with act/sub claims)
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.bank.example/oauth2/token
+          scopes:
+            consents:admin: PSU-centric consent search + revoke (Customer Care)
+            consents:admin:fraud-revoke: FRAUD_SUSPECTED revocation only (Risk Analyst)
+            disputes:admin: Dispute create/update + refund initiation (Customer Care)
+            platform:operations:read: Operations Console reads
+            platform:operations:write: Outage ack, incident creation, thresholds, replay
+            platform:analytics:read: Executive Dashboard reads
+            reconciliation:read: Reconciliation Engine outputs
+            finance:reconciliation:write: Break investigation workflow
+            finance:disputes:write: Nebras dispute case creation
+            risk:read: Risk View signals
+            risk:investigations:write: Risk investigation workflow + STR draft
+            compliance:reports:read: Report library reads
+            compliance:reports:generate: Initiate report runs (four-eyes when CBUAE-bound)
+            audit:read: 24-month PSU-centric audit trail
+            commercial:read: Commercial analytics views
+            pipeline:read: Pipeline view
+            programme:read: Programme view (cross-bank where applicable)
+            certification:read: Certification tracker
+            billing:read: TPP counterparty registry + invoice-run reads (Finance)
+            billing:write: Financial-system registration + invoice-run initiation (Finance)
+
+  parameters:
+    fapiInteractionId:
+      name: x-fapi-interaction-id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: Used as the OTel trace ID end-to-end (NFR-26)
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string }
+      description: 24h dedup window (Kong plugin); required on all mutating endpoints
+    cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50, maximum: 200 }
+    breakId:
+      name: break_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    consentId:
+      name: consent_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    disputeId:
+      name: dispute_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    reportId:
+      name: report_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    organisationId:
+      name: organisation_id
+      in: path
+      required: true
+      schema: { type: string }
+      description: Trust Framework Directory OrganisationId
+    recordSetId:
+      name: record_set_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    invoiceRunId:
+      name: invoice_run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    approvalId:
+      name: approval_id
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Standard error envelope (per CLAUDE.md)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ApprovalPending:
+      description: Four-eyes operation accepted; pending second-person approval (2-business-hour expiry, BO-OQ-30 default)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ApprovalRequest' }
+    ReconciliationRun:
+      description: Reconciliation run
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ReconciliationRun' }
+    ReconciliationBreak:
+      description: Reconciliation break
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ReconciliationBreak' }
+    Thresholds:
+      description: Threshold set
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Threshold' }
+    Dispute:
+      description: Dispute case
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DisputeCase' }
+    Report:
+      description: Compliance report record
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ComplianceReport' }
+    Approval:
+      description: Approval request
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ApprovalRequest' }
+    RevocationResult:
+      description: Revocation outcome
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      consent_id: { type: string, format: uuid }
+                      status: { type: string, enum: [Revoked] }
+                      nebras_propagation_ms: { type: integer, description: Must be < 5000 p99 (NFR-18) }
+                      psu_notified: { type: boolean }
+    ConsentEventList:
+      description: Paginated consent lifecycle events
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ConsentEvent' }
+    AnalyticsView:
+      description: View payload with mandatory freshness metadata (BACKOFFICE-40)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { type: object, description: View-specific widgets }
+                  freshness: { $ref: '#/components/schemas/Freshness' }
+
+  schemas:
+    Envelope:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            request_id: { type: string }
+            timestamp: { type: string, format: date-time }
+            next_cursor: { type: string, nullable: true }
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id, timestamp]
+          properties:
+            code: { type: string, example: BACKOFFICE.SCOPE_DENIED }
+            message: { type: string }
+            required_scope: { type: string, nullable: true }
+            request_id: { type: string }
+            timestamp: { type: string, format: date-time }
+    Channel:
+      type: string
+      enum: [internal_retail, internal_sme, internal_corporate, external_direct, external_tpp_aas]
+      description: §6.0 channel dimension (attribute, not tenant key)
+    LineType:
+      type: string
+      enum: [nebras_fees, payment_settlement, consent_record, tpp_aas_pass_through, lfi_access_log]
+    BreakStatus:
+      type: string
+      enum: [flagged, assigned, resolved_matched, resolved_internal_correction, escalated_nebras_dispute, escalated_fintech_billing]
+    DisputeState:
+      type: string
+      enum: [open, in_progress, escalated, refund_initiated, resolved, closed]
+    ReportStatus:
+      type: string
+      enum: [requested, generating, awaiting_approval, approved, submitted, rejected, archived]
+    ConsentStatus:
+      type: string
+      enum: [AwaitingAuthorization, Authorized, Rejected, Suspended, Consumed, Expired, Revoked]
+      description: Full CBUAE v2.1-final lifecycle. `Suspended` is gated on the platform gap closure (Ready-to-Build Checklist item 2).
+    ReconciliationRun:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string, example: recon-2026-07-15-daily }
+        run_type: { type: string, enum: [daily, monthly_close, replay, on_demand] }
+        status: { type: string, enum: [running, completed, failed, partial] }
+        reconciliation_window_start: { type: string, format: date-time }
+        reconciliation_window_end: { type: string, format: date-time }
+        line_count_total: { type: integer, nullable: true }
+        line_count_matched: { type: integer, nullable: true }
+        line_count_unmatched: { type: integer, nullable: true }
+        line_count_disputed: { type: integer, nullable: true }
+        failure_reason: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    ReconciliationBreak:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        run_id: { type: string }
+        client_id: { type: string, format: uuid, nullable: true }
+        channel: { $ref: '#/components/schemas/Channel' }
+        line_type: { $ref: '#/components/schemas/LineType' }
+        status: { $ref: '#/components/schemas/BreakStatus' }
+        variance_amount: { type: number, nullable: true, description: AED }
+        variance_count: { type: integer, nullable: true }
+        source_a_ref: { type: string, description: Nebras source line }
+        source_b_ref: { type: string, description: Platform internal log line }
+        source_c_ref: { type: string, nullable: true, description: Fintech billing line }
+        assigned_to: { type: string, nullable: true }
+        sla_clock_started_at: { type: string, format: date-time, nullable: true }
+        resolution_outcome: { type: string, nullable: true }
+        resolution_note: { type: string, nullable: true }
+        nebras_dispute_case_id: { type: string, nullable: true }
+        reopened_count: { type: integer }
+        created_at: { type: string, format: date-time }
+    Threshold:
+      type: object
+      required: [fee_class, threshold_value]
+      properties:
+        fee_class: { type: string, example: nebras_fees }
+        threshold_value: { type: number, description: 'Default: 0.01 AED (1 fils) for fees; 0 for consent drift' }
+        unit: { type: string, enum: [aed, count] }
+    PsuConsentSearchResult:
+      type: object
+      properties:
+        psu:
+          type: object
+          properties:
+            bank_customer_id: { type: string }
+            account_count: { type: integer }
+        consents:
+          type: array
+          items: { $ref: '#/components/schemas/ConsentAdminView' }
+    ConsentAdminView:
+      type: object
+      properties:
+        consent_id: { type: string, format: uuid }
+        tpp:
+          type: object
+          properties:
+            client_id: { type: string, format: uuid }
+            display_name: { type: string }
+        purpose: { type: string, example: AISP_DATA_SHARING }
+        scope: { type: array, items: { type: string } }
+        status: { $ref: '#/components/schemas/ConsentStatus' }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, nullable: true }
+        last_access_at: { type: string, format: date-time, nullable: true }
+        multi_auth:
+          type: object
+          nullable: true
+          description: Present for multi-authorisation consents (BACKOFFICE-61, fast-follow)
+          properties:
+            authorisers:
+              type: array
+              items:
+                type: object
+                properties:
+                  authoriser_ref: { type: string }
+                  status: { type: string }
+    ConsentEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        consent_id: { type: string, format: uuid }
+        psu_identifier: { type: string }
+        event_type: { type: string, enum: [granted, accessed, modified, revoked] }
+        event_subtype: { type: string, nullable: true, description: e.g. revocation reason code }
+        event_data: { type: object }
+        acting_principal: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+    PaymentAdminView:
+      type: object
+      properties:
+        payment_id: { type: string, format: uuid }
+        ipp_status: { type: string, description: One of the 5 IPP status codes }
+        consent_at_time_of_payment: { $ref: '#/components/schemas/ConsentAdminView' }
+        cop_outcome: { type: object, description: CoP result from the Phase-0 endpoint }
+        risk_information_block: { type: object, description: As submitted to the LFI }
+        channel: { $ref: '#/components/schemas/Channel' }
+    DisputeCreate:
+      type: object
+      required: [psu_identifier, dispute_type]
+      properties:
+        psu_identifier: { type: string }
+        dispute_type: { type: string, enum: [unauthorised_payment, unrecognised_tpp, consent_complaint, data_misuse_complaint, other] }
+        originating_payment_id: { type: string, format: uuid, nullable: true }
+        originating_consent_id: { type: string, format: uuid, nullable: true }
+        originating_call_id: { type: string, nullable: true, description: Contact-centre call linkage (BACKOFFICE-64, fast-follow) }
+        dispute_reason_code: { type: string, nullable: true }
+    DisputeCase:
+      allOf:
+        - $ref: '#/components/schemas/DisputeCreate'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            state: { $ref: '#/components/schemas/DisputeState' }
+            sla_clock_started_at: { type: string, format: date-time }
+            refund_required_by: { type: string, format: date-time, nullable: true, description: Next business day after sla_clock_started_at }
+            refund_initiated_at: { type: string, format: date-time, nullable: true }
+            refund_amount: { type: number, nullable: true }
+            nebras_case_id: { type: string, nullable: true }
+            care_case_id: { type: string, nullable: true }
+            assigned_to: { type: string, nullable: true }
+            created_at: { type: string, format: date-time }
+    ComplianceReport:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        report_type: { type: string }
+        status: { $ref: '#/components/schemas/ReportStatus' }
+        reporting_period_start: { type: string, format: date-time }
+        reporting_period_end: { type: string, format: date-time }
+        requested_by: { type: string }
+        approved_by: { type: string, nullable: true }
+        integrity_hash: { type: string, nullable: true, description: SHA-256, set once approved }
+        generated_at: { type: string, format: date-time, nullable: true }
+        submitted_at: { type: string, format: date-time, nullable: true }
+    ApprovalRequest:
+      type: object
+      properties:
+        approval_request_id: { type: string }
+        operation_type: { type: string }
+        state: { type: string, enum: [pending, approved, rejected, timed_out] }
+        initiator: { type: string }
+        approver_required_scope: { type: string }
+        approver: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time, description: Default initiation + 2 business hours }
+        reject_reason: { type: string, nullable: true }
+    RiskSignal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        signal_type: { type: string, enum: [consent_anomaly, tpp_behaviour, cop_mismatch_spike, nebras_liability_approach, agent_anomaly, predictive_liability_forecast] }
+        severity: { type: string, enum: [info, low, medium, high, critical] }
+        status: { type: string, enum: [open, acknowledged, investigating, closed_actioned, closed_no_action, false_positive] }
+        client_id: { type: string, format: uuid, nullable: true }
+        channel: { $ref: '#/components/schemas/Channel' }
+        signal_data: { type: object }
+        nebras_liability_event_ref:
+          type: string
+          nullable: true
+          description: Liability-matrix key issue × liable party (LFI/TPP) × AED amount
+        created_at: { type: string, format: date-time }
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        event_type: { type: string, example: psu_lookup }
+        acting_principal: { type: string }
+        acting_persona: { type: string }
+        scope_used: { type: string }
+        target_psu_identifier: { type: string, nullable: true }
+        target_consent_id: { type: string, format: uuid, nullable: true }
+        target_dispute_id: { type: string, format: uuid, nullable: true }
+        request_trace_id: { type: string, description: x-fapi-interaction-id }
+        request_body_redacted: { type: object }
+        response_status: { type: integer }
+        created_at: { type: string, format: date-time }
+    Freshness:
+      type: object
+      properties:
+        source_published_at: { type: string, format: date-time }
+        view_refreshed_at: { type: string, format: date-time }
+        stale: { type: boolean, description: 'True when older than threshold (default: 2× source refresh cadence — BO-OQ-23)' }
+        stale_cause: { type: string, nullable: true }
+
+    TppCounterparty:
+      type: object
+      properties:
+        organisation_id: { type: string, description: Trust Framework Directory OrganisationId }
+        legal_name: { type: string }
+        registration_number: { type: string, nullable: true }
+        directory_contacts: { type: array, items: { type: object, additionalProperties: true } }
+        directory_synced_at: { type: string, format: date-time }
+        production_status: { type: string, enum: [directory_only, active_traffic, dormant, decommissioned] }
+        first_traffic_at: { type: string, format: date-time, nullable: true }
+        registration_state: { type: string, enum: [unregistered, onboarding, registered, suspended] }
+        financial_system_ref: { type: string, nullable: true, description: Counterparty reference in the P9 financial system }
+        unbilled_traffic: { type: boolean, description: Alert condition — traffic observed without completed financial-system registration }
+        mtd_fee_accrual: { type: number, nullable: true, description: AED }
+        channel: { $ref: '#/components/schemas/Channel' }
+    BillingRecordSet:
+      type: object
+      properties:
+        record_set_id: { type: string, format: uuid }
+        billing_period: { type: string, description: 'YYYY-MM' }
+        ingested_at: { type: string, format: date-time }
+        ingested_by: { type: string, description: acting principal (High-class audited) }
+        source_note: { type: string, nullable: true }
+        integrity_hash: { type: string }
+        line_count: { type: integer }
+        status: { type: string, enum: [ingested, reconciling, reconciled_clean, reconciled_with_breaks] }
+        open_break_count: { type: integer }
+        nebras_billing_query_refs: { type: array, items: { type: string }, description: Nebras case references for disputed lines (30-day window) }
+    InvoiceRun:
+      type: object
+      properties:
+        invoice_run_id: { type: string, format: uuid }
+        billing_period: { type: string }
+        record_set_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending_approval, approved, dispatched_to_p9, partially_settled, settled, rejected] }
+        approval_id: { type: string, format: uuid, nullable: true }
+        invoices: { type: array, items: { $ref: '#/components/schemas/InvoiceInstruction' } }
+        withheld_line_count: { type: integer, description: Disputed lines excluded from this cycle }
+        net_settlement_offset: { type: number, nullable: true, description: AED netted where the bank also owes Nebras fees as TPP-of-record }
+    InvoiceInstruction:
+      type: object
+      properties:
+        organisation_id: { type: string }
+        financial_system_ref: { type: string }
+        line_items: { type: array, items: { type: object, additionalProperties: true } }
+        total: { type: number, description: AED }
+        invoice_status: { type: string, enum: [instructed, issued, settled, overdue, credit_noted] }
+        credit_note_refs: { type: array, items: { type: string }, description: Issued on post-invoice break resolution }
