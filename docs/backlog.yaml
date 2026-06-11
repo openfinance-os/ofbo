@@ -22,7 +22,7 @@ milestones:
       - { id: BACKOFFICE-45, title: High-class audit write path (INSERT-only) with PII redaction at emission, status: done }
       - { id: BACKOFFICE-51, title: Shared PII redaction library (Emirates ID, names, accounts, IBAN), status: done, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-44, title: Four-eyes approval primitive (202 + approval_request, 2-business-hour expiry), status: done, depends_on: [BACKOFFICE-43, BACKOFFICE-45] }
-      - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: pending, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
+      - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: done, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
       - { id: BACKOFFICE-48, title: OTel emission with x-fapi-interaction-id propagation end-to-end, status: pending }
       - { id: BACKOFFICE-49, title: BCBS 239 lineage emission at write time (lineage_events via P7), status: pending, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-50, title: Retention lifecycle - deletion attempts denied and High-class logged, status: pending, depends_on: [BACKOFFICE-45] }

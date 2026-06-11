@@ -6,6 +6,13 @@ import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
 import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
+import {
+  createJustificationMiddleware,
+  isServiceAccountSubject,
+  InMemoryRiskSignalSink,
+  SuperAdminGuardrails,
+  type SuperAdminDeps
+} from './superadmin.js'
 import { approvalRoutes } from './approvals/routes.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
@@ -29,12 +36,18 @@ export interface AppDeps {
   idp?: IdentityProviderPort
   audit?: AuthAuditSink
   approvals?: ApprovalsDeps
+  superadmin?: Partial<SuperAdminDeps>
 }
 
 export function createApp(deps: AppDeps = {}) {
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
   const approvals = new ApprovalsService(audit, deps.approvals ?? {})
+  const guardrails = new SuperAdminGuardrails({
+    itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
+    riskSignals: deps.superadmin?.riskSignals ?? new InMemoryRiskSignalSink(),
+    ...(deps.superadmin?.sessionTtlMs !== undefined ? { sessionTtlMs: deps.superadmin.sessionTtlMs } : {})
+  })
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = approvalRoutes(approvals)
   const app = new Hono()
@@ -56,8 +69,15 @@ export function createApp(deps: AppDeps = {}) {
     await next()
   })
 
-  app.use('*', createAuthMiddleware(idp, audit))
+  app.use(
+    '*',
+    createAuthMiddleware(idp, audit, {
+      isServiceAccountSubject,
+      onSuperAdminSession: (subject, tokenKey, traceId) => guardrails.onSession(subject, tokenKey, traceId)
+    })
+  )
   app.use('*', createScopeMiddleware(audit))
+  app.use('*', createJustificationMiddleware(audit))
 
   app.all('*', async (c) => {
     const url = new URL(c.req.url)
