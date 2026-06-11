@@ -571,7 +571,7 @@ paths:
               type: object
               required: [refund_amount]
               properties:
-                refund_amount: { type: number, format: decimal, description: AED }
+                refund_amount: { $ref: '#/components/schemas/Money' }
       responses:
         '202': { $ref: '#/components/responses/ApprovalPending' }
         default: { $ref: '#/components/responses/Error' }
@@ -1547,16 +1547,29 @@ components:
             next_cursor: { type: string, nullable: true }
     ErrorEnvelope:
       type: object
+      required: [error]
       properties:
         error:
           type: object
-          required: [code, message, request_id, timestamp]
+          required: [code, message, remediation, docs_url]
           properties:
             code: { type: string, example: BACKOFFICE.SCOPE_DENIED }
             message: { type: string }
-            required_scope: { type: string, nullable: true }
+            remediation: { type: string, description: What the caller can do to resolve the error }
+            docs_url: { type: string, format: uri }
+            required_scope: { type: string, nullable: true, description: Present on scope-denied errors }
+        meta:
+          type: object
+          properties:
             request_id: { type: string }
             timestamp: { type: string, format: date-time }
+    Money:
+      type: object
+      required: [amount, currency]
+      description: 'Binding money convention (CLAUDE.md): integer minor units + ISO 4217 — never floating point. Example: { "amount": 150000, "currency": "AED" } = AED 1,500.00.'
+      properties:
+        amount: { type: integer, description: Integer minor units (fils for AED); may be negative for offsets/credits }
+        currency: { type: string, pattern: '^[A-Z]{3}$', example: AED, description: ISO 4217 alphabetic code }
     Channel:
       type: string
       enum: [internal_retail, internal_sme, internal_corporate, external_direct, external_tpp_aas]
@@ -1601,7 +1614,9 @@ components:
         channel: { $ref: '#/components/schemas/Channel' }
         line_type: { $ref: '#/components/schemas/LineType' }
         status: { $ref: '#/components/schemas/BreakStatus' }
-        variance_amount: { type: number, nullable: true, description: AED }
+        variance_amount:
+          nullable: true
+          allOf: [ { $ref: '#/components/schemas/Money' } ]
         variance_count: { type: integer, nullable: true }
         source_a_ref: { type: string, description: Nebras source line }
         source_b_ref: { type: string, description: Platform internal log line }
@@ -1618,7 +1633,7 @@ components:
       required: [fee_class, threshold_value]
       properties:
         fee_class: { type: string, example: nebras_fees }
-        threshold_value: { type: number, description: 'Default: 0.01 AED (1 fils) for fees; 0 for consent drift' }
+        threshold_value: { type: integer, description: 'Integer minor units (fils) when unit=aed — default 1 (= 1 fils) for fees; plain count when unit=count — default 0 for consent drift' }
         unit: { type: string, enum: [aed, count] }
     PsuConsentSearchResult:
       type: object
@@ -1698,7 +1713,9 @@ components:
             sla_clock_started_at: { type: string, format: date-time }
             refund_required_by: { type: string, format: date-time, nullable: true, description: Next business day after sla_clock_started_at }
             refund_initiated_at: { type: string, format: date-time, nullable: true }
-            refund_amount: { type: number, nullable: true }
+            refund_amount:
+              nullable: true
+              allOf: [ { $ref: '#/components/schemas/Money' } ]
             nebras_case_id: { type: string, nullable: true }
             care_case_id: { type: string, nullable: true }
             assigned_to: { type: string, nullable: true }
@@ -1778,7 +1795,10 @@ components:
         registration_state: { type: string, enum: [unregistered, onboarding, registered, suspended] }
         financial_system_ref: { type: string, nullable: true, description: Counterparty reference in the P9 financial system }
         unbilled_traffic: { type: boolean, description: Alert condition — traffic observed without completed financial-system registration }
-        mtd_fee_accrual: { type: number, nullable: true, description: AED }
+        mtd_fee_accrual:
+          nullable: true
+          description: Month-to-date fee accrual
+          allOf: [ { $ref: '#/components/schemas/Money' } ]
         channel: { $ref: '#/components/schemas/Channel' }
     BillingRecordSet:
       type: object
@@ -1803,13 +1823,16 @@ components:
         approval_id: { type: string, format: uuid, nullable: true }
         invoices: { type: array, items: { $ref: '#/components/schemas/InvoiceInstruction' } }
         withheld_line_count: { type: integer, description: Disputed lines excluded from this cycle }
-        net_settlement_offset: { type: number, nullable: true, description: AED netted where the bank also owes Nebras fees as TPP-of-record }
+        net_settlement_offset:
+          nullable: true
+          description: Amount netted where the bank also owes Nebras fees as TPP-of-record (negative = owed)
+          allOf: [ { $ref: '#/components/schemas/Money' } ]
     InvoiceInstruction:
       type: object
       properties:
         organisation_id: { type: string }
         financial_system_ref: { type: string }
         line_items: { type: array, items: { type: object, additionalProperties: true } }
-        total: { type: number, description: AED }
+        total: { $ref: '#/components/schemas/Money' }
         invoice_status: { type: string, enum: [instructed, issued, settled, overdue, credit_noted] }
         credit_note_refs: { type: array, items: { type: string }, description: Issued on post-invoice break resolution }
