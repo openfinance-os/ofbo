@@ -81,6 +81,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.4
         version: 2.0.4(hono@4.12.25)
+      '@ofbo/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       tsx:
         specifier: ^4.19.2
         version: 4.22.4
