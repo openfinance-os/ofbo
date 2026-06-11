@@ -6,7 +6,7 @@ A bank-neutral, build-ready specification for the internal back office a UAE ban
 
 | File | Purpose |
 |---|---|
-| `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 79 requirements (BACKOFFICE-01..79), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
+| `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
 | `specs/backoffice-openapi.yaml` | API contract — 57 paths, 9 tags, admin-scoped. Ground truth for the build |
 | `CLAUDE.md` | Build conventions for AI-assisted delivery (Claude Code): stack defaults, API conventions, per-story workflow, hard stops |
 
