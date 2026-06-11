@@ -1,0 +1,73 @@
+# Quality gates per release (CLAUDE.md): Q1 build+unit, Q2 static analysis+SAST,
+# Q3 integration+contract tests. A failed gate blocks merge. Q4/Q4.5/Q5 land in
+# later milestones (security+deps, BCBS 239 lineage validation, manual prod approval).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  q1-build-unit:
+    name: Q1 — build + unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen
+      - name: Generated artifacts are committed and current
+        run: git diff --exit-code packages/contracts/src/*.generated.ts
+      - run: pnpm test
+
+  q2-static-sast:
+    name: Q2 — static analysis + SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: semgrep (SAST)
+        run: |
+          pipx install semgrep
+          semgrep scan --config p/typescript --error --exclude '*.generated.ts'
+
+  q3-integration-contract:
+    name: Q3 — integration + contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ofbo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ofbo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:apply
+      - run: pnpm db:seed
+      - run: pnpm test:integration

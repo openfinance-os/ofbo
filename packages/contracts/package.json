@@ -1,0 +1,21 @@
+{
+  "name": "@ofbo/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen": "tsx scripts/gen.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.13.4",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.4",
+    "tsx": "^4.19.2"
+  }
+}

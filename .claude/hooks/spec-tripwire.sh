@@ -7,8 +7,16 @@ set -euo pipefail
 
 input=$(cat)
 file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')
+[ -n "$file_path" ] || exit 0
 
-case "$file_path" in
+# Canonicalize so ../, symlinks, or odd prefixes cannot dodge the match.
+if command -v realpath >/dev/null 2>&1; then
+  canonical=$(realpath -m -- "$file_path" 2>/dev/null || printf '%s' "$file_path")
+else
+  canonical="$file_path"
+fi
+
+case "$canonical" in
   */specs/backoffice-openapi.yaml | specs/backoffice-openapi.yaml) ;;
   *) exit 0 ;;
 esac
