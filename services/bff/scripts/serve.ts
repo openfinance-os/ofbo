@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server'
-import { PgApprovalStore, PgAuditEmitter, PgIdempotencyStore, PgLineageEmitter } from '@ofbo/db'
+import { PgApprovalStore, PgAuditEmitter, PgIdempotencyStore, PgLineageEmitter, PgRiskSignalEmitter } from '@ofbo/db'
 import { createApp } from '../src/app.js'
 
 /**
@@ -19,11 +19,13 @@ const lineage = databaseUrl ? new PgLineageEmitter(databaseUrl, tenancy) : undef
 const audit = databaseUrl ? new PgAuditEmitter(databaseUrl, tenancy, lineage) : undefined
 const approvalStore = databaseUrl ? new PgApprovalStore(databaseUrl, tenancy, lineage) : undefined
 const idempotency = databaseUrl ? new PgIdempotencyStore(databaseUrl, tenancy) : undefined
+const riskSignals = databaseUrl ? new PgRiskSignalEmitter(databaseUrl, tenancy) : undefined
 
 const app = createApp({
   ...(audit ? { audit } : {}),
   ...(approvalStore ? { approvals: { store: approvalStore } } : {}),
-  ...(idempotency ? { idempotency } : {})
+  ...(idempotency ? { idempotency } : {}),
+  ...(riskSignals ? { superadmin: { riskSignals } } : {})
 })
 
 serve({ fetch: app.fetch, port })

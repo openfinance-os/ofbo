@@ -12,6 +12,7 @@ const asPersona = (p: string) => ({
   ...FAPI_HEADERS,
   'content-type': 'application/json',
   'idempotency-key': crypto.randomUUID(),
+  'x-superadmin-justification': 'approvals test fixture justification (BACKOFFICE-80)',
   authorization: `Bearer demo-token:${p}`
 })
 

@@ -54,9 +54,17 @@ export interface AuthAuditEvent {
     | 'approval_approved'
     | 'approval_rejected'
     | 'approval_timed_out'
+    | 'superadmin_mutation'
   acting_principal: string
   acting_persona: string | null
-  reason: 'missing_token' | 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona' | 'scope_not_held' | null
+  reason:
+    | 'missing_token'
+    | 'invalid_token'
+    | 'mfa_not_satisfied'
+    | 'unknown_persona'
+    | 'scope_not_held'
+    | 'service_account_superadmin'
+    | null
   trace_id: string
   /** Set on scope_denied events (BACKOFFICE-43 acceptance: persona, attempted scope, reason). */
   attempted_scope?: string | null
@@ -64,6 +72,8 @@ export interface AuthAuditEvent {
   superadmin_marker?: boolean
   /** Set on approval lifecycle events (BACKOFFICE-44). */
   approval_request_id?: string
+  /** Set on superadmin_mutation events (BACKOFFICE-80 guardrail d). */
+  justification?: string
 }
 
 /** Sink for sign-in audit events. The DB-backed High-class emitter replaces the
@@ -85,7 +95,14 @@ declare module 'hono' {
   }
 }
 
-export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAuditSink): MiddlewareHandler {
+export interface AuthHooks {
+  /** Fires after a successful super-admin sign-in (BACKOFFICE-80 session auto-raise). */
+  onSuperAdminSession?: (subject: string, tokenKey: string, traceId: string) => Promise<void>
+  /** BACKOFFICE-80 guardrail (a): the role is never held by automations. */
+  isServiceAccountSubject?: (subject: string) => boolean
+}
+
+export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAuditSink, hooks: AuthHooks = {}): MiddlewareHandler {
   return async (c, next) => {
     const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
     const deny = async (
@@ -130,6 +147,25 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       return deny('BACKOFFICE.UNAUTHENTICATED', 'The token persona is not in the persona scope matrix.', 'unknown_persona', claims.subject, claims.persona)
     }
 
+    if (claims.persona === 'platform-super-admin' && hooks.isServiceAccountSubject?.(claims.subject)) {
+      await audit.record({
+        event_type: 'signin_failure',
+        acting_principal: claims.subject,
+        acting_persona: claims.persona,
+        reason: 'service_account_superadmin',
+        trace_id: traceId
+      })
+      return c.json(
+        errorEnvelope(
+          'BACKOFFICE.SERVICE_ACCOUNT_SUPERADMIN_FORBIDDEN',
+          'platform:superadmin is assignable only to named human principals — never to service accounts or automations.',
+          'Use a named human principal, or register the automation under BACKOFFICE-60 (Phase 2) with its own scoped access.',
+          DOCS_BASE
+        ),
+        403
+      )
+    }
+
     await audit.record({
       event_type: 'signin_success',
       acting_principal: claims.subject,
@@ -139,6 +175,9 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       superadmin_marker: scopes.includes('platform:superadmin')
     })
     c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes })
+    if (scopes.includes('platform:superadmin') && hooks.onSuperAdminSession) {
+      await hooks.onSuperAdminSession(claims.subject, token, traceId)
+    }
     await next()
   }
 }

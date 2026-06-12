@@ -10,5 +10,7 @@ export const FAPI_HEADERS = { 'x-fapi-interaction-id': FIXED_UUID }
 /** Authenticated demo-persona headers (P2 sim tokens; BACKOFFICE-47). */
 export const AUTHED_HEADERS = {
   ...FAPI_HEADERS,
-  authorization: 'Bearer demo-token:platform-super-admin'
+  authorization: 'Bearer demo-token:platform-super-admin',
+  // BACKOFFICE-80 guardrail d: super-admin mutations carry a recorded justification
+  'x-superadmin-justification': 'contract test sweep across all routes (BACKOFFICE-80)'
 }

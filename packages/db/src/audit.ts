@@ -12,6 +12,7 @@ import type { LineageSink } from './lineage.js'
 
 export interface HighClassAuditEvent {
   event_type: string
+  superadmin_marker?: boolean
   acting_principal: string
   acting_persona: string
   scope_used: string
@@ -34,6 +35,7 @@ export interface AuthSinkEvent {
   attempted_scope?: string | null
   superadmin_marker?: boolean
   approval_request_id?: string
+  justification?: string
 }
 
 export interface AuditEmitterConfig {
@@ -83,8 +85,8 @@ export class PgAuditEmitter {
         `INSERT INTO audit_high_sensitivity
            (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
             target_psu_identifier, target_consent_id, target_dispute_id,
-            request_trace_id, request_body_redacted, response_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12)`,
+            request_trace_id, request_body_redacted, response_status, superadmin_marker)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)`,
         [
           this.config.bankId,
           this.config.channel,
@@ -97,7 +99,8 @@ export class PgAuditEmitter {
           event.target_dispute_id ?? null,
           event.request_trace_id,
           body,
-          event.response_status
+          event.response_status,
+          event.superadmin_marker ?? false
         ]
       )
     )
@@ -123,10 +126,12 @@ export class PgAuditEmitter {
       acting_persona: event.acting_persona ?? 'unknown',
       scope_used: event.attempted_scope ?? 'none',
       request_trace_id: event.trace_id,
+      superadmin_marker: event.superadmin_marker ?? false,
       request_body: {
         reason: event.reason,
         superadmin_marker: event.superadmin_marker ?? false,
-        ...(event.approval_request_id ? { approval_request_id: event.approval_request_id } : {})
+        ...(event.approval_request_id ? { approval_request_id: event.approval_request_id } : {}),
+        ...(event.justification ? { justification: event.justification } : {})
       },
       response_status:
         event.event_type === 'signin_failure' ? 401 : event.event_type === 'scope_denied' ? 403 : 200

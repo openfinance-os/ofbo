@@ -22,7 +22,7 @@ milestones:
       - { id: BACKOFFICE-45, title: High-class audit write path (INSERT-only) with PII redaction at emission, status: done }
       - { id: BACKOFFICE-51, title: Shared PII redaction library (Emirates ID, names, accounts, IBAN), status: done, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-44, title: Four-eyes approval primitive (202 + approval_request, 2-business-hour expiry), status: done, depends_on: [BACKOFFICE-43, BACKOFFICE-45] }
-      - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: blocked, reason: awaiting human approval of spec PR 9 (x-superadmin-justification header) - code PR 8 ready and gated on it, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
+      - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: done, pr: 8, note: spec PR 9 (x-superadmin-justification) human-approved and merged 2026-06-12, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
       - { id: BACKOFFICE-48, title: OTel emission with x-fapi-interaction-id propagation end-to-end, status: done }
       - { id: BACKOFFICE-49, title: BCBS 239 lineage emission at write time (lineage_events via P7), status: done, depends_on: [BACKOFFICE-45] }
       - { id: M1-LINEAGE-RISK-SIGNAL, title: Wire lineage emission into PgRiskSignalEmitter (lands with the parked BACKOFFICE-80 branch), status: pending, depends_on: [BACKOFFICE-49, BACKOFFICE-80] }
