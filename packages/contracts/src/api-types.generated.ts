@@ -99,6 +99,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -228,6 +230,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     break_id: components["parameters"]["breakId"];
@@ -264,6 +268,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     break_id: components["parameters"]["breakId"];
@@ -308,6 +314,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     break_id: components["parameters"]["breakId"];
@@ -360,6 +368,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     break_id: components["parameters"]["breakId"];
@@ -402,6 +412,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -461,6 +473,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -627,6 +641,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     consent_id: components["parameters"]["consentId"];
@@ -673,6 +689,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -717,6 +735,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     consent_id: components["parameters"]["consentId"];
@@ -910,6 +930,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -952,6 +974,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     dispute_id: components["parameters"]["disputeId"];
@@ -995,6 +1019,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     dispute_id: components["parameters"]["disputeId"];
@@ -1293,6 +1319,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -1338,6 +1366,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -1518,6 +1548,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     report_id: components["parameters"]["reportId"];
@@ -1554,6 +1586,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     report_id: components["parameters"]["reportId"];
@@ -1590,6 +1624,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -1634,6 +1670,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -1756,6 +1794,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     approval_id: components["parameters"]["approvalId"];
@@ -1811,6 +1851,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     approval_id: components["parameters"]["approvalId"];
@@ -1999,6 +2041,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     signal_id: string;
@@ -2182,6 +2226,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -2221,6 +2267,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     /** @description Trust Framework Directory OrganisationId */
@@ -2295,6 +2343,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -2352,6 +2402,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path: {
                     record_set_id: components["parameters"]["recordSetId"];
@@ -2424,6 +2476,8 @@ export interface paths {
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
                     /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
                     "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
                 path?: never;
                 cookie?: never;
@@ -2782,6 +2836,8 @@ export interface components {
             target_dispute_id?: string | null;
             /** @description x-fapi-interaction-id */
             request_trace_id?: string;
+            /** @description BACKOFFICE-80: stamped true on every record produced under platform:superadmin */
+            superadmin_marker?: boolean;
             request_body_redacted?: Record<string, never>;
             response_status?: number;
             /** Format: date-time */
@@ -3003,6 +3059,8 @@ export interface components {
         fapiInteractionId: string;
         /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
         idempotencyKey: string;
+        /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+        superAdminJustification: string;
         cursor: string;
         limit: number;
         breakId: string;
