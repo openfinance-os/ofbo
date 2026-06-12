@@ -109,12 +109,22 @@ describe('demo Nebras simulator (Railway)', () => {
     expect(body.status).toBe('Authorized')
   })
 
-  it('exposes the fault-injection admin endpoint (breaks on demand for demos)', async () => {
+  it('keeps the fault-injection admin surface OFF public ingress (401 without the operator token)', async () => {
     const res = await fetch(`${SIM}/admin/faults`)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { faults: unknown[] }
-    expect(Array.isArray(body.faults)).toBe(true)
+    expect(res.status).toBe(401)
   })
+
+  it.skipIf(!process.env.SIM_ADMIN_TOKEN)(
+    'admits the operator token to the fault-injection surface (breaks on demand for demos)',
+    async () => {
+      const res = await fetch(`${SIM}/admin/faults`, {
+        headers: { 'x-admin-token': process.env.SIM_ADMIN_TOKEN! }
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { faults: unknown[] }
+      expect(Array.isArray(body.faults)).toBe(true)
+    }
+  )
 
   it('serves the TPP reports surface', async () => {
     const res = await fetch(`${SIM}/tpp-reports/2026-05`)

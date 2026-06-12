@@ -121,3 +121,52 @@ describe('Nebras simulator v1 — fault injection (the demo trigger)', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('Nebras simulator — admin surface guard (M1-DEMO-DEPLOY: /admin off public ingress)', () => {
+  const guarded = () => createNebrasSim({ adminToken: 'demo-admin-secret' })
+
+  it('rejects unauthenticated admin requests when a token is configured', async () => {
+    const app = guarded()
+    expect((await app.request('/admin/faults')).status).toBe(401)
+    expect(
+      (
+        await app.request('/admin/faults', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ fault: 'revoke_delay', delay_ms: 7000 })
+        })
+      ).status
+    ).toBe(401)
+    expect((await app.request('/admin/faults', { method: 'DELETE' })).status).toBe(401)
+  })
+
+  it('rejects a wrong token', async () => {
+    const app = guarded()
+    const res = await app.request('/admin/faults', { headers: { 'x-admin-token': 'wrong' } })
+    expect(res.status).toBe(401)
+  })
+
+  it('admits the configured token and admin behavior is unchanged', async () => {
+    const app = guarded()
+    const created = await app.request('/admin/faults', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-token': 'demo-admin-secret' },
+      body: JSON.stringify({ fault: 'revoke_delay', delay_ms: 7000 })
+    })
+    expect(created.status).toBe(201)
+    const list = await app.request('/admin/faults', { headers: { 'x-admin-token': 'demo-admin-secret' } })
+    expect(list.status).toBe(200)
+    expect(((await list.json()) as { faults: unknown[] }).faults).toHaveLength(1)
+  })
+
+  it('leaves the emulated Hub surfaces public (only /admin is operator-facing)', async () => {
+    const app = guarded()
+    expect((await app.request(`/consent-manager/consents/${CONSENT}`)).status).toBe(200)
+    expect((await app.request('/tpp-reports/2026-05')).status).toBe(200)
+  })
+
+  it('stays open when no token is configured (local dev / unit tests)', async () => {
+    const app = createNebrasSim()
+    expect((await app.request('/admin/faults')).status).toBe(200)
+  })
+})

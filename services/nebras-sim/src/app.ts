@@ -23,10 +23,27 @@ function periodSeed(period: string): number {
   return h || 1
 }
 
-export function createNebrasSim() {
+export interface NebrasSimOptions {
+  /** When set, every /admin/* request must carry it in x-admin-token —
+   *  fault injection is operator-facing, never public ingress (M1-DEMO-DEPLOY).
+   *  Unset = open (local dev/tests); the deployed service always sets it. */
+  adminToken?: string
+}
+
+export function createNebrasSim(options: NebrasSimOptions = {}) {
   const app = new Hono()
   const faults: Fault[] = []
   const revoked = new Map<string, string>() // consent_id → revoked_at ISO
+
+  if (options.adminToken) {
+    const token = options.adminToken
+    app.use('/admin/*', async (c, next) => {
+      if (c.req.header('x-admin-token') !== token) {
+        return c.json({ error: 'admin surface requires x-admin-token' }, 401)
+      }
+      await next()
+    })
+  }
 
   const activeFault = <K extends Fault['fault']>(kind: K) =>
     faults.find((f): f is Extract<Fault, { fault: K }> => f.fault === kind)

@@ -59,4 +59,5 @@ jobs:
       - name: smoke suite against the deployed demo
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SIM_ADMIN_TOKEN: ${{ secrets.SIM_ADMIN_TOKEN }}
         run: pnpm test:smoke
