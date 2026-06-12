@@ -1,12 +1,13 @@
 import { Hono } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
-import type { IdentityProviderPort } from '@ofbo/ports'
+import type { ApmPort, IdentityProviderPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
 import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
 import { approvalRoutes } from './approvals/routes.js'
+import { createTelemetryMiddleware } from './telemetry.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
  *  suites to exclude them from the contract-pending it.fails layer. */
@@ -29,6 +30,7 @@ export interface AppDeps {
   idp?: IdentityProviderPort
   audit?: AuthAuditSink
   approvals?: ApprovalsDeps
+  apm?: Pick<ApmPort, 'exportSpans'>
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -37,7 +39,11 @@ export function createApp(deps: AppDeps = {}) {
   const approvals = new ApprovalsService(audit, deps.approvals ?? {})
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = approvalRoutes(approvals)
+  const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
+
+  // outermost: every request — including 400/401/404 — is spanned (BACKOFFICE-48)
+  app.use('*', createTelemetryMiddleware(apm))
 
   app.use('*', async (c, next) => {
     const fapi = c.req.header('x-fapi-interaction-id')
