@@ -63,7 +63,9 @@ BEGIN
 END $$;
 
 -- INSERT-only audit: belt (no policy) AND braces (no privilege). No deletion path
--- for regulated records anywhere: DELETE is granted to no role on any table.
+-- for regulated records anywhere: DELETE is granted to no role on any regulated
+-- table. (idempotency_key — an operational 24h replay cache outside
+-- retention_policy — is the schema's one deletion path; see 0009.)
 REVOKE UPDATE, DELETE ON audit_high_sensitivity FROM PUBLIC, ofbo_app, bank_internal_view;
 
 GRANT SELECT ON consent_admin_event TO bank_internal_view;
