@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server'
-import { PgAuditEmitter } from '@ofbo/db'
+import { PgAuditEmitter, PgRiskSignalEmitter } from '@ofbo/db'
 import { createApp } from '../src/app.js'
 
 /**
@@ -17,7 +17,20 @@ const audit = databaseUrl
     })
   : undefined
 
-serve({ fetch: createApp(audit ? { audit } : {}).fetch, port })
+const riskSignals = databaseUrl
+  ? new PgRiskSignalEmitter(databaseUrl, {
+      bankId: process.env.BANK_ID ?? '11111111-1111-4111-8111-111111111111',
+      channel: 'internal_retail'
+    })
+  : undefined
+
+serve({
+  fetch: createApp({
+    ...(audit ? { audit } : {}),
+    ...(riskSignals ? { superadmin: { riskSignals } } : {})
+  }).fetch,
+  port
+})
 console.log(
   `OFBO BFF (demo profile) listening on http://localhost:${port} — audit sink: ${audit ? 'postgres (High-class)' : 'in-memory'}`
 )

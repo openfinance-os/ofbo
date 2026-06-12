@@ -46,6 +46,15 @@ export function isServiceAccountSubject(subject: string): boolean {
   return SERVICE_ACCOUNT_RE.test(subject)
 }
 
+function fnv1a(input: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16)
+}
+
 export class SuperAdminGuardrails {
   private readonly seenSessions = new Map<string, number>()
   private readonly sessionTtlMs: number
@@ -56,10 +65,11 @@ export class SuperAdminGuardrails {
 
   /** Once per session (token, TTL-bounded): informational ITSM ticket + Risk signal. */
   async onSession(subject: string, tokenKey: string, traceId: string): Promise<void> {
+    const sessionKey = fnv1a(tokenKey) // never hold the raw bearer token
     const nowMs = Date.now()
-    const seen = this.seenSessions.get(tokenKey)
+    const seen = this.seenSessions.get(sessionKey)
     if (seen !== undefined && nowMs - seen < this.sessionTtlMs) return
-    this.seenSessions.set(tokenKey, nowMs)
+    this.seenSessions.set(sessionKey, nowMs)
     await this.deps.itsm.createTicket(
       {
         type: 'superadmin_session',
