@@ -61,3 +61,9 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Conformance DRIFT (correctly): x-superadmin-justification is client-observable but was absent from the contract → spec PR #9 opened per contract-first (27 mutating ops gain the optional param; AuditEvent.superadmin_marker added; artifacts regenerated). HUMAN DECISION: approve/merge PR #9, then PR #8 merges.
 - Iteration interrupted overnight by the monthly spend limit; resumed cleanly from the committed branch.
 - Loop continues with the next eligible item: BACKOFFICE-48 (OTel emission).
+
+## 2026-06-12 — BACKOFFICE-48 (PR #10, loop iteration 7)
+
+- OTel emission via the P5 bridge: one span per request, trace_id = x-fapi-interaction-id verbatim (NFR-26), route TEMPLATES only (zero identifiers in telemetry), UNMATCHED collapse for bounded cardinality, redactText over the client-controlled header value, redactingLog with key+shape masking. OtelSpan now a rich P5 port type; port suite binds both adapters.
+- Evidence: 193 unit / 14 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT; both advisories fixed in-branch pre-PR.
+- Next eligible: BACKOFFICE-49 (BCBS 239 lineage emission via P7).
