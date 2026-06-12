@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server'
-import { PgAuditEmitter } from '@ofbo/db'
+import { PgAuditEmitter, PgLineageEmitter } from '@ofbo/db'
 import { createApp } from '../src/app.js'
 
 /**
@@ -10,12 +10,12 @@ import { createApp } from '../src/app.js'
 const port = Number(process.env.PORT ?? 8787)
 const databaseUrl = process.env.DATABASE_URL
 
-const audit = databaseUrl
-  ? new PgAuditEmitter(databaseUrl, {
-      bankId: process.env.BANK_ID ?? '11111111-1111-4111-8111-111111111111',
-      channel: 'internal_retail'
-    })
-  : undefined
+const tenancy = {
+  bankId: process.env.BANK_ID ?? '11111111-1111-4111-8111-111111111111',
+  channel: 'internal_retail'
+}
+const lineage = databaseUrl ? new PgLineageEmitter(databaseUrl, tenancy) : undefined
+const audit = databaseUrl ? new PgAuditEmitter(databaseUrl, tenancy, lineage) : undefined
 
 serve({ fetch: createApp(audit ? { audit } : {}).fetch, port })
 console.log(
