@@ -30,7 +30,7 @@ milestones:
       - { id: BACKOFFICE-54, title: Data-classification metadata on every record, status: done }
       - { id: M1-NEBRAS-SIM, title: Nebras simulator v1 service (consent + reports surfaces, fault-injection admin endpoint), status: done }
       - { id: M1-PORTAL-SHELL, title: Portal shell - persona login, DEMO banner, admin-scoped echo, audit visible, status: pending, depends_on: [BACKOFFICE-47, BACKOFFICE-43, BACKOFFICE-45] }
-      - { id: M1-DEMO-DEPLOY, title: Demo deployment pipeline (Cloudflare + Supabase + Railway, auto-deploy on merge), status: blocked, reason: needs BD-14 credentials from the user (Supabase project, Cloudflare account, Railway) }
+      - { id: M1-DEMO-DEPLOY, title: Demo deployment pipeline (Cloudflare + Supabase + Railway, auto-deploy on merge), status: in-progress, note: BD-14 credentials provided 2026-06-12 (local .env); Supabase schema applied + seeded, Railway project ofbo-demo provisioned (services nebras-sim + jobs), Cloudflare token verified }
       - { id: BACKOFFICE-55, title: Region-parameterised IaC (Terraform skeleton, region as parameter), status: pending }
       - { id: BACKOFFICE-57, title: Release evidence bundle committed per release tag, status: pending }
       - { id: BACKOFFICE-56, title: Quality gates Q4 (security+deps) and Q4.5 (lineage validation) added to CI, status: pending, depends_on: [BACKOFFICE-49] }

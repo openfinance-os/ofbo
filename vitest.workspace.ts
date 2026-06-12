@@ -17,5 +17,14 @@ export default defineWorkspace([
       pool: 'threads',
       poolOptions: { threads: { singleThread: true } }
     }
+  },
+  {
+    test: {
+      name: 'smoke',
+      // Runs against the DEPLOYED demo environment (deploy workflow, post-deploy).
+      include: ['tests/smoke/**/*.smoke.spec.ts'],
+      exclude: ['**/node_modules/**'],
+      testTimeout: 15_000
+    }
   }
 ])

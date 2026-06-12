@@ -14,12 +14,18 @@ importers:
       '@types/node':
         specifier: ^22
         version: 22.19.21
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.21))
       eslint:
         specifier: ^9.17.0
         version: 9.39.4
+      pg:
+        specifier: ^8.13.1
+        version: 8.21.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
