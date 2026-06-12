@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono'
 import type { ApmPort, OtelSpan } from '@ofbo/ports'
 import { matchRoute } from '@ofbo/contracts'
-import { redactText } from '@ofbo/redaction'
+import { redactPii, redactText } from '@ofbo/redaction'
 
 /**
  * BACKOFFICE-48: OTel emission with x-fapi-interaction-id as the end-to-end
@@ -21,7 +21,8 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
     const status = c.res.status
     const span: OtelSpan = {
       name: `${c.req.method} ${route}`,
-      trace_id: c.req.header('x-fapi-interaction-id') ?? 'untraced',
+      // redactText closes the one channel a client could use to push an identifier into telemetry
+      trace_id: redactText(c.req.header('x-fapi-interaction-id') ?? 'untraced'),
       span_id: crypto.randomUUID(),
       start_time: start,
       end_time: Date.now(),
@@ -45,7 +46,8 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 export function redactingLog(write: (line: string) => void = (l) => console.log(l)) {
   return (message: string, fields: Record<string, string | number | boolean> = {}): void => {
-    const line = JSON.stringify({ message, ...fields, ts: new Date().toISOString() })
+    // key-based masking first (names/emails/phones), then shape-based over the whole line
+    const line = JSON.stringify({ message, ...redactPii(fields), ts: new Date().toISOString() })
     write(redactText(line))
   }
 }
