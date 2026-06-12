@@ -58,6 +58,8 @@ export async function retentionStatus(databaseUrl: string): Promise<RetentionSta
     const policies = await pool.query(`SELECT table_name, hot_months, immutable_months FROM retention_policy ORDER BY table_name`)
     const out: RetentionStatusRow[] = []
     for (const p of policies.rows) {
+      // defence in depth: identifiers come from the read-only policy table, but validate anyway
+      if (!/^[a-z_][a-z0-9_]*$/.test(p.table_name)) throw new Error(`invalid table name in retention_policy: ${p.table_name}`)
       const stats = await pool.query(
         `SELECT count(*)::int AS row_count,
                 count(*) FILTER (WHERE created_at < now() - ($1 || ' months')::interval)::int AS due_for_warm_tier,
