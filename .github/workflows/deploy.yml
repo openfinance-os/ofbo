@@ -1,0 +1,63 @@
+# M1-DEMO-DEPLOY: auto-deploy on merge (PRD §9 — "deploy early, deploy always").
+# Merge policy already gates merges on CI (Q1–Q3), so this workflow deploys what
+# a green PR produced, then runs the smoke acceptance suite against the LIVE
+# demo environment — a broken demo fails the pipeline, not the next visitor.
+#
+# Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, RAILWAY_TOKEN (project
+# token scoped to ofbo-demo/production), DATABASE_URL (smoke audit assertion).
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-bff:
+    name: BFF → Cloudflare Workers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: wrangler deploy
+        working-directory: services/bff
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy
+
+  deploy-sim:
+    name: Nebras simulator → Railway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: railway up
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: npx -y @railway/cli@4 up --service nebras-sim --ci
+
+  smoke:
+    name: Smoke — demo URL live
+    needs: [deploy-bff, deploy-sim]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: smoke suite against the deployed demo
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SIM_ADMIN_TOKEN: ${{ secrets.SIM_ADMIN_TOKEN }}
+        run: pnpm test:smoke

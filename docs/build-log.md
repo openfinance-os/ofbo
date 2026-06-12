@@ -53,3 +53,54 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Evidence: 187 unit / 14 integration green; approvals+idempotency 95.4% coverage; CI Q1–Q3 pass.
 - Known follow-ups noted by review (non-blocking): idempotency cache should fingerprint the request body (conflict vs replay) and needs a durable store for sleep-tolerant hosting — both land with M1-DEMO-DEPLOY.
 - Next eligible: BACKOFFICE-80 (super-admin guardrails; deps 43+44 now done).
+
+## 2026-06-12 — BACKOFFICE-80 (PRs #8 + #9, loop iteration 6 — PARKED awaiting human)
+
+- Guardrails implemented and fully gated: session auto-raise (1 ITSM ticket + 1 Risk signal per session, hashed token key), ≥20-char justification on super-admin mutations (High-class audited), service-account rejection at sign-in, superadmin_marker as a first-class audit column + monthly Compliance review view (security_invoker), PgRiskSignalEmitter.
+- Evidence: 193 unit / 17 integration green; superadmin module 100% lines; hard-stop PASS (3 advisories, all fixed in-branch).
+- Conformance DRIFT (correctly): x-superadmin-justification is client-observable but was absent from the contract → spec PR #9 opened per contract-first (27 mutating ops gain the optional param; AuditEvent.superadmin_marker added; artifacts regenerated). HUMAN DECISION: approve/merge PR #9, then PR #8 merges.
+- Iteration interrupted overnight by the monthly spend limit; resumed cleanly from the committed branch.
+- Loop continues with the next eligible item: BACKOFFICE-48 (OTel emission).
+
+## 2026-06-12 — BACKOFFICE-48 (PR #10, loop iteration 7)
+
+- OTel emission via the P5 bridge: one span per request, trace_id = x-fapi-interaction-id verbatim (NFR-26), route TEMPLATES only (zero identifiers in telemetry), UNMATCHED collapse for bounded cardinality, redactText over the client-controlled header value, redactingLog with key+shape masking. OtelSpan now a rich P5 port type; port suite binds both adapters.
+- Evidence: 193 unit / 14 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT; both advisories fixed in-branch pre-PR.
+- Next eligible: BACKOFFICE-49 (BCBS 239 lineage emission via P7).
+
+## 2026-06-12 — BACKOFFICE-49 (PR #11, loop iteration 8)
+
+- Lineage at write time via the P7 demo adapter: lineage_events (evidence-grade, INSERT-only), PgLineageEmitter wired into the audit emitter, best-effort isolation tested, Q4.5 validateLineageCoverage names real gaps (pinned: tpp_counterparty seed gap).
+- Story rescoped mid-flight to main's reality: the risk-signal emitter lives in the parked BACKOFFICE-80 branch, so its lineage wiring is queued as M1-LINEAGE-RISK-SIGNAL (deps 49+80) instead of silently stacking on an unmerged branch.
+- Evidence: 193 unit / 17 integration green; CI Q1–Q3 pass; hard-stop PASS; conformance CONFORMANT.
+- Next eligible: BACKOFFICE-50 (retention lifecycle).
+
+## 2026-06-12 — BACKOFFICE-50 (PR #12, loop iteration 9)
+
+- Retention lifecycle: retention_policy (24/60 months, deletion_allowed=false by CHECK, read-only), withDenialLogging (denied mutations → High-class audit, unconditional rethrow), retentionStatus for the Compliance View. Identifier guard added per review.
+- Evidence: 193 unit / 21 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-54 (data-classification metadata).
+
+## 2026-06-12 — BACKOFFICE-54 (PR #13, loop iteration 10)
+
+- Classification on every record: ofbo_classification domain (PRD §7.4 vocabulary), NOT NULL columns across all 10 tables (audit defaults restricted), read-only classification_policy floors, validateClassificationFloors as the Compliance-review trigger source.
+- Evidence: 193 unit / 26 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT.
+- Iteration interrupted twice by the monthly spend limit (reviewers); resumed on user instruction after a workflow-orchestration discussion (decision: stay serial through M1; revisit bounded fan-out at M4).
+- Spec note for BACKOFFICE-35: ComplianceReport schema lacks the classification field the PRD lists — spec-change when the report endpoints land.
+- Next eligible: M1-NEBRAS-SIM (Nebras simulator v1 service).
+
+## 2026-06-12 — M1-NEBRAS-SIM (PR #14, loop iteration 11)
+
+- Nebras simulator v1 live: consent revoke ack <5s, deterministic per-period TPP reports/datasets, fault injection (revoke_delay → visible SLA breach; fee_variance → exactly one perturbed line for M3 to find; consent_drift → mirror disagreement), resettable for repeatable demos.
+- Evidence: 203 unit / 26 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT; both review nits fixed in-branch.
+- Deployment note: /admin/faults must stay off public ingress at M1-DEMO-DEPLOY. Dispute surface (v2) needed before M3.
+- Next eligible: M1-PORTAL-SHELL (deps 47/43/45 all done).
+
+## 2026-06-12 — M1-DEMO-DEPLOY (PRs #15 + #16, loop iteration 12)
+
+- **Demo is live and auto-deploys on merge** (BD-14 credentials provided by the user this session): BFF at https://ofbo-bff.michartmann.workers.dev (Cloudflare Worker, nodejs_compat, pg over cloudflare:sockets; DATABASE_URL as worker secret), Nebras simulator at https://nebras-sim-production.up.railway.app (Railway container, repo-root Dockerfile). deploy.yml: merge → wrangler deploy + railway up → smoke acceptance suite against the LIVE URLs (a broken demo fails the pipeline).
+- Conformance round 1 caught real drift: per-request createApp on Workers destroyed the Idempotency-Key 24h window and made approvals unretrievable. Fix: contract state moved to Postgres — PgApprovalStore + PgIdempotencyStore (migration 0009: approval_request.execution_result, idempotency_key table; RLS-forced, classification row; its 24h prune is the schema's ONE deletion path — operational cache, deliberately outside retention_policy; cleared by hard-stop delta re-review). Migration 0008: GRANT ofbo_app TO the connection user (managed Postgres ≠ superuser; SET LOCAL ROLE needs membership — found live on Supabase, not locally/CI).
+- PR #16 closed the parked M1-NEBRAS-SIM note PR #15 missed: /admin/faults was publicly reachable. createNebrasSim({ adminToken }) → x-admin-token guard on /admin/* (401 at the live URL asserted by smoke); token in Railway var + GH secret only.
+- Evidence: 208 unit / 34 integration green; smoke 9 (8 run + 1 token-gated) against production incl. High-class audit persisted to Supabase verified by trace id; CI Q1–Q3 pass on both PRs; first two auto-deploy runs green. Reviewers: hard-stop PASS ×3 (incl. DELETE-path delta), conformance NONCONFORMANT → CONFORMANT (#15), CONFORMANT (#16).
+- Parked: worker fail-fast when DATABASE_URL is unset in the demo profile (reviewer observation — M5 hardening candidate). The `jobs` Railway service is provisioned but empty until M3. Supabase region is ap-northeast-2 (demo only; residency is an IaC parameter for regulated profiles).
+- Next eligible: M1-PORTAL-SHELL (deps 47/43/45 all done) — joins the deploy and completes the M1 exit criteria (DEMO banner, login screen, audit visible).

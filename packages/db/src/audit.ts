@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { redactPii } from '@ofbo/redaction'
+import type { LineageSink } from './lineage.js'
 
 /**
  * BACKOFFICE-45: the DB-backed High-class audit emitter. INSERT-only by
@@ -42,9 +43,19 @@ export interface AuditEmitterConfig {
   channel: string
 }
 
+const AUDIT_COLUMNS = [
+  'bank_id', 'channel', 'event_type', 'acting_principal', 'acting_persona', 'scope_used',
+  'target_psu_identifier', 'target_consent_id', 'target_dispute_id',
+  'request_trace_id', 'request_body_redacted', 'response_status'
+]
+
 export class PgAuditEmitter {
   private readonly pool: pg.Pool
-  constructor(databaseUrl: string, private readonly config: AuditEmitterConfig) {
+  constructor(
+    databaseUrl: string,
+    private readonly config: AuditEmitterConfig,
+    private readonly lineage?: LineageSink
+  ) {
     this.pool = new pg.Pool({ connectionString: databaseUrl })
   }
 
@@ -93,6 +104,18 @@ export class PgAuditEmitter {
         ]
       )
     )
+    // BCBS 239 (BACKOFFICE-49): lineage at write time. Best-effort by design —
+    // the regulated write itself never depends on catalogue availability.
+    try {
+      await this.lineage?.emitLineage({
+        table: 'audit_high_sensitivity',
+        columns: AUDIT_COLUMNS,
+        source: 'bff-audit-emitter',
+        trace_id: event.request_trace_id
+      })
+    } catch {
+      /* catalogue unavailable — write stands; Q4.5 surfaces persistent gaps */
+    }
   }
 
   /** AuthAuditSink-compatible: lets the BFF swap its in-memory sink for this emitter. */

@@ -32,9 +32,21 @@ export interface CoreBankingPort {
   ): Promise<{ ref: string; amount: Money; booked_at: string }[]>
 }
 
+/** OTel span shape carried over the P5 bridge. trace_id IS x-fapi-interaction-id. */
+export interface OtelSpan {
+  name: string
+  trace_id: string
+  span_id: string
+  parent_span_id?: string
+  start_time: number
+  end_time: number
+  status_code: 'ok' | 'error'
+  attributes: Record<string, string | number | boolean>
+}
+
 /** P5 — Enterprise APM: bridge off the OTel stream (never a second instrumentation path). */
 export interface ApmPort {
-  exportSpans(spans: { name: string; trace_id: string }[]): Promise<void>
+  exportSpans(spans: OtelSpan[]): Promise<void>
 }
 
 /** P6 — Enterprise egress gateway: ALL Nebras-bound traffic. No direct egress — non-negotiable. */

@@ -2,7 +2,7 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ApprovalError, ApprovalsService, toWire } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import { IdempotencyCache } from '../idempotency.js'
+import { IdempotencyCache, type IdempotencyStore } from '../idempotency.js'
 
 /**
  * Handlers for the 5 approvals contract paths. Scopes here are dynamic in the
@@ -23,7 +23,7 @@ function fail(c: Context, e: unknown): Response {
   throw e
 }
 
-export function approvalRoutes(service: ApprovalsService, idempotency = new IdempotencyCache()): Record<string, Handler> {
+export function approvalRoutes(service: ApprovalsService, idempotency: IdempotencyStore = new IdempotencyCache()): Record<string, Handler> {
   const trace = (c: Context) => c.req.header('x-fapi-interaction-id') ?? 'unknown'
 
   /** Binding convention: mutating endpoints require Idempotency-Key; successful
@@ -38,11 +38,11 @@ export function approvalRoutes(service: ApprovalsService, idempotency = new Idem
         )
       }
       const cacheKey = `${routeKey}|${c.get('principal').subject}|${key}`
-      const cached = idempotency.get(cacheKey)
+      const cached = await idempotency.get(cacheKey)
       if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
       const res = await handler(c, params)
       if (res.status >= 200 && res.status < 300) {
-        idempotency.set(cacheKey, res.status, await res.clone().json())
+        await idempotency.set(cacheKey, res.status, await res.clone().json())
       }
       return res
     }
