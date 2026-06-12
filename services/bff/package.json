@@ -7,10 +7,12 @@
     ".": "./src/app.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@ofbo/contracts": "workspace:*",
+    "@ofbo/db": "workspace:*",
     "@ofbo/ports": "workspace:*",
     "hono": "^4.6.14",
     "@ofbo/redaction": "workspace:*"
@@ -18,6 +20,6 @@
   "devDependencies": {
     "@hono/node-server": "^2.0.4",
     "tsx": "^4.19.2",
-    "@ofbo/db": "workspace:*"
+    "wrangler": "^4.16.0"
   }
 }
