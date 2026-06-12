@@ -1,11 +1,12 @@
 import { serve } from '@hono/node-server'
-import { PgAuditEmitter, PgLineageEmitter } from '@ofbo/db'
+import { PgApprovalStore, PgAuditEmitter, PgIdempotencyStore, PgLineageEmitter } from '@ofbo/db'
 import { createApp } from '../src/app.js'
 
 /**
- * Local dev server (node). With DATABASE_URL set, sign-in/scope audit events are
- * written to audit_high_sensitivity via the BACKOFFICE-45 emitter (PII redacted,
- * INSERT-only); without it, the in-memory sink applies.
+ * Local dev server (node). With DATABASE_URL set, the BFF runs exactly like the
+ * deployed worker: High-class audit to audit_high_sensitivity (PII redacted,
+ * INSERT-only), durable approvals + Idempotency-Key replay in Postgres.
+ * Without it, the in-memory defaults apply (single-process semantics).
  */
 const port = Number(process.env.PORT ?? 8787)
 const databaseUrl = process.env.DATABASE_URL
@@ -16,8 +17,16 @@ const tenancy = {
 }
 const lineage = databaseUrl ? new PgLineageEmitter(databaseUrl, tenancy) : undefined
 const audit = databaseUrl ? new PgAuditEmitter(databaseUrl, tenancy, lineage) : undefined
+const approvalStore = databaseUrl ? new PgApprovalStore(databaseUrl, tenancy, lineage) : undefined
+const idempotency = databaseUrl ? new PgIdempotencyStore(databaseUrl, tenancy) : undefined
 
-serve({ fetch: createApp(audit ? { audit } : {}).fetch, port })
+const app = createApp({
+  ...(audit ? { audit } : {}),
+  ...(approvalStore ? { approvals: { store: approvalStore } } : {}),
+  ...(idempotency ? { idempotency } : {})
+})
+
+serve({ fetch: app.fetch, port })
 console.log(
-  `OFBO BFF (demo profile) listening on http://localhost:${port} — audit sink: ${audit ? 'postgres (High-class)' : 'in-memory'}`
+  `OFBO BFF (demo profile) listening on http://localhost:${port} — stores: ${databaseUrl ? 'postgres (audit High-class, durable approvals + idempotency)' : 'in-memory'}`
 )

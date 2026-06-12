@@ -33,6 +33,15 @@ Work milestone by milestone (PRD §9), one story per session, one PR per story. 
 
 ## Demo deployment (free / low-cost)
 
+**Live demo (M1-DEMO-DEPLOY, auto-deploys on merge to main):**
+
+| Surface | URL |
+|---|---|
+| BFF (Cloudflare Worker) | https://ofbo-bff.michartmann.workers.dev |
+| Nebras simulator (Railway) | https://nebras-sim-production.up.railway.app |
+
+Every merge to main triggers `.github/workflows/deploy.yml`: BFF → Cloudflare (wrangler), simulator → Railway, then the smoke acceptance suite (`pnpm test:smoke`) runs against the live URLs — a broken demo fails the pipeline. The portal joins the deploy with M1-PORTAL-SHELL.
+
 The demo profile (PRD §3.1) runs everything on free tiers with synthetic data only. Default stack — **three services**:
 
 | Service | Covers | Notes |

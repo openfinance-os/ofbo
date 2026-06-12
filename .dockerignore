@@ -1,0 +1,9 @@
+# Never ship secrets or local state into image build contexts.
+.env*
+.git
+node_modules
+**/node_modules
+coverage
+docs
+.remember
+.claude

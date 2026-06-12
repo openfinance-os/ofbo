@@ -1,8 +1,9 @@
 /**
  * Idempotency-Key handling (binding convention: required on every mutating
  * endpoint, 24h dedup window). In the demo profile the BFF is the first
- * enforcement layer, so the replay cache lives here; a durable store replaces
- * the in-memory map when the demo deployment lands (sleep-tolerant hosting).
+ * enforcement layer, so replay enforcement lives here. Deployed entries use
+ * the durable Pg store (@ofbo/db PgIdempotencyStore — isolate/restart-proof);
+ * this in-memory cache remains the no-database default for tests/local dev.
  */
 
 interface CachedResponse {
@@ -11,9 +12,15 @@ interface CachedResponse {
   created_at_ms: number
 }
 
+/** What the routes need from a replay store; PgIdempotencyStore matches structurally. */
+export interface IdempotencyStore {
+  get(key: string): Promise<{ status: number; body: unknown } | null> | { status: number; body: unknown } | null
+  set(key: string, status: number, body: unknown): Promise<void> | void
+}
+
 const WINDOW_MS = 24 * 60 * 60 * 1000
 
-export class IdempotencyCache {
+export class IdempotencyCache implements IdempotencyStore {
   private readonly entries = new Map<string, CachedResponse>()
   constructor(private readonly now: () => number = () => Date.now()) {}
 

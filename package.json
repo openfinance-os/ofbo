@@ -12,12 +12,15 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:smoke": "vitest run --project smoke",
     "db:apply": "pnpm --filter @ofbo/db apply",
     "db:seed": "pnpm --filter @ofbo/db seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@types/node": "^22",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",
