@@ -88,3 +88,10 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Iteration interrupted twice by the monthly spend limit (reviewers); resumed on user instruction after a workflow-orchestration discussion (decision: stay serial through M1; revisit bounded fan-out at M4).
 - Spec note for BACKOFFICE-35: ComplianceReport schema lacks the classification field the PRD lists — spec-change when the report endpoints land.
 - Next eligible: M1-NEBRAS-SIM (Nebras simulator v1 service).
+
+## 2026-06-12 — M1-NEBRAS-SIM (PR #14, loop iteration 11)
+
+- Nebras simulator v1 live: consent revoke ack <5s, deterministic per-period TPP reports/datasets, fault injection (revoke_delay → visible SLA breach; fee_variance → exactly one perturbed line for M3 to find; consent_drift → mirror disagreement), resettable for repeatable demos.
+- Evidence: 203 unit / 26 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT; both review nits fixed in-branch.
+- Deployment note: /admin/faults must stay off public ingress at M1-DEMO-DEPLOY. Dispute surface (v2) needed before M3.
+- Next eligible: M1-PORTAL-SHELL (deps 47/43/45 all done).
