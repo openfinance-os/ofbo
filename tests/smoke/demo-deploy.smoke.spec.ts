@@ -53,6 +53,21 @@ describe('demo BFF (Cloudflare Worker)', () => {
     expect(body.meta.timestamp).toBeTruthy()
   })
 
+  it('enforces the Idempotency-Key convention on mutating routes', async () => {
+    const res = await fetch(`${BFF}/approvals`, {
+      method: 'POST',
+      headers: {
+        'x-fapi-interaction-id': fapi(),
+        authorization: 'Bearer demo-token:operations-analyst',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({ operation_type: 'smoke.noop', operation_payload: {} })
+    })
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('BACKOFFICE.MISSING_IDEMPOTENCY_KEY')
+  })
+
   it.skipIf(!DATABASE_URL)(
     'persists a High-class audit record for the sign-in (request_trace_id = x-fapi-interaction-id)',
     async () => {

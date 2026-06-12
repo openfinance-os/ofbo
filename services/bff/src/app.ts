@@ -8,6 +8,7 @@ import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope
 import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
 import { approvalRoutes } from './approvals/routes.js'
 import { createTelemetryMiddleware } from './telemetry.js'
+import type { IdempotencyStore } from './idempotency.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
  *  suites to exclude them from the contract-pending it.fails layer. */
@@ -31,6 +32,7 @@ export interface AppDeps {
   audit?: AuthAuditSink
   approvals?: ApprovalsDeps
   apm?: Pick<ApmPort, 'exportSpans'>
+  idempotency?: IdempotencyStore
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -38,7 +40,7 @@ export function createApp(deps: AppDeps = {}) {
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
   const approvals = new ApprovalsService(audit, deps.approvals ?? {})
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
-  const handlers = approvalRoutes(approvals)
+  const handlers = approvalRoutes(approvals, deps.idempotency)
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
 
