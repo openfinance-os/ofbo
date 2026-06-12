@@ -64,7 +64,7 @@ export function createNebrasSim() {
       line_type: l.line_type,
       tpp_organisation_id: l.tpp_organisation_id,
       fee: { ...l.fee },
-      occurred_at: l.occurred_at
+      occurred_at: l.occurred_at.replace('2026-05', period)
     }))
     const variance = activeFault('fee_variance')
     if (variance && variance.period === period && rows.length > 0) {
@@ -95,6 +95,13 @@ export function createNebrasSim() {
     }
     if (typeof body.fault !== 'string' || !FAULT_TYPES.has(body.fault)) {
       return c.json({ error: `fault must be one of: ${[...FAULT_TYPES].join(', ')}` }, 400)
+    }
+    // money stays integer minor units even under fault injection
+    if (body.fault === 'fee_variance' && !Number.isInteger(body.variance_minor_units)) {
+      return c.json({ error: 'variance_minor_units must be an integer (minor units)' }, 400)
+    }
+    if (body.fault === 'revoke_delay' && !Number.isInteger(body.delay_ms)) {
+      return c.json({ error: 'delay_ms must be an integer' }, 400)
     }
     faults.push(body as unknown as Fault)
     return c.json({ injected: body, active_faults: faults.length }, 201)
