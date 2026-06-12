@@ -79,6 +79,9 @@ importers:
       '@ofbo/ports':
         specifier: workspace:*
         version: link:../../packages/ports
+      '@ofbo/redaction':
+        specifier: workspace:*
+        version: link:../../packages/redaction
       hono:
         specifier: ^4.6.14
         version: 4.12.25

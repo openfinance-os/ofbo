@@ -47,7 +47,19 @@ function describePortContract(profile: 'demo') {
 
     it('P5 accepts an OTel span batch', async () => {
       const p5 = getAdapter('p5-apm', profile)
-      await expect(p5.exportSpans([{ name: 'test-span', trace_id: trace.trace_id }])).resolves.toBeUndefined()
+      await expect(
+        p5.exportSpans([
+          {
+            name: 'test-span',
+            trace_id: trace.trace_id,
+            span_id: 'span-001',
+            start_time: 0,
+            end_time: 1,
+            status_code: 'ok',
+            attributes: { 'http.route': '/test' }
+          }
+        ])
+      ).resolves.toBeUndefined()
     })
 
     it('P6 acknowledges consent revocation within the 5s scheme SLA', async () => {
