@@ -28,7 +28,7 @@ milestones:
       - { id: M1-LINEAGE-RISK-SIGNAL, title: Wire lineage emission into PgRiskSignalEmitter (lands with the parked BACKOFFICE-80 branch), status: pending, depends_on: [BACKOFFICE-49, BACKOFFICE-80] }
       - { id: BACKOFFICE-50, title: Retention lifecycle - deletion attempts denied and High-class logged, status: done, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-54, title: Data-classification metadata on every record, status: done }
-      - { id: M1-NEBRAS-SIM, title: Nebras simulator v1 service (consent + reports surfaces, fault-injection admin endpoint), status: pending }
+      - { id: M1-NEBRAS-SIM, title: Nebras simulator v1 service (consent + reports surfaces, fault-injection admin endpoint), status: done }
       - { id: M1-PORTAL-SHELL, title: Portal shell - persona login, DEMO banner, admin-scoped echo, audit visible, status: pending, depends_on: [BACKOFFICE-47, BACKOFFICE-43, BACKOFFICE-45] }
       - { id: M1-DEMO-DEPLOY, title: Demo deployment pipeline (Cloudflare + Supabase + Railway, auto-deploy on merge), status: blocked, reason: needs BD-14 credentials from the user (Supabase project, Cloudflare account, Railway) }
       - { id: BACKOFFICE-55, title: Region-parameterised IaC (Terraform skeleton, region as parameter), status: pending }
