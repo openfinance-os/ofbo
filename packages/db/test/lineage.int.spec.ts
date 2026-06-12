@@ -66,7 +66,8 @@ describe('BACKOFFICE-49 — BCBS 239 lineage emission at write time (P7 demo ada
   it('validateLineageCoverage (the Q4.5 check) confirms written tables have lineage and names gaps', async () => {
     const result = await validateLineageCoverage(url)
     expect(result.covered).toContain('audit_high_sensitivity')
-    // tpp_counterparty was seeded by the M0 seed without lineage — a genuine pre-existing gap
-    expect(Array.isArray(result.gaps)).toBe(true)
+    // tpp_counterparty was seeded by the M0 seed without lineage — a genuine pre-existing
+    // gap the Q4.5 check MUST name (regression pin per review)
+    expect(result.gaps).toContain('tpp_counterparty')
   })
 })
