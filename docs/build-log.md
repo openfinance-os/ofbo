@@ -74,3 +74,9 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Story rescoped mid-flight to main's reality: the risk-signal emitter lives in the parked BACKOFFICE-80 branch, so its lineage wiring is queued as M1-LINEAGE-RISK-SIGNAL (deps 49+80) instead of silently stacking on an unmerged branch.
 - Evidence: 193 unit / 17 integration green; CI Q1–Q3 pass; hard-stop PASS; conformance CONFORMANT.
 - Next eligible: BACKOFFICE-50 (retention lifecycle).
+
+## 2026-06-12 — BACKOFFICE-50 (PR #12, loop iteration 9)
+
+- Retention lifecycle: retention_policy (24/60 months, deletion_allowed=false by CHECK, read-only), withDenialLogging (denied mutations → High-class audit, unconditional rethrow), retentionStatus for the Compliance View. Identifier guard added per review.
+- Evidence: 193 unit / 21 integration green; CI Q1–Q3 pass; hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-54 (data-classification metadata).
