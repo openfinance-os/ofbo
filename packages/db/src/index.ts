@@ -3,3 +3,4 @@ export { PgAuditEmitter, type HighClassAuditEvent, type AuthSinkEvent, type Audi
 export { redactPii, redactText } from '@ofbo/redaction'
 export { PgLineageEmitter, validateLineageCoverage, type LineageSink, type LineageEvent } from './lineage.js'
 export { withDenialLogging, retentionStatus, type RetentionStatusRow, type DenialActor } from './retention.js'
+export { validateClassificationFloors, type ClassificationMismatch } from './classification.js'
