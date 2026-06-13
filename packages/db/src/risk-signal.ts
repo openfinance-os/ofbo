@@ -1,8 +1,12 @@
 import pg from 'pg'
+import type { LineageSink } from './lineage.js'
 
 /**
  * BACKOFFICE-80: persists Risk View signals (risk_signal table) under the
  * constrained ofbo_app role — structural match for the BFF RiskSignalSink.
+ * M1-LINEAGE-RISK-SIGNAL: emits column-level lineage at write time (BCBS 239),
+ * exactly as the audit path does — best-effort, the regulated write never
+ * depends on catalogue availability.
  */
 
 export interface RiskSignalSinkEvent {
@@ -13,9 +17,15 @@ export interface RiskSignalSinkEvent {
   trace_id: string
 }
 
+const RISK_SIGNAL_COLUMNS = ['bank_id', 'channel', 'signal_type', 'severity', 'status', 'signal_data']
+
 export class PgRiskSignalEmitter {
   private readonly pool: pg.Pool
-  constructor(databaseUrl: string, private readonly config: { bankId: string; channel: string }) {
+  constructor(
+    databaseUrl: string,
+    private readonly config: { bankId: string; channel: string },
+    private readonly lineage?: LineageSink
+  ) {
     this.pool = new pg.Pool({ connectionString: databaseUrl })
   }
 
@@ -42,6 +52,18 @@ export class PgRiskSignalEmitter {
       throw e
     } finally {
       c.release()
+    }
+    // BCBS 239 (M1-LINEAGE-RISK-SIGNAL): lineage at write time. Best-effort by
+    // design — the regulated write itself never depends on catalogue availability.
+    try {
+      await this.lineage?.emitLineage({
+        table: 'risk_signal',
+        columns: RISK_SIGNAL_COLUMNS,
+        source: 'bff-risk-signal-emitter',
+        trace_id: event.trace_id
+      })
+    } catch {
+      /* catalogue unavailable — write stands; Q4.5 surfaces persistent gaps */
     }
   }
 

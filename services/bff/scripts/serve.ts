@@ -19,7 +19,7 @@ const lineage = databaseUrl ? new PgLineageEmitter(databaseUrl, tenancy) : undef
 const audit = databaseUrl ? new PgAuditEmitter(databaseUrl, tenancy, lineage) : undefined
 const approvalStore = databaseUrl ? new PgApprovalStore(databaseUrl, tenancy, lineage) : undefined
 const idempotency = databaseUrl ? new PgIdempotencyStore(databaseUrl, tenancy) : undefined
-const riskSignals = databaseUrl ? new PgRiskSignalEmitter(databaseUrl, tenancy) : undefined
+const riskSignals = databaseUrl ? new PgRiskSignalEmitter(databaseUrl, tenancy, lineage) : undefined
 
 const app = createApp({
   ...(audit ? { audit } : {}),
