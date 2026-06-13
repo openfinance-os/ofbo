@@ -25,7 +25,7 @@ milestones:
       - { id: BACKOFFICE-80, title: Platform Super Administrator marker scope with code-enforced guardrails, status: done, pr: 8, note: spec PR 9 (x-superadmin-justification) human-approved and merged 2026-06-12, depends_on: [BACKOFFICE-43, BACKOFFICE-44] }
       - { id: BACKOFFICE-48, title: OTel emission with x-fapi-interaction-id propagation end-to-end, status: done }
       - { id: BACKOFFICE-49, title: BCBS 239 lineage emission at write time (lineage_events via P7), status: done, depends_on: [BACKOFFICE-45] }
-      - { id: M1-LINEAGE-RISK-SIGNAL, title: Wire lineage emission into PgRiskSignalEmitter (lands with the parked BACKOFFICE-80 branch), status: pending, depends_on: [BACKOFFICE-49, BACKOFFICE-80] }
+      - { id: M1-LINEAGE-RISK-SIGNAL, title: Wire lineage emission into PgRiskSignalEmitter (lands with the parked BACKOFFICE-80 branch), status: in-progress, depends_on: [BACKOFFICE-49, BACKOFFICE-80] }
       - { id: BACKOFFICE-50, title: Retention lifecycle - deletion attempts denied and High-class logged, status: done, depends_on: [BACKOFFICE-45] }
       - { id: BACKOFFICE-54, title: Data-classification metadata on every record, status: done }
       - { id: M1-NEBRAS-SIM, title: Nebras simulator v1 service (consent + reports surfaces, fault-injection admin endpoint), status: done }
