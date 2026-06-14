@@ -1,0 +1,19 @@
+# Demo-profile deployment (BD-14): Internal Portal on Cloudflare Workers, built
+# by the OpenNext adapter. Secrets (never here): DATABASE_URL via CI / `wrangler
+# secret put` — the portal's High-class audit write + read path needs it.
+name = "ofbo-portal"
+main = ".open-next/worker.js"
+compatibility_date = "2025-05-05"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+DEPLOY_PROFILE = "demo"
+# Demo bank tenant — matches the seeded dataset and the BFF worker.
+BANK_ID = "11111111-1111-4111-8111-111111111111"
+
+[observability]
+enabled = true
