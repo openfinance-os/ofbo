@@ -70,3 +70,45 @@ export async function validateLineageCoverage(
     await pool.end()
   }
 }
+
+/**
+ * Tables that legitimately carry rows without write-time lineage today, each
+ * mapped to the story that closes the gap. tpp_counterparty is bulk-seeded
+ * reference data; its write path (and lineage emission) lands with BACKOFFICE-71.
+ * The Q4.5 gate fails on ANY gap not listed here — so a real regression (a
+ * write-path table that stops emitting lineage) blocks merge.
+ */
+export const KNOWN_LINEAGE_GAPS: Record<string, string> = {
+  tpp_counterparty: 'BACKOFFICE-71 — TPP registry write path emits lineage'
+}
+
+export interface LineageGateResult {
+  ok: boolean
+  covered: string[]
+  allowedGaps: string[]
+  unexpectedGaps: string[]
+  /** Allowlisted tables now covered — the allowlist entry can be removed. */
+  staleAllowlist: string[]
+}
+
+/**
+ * Q4.5 BCBS 239 gate: pass only when every table-with-rows emits lineage, save
+ * for the documented known-pending gaps. Pure — the CI step feeds it a coverage
+ * report from validateLineageCoverage.
+ */
+export function evaluateLineageGate(
+  report: { covered: string[]; gaps: string[] },
+  allowlist: Record<string, string> = KNOWN_LINEAGE_GAPS
+): LineageGateResult {
+  const allowed = new Set(Object.keys(allowlist))
+  const unexpectedGaps = report.gaps.filter((g) => !allowed.has(g))
+  const allowedGaps = report.gaps.filter((g) => allowed.has(g))
+  const staleAllowlist = [...allowed].filter((t) => report.covered.includes(t))
+  return {
+    ok: unexpectedGaps.length === 0,
+    covered: report.covered,
+    allowedGaps,
+    unexpectedGaps,
+    staleAllowlist
+  }
+}

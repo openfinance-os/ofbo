@@ -1,6 +1,7 @@
 # Quality gates per release (CLAUDE.md): Q1 build+unit, Q2 static analysis+SAST,
-# Q3 integration+contract tests. A failed gate blocks merge. Q4/Q4.5/Q5 land in
-# later milestones (security+deps, BCBS 239 lineage validation, manual prod approval).
+# Q3 integration+contract tests, Q4 security review+dependency scan, Q4.5 BCBS 239
+# lineage validation (P7). A failed gate blocks merge. Q5 (manual prod approval)
+# is evidenced at release time (BACKOFFICE-57 bundle), not on every PR.
 name: ci
 
 on:
@@ -71,3 +72,56 @@ jobs:
       - run: pnpm db:apply
       - run: pnpm db:seed
       - run: pnpm test:integration
+
+  q4-security-deps:
+    name: Q4 — security review + dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Dependency scan blocks on high/critical in SHIPPED (production) deps.
+      # Dev/build-tooling advisories are tracked separately, not a merge blocker.
+      - name: dependency scan (production deps)
+        run: pnpm audit --prod --audit-level=high
+      - name: secrets scan (security review)
+        run: |
+          pipx install semgrep
+          semgrep scan --config p/secrets --error --exclude '*.generated.ts'
+
+  q45-lineage:
+    name: Q4.5 — BCBS 239 lineage validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ofbo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ofbo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:apply
+      - run: pnpm db:seed
+      # Exercise the real write-path emitters so lineage exists for the tables
+      # that emit at write time (audit, risk_signal, approval_request, …).
+      - run: pnpm test:integration
+      # Gate: every table with rows must emit lineage, save documented gaps.
+      - run: pnpm --filter @ofbo/db lineage:gate
