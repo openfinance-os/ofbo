@@ -1,0 +1,19 @@
+{
+  "name": "@ofbo/release-evidence",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "bundle": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@ofbo/db": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

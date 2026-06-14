@@ -32,7 +32,7 @@ milestones:
       - { id: M1-PORTAL-SHELL, title: Portal shell - persona login, DEMO banner, admin-scoped echo, audit visible, status: done, note: "Next.js portal (apps/portal) on Cloudflare Workers via OpenNext; joins auto-deploy; persona MFA login via P2 IdP port, persistent DEMO banner, admin-scoped echo, High-class audit emitted + visible (PgAuditReader)", depends_on: [BACKOFFICE-47, BACKOFFICE-43, BACKOFFICE-45] }
       - { id: M1-DEMO-DEPLOY, title: Demo deployment pipeline (Cloudflare + Supabase + Railway, auto-deploy on merge), status: done, note: live 2026-06-12 - BFF at ofbo-bff.michartmann.workers.dev, sim at nebras-sim-production.up.railway.app, smoke suite gates every deploy; BD-14 credentials in GH secrets }
       - { id: BACKOFFICE-55, title: Region-parameterised IaC (Terraform skeleton, region as parameter), status: done, note: "infra/terraform skeleton; region is a required parameter validated against approved_residency_regions (BD-06, UAE default); residency enforced via cross-var validation + check block; region-aware naming; invariants gated by a pure-Node test in CI Q1 (no terraform binary)" }
-      - { id: BACKOFFICE-57, title: Release evidence bundle committed per release tag, status: pending }
+      - { id: BACKOFFICE-57, title: Release evidence bundle committed per release tag, status: done, note: "@ofbo/release-evidence builds a sealed (sha256) bundle — control mappings (Q1-Q5+Q4.5), gate results, test results, scan outputs, live BCBS 239 lineage proof, git anchor; release-evidence.yml commits releases/<tag>/ on a published release" }
       - { id: BACKOFFICE-56, title: Quality gates Q4 (security+deps) and Q4.5 (lineage validation) added to CI, status: pending, depends_on: [BACKOFFICE-49] }
 
   - name: M2
