@@ -142,6 +142,16 @@ importers:
 
   packages/redaction: {}
 
+  packages/release-evidence:
+    dependencies:
+      '@ofbo/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
+
   packages/synthetic-data: {}
 
   services/bff:

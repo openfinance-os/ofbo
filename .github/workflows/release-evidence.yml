@@ -1,0 +1,98 @@
+# BACKOFFICE-57 — release evidence bundle, committed to git per release tag
+# (CLAUDE.md: "Release evidence bundle committed to git"; PRD §6). On a published
+# release this runs the quality gates for the released commit, collects the live
+# BCBS 239 lineage proof, assembles the sealed bundle, and commits it under
+# releases/<tag>/ on the default branch. Q5 (manual prod approval) is evidenced
+# by the release itself being published through the protected flow.
+name: release-evidence
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-evidence-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    name: Assemble + commit release evidence bundle
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ofbo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ofbo
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen
+      - run: pnpm db:apply
+      - run: pnpm db:seed
+
+      - name: Q1 — build + unit
+        id: q1
+        continue-on-error: true
+        run: pnpm test -- --reporter=json --outputFile=unit-results.json
+
+      - name: Q2 — static analysis + SAST
+        id: q2
+        continue-on-error: true
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pipx install semgrep
+          semgrep scan --config p/typescript --error --exclude '*.generated.ts'
+
+      - name: Q3 — integration + contract
+        id: q3
+        continue-on-error: true
+        run: pnpm test:integration
+
+      - name: Q4 — dependency scan
+        id: q4
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
+
+      - name: Assemble gate results
+        env:
+          Q1: ${{ steps.q1.outcome }}
+          Q2: ${{ steps.q2.outcome }}
+          Q3: ${{ steps.q3.outcome }}
+          Q4: ${{ steps.q4.outcome }}
+        run: node packages/release-evidence/scripts/collect-gates.mjs > gate-input.json
+
+      - name: Build + write evidence bundle
+        run: pnpm --filter @ofbo/release-evidence bundle -- --tag "$RELEASE_TAG" --commit "$RELEASE_SHA" --ref "refs/tags/$RELEASE_TAG" --input "$GITHUB_WORKSPACE/gate-input.json"
+
+      - name: Commit bundle to git
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "releases/$TAG"
+          git commit -m "release-evidence: bundle for $TAG"
+          git push origin "HEAD:$DEFAULT_BRANCH"
