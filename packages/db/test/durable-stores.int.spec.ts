@@ -1,8 +1,9 @@
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { applyMigrations } from '../src/apply.js'
 import { PgApprovalStore, type StoredApprovalRecord } from '../src/approvals-store.js'
 import { PgIdempotencyStore } from '../src/idempotency-store.js'
+import { PgLineageEmitter, type LineageEvent } from '../src/lineage.js'
 
 /**
  * M1-DEMO-DEPLOY (conformance fix): on Workers, two requests in one demo
@@ -36,7 +37,19 @@ beforeAll(async () => {
 
 describe('PgApprovalStore (approval_request table)', () => {
   const lineageEvents: Array<{ table: string }> = []
-  const lineage = { emitLineage: async (e: { table: string }) => void lineageEvents.push(e) }
+  // Forward to BOTH an in-memory recorder (for the assertion below) and the real
+  // PgLineageEmitter, so approval_request lineage actually lands in the catalogue
+  // — proving BCBS 239 end to end and giving the Q4.5 gate real coverage to find.
+  const realLineage = new PgLineageEmitter(DATABASE_URL, TENANCY)
+  const lineage = {
+    emitLineage: async (e: LineageEvent) => {
+      lineageEvents.push(e)
+      await realLineage.emitLineage(e)
+    }
+  }
+  afterAll(async () => {
+    await realLineage.close()
+  })
 
   it('persists approvals ACROSS store instances (isolate-restart shaped)', async () => {
     const writer = new PgApprovalStore(DATABASE_URL, TENANCY, lineage)
