@@ -142,3 +142,77 @@ export class PgAuditEmitter {
     await this.pool.end()
   }
 }
+
+/** A single High-class audit row, projected to its non-PII summary fields. The
+ *  redacted body never carries PII (redaction happens at emission), so the
+ *  portal renders these directly. */
+export interface AuditEventSummary {
+  id: string
+  event_type: string
+  acting_principal: string
+  acting_persona: string
+  scope_used: string
+  request_trace_id: string
+  response_status: number
+  superadmin_marker: boolean
+  created_at: string
+}
+
+/**
+ * Read side of the High-class audit store (M1-PORTAL-SHELL: "audit record
+ * emitted and visible"). Reads run as ofbo_app with the tenancy context set, so
+ * RLS binds the SELECT to the caller's bank partition exactly as the write path
+ * does — the INSERT-only guarantees are untouched (this class never mutates).
+ */
+export class PgAuditReader {
+  private readonly pool: pg.Pool
+  constructor(
+    databaseUrl: string,
+    private readonly config: AuditEmitterConfig
+  ) {
+    this.pool = new pg.Pool({ connectionString: databaseUrl })
+  }
+
+  /** Recent events, newest first. Optionally scoped to one acting principal. */
+  async recent(opts: { actingPrincipal?: string; limit?: number } = {}): Promise<AuditEventSummary[]> {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100)
+    const c = await this.pool.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE ofbo_app')
+      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      const where = opts.actingPrincipal ? 'WHERE acting_principal = $1' : ''
+      const params = opts.actingPrincipal ? [opts.actingPrincipal, limit] : [limit]
+      const { rows } = await c.query(
+        `SELECT id, event_type, acting_principal, acting_persona, scope_used,
+                request_trace_id, response_status, superadmin_marker, created_at
+           FROM audit_high_sensitivity
+           ${where}
+           ORDER BY created_at DESC
+           LIMIT $${params.length}`,
+        params
+      )
+      await c.query('COMMIT')
+      return rows.map((r) => ({
+        id: r.id,
+        event_type: r.event_type,
+        acting_principal: r.acting_principal,
+        acting_persona: r.acting_persona,
+        scope_used: r.scope_used,
+        request_trace_id: r.request_trace_id,
+        response_status: r.response_status,
+        superadmin_marker: r.superadmin_marker,
+        created_at: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at)
+      }))
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => undefined)
+      throw e
+    } finally {
+      c.release()
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end()
+  }
+}

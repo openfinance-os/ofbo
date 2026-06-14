@@ -1,0 +1,112 @@
+:root {
+  --ofbo-ink: #0b1f33;
+  --ofbo-accent: #0a6cff;
+  --ofbo-demo: #b54708;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ofbo-ink);
+  background: #f6f8fb;
+}
+
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--ofbo-demo);
+  text-align: center;
+}
+
+.portal-main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+.persona-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.persona-list button,
+.dashboard button {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d0d7e2;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.persona-list button:hover {
+  border-color: var(--ofbo-accent);
+}
+
+.persona-id {
+  color: #6b7785;
+  font-size: 0.85em;
+}
+
+.mfa-note {
+  color: #475467;
+}
+
+.signin-error {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.dashboard {
+  display: grid;
+  gap: 2rem;
+}
+
+.scope-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.scope-list li {
+  padding: 0.25rem 0.6rem;
+  background: #eef4ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #e4e9f0;
+}
+
+.trace-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}

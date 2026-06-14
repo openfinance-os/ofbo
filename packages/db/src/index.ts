@@ -1,6 +1,13 @@
 export { applyMigrations } from './apply.js'
 export { PgApprovalStore, type StoredApprovalRecord, type StoredApprovalState } from './approvals-store.js'
-export { PgAuditEmitter, type HighClassAuditEvent, type AuthSinkEvent, type AuditEmitterConfig } from './audit.js'
+export {
+  PgAuditEmitter,
+  PgAuditReader,
+  type HighClassAuditEvent,
+  type AuthSinkEvent,
+  type AuditEmitterConfig,
+  type AuditEventSummary
+} from './audit.js'
 export { PgIdempotencyStore, type CachedIdempotentResponse } from './idempotency-store.js'
 export { redactPii, redactText } from '@ofbo/redaction'
 export { PgLineageEmitter, validateLineageCoverage, type LineageSink, type LineageEvent } from './lineage.js'
