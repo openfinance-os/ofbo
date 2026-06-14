@@ -46,9 +46,14 @@ export interface DemoDataset {
     consents: {
       consent_id: string
       tpp_organisation_id: string
+      tpp_client_id: string
+      tpp_display_name: string
       purpose: string
+      scope: string[]
       status: (typeof CONSENT_STATUSES)[number]
       granted_at: string
+      expires_at: string | null
+      last_access_at: string | null
     }[]
   }[]
   billing_lines: {
@@ -61,6 +66,47 @@ export interface DemoDataset {
   }[]
 }
 
+/** OF v2.1 data-scope sets per purpose — deterministic, no RNG draw. */
+const SCOPE_BY_PURPOSE: Record<string, string[]> = {
+  AISP_DATA_SHARING: ['accounts:read', 'balances:read', 'transactions:read'],
+  SIP_PAYMENT: ['payments:initiate'],
+  COP_CONFIRMATION: ['cop:confirm']
+}
+
+/** Statuses for which the PSU's data was actually accessed → a last_access exists. */
+const ACCESSED_STATUSES = new Set(['Authorized', 'Consumed', 'Expired', 'Revoked'])
+
+/** Deterministic UUID-v4-shaped client id from an organisation id (no RNG draw,
+ *  so enrichment never shifts the generator's byte-repeatable sequence). */
+function deterministicClientId(org: string): string {
+  let h = 0x811c9dc5
+  const out: string[] = []
+  for (let i = 0; i < 32; i++) {
+    h ^= org.charCodeAt(i % org.length) + i
+    h = Math.imul(h, 0x01000193) >>> 0
+    out.push((h & 0xf).toString(16))
+  }
+  out[12] = '4'
+  out[16] = ((parseInt(out[16]!, 16) & 0x3) | 0x8).toString(16)
+  const s = out.join('')
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
+}
+
+/** 'org-fictional-fintech-01' → 'Fictional Fintech 01'. */
+function tppDisplayName(org: string): string {
+  return org
+    .replace(/^org-/, '')
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+function addMonthsIso(iso: string, months: number): string {
+  const d = new Date(iso)
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d.toISOString().replace('.000Z', 'Z')
+}
+
 export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
   const pick = makePick(mulberry32(seed))
 
@@ -69,13 +115,26 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
       iban: `AE${pick.digits(2)}000${pick.digits(16)}`,
       account_ref: `acc-${pick.digits(6)}`
     }))
-    const consents = Array.from({ length: pick.int(3, 6) }, () => ({
-      consent_id: pick.uuid(),
-      tpp_organisation_id: pick.of(TPPS),
-      purpose: pick.of(['AISP_DATA_SHARING', 'SIP_PAYMENT', 'COP_CONFIRMATION'] as const),
-      status: pick.of(CONSENT_STATUSES),
-      granted_at: `2026-0${pick.int(1, 5)}-${String(pick.int(1, 28)).padStart(2, '0')}T${String(pick.int(0, 23)).padStart(2, '0')}:00:00Z`
-    }))
+    const consents = Array.from({ length: pick.int(3, 6) }, () => {
+      // RNG draws stay in the original order; derived fields consume no draws.
+      const consent_id = pick.uuid()
+      const tpp_organisation_id = pick.of(TPPS)
+      const purpose = pick.of(['AISP_DATA_SHARING', 'SIP_PAYMENT', 'COP_CONFIRMATION'] as const)
+      const status = pick.of(CONSENT_STATUSES)
+      const granted_at = `2026-0${pick.int(1, 5)}-${String(pick.int(1, 28)).padStart(2, '0')}T${String(pick.int(0, 23)).padStart(2, '0')}:00:00Z`
+      return {
+        consent_id,
+        tpp_organisation_id,
+        tpp_client_id: deterministicClientId(tpp_organisation_id),
+        tpp_display_name: tppDisplayName(tpp_organisation_id),
+        purpose,
+        scope: SCOPE_BY_PURPOSE[purpose] ?? [],
+        status,
+        granted_at,
+        expires_at: status === 'AwaitingAuthorization' || status === 'Rejected' ? null : addMonthsIso(granted_at, 12),
+        last_access_at: ACCESSED_STATUSES.has(status) ? addMonthsIso(granted_at, 1) : null
+      }
+    })
     return {
       bank_customer_id: `cust-${String(i + 1).padStart(4, '0')}`,
       emirates_id: `999-${pick.int(1960, 2005)}-${pick.digits(7)}-${pick.digits(1)}`,

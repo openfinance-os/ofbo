@@ -16,7 +16,8 @@
     "@ofbo/db": "workspace:*",
     "@ofbo/ports": "workspace:*",
     "hono": "^4.6.14",
-    "@ofbo/redaction": "workspace:*"
+    "@ofbo/redaction": "workspace:*",
+    "@ofbo/synthetic-data": "workspace:*"
   },
   "devDependencies": {
     "@hono/node-server": "^2.0.4",
