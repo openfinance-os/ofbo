@@ -13,7 +13,8 @@ export default defineWorkspace([
       include: [
         'packages/**/test/**/*.spec.ts',
         'services/**/test/**/*.spec.ts',
-        'apps/**/test/**/*.spec.{ts,tsx}'
+        'apps/**/test/**/*.spec.{ts,tsx}',
+        'infra/**/test/**/*.spec.ts'
       ],
       exclude: ['**/*.int.spec.ts', '**/node_modules/**']
     }
