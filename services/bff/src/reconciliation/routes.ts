@@ -119,6 +119,38 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     },
 
+    'post /back-office/reconciliation/runs:replay': async (c) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+          400
+        )
+      }
+      let body: { window_start?: string; window_end?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { window_start, window_end } as ISO timestamps.', DOCS_BASE), 400)
+      }
+      if (!body.window_start || !body.window_end) {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'window_start and window_end are required.', 'Send { window_start, window_end } as ISO timestamps.', DOCS_BASE), 400)
+      }
+      // Scope the replay key by window so a reused key cannot replay a different range.
+      const cacheKey = `reconciliation:replay|${body.window_start}|${body.window_end}|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const { run } = await service.replay(c.get('principal'), { start: body.window_start, end: body.window_end }, traceId)
+        const res = c.json(dataEnvelope(toWire(run)), 202)
+        await idempotency.set(cacheKey, 202, await res.clone().json())
+        return res
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
     'get /back-office/reconciliation/breaks': async (c) => {
       const q: ReconciliationBreakListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
