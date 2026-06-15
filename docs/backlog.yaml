@@ -107,7 +107,7 @@ milestones:
       - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: done }
       - { id: BACKOFFICE-41, title: Analytics exports (PDF/XLSX/CSV), status: done }
       - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: done }
-      - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: pending }
+      - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: done }
       - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: pending }
       - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: pending }
       - { id: BACKOFFICE-74, title: Trust Framework participant administration, status: pending }

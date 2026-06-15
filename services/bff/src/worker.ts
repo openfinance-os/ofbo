@@ -30,6 +30,7 @@ import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/in
 import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
+import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -157,13 +158,17 @@ export default {
     // BACKOFFICE-38 — TPP behavioural profiling: 3σ deviations (volume / hour-of-day /
     // CoP mismatch) → tpp_behaviour Risk signal, deduped against open signals.
     const tppProfiler = new TppBehaviourProfiler({ source: new DemoTppActivitySource(), signals: riskSignals, dedup: anomalyStore })
+    // BACKOFFICE-66 — scheme certificate expiry monitor: red ≤30d → P3 ITSM ticket,
+    // critical ≤7d → ticket + High-class audit (chain handled by P6).
+    const certMonitor = new CertExpiryMonitor({ source: new DemoCertChainSource(), itsm, audit })
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
         ingestion.runIngestion(period, crypto.randomUUID()),
         runLiability(),
         anomalyDetector.detect(crypto.randomUUID()),
-        tppProfiler.profile(crypto.randomUUID())
+        tppProfiler.profile(crypto.randomUUID()),
+        certMonitor.check(crypto.randomUUID())
       ]).finally(async () => {
         await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), audit.close(), lineage.close()])
       })
