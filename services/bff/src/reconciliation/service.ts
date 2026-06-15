@@ -19,6 +19,7 @@ import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { runThreeWayReconciliation, type ReconLineResult, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
+import { computeTppAasMargin, emptyMargin, mergeMargin, type MarginSummary } from './margin.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
 import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
 
@@ -38,6 +39,7 @@ export interface ReconciliationLogStore {
   create(input: ReconciliationRunCreateInput, traceId: string): Promise<{ run: StoredReconciliationRun; created: boolean }>
   get(runId: string): Promise<StoredReconciliationRun | null>
   countForPrefix(runIdPrefix: string): Promise<number>
+  listForPrefix(runIdPrefix: string): Promise<StoredReconciliationRun[]>
   listForRange(start: string, end: string): Promise<StoredReconciliationRun[]>
   list(query?: ReconciliationRunListQuery): Promise<ReconciliationRunPage>
 }
@@ -168,6 +170,7 @@ export interface ReconRunResult {
   created: boolean
   result: ReconResult
   breaks: StoredReconciliationBreak[]
+  margin: MarginSummary
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -216,6 +219,8 @@ export class ReconciliationService {
     const spanStart = this.now().getTime()
     const bundle = opts.simConfig ? buildSimReconSources(period, opts.simConfig) : this.sourcesFor(period)
     const result = await runThreeWayReconciliation(bundle, window, { openDisputeRefs: bundle.openDisputeRefs })
+    // BACKOFFICE-07 — TPP-aaS margin for the run (Nebras fee ↔ fintech re-bill).
+    const margin = await this.marginFor(bundle, window)
 
     const { run, created } = await this.store.create(
       {
@@ -247,7 +252,8 @@ export class ReconciliationService {
           line_count_total: result.line_count_total,
           line_count_matched: result.line_count_matched,
           line_count_unmatched: result.line_count_unmatched,
-          line_count_disputed: result.line_count_disputed
+          line_count_disputed: result.line_count_disputed,
+          tpp_aas_margin: margin.total_margin
         },
         response_status: 200
       })
@@ -258,9 +264,16 @@ export class ReconciliationService {
     const breaks = created ? await this.detectAndRecordBreaks(runId, result, traceId) : []
 
     // BACKOFFICE-13 — OTel: one run span + one span per reconciled line.
-    if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart)
+    if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart, margin.total_margin)
 
-    return { run, created, result, breaks }
+    return { run, created, result, breaks, margin }
+  }
+
+  /** BACKOFFICE-07 — fetch the three sources for a window and compute the run's
+   *  TPP-aaS margin (per fintech + product family). */
+  private async marginFor(bundle: ReconSourcesBundle, window: ReconWindow): Promise<MarginSummary> {
+    const [nebras, fintech, platform] = await Promise.all([bundle.nebras.fetch(window), bundle.fintech.fetch(window), bundle.platform.fetch(window)])
+    return computeTppAasMargin({ nebras, fintech, platform })
   }
 
   /**
@@ -269,7 +282,7 @@ export class ReconciliationService {
    * second instrumentation path). Span attributes carry run_id, line_type, the
    * three source refs, the variance and the decision. Telemetry never fails a run.
    */
-  private emitRunSpans(runId: string, runType: string, result: ReconResult, traceId: string, startMs: number): void {
+  private emitRunSpans(runId: string, runType: string, result: ReconResult, traceId: string, startMs: number, marginTotal: number): void {
     if (!this.apm) return
     const trace = redactText(traceId)
     const endMs = this.now().getTime()
@@ -287,7 +300,8 @@ export class ReconciliationService {
         'recon.line_count_total': result.line_count_total,
         'recon.line_count_matched': result.line_count_matched,
         'recon.line_count_unmatched': result.line_count_unmatched,
-        'recon.line_count_disputed': result.line_count_disputed
+        'recon.line_count_disputed': result.line_count_disputed,
+        'recon.tpp_aas_margin': marginTotal
       }
     }
     const lineSpan = (line: ReconLineResult): OtelSpan => ({
@@ -547,11 +561,18 @@ export class ReconciliationService {
     }
     if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
     const prefix = `recon-${period}-`
-    const [runCount, byStatus] = await Promise.all([this.store.countForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
+    const [runs, byStatus] = await Promise.all([this.store.listForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
     const sum = (keys: string[]) => keys.reduce((n, k) => n + (byStatus[k] ?? 0), 0)
+    // BACKOFFICE-07 — TPP-aaS margin for the month: re-derive each run's sources
+    // (deterministic) and accumulate the per-fintech / per-product-family margin.
+    const margin = emptyMargin()
+    for (const run of runs) {
+      const runPeriod = dateKey(new Date(run.window_start))
+      mergeMargin(margin, await this.marginFor(this.sourcesFor(runPeriod), { start: run.window_start, end: run.window_end }))
+    }
     const summary = {
       period,
-      run_count: runCount,
+      run_count: runs.length,
       breaks: {
         total: Object.values(byStatus).reduce((n, v) => n + v, 0),
         open: sum(OPEN_STATUSES),
@@ -560,8 +581,7 @@ export class ReconciliationService {
         by_status: byStatus
       },
       open_nebras_disputes: byStatus['escalated_nebras_dispute'] ?? 0,
-      // TPP-aaS margin is produced by BACKOFFICE-07; carried as pending until then.
-      tpp_aas_margin: { status: 'pending_backoffice_07', minor_units: 0, currency: 'AED' }
+      tpp_aas_margin: margin
     }
     const start = `${period}-01T00:00:00.000Z`
     const end = this.now().toISOString()
@@ -590,7 +610,7 @@ export class ReconciliationService {
       acting_persona: principal.persona,
       scope_used: RECON_WRITE_SCOPE,
       request_trace_id: traceId,
-      request_body: { report_id: report.id, period, run_count: runCount, break_total: summary.breaks.total, integrity_hash },
+      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, integrity_hash },
       response_status: 200,
       superadmin_marker: principal.scopes.includes('platform:superadmin')
     })
@@ -699,6 +719,9 @@ export class InMemoryReconciliationLogStore implements ReconciliationLogStore {
   }
   async countForPrefix(runIdPrefix: string): Promise<number> {
     return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).length
+  }
+  async listForPrefix(runIdPrefix: string): Promise<StoredReconciliationRun[]> {
+    return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).sort((a, b) => a.window_start.localeCompare(b.window_start))
   }
   async listForRange(start: string, end: string): Promise<StoredReconciliationRun[]> {
     return this.rows.filter((r) => r.created_at >= start && r.created_at < end).sort((a, b) => a.created_at.localeCompare(b.created_at))

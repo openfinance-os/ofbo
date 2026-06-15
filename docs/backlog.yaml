@@ -59,7 +59,7 @@ milestones:
       - { id: BACKOFFICE-05, title: One-click Nebras dispute case from a break, status: done, depends_on: [BACKOFFICE-03] }
       - { id: BACKOFFICE-13, title: OTel traces per run per line, status: done, depends_on: [BACKOFFICE-01] }
       - { id: BACKOFFICE-06, title: Monthly reconciliation summary + Finance sign-off, status: done, depends_on: [BACKOFFICE-04] }
-      - { id: BACKOFFICE-07, title: TPP-aaS pass-through billing and margin tracking, status: pending, depends_on: [BACKOFFICE-01] }
+      - { id: BACKOFFICE-07, title: TPP-aaS pass-through billing and margin tracking, status: done, depends_on: [BACKOFFICE-01] }
       - { id: BACKOFFICE-08, title: CBUAE reconciliation export with integrity hashes, status: done, depends_on: [BACKOFFICE-06] }
       - { id: BACKOFFICE-14, title: Reconciliation retention lifecycle (hot/warm/immutable), status: pending, depends_on: [BACKOFFICE-01] }
 

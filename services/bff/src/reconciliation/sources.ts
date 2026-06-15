@@ -100,7 +100,12 @@ function build(period: string, cfg: Required<SimReconConfig>): Built {
     const billed: Money = expected ?? { amount: 40 + (fnv1a(lineRef) % 200), currency: AED } // nebras_fees pass-through
     platform.push({ line_ref: lineRef, line_type: lineType, channel: chan(i), client_id: client(i), call_count: count, call_success: true })
     nebras.push({ line_ref: lineRef, line_type: lineType, channel: chan(i), client_id: client(i), billed_fee: billed })
-    if (lineType === 'tpp_aas_pass_through') fintech.push({ line_ref: lineRef, billed_fee: billed })
+    // TPP-aaS (BACKOFFICE-07): the bank re-bills the fintech the Nebras fee + a
+    // deterministic markup — that markup is the bank's pass-through margin.
+    if (lineType === 'tpp_aas_pass_through') {
+      const markup = 2 + (fnv1a(`margin:${lineRef}`) % 3) // 2–4 fils per line
+      fintech.push({ line_ref: lineRef, billed_fee: { amount: billed.amount + markup, currency: AED } })
+    }
   }
 
   // Fee-variance lines: Nebras billed differs from the schedule expectation.
