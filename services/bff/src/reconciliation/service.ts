@@ -208,13 +208,13 @@ export class ReconciliationService {
    * day ending at `now`). Idempotent on the derived run_id. `simConfig` lets a
    * demo dial the injected variance/dispute counts.
    */
-  async runDaily(traceId: string, opts: { window?: ReconWindow; runType?: string; simConfig?: SimReconConfig } = {}): Promise<ReconRunResult> {
+  async runDaily(traceId: string, opts: { window?: ReconWindow; runType?: string; simConfig?: SimReconConfig; runId?: string } = {}): Promise<ReconRunResult> {
     const end = opts.window ? new Date(opts.window.end) : this.now()
     const start = opts.window ? new Date(opts.window.start) : new Date(end.getTime() - 24 * 60 * 60 * 1000)
     const window: ReconWindow = { start: start.toISOString(), end: end.toISOString() }
     const runType = opts.runType ?? 'daily'
     const period = dateKey(start)
-    const runId = `recon-${period}-${runType}`
+    const runId = opts.runId ?? `recon-${period}-${runType}`
 
     const spanStart = this.now().getTime()
     const bundle = opts.simConfig ? buildSimReconSources(period, opts.simConfig) : this.sourcesFor(period)
@@ -267,6 +267,40 @@ export class ReconciliationService {
     if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart, margin.total_margin)
 
     return { run, created, result, breaks, margin }
+  }
+
+  /**
+   * BACKOFFICE-10 — replay reconciliation over a date range from the buffered
+   * source data (for a missed/failed daily run). Idempotent: the run_id is derived
+   * from the window, so a repeat replay of an unchanged window is a no-op — the
+   * store ON CONFLICT returns the existing run, and break detection / the run-
+   * completion audit only fire on an actually-executed run (BACKOFFICE-01). The
+   * sim sources are deterministic per period, so an unchanged window always
+   * reproduces the same run. platform:operations:write; the human initiator is
+   * High-class audited here (the system run-completion audit is separate).
+   */
+  async replay(principal: Principal, window: { start: string; end: string }, traceId: string): Promise<{ run: StoredReconciliationRun; created: boolean }> {
+    assertScope(principal, OPS_WRITE_SCOPE)
+    const start = new Date(window.start)
+    const end = new Date(window.end)
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_WINDOW', 'window_start and window_end must be valid ISO timestamps.', 400)
+    }
+    if (end.getTime() <= start.getTime()) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_WINDOW', 'window_end must be after window_start.', 400)
+    }
+    const runId = `recon-replay-${dateKey(start)}_${dateKey(end)}`
+    const { run, created } = await this.runDaily(traceId, { window: { start: start.toISOString(), end: end.toISOString() }, runType: 'replay', runId })
+    await this.audit.emit({
+      event_type: 'reconciliation_replay_requested',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: OPS_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { window: { start: start.toISOString(), end: end.toISOString() }, run_id: run.run_id, idempotent_noop: !created },
+      response_status: 202
+    })
+    return { run, created }
   }
 
   /** BACKOFFICE-07 — fetch the three sources for a window and compute the run's
