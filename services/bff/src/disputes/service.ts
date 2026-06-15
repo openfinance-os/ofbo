@@ -124,13 +124,14 @@ export function makeRefundOperation(deps: {
       const refundAmount = payload.refund_amount as Money
       const traceId = String(payload.trace_id ?? 'unknown')
       const initiatedBy = String(payload.initiated_by ?? 'unknown')
+      const initiatedByPersona = String(payload.initiated_by_persona ?? 'unknown')
       const refundRequiredBy = endOfNextBusinessDay(now()).toISOString()
       const updated = await deps.store.markRefundInitiated(disputeId, refundAmount, refundRequiredBy, traceId)
       if (!updated) throw new Error(`dispute ${disputeId} not found at refund execution`)
       await deps.audit.emit({
         event_type: 'refund_initiated',
         acting_principal: initiatedBy,
-        acting_persona: 'customer-care-agent',
+        acting_persona: initiatedByPersona,
         scope_used: DISPUTE_SCOPE,
         target_dispute_id: disputeId,
         request_trace_id: traceId,
@@ -268,6 +269,7 @@ export class DisputeService {
           dispute_id: disputeId,
           refund_amount: refundAmount,
           initiated_by: principal.subject,
+          initiated_by_persona: principal.persona,
           trace_id: traceId
         }
       },
