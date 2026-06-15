@@ -62,6 +62,7 @@ export default {
     const tppCounterpartyStore = url ? new PgTppCounterpartyStore(url, tenancy, lineage) : undefined
     const billingRecordStore = url ? new PgBillingRecordStore(url, tenancy, lineage) : undefined
     const invoiceRunStore = url ? new PgInvoiceRunStore(url, tenancy, lineage) : undefined
+    const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -75,12 +76,13 @@ export default {
       ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
       ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
       ...(billingRecordStore ? { billingRecordStore } : {}),
-      ...(invoiceRunStore ? { invoiceRunStore } : {})
+      ...(invoiceRunStore ? { invoiceRunStore } : {}),
+      ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

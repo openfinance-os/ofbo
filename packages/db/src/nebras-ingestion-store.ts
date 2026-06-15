@@ -230,4 +230,44 @@ export class PgNebrasAggregateStore extends TenantStore {
     )
     return rows.map(toAggregate)
   }
+
+  /** BACKOFFICE-31 — MTD Nebras fee accrual for the Finance View: the period's
+   *  materialized aggregates rolled up, with the worst-case freshness. */
+  async feeAccrualForPeriod(period: string): Promise<FeeAccrual | null> {
+    const rows = await this.listForPeriod(period)
+    return rollUpFeeAccrual(rows)
+  }
+}
+
+export interface FeeAccrual {
+  total_fee_minor: number
+  currency: string
+  by_line_type: { line_type: string; total_fee_minor: number; line_count: number }[]
+  source_published_at: string | null
+  stale: boolean
+}
+
+/** Roll a period's per-(channel×line_type) aggregates into the Finance View accrual. */
+export function rollUpFeeAccrual(rows: StoredAggregate[]): FeeAccrual | null {
+  if (rows.length === 0) return null
+  const byType = new Map<string, { line_type: string; total_fee_minor: number; line_count: number }>()
+  let total = 0
+  let published: string | null = null
+  let stale = false
+  for (const r of rows) {
+    total += r.total_fee_minor
+    const b = byType.get(r.line_type) ?? { line_type: r.line_type, total_fee_minor: 0, line_count: 0 }
+    b.total_fee_minor += r.total_fee_minor
+    b.line_count += r.line_count
+    byType.set(r.line_type, b)
+    if (!published || r.source_published_at > published) published = r.source_published_at
+    if (r.freshness !== 'fresh') stale = true
+  }
+  return {
+    total_fee_minor: total,
+    currency: rows[0]!.currency,
+    by_line_type: [...byType.values()].sort((a, b) => a.line_type.localeCompare(b.line_type)),
+    source_published_at: published,
+    stale
+  }
 }

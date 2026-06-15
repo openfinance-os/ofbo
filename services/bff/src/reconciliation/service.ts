@@ -547,6 +547,30 @@ export class ReconciliationService {
   }
 
   /**
+   * BACKOFFICE-31 — TPP-aaS margin by fintech + product family for a calendar
+   * month, re-derived from each run's deterministic sources (same basis as the
+   * monthly sign-off). Read-only; reconciliation:read. For the Finance View.
+   */
+  async marginForPeriod(principal: Principal, period: string): Promise<MarginSummary> {
+    assertScope(principal, RECON_READ_SCOPE)
+    const runs = await this.store.listForPrefix(`recon-${period}-`)
+    const margin = emptyMargin()
+    for (const run of runs) {
+      const runPeriod = dateKey(new Date(run.window_start))
+      mergeMargin(margin, await this.marginFor(this.sourcesFor(runPeriod), { start: run.window_start, end: run.window_end }))
+    }
+    return margin
+  }
+
+  /** BACKOFFICE-31 — the open Nebras dispute queue size for a month (Finance View). */
+  async openNebrasDisputeCount(principal: Principal, period: string): Promise<number> {
+    assertScope(principal, RECON_READ_SCOPE)
+    if (!this.breakStore) return 0
+    const byStatus = await this.breakStore.summarizeByStatus(`recon-${period}-`)
+    return byStatus['escalated_nebras_dispute'] ?? 0
+  }
+
+  /**
    * BACKOFFICE-06 — month-close: generate + lock the monthly reconciliation summary
    * (run count, break counts by disposition, open Nebras disputes; TPP-aaS margin
    * is enriched by BACKOFFICE-07) and persist it as a compliance_report with the

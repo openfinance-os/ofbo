@@ -78,8 +78,10 @@ export {
 export {
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
+  rollUpFeeAccrual,
   type StoredSnapshot,
   type SnapshotCreateInput,
   type StoredAggregate,
-  type AggregateInput
+  type AggregateInput,
+  type FeeAccrual
 } from './nebras-ingestion-store.js'

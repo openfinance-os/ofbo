@@ -57,6 +57,7 @@ import {
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
+import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader } from './analytics/finance-view.js'
 import {
   InvoicingService,
   InMemoryBillingRecordStore,
@@ -108,7 +109,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/billing-records/{record_set_id}:reconcile',
   'get /back-office/invoice-runs',
   'post /back-office/invoice-runs',
-  'get /back-office/invoice-runs/{invoice_run_id}'
+  'get /back-office/invoice-runs/{invoice_run_id}',
+  'get /back-office/analytics/finance-view'
 ])
 
 /**
@@ -141,6 +143,9 @@ export interface AppDeps {
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
   billingRecordStore?: BillingRecordStore
   invoiceRunStore?: InvoiceRunStore
+  /** BACKOFFICE-31 — Finance View fee-accrual source (the BACKOFFICE-32 materialized
+   *  aggregates). Defaults to an empty reader; the worker wires the Pg aggregate store. */
+  nebrasAggregateReader?: FinanceFeeAccrualReader
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -228,8 +233,9 @@ export function createApp(deps: AppDeps = {}) {
     reports: complianceReportStore,
     audit: highClassAudit
   })
+  const tppCounterpartyStore = deps.tppCounterpartyStore ?? new InMemoryTppCounterpartyStore()
   const tppRegistryService = new TppRegistryService(
-    deps.tppCounterpartyStore ?? new InMemoryTppCounterpartyStore(),
+    tppCounterpartyStore,
     deps.tppDirectoryEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env)),
     highClassAudit,
     getAdapter('p9-financial-system', profileFromConfig(process.env)),
@@ -241,6 +247,15 @@ export function createApp(deps: AppDeps = {}) {
     breakSink: reconciliationBreakStore,
     approvals,
     audit: highClassAudit
+  })
+  // BACKOFFICE-31 — Finance View composes persisted data under one read scope:
+  // fee accrual (BACKOFFICE-32 aggregates), margin (BACKOFFICE-07), the open Nebras
+  // dispute queue, and the unbilled-traffic signal (BACKOFFICE-72, aggregate count).
+  const financeViewService = new FinanceViewService({
+    feeAccrual: deps.nebrasAggregateReader ?? { feeAccrualForPeriod: async () => null },
+    margin: reconciliationService,
+    disputes: reconciliationService,
+    unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length }
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
@@ -255,7 +270,8 @@ export function createApp(deps: AppDeps = {}) {
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
-    ...tppInvoicingRoutes(invoicingService, idempotencyStore)
+    ...tppInvoicingRoutes(invoicingService, idempotencyStore),
+    ...financeViewRoutes(financeViewService)
   }
   const app = new Hono()
 
