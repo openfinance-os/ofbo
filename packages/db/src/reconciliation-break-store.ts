@@ -185,6 +185,36 @@ export class PgReconciliationBreakStore {
     return rows.map(toBreak)
   }
 
+  async get(id: string): Promise<StoredReconciliationBreak | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(`SELECT ${SELECT_COLUMNS} FROM reconciliation_break WHERE id = $1`, [id])
+      return res.rows[0] ?? null
+    })
+    return row ? toBreak(row) : null
+  }
+
+  /**
+   * BACKOFFICE-03 — claim a FLAGGED break: → assigned, record the claimant, and
+   * start the resolution SLA clock. The `status = 'flagged'` guard makes the
+   * claim atomic — a concurrent second claim updates 0 rows (returns null), so
+   * the break leaves every other claimant's queue. reconciliation_break is a
+   * mutable workflow table (RLS UPDATE).
+   */
+  async claim(id: string, assignedTo: string, traceId: string): Promise<StoredReconciliationBreak | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE reconciliation_break
+            SET status = 'assigned', assigned_to = $2, sla_clock_started_at = now()
+          WHERE id = $1 AND status = 'flagged'
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, assignedTo]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toBreak(row) : null
+  }
+
   /** Count breaks already recorded for a run — used to keep detection idempotent. */
   async countForRun(runId: string): Promise<number> {
     return this.asApp(async (c) => {

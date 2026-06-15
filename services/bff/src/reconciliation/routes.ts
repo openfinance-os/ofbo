@@ -3,7 +3,8 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { StoredReconciliationRun, ReconciliationRunListQuery, StoredReconciliationBreak, ReconciliationBreakListQuery } from '@ofbo/db'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
-import type { ReconciliationService } from './service.js'
+import { BreakWorkflowError, type ReconciliationService } from './service.js'
+import type { IdempotencyStore } from '../idempotency.js'
 
 /**
  * BACKOFFICE-01 — reconciliation run read surface. Both routes are
@@ -57,10 +58,13 @@ export function breakToWire(b: StoredReconciliationBreak) {
 
 function fail(c: Context, e: unknown): Response {
   if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+  if (e instanceof BreakWorkflowError) {
+    return c.json(errorEnvelope(e.code, e.message, 'See the break workflow contract (BACKOFFICE-03).', DOCS_BASE), e.status as ContentfulStatusCode)
+  }
   throw e
 }
 
-export function reconciliationRoutes(service: ReconciliationService): Record<string, Handler> {
+export function reconciliationRoutes(service: ReconciliationService, idempotency: IdempotencyStore): Record<string, Handler> {
   return {
     'get /back-office/reconciliation/runs': async (c) => {
       const q: ReconciliationRunListQuery = {
@@ -104,6 +108,28 @@ export function reconciliationRoutes(service: ReconciliationService): Record<str
       try {
         const { rows, next_cursor } = await service.listBreaks(c.get('principal'), q)
         return c.json(dataEnvelope(rows.map(breakToWire), { next_cursor }), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
+    'post /back-office/reconciliation/breaks/{break_id}/claim': async (c, params) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+          400
+        )
+      }
+      const cacheKey = `reconciliation:claim|${params.break_id}|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const claimed = await service.claimBreak(c.get('principal'), params.break_id!, traceId)
+        const res = c.json(dataEnvelope(breakToWire(claimed)), 200)
+        await idempotency.set(cacheKey, 200, await res.clone().json())
+        return res
       } catch (e) {
         return fail(c, e)
       }
