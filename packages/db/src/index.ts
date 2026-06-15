@@ -22,7 +22,14 @@ export {
 } from './lineage.js'
 export { withDenialLogging, retentionStatus, type RetentionStatusRow, type DenialActor } from './retention.js'
 export { validateClassificationFloors, type ClassificationMismatch } from './classification.js'
-export { PgRiskSignalEmitter, type RiskSignalSinkEvent } from './risk-signal.js'
+export {
+  PgRiskSignalEmitter,
+  PgRiskMetricsStore,
+  type RiskSignalSinkEvent,
+  type RiskSignalSummary,
+  type LiabilityMonitor,
+  type RiskSignalHeader
+} from './risk-signal.js'
 export {
   PgConsentEventReader,
   encodeCursor,

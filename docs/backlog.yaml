@@ -77,7 +77,7 @@ milestones:
       - { id: BACKOFFICE-31, title: Finance View, status: done, depends_on: [BACKOFFICE-32] }
       - { id: BACKOFFICE-28, title: Operations Console (platform health, certification per role), status: done }
       - { id: BACKOFFICE-29, title: Compliance View, status: done }
-      - { id: BACKOFFICE-30, title: Risk View, status: pending }
+      - { id: BACKOFFICE-30, title: Risk View, status: in-progress }
       - { id: BACKOFFICE-27, title: Executive Dashboard (Commercial + Programme angles), status: pending, depends_on: [BACKOFFICE-31] }
       - { id: BACKOFFICE-34, title: Onboarding funnel metrics (entry-path dimension), status: pending }
       - { id: BACKOFFICE-35, title: Self-service CBUAE periodic report generation (four-eyes when CBUAE-bound), status: pending }

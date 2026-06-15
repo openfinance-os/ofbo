@@ -1,0 +1,82 @@
+import type { Context } from 'hono'
+import type { RiskSignalSummary, LiabilityMonitor, RiskSignalHeader } from '@ofbo/db'
+import type { Principal } from '../auth.js'
+import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { dataEnvelope } from '../envelope.js'
+
+/**
+ * BACKOFFICE-30 — Risk View. A read-only analytics view (risk:read, enforced at the
+ * BFF middleware AND re-checked here) over risk_signal: consent anomaly signals
+ * (frequency, platform↔Nebras drift), TPP behavioural anomalies (volume spikes,
+ * off-pattern timing, CoP mismatch trends), and the proactive Nebras-liability
+ * monitor — with the freshness envelope (BACKOFFICE-40). Surfaces typed signal
+ * headers + counts only, never the raw signal_data blob (no PSU PII). The
+ * threshold-based liability-event engine (BACKOFFICE-36) and streaming consent
+ * anomaly detection (BACKOFFICE-37) feed this view; they are separate stories.
+ */
+
+export const RISK_VIEW_SCOPE = 'risk:read'
+
+const CONSENT_ANOMALY_TYPES = ['consent_anomaly', 'cop_mismatch_spike']
+const TPP_ANOMALY_TYPES = ['tpp_behaviour', 'agent_anomaly']
+
+export interface RiskMetricsReader {
+  summary(): Promise<RiskSignalSummary>
+  liabilityMonitor(): Promise<LiabilityMonitor>
+  recentActive(limit?: number): Promise<RiskSignalHeader[]>
+}
+
+export interface RiskViewDeps {
+  metrics: RiskMetricsReader
+  now?: () => Date
+}
+
+const sumTypes = (by: Record<string, number>, types: string[]) => types.reduce((n, t) => n + (by[t] ?? 0), 0)
+
+export class RiskViewService {
+  constructor(private readonly deps: RiskViewDeps) {}
+
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+    assertScope(principal, RISK_VIEW_SCOPE)
+    const now = (this.deps.now ?? (() => new Date()))()
+
+    const [summary, liability, recent] = await Promise.all([
+      this.deps.metrics.summary(),
+      this.deps.metrics.liabilityMonitor(),
+      this.deps.metrics.recentActive(20)
+    ])
+
+    const data = {
+      signal_summary: { active_total: summary.active_total, by_type: summary.by_type, by_severity: summary.by_severity, by_status: summary.by_status },
+      consent_anomalies: { active: sumTypes(summary.by_type, CONSENT_ANOMALY_TYPES) },
+      tpp_behaviour_anomalies: { active: sumTypes(summary.by_type, TPP_ANOMALY_TYPES) },
+      liability_monitor: liability,
+      recent_signals: recent
+    }
+    const refreshedAt = now.toISOString()
+    const freshness = {
+      // Live read over risk_signal — trivially fresh.
+      source_published_at: refreshedAt,
+      view_refreshed_at: refreshedAt,
+      stale: false,
+      stale_cause: null
+    }
+    return { data, freshness }
+  }
+}
+
+type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
+
+export function riskViewRoutes(service: RiskViewService): Record<string, Handler> {
+  return {
+    'get /back-office/analytics/risk-view': async (c) => {
+      try {
+        const { data, freshness } = await service.view(c.get('principal'))
+        return c.json({ ...dataEnvelope(data), freshness }, 200)
+      } catch (e) {
+        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+        throw e
+      }
+    }
+  }
+}
