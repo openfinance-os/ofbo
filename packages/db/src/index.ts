@@ -22,3 +22,10 @@ export {
 export { withDenialLogging, retentionStatus, type RetentionStatusRow, type DenialActor } from './retention.js'
 export { validateClassificationFloors, type ClassificationMismatch } from './classification.js'
 export { PgRiskSignalEmitter, type RiskSignalSinkEvent } from './risk-signal.js'
+export {
+  PgConsentEventReader,
+  encodeCursor,
+  type ConsentTimelineEvent,
+  type ConsentEventPage,
+  type ConsentEventQuery
+} from './consent-events.js'

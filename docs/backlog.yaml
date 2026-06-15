@@ -38,7 +38,7 @@ milestones:
   - name: M2
     items:
       - { id: BACKOFFICE-16, title: PSU-centric consent search (<500ms p95, High-class audited), status: done, note: "GET /consents:search-psu by bank_customer_id|iban|emirates_id → PsuConsentSearchResult (TPP identity, purpose, scope, 7-state status, last access); scope consents:admin at BFF+service; exactly one High-class consent_search audit per call (PII identifier redacted at emission, target=resolved internal id, trace propagated). Demo data via enriched @ofbo/synthetic-data + DemoConsentDirectory (M6 swaps the interface)" }
-      - { id: BACKOFFICE-19, title: 24-month per-PSU consent audit-trail timeline, status: pending, depends_on: [BACKOFFICE-16] }
+      - { id: BACKOFFICE-19, title: 24-month per-PSU consent audit-trail timeline, status: done, note: "GET /consents/{id}/audit-trail + /psu/{id}/audit-trail — chronological 24-mo consent lifecycle events from the High-class store, audit:read at BFF+service, keyset cursor (created_at,id) truncated to ms to avoid boundary overlap; event.id is the drill-down anchor. PgConsentEventReader (read-only, RLS) in @ofbo/db; M6 swaps the ConsentEventSource interface", depends_on: [BACKOFFICE-16] }
       - { id: BACKOFFICE-17, title: Single-consent revocation with reason code (<5s p99 to Nebras sim), status: pending, depends_on: [BACKOFFICE-16] }
       - { id: BACKOFFICE-18, title: Emergency PSU-wide bulk revocation (four-eyes), status: pending, depends_on: [BACKOFFICE-17] }
       - { id: SPEC-FRAUD-REVOKE-FOUREYES, title: Spec-change PR - add x-four-eyes + 202 to revoke-fraud per binding BD-03 default; clarify reports:approve 200-vs-202; approval id format (human-approved merge), status: pending }

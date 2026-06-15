@@ -17,6 +17,12 @@ import { approvalRoutes } from './approvals/routes.js'
 import { consentRoutes } from './consents/routes.js'
 import { ConsentSearchService } from './consents/service.js'
 import { DemoConsentDirectory, type ConsentDirectory } from './consents/directory.js'
+import {
+  ConsentAuditTrailService,
+  consentAuditTrailRoutes,
+  InMemoryConsentEventSource,
+  type ConsentEventSource
+} from './consents/audit-trail.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import type { IdempotencyStore } from './idempotency.js'
@@ -29,7 +35,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /approvals/{approval_id}',
   'post /approvals/{approval_id}:approve',
   'post /approvals/{approval_id}:reject',
-  'get /consents:search-psu'
+  'get /consents:search-psu',
+  'get /consents/{consent_id}/audit-trail',
+  'get /psu/{psu_identifier}/audit-trail'
 ])
 
 /**
@@ -50,6 +58,7 @@ export interface AppDeps {
    *  when it exposes emit (PgAuditEmitter does), else an in-memory sink. */
   highClassAudit?: HighClassAuditSink
   consentDirectory?: ConsentDirectory
+  consentEventSource?: ConsentEventSource
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -76,8 +85,13 @@ export function createApp(deps: AppDeps = {}) {
     audit: highClassAudit,
     directory: deps.consentDirectory ?? sharedDemoConsentDirectory()
   })
+  const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
-  const handlers = { ...approvalRoutes(approvals, deps.idempotency), ...consentRoutes(consentSearch) }
+  const handlers = {
+    ...approvalRoutes(approvals, deps.idempotency),
+    ...consentRoutes(consentSearch),
+    ...consentAuditTrailRoutes(auditTrail)
+  }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
 

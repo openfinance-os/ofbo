@@ -1,4 +1,11 @@
-import { PgApprovalStore, PgAuditEmitter, PgIdempotencyStore, PgLineageEmitter, PgRiskSignalEmitter } from '@ofbo/db'
+import {
+  PgApprovalStore,
+  PgAuditEmitter,
+  PgConsentEventReader,
+  PgIdempotencyStore,
+  PgLineageEmitter,
+  PgRiskSignalEmitter
+} from '@ofbo/db'
 import { createApp } from './app.js'
 
 /**
@@ -35,17 +42,19 @@ export default {
     const approvalStore = url ? new PgApprovalStore(url, tenancy, lineage) : undefined
     const idempotency = url ? new PgIdempotencyStore(url, tenancy) : undefined
     const riskSignals = url ? new PgRiskSignalEmitter(url, tenancy, lineage) : undefined
+    const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
       ...(approvalStore ? { approvals: { store: approvalStore } } : {}),
       ...(idempotency ? { idempotency } : {}),
-      ...(riskSignals ? { superadmin: { riskSignals } } : {})
+      ...(riskSignals ? { superadmin: { riskSignals } } : {}),
+      ...(consentEvents ? { consentEventSource: consentEvents } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
