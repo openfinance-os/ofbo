@@ -361,6 +361,27 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/scheme-notifications",
+    "tag": "analytics",
+    "scope": "platform:operations:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/scheme-notifications",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/scheme-notifications/{notification_id}:acknowledge",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/lineage/{table_name}",
     "tag": "audit",
     "scope": "compliance:reports:read",
