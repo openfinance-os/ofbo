@@ -22,10 +22,13 @@ export interface PaymentAdminView {
 
 export interface PaymentSource {
   get(paymentId: string): PaymentAdminView | null
+  /** All payments for a PSU (internal bank_customer_id) — the inquiry bundle. */
+  byPsu(psuIdentifier: string): PaymentAdminView[]
 }
 
 export class DemoPaymentDirectory implements PaymentSource {
   private readonly byId = new Map<string, PaymentAdminView>()
+  private readonly byPsuId = new Map<string, PaymentAdminView[]>()
 
   constructor(seed?: number) {
     const ds = seed === undefined ? generateDemoDataset() : generateDemoDataset(seed)
@@ -45,7 +48,7 @@ export class DemoPaymentDirectory implements PaymentSource {
               last_access_at: c.last_access_at
             }
           : null
-        this.byId.set(p.payment_id, {
+        const view: PaymentAdminView = {
           payment_id: p.payment_id,
           ipp_status: p.ipp_status,
           consent_at_time_of_payment: consentView,
@@ -53,12 +56,20 @@ export class DemoPaymentDirectory implements PaymentSource {
           risk_information_block: p.risk_information_block,
           channel: p.channel,
           psu_identifier: psu.bank_customer_id
-        })
+        }
+        this.byId.set(p.payment_id, view)
+        const list = this.byPsuId.get(psu.bank_customer_id) ?? []
+        list.push(view)
+        this.byPsuId.set(psu.bank_customer_id, list)
       }
     }
   }
 
   get(paymentId: string): PaymentAdminView | null {
     return this.byId.get(paymentId) ?? null
+  }
+
+  byPsu(psuIdentifier: string): PaymentAdminView[] {
+    return this.byPsuId.get(psuIdentifier) ?? []
   }
 }

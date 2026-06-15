@@ -33,6 +33,12 @@ import {
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
+import {
+  InquiryBundleService,
+  InMemoryComplianceReportStore,
+  inquiryRoutes,
+  type ComplianceReportStore
+} from './inquiries/bundle.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -53,7 +59,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /payments/{payment_id}:admin',
   'post /disputes',
   'get /disputes',
-  'post /disputes/{dispute_id}:initiate-refund'
+  'post /disputes/{dispute_id}:initiate-refund',
+  'post /back-office/inquiries/psu'
 ])
 
 /**
@@ -78,6 +85,7 @@ export interface AppDeps {
   nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent' | 'createDisputeCase' | 'dispatchRefund'>
   disputeStore?: DisputeStore
   paymentSource?: PaymentSource
+  complianceReportStore?: ComplianceReportStore
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -126,12 +134,21 @@ export function createApp(deps: AppDeps = {}) {
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
+  const paymentSource = deps.paymentSource ?? sharedDemoPaymentDirectory()
   const disputeService = new DisputeService({
     store: disputeStore,
-    payments: deps.paymentSource ?? sharedDemoPaymentDirectory(),
+    payments: paymentSource,
     egress: nebrasEgress,
     audit: highClassAudit,
     approvals
+  })
+  const inquiryService = new InquiryBundleService({
+    consents: deps.consentDirectory ?? sharedDemoConsentDirectory(),
+    payments: paymentSource,
+    disputes: disputeStore,
+    events: deps.consentEventSource ?? new InMemoryConsentEventSource(),
+    reports: deps.complianceReportStore ?? new InMemoryComplianceReportStore(),
+    audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
@@ -141,7 +158,8 @@ export function createApp(deps: AppDeps = {}) {
     ...consentRevokeRoutes(revokeService, idempotencyStore),
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
-    ...disputeRoutes(disputeService, idempotencyStore)
+    ...disputeRoutes(disputeService, idempotencyStore),
+    ...inquiryRoutes(inquiryService, idempotencyStore)
   }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()

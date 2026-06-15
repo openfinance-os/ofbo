@@ -1,6 +1,7 @@
 import {
   PgApprovalStore,
   PgAuditEmitter,
+  PgComplianceReportStore,
   PgConsentEventReader,
   PgDisputeStore,
   PgIdempotencyStore,
@@ -45,6 +46,7 @@ export default {
     const riskSignals = url ? new PgRiskSignalEmitter(url, tenancy, lineage) : undefined
     const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
     const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
+    const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -52,12 +54,13 @@ export default {
       ...(idempotency ? { idempotency } : {}),
       ...(riskSignals ? { superadmin: { riskSignals } } : {}),
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
-      ...(disputeStore ? { disputeStore } : {})
+      ...(disputeStore ? { disputeStore } : {}),
+      ...(complianceReportStore ? { complianceReportStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
