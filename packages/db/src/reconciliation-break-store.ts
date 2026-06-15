@@ -278,6 +278,17 @@ export class PgReconciliationBreakStore {
     return row ? toBreak(row) : null
   }
 
+  /** BACKOFFICE-06 — counts of breaks by status for a run_id prefix (a month's
+   *  runs share the prefix recon-YYYY-MM-). Feeds the monthly sign-off summary. */
+  async summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>> {
+    return this.asApp(async (c) => {
+      const res = await c.query(`SELECT status, count(*)::int AS n FROM reconciliation_break WHERE run_id LIKE $1 GROUP BY status`, [`${runIdPrefix}%`])
+      const out: Record<string, number> = {}
+      for (const r of res.rows) out[r.status as string] = Number(r.n)
+      return out
+    })
+  }
+
   /** Count breaks already recorded for a run — used to keep detection idempotent. */
   async countForRun(runId: string): Promise<number> {
     return this.asApp(async (c) => {

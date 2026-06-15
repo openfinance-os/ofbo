@@ -6,8 +6,11 @@ import type {
   StoredReconciliationBreak,
   ReconciliationBreakCreateInput,
   ReconciliationBreakListQuery,
-  ReconciliationBreakPage
+  ReconciliationBreakPage,
+  ComplianceReportCreateInput,
+  StoredComplianceReport
 } from '@ofbo/db'
+import { createHash } from 'node:crypto'
 import type { ApmPort, ItsmPort, NebrasEgressPort, OtelSpan } from '@ofbo/ports'
 import { redactText } from '@ofbo/redaction'
 import type { Principal } from '../auth.js'
@@ -34,6 +37,7 @@ const RUN_PRINCIPAL = 'system:reconciliation-engine'
 export interface ReconciliationLogStore {
   create(input: ReconciliationRunCreateInput, traceId: string): Promise<{ run: StoredReconciliationRun; created: boolean }>
   get(runId: string): Promise<StoredReconciliationRun | null>
+  countForPrefix(runIdPrefix: string): Promise<number>
   list(query?: ReconciliationRunListQuery): Promise<ReconciliationRunPage>
 }
 
@@ -45,12 +49,33 @@ export interface ReconciliationBreakStore {
   resolve(id: string, outcome: string, note: string, traceId: string): Promise<StoredReconciliationBreak | null>
   reopen(id: string, traceId: string): Promise<StoredReconciliationBreak | null>
   escalateNebras(id: string, nebrasCaseId: string, traceId: string): Promise<StoredReconciliationBreak | null>
+  summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>>
   list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
+}
+
+/** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (create + lineage). */
+export interface MonthlyReportStore {
+  create(input: ComplianceReportCreateInput, traceId: string): Promise<StoredComplianceReport>
 }
 
 export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
 export const OPS_WRITE_SCOPE = 'platform:operations:write'
 export const DISPUTES_WRITE_SCOPE = 'finance:disputes:write'
+export const MONTHLY_REPORT_TYPE = 'monthly_reconciliation'
+const OPEN_STATUSES = ['flagged', 'assigned']
+const RESOLVED_STATUSES = ['resolved_matched', 'resolved_internal_correction']
+const ESCALATED_STATUSES = ['escalated_nebras_dispute', 'escalated_fintech_billing']
+
+/** Deterministic JSON for hashing (sorted keys). */
+function canonicalJson(value: unknown): string {
+  const norm = (v: unknown): unknown =>
+    v === null || typeof v !== 'object'
+      ? v
+      : Array.isArray(v)
+        ? v.map(norm)
+        : Object.fromEntries(Object.keys(v as Record<string, unknown>).sort().map((k) => [k, norm((v as Record<string, unknown>)[k])]))
+  return JSON.stringify(norm(value))
+}
 export const COMPLIANCE_SCOPE = 'audit:read'
 export const BREAK_REOPEN_OPERATION = 'reconciliation.break_reopen'
 /** Resolve outcomes accepted by the resolve endpoint (escalated_nebras_dispute is
@@ -128,6 +153,8 @@ export interface ReconciliationDeps {
   egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   /** BACKOFFICE-13 — P5 APM sink for per-run/per-line OTel spans (omit to skip). */
   apm?: Pick<ApmPort, 'exportSpans'>
+  /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (omit to disable). */
+  reports?: MonthlyReportStore
   now?: () => Date
 }
 
@@ -151,6 +178,7 @@ export class ReconciliationService {
   private readonly approvals?: ReopenApprovalRequester
   private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   private readonly apm?: Pick<ApmPort, 'exportSpans'>
+  private readonly reports?: MonthlyReportStore
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -163,6 +191,7 @@ export class ReconciliationService {
     this.approvals = deps.approvals
     this.egress = deps.egress
     this.apm = deps.apm
+    this.reports = deps.reports
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -497,6 +526,71 @@ export class ReconciliationService {
     })
     return { break_id: breakId, status: escalated.status, nebras_dispute_case_id: nebras_case_id }
   }
+
+  /**
+   * BACKOFFICE-06 — month-close: generate + lock the monthly reconciliation summary
+   * (run count, break counts by disposition, open Nebras disputes; TPP-aaS margin
+   * is enriched by BACKOFFICE-07) and persist it as a compliance_report with the
+   * Finance Analyst's IdP-attested sign-off (approved_by = the authenticated
+   * principal) + a SHA-256 integrity hash. The report is the locked, 5-yr-archived
+   * artifact; PDF/XLSX rendering is a downstream concern off this signed record.
+   */
+  async monthlySignoff(principal: Principal, period: string, traceId: string): Promise<StoredComplianceReport> {
+    assertScope(principal, RECON_WRITE_SCOPE)
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
+    }
+    if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
+    const prefix = `recon-${period}-`
+    const [runCount, byStatus] = await Promise.all([this.store.countForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
+    const sum = (keys: string[]) => keys.reduce((n, k) => n + (byStatus[k] ?? 0), 0)
+    const summary = {
+      period,
+      run_count: runCount,
+      breaks: {
+        total: Object.values(byStatus).reduce((n, v) => n + v, 0),
+        open: sum(OPEN_STATUSES),
+        resolved: sum(RESOLVED_STATUSES),
+        escalated: sum(ESCALATED_STATUSES),
+        by_status: byStatus
+      },
+      open_nebras_disputes: byStatus['escalated_nebras_dispute'] ?? 0,
+      // TPP-aaS margin is produced by BACKOFFICE-07; carried as pending until then.
+      tpp_aas_margin: { status: 'pending_backoffice_07', minor_units: 0, currency: 'AED' }
+    }
+    const start = `${period}-01T00:00:00.000Z`
+    const end = this.now().toISOString()
+    const integrity_hash = createHash('sha256').update(canonicalJson(summary)).digest('hex')
+
+    const report = await this.reports.create(
+      {
+        report_type: MONTHLY_REPORT_TYPE,
+        // Generated + signed off in one Finance Analyst action (IdP-attested).
+        status: 'approved',
+        reporting_period_start: start,
+        reporting_period_end: end,
+        classification: 'restricted',
+        requested_by: principal.subject,
+        approved_by: principal.subject,
+        integrity_hash,
+        generated_at: end,
+        content: summary
+      },
+      traceId
+    )
+
+    await this.audit.emit({
+      event_type: 'reconciliation_monthly_signoff',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: RECON_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { report_id: report.id, period, run_count: runCount, break_total: summary.breaks.total, integrity_hash },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return report
+  }
 }
 
 /** No-database default (tests / local dev). */
@@ -524,6 +618,9 @@ export class InMemoryReconciliationLogStore implements ReconciliationLogStore {
   }
   async get(runId: string): Promise<StoredReconciliationRun | null> {
     return this.rows.find((r) => r.run_id === runId) ?? null
+  }
+  async countForPrefix(runIdPrefix: string): Promise<number> {
+    return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).length
   }
   async list(query: ReconciliationRunListQuery = {}): Promise<ReconciliationRunPage> {
     let rows = this.rows
@@ -601,6 +698,11 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     row.status = 'escalated_nebras_dispute'
     row.nebras_dispute_case_id = nebrasCaseId
     return row
+  }
+  async summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>> {
+    const out: Record<string, number> = {}
+    for (const r of this.rows) if (r.run_id.startsWith(runIdPrefix)) out[r.status] = (out[r.status] ?? 0) + 1
+    return out
   }
   async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
     let rows = this.rows
