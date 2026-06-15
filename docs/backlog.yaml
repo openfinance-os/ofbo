@@ -115,6 +115,26 @@ milestones:
       - { id: BACKOFFICE-79, title: Nebras service-desk case tracking, status: pending }
       - { id: BACKOFFICE-70, title: LFI Ozone Connect health-check surfacing, status: pending }
 
+  - name: UI
+    # Portal screen build-out from the Stitch project (8050269076066130289) "Regulated Institutional
+    # Interface" design system. Division of truth: Stitch = appearance (layout + tokens);
+    # specs/backoffice-openapi.yaml = behaviour + data. Every screen is token-only (no raw hex/px),
+    # OpenAPI-bound (no Stitch mock values), DEMO-bannered, persona scope-gated, zero PII, four-eyes
+    # via 202 + approval_request (never inline), and cites its Stitch screen id in the PR for
+    # design<->code traceability. Positioned post-M5 to avoid disrupting the in-flight backend loop;
+    # promote UI-00/01/02 earlier on request once the foundation is approved.
+    items:
+      - { id: UI-00-DESIGN-SYSTEM, title: Codify Stitch design.md as a repo-canonical Tailwind token preset, status: pending, depends_on: [M1-PORTAL-SHELL], note: "Pull the 'Regulated Institutional Interface' design.md into apps/portal/design/ as the canonical token source; emit a Tailwind preset (Inter + JetBrains Mono scale, navy #0F172A primary, status semantics red=breach/amber=break/green=reconciled, 4px spacing, radii, density toggles). ADR in docs/adrs/ for adopting Tailwind. Migrate the M1 shell's plain globals.css onto tokens and RETIRE the ad-hoc --ofbo-* palette (reconcile, do not preserve). CI lint fails on raw hex/px in components. Push edits back to Stitch via upload_design_md. Relates to BACKOFFICE-26 (console design-system + Al Tareq brand conformance, M5)" }
+      - { id: UI-01-APP-SHELL, title: App shell (sidebar/topbar, persona-switcher, scope-aware nav), status: pending, depends_on: [UI-00-DESIGN-SYSTEM], note: "Refactor the existing flat portal-main layout into the design-system shell: 240px collapsible sidebar, 64px top bar, persona-switcher with role badge, global search slot, density toggle. Nav hides modules outside the persona scope matrix. ABSORB (do not recreate) the M1 components: demo-banner, scope-echo (-> persona-switcher/role-badge), audit-panel (-> audit-trail timeline). The login screen (app/page.tsx) stays - it is the one surface outside the Stitch set; restyle to tokens" }
+      - { id: UI-02-CARE-CONSOLE, title: Customer Care Console screen (end-to-end proving run), status: pending, depends_on: [UI-01-APP-SHELL], note: "Translate Stitch 'OFBO - Customer Care Console' -> React; wire to shipped backends -16 (consent search) / -19 (24-mo timeline) / -17 (revoke) / -20 (dispute). First full-pipeline proof (tokens -> component -> OpenAPI client -> tests) before scaling the rest. consents:admin scope-gated" }
+      - { id: UI-03-RECON-CONSOLE, title: Reconciliation Console screen, status: pending, depends_on: [UI-01-APP-SHELL], note: "Translate Stitch 'OFBO - Reconciliation Console'; binds -01/-02/-03/-04/-06 (run list, break queue, claim + SLA clock, resolution outcomes). Feeds BACKOFFICE-15 (recon console WCAG 2.1 AA, M5)" }
+      - { id: UI-04-INVESTIGATION, title: Investigation Detail View screen, status: pending, depends_on: [UI-03-RECON-CONSOLE], note: "Translate Stitch 'OFBO - Investigation Detail View'; break detail binding -05 (one-click Nebras dispute) and -11 (three-source side-by-side diff, done)" }
+      - { id: UI-05-FOUR-EYES, title: Four-Eyes Approval Portal screen, status: pending, depends_on: [UI-01-APP-SHELL], note: "Translate Stitch 'OFBO - Four-Eyes Approval Portal'; cross-cutting over the approvals primitive (-44). Dual initiator/approver cards, permission lockouts (disabled when the principal lacks the required scope), 202 + approval_request flow - never inline execution" }
+      - { id: UI-06-ANALYTICS, title: Analytics & Insights Dashboard screen, status: pending, depends_on: [UI-01-APP-SHELL, BACKOFFICE-27, BACKOFFICE-31], note: "Translate Stitch 'OFBO - Analytics & Insights Dashboard'; binds Executive Dashboard (-27) + Finance View (-31). Build contract-first against stubs if the M4 backend lags. Data-freshness indicator per -40" }
+      - { id: UI-07-RISK, title: Risk Management & Anomaly Detection screen, status: pending, depends_on: [UI-01-APP-SHELL, BACKOFFICE-30], note: "Translate Stitch 'OFBO - Risk Management & Anomaly Detection'; binds Risk View (-30), proactive liability monitor (-36), consent-pattern anomalies (-37). Narrow Risk scope per the persona matrix" }
+      - { id: UI-08-TPP-BILLING, title: TPP Billing & Registry screen, status: pending, depends_on: [UI-01-APP-SHELL, BACKOFFICE-71], note: "Translate Stitch 'OFBO - TPP Billing & Registry'; binds consuming-TPP registry (-71), onboarding (-72), monthly invoicing (-73). Finance scope. -71 carries the known tpp_counterparty lineage gap" }
+      - { id: UI-09-OPS-CONSOLE, title: Operations Console screen, status: pending, depends_on: [UI-01-APP-SHELL, BACKOFFICE-28], note: "Translate Stitch 'OFBO - Operations Console'; binds Operations Console backend (-28) + SLO observability (-58). Aggregate ops surface - lands after the modules it summarizes" }
+
   - name: M6
     items:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
