@@ -15,9 +15,12 @@ export interface RiskSignalSinkEvent {
   acting_principal: string
   summary: string
   trace_id: string
+  /** BACKOFFICE-36 — liability proximity ref (issue × liable party × AED). */
+  nebras_liability_event_ref?: string
+  client_id?: string
 }
 
-const RISK_SIGNAL_COLUMNS = ['bank_id', 'channel', 'signal_type', 'severity', 'status', 'signal_data']
+const RISK_SIGNAL_COLUMNS = ['bank_id', 'channel', 'signal_type', 'severity', 'status', 'signal_data', 'nebras_liability_event_ref']
 
 export class PgRiskSignalEmitter {
   private readonly pool: pg.Pool
@@ -36,14 +39,16 @@ export class PgRiskSignalEmitter {
       await c.query('SET LOCAL ROLE ofbo_app')
       await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
       await c.query(
-        `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, signal_data)
-         VALUES ($1, $2, $3, $4, 'open', $5::jsonb)`,
+        `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, client_id, signal_data, nebras_liability_event_ref)
+         VALUES ($1, $2, $3, $4, 'open', $5, $6::jsonb, $7)`,
         [
           this.config.bankId,
           this.config.channel,
           event.signal_type,
           event.severity,
-          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id })
+          event.client_id ?? null,
+          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id }),
+          event.nebras_liability_event_ref ?? null
         ]
       )
       await c.query('COMMIT')

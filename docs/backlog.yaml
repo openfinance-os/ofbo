@@ -81,7 +81,7 @@ milestones:
       - { id: BACKOFFICE-27, title: Executive Dashboard (Commercial + Programme angles), status: done, depends_on: [BACKOFFICE-31] }
       - { id: BACKOFFICE-34, title: Onboarding funnel metrics (entry-path dimension), status: done }
       - { id: BACKOFFICE-35, title: Self-service CBUAE periodic report generation (four-eyes when CBUAE-bound), status: done }
-      - { id: BACKOFFICE-36, title: Proactive Nebras-liability monitor (issue x liable party x AED), status: pending, depends_on: [BACKOFFICE-30] }
+      - { id: BACKOFFICE-36, title: Proactive Nebras-liability monitor (issue x liable party x AED), status: in-progress, depends_on: [BACKOFFICE-30] }
       - { id: BACKOFFICE-37, title: Consent-pattern anomaly detection (streaming), status: pending, depends_on: [BACKOFFICE-30] }
       - { id: BACKOFFICE-39, title: Programme-level reporting view, status: pending }
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: pending }

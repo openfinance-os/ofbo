@@ -24,6 +24,7 @@ import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
 import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
+import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -128,9 +129,21 @@ export default {
     // surfaces via P6 and refreshes the materialized aggregates the M4 views read.
     const period = new Date().toISOString().slice(0, 7)
     const ingestion = new NebrasIngestionService({ egress, snapshots: snapshotStore, aggregates: aggregateStore, audit, apm, warmExporter: new InMemoryWarmTierExporter() })
+    // BACKOFFICE-36 — proactive Nebras-liability monitor: evaluate liability events
+    // against the v2.1 matrix; emit nebras_liability_approach signals + P3 ITSM,
+    // deduped against the currently-open liability signals.
+    const riskSignals = new PgRiskSignalEmitter(url, tenancy, lineage)
+    const riskMetrics = new PgRiskMetricsStore(url, tenancy)
+    const liabilityMonitor = new LiabilityMonitorService({ signals: riskSignals, itsm })
+    const runLiability = async () => {
+      const open = await riskMetrics.liabilityMonitor()
+      const openRefs = new Set(open.recent.map((s) => s.nebras_liability_event_ref).filter((r): r is string => !!r))
+      const events = await new DemoLiabilityEventSource().getLiabilityEvents()
+      await liabilityMonitor.evaluate(events, openRefs, crypto.randomUUID())
+    }
     ctx.waitUntil(
-      Promise.allSettled([service.runDaily(crypto.randomUUID()), ingestion.runIngestion(period, crypto.randomUUID())]).finally(async () => {
-        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), audit.close(), lineage.close()])
+      Promise.allSettled([service.runDaily(crypto.randomUUID()), ingestion.runIngestion(period, crypto.randomUUID()), runLiability()]).finally(async () => {
+        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), audit.close(), lineage.close()])
       })
     )
   }

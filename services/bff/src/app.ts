@@ -72,6 +72,7 @@ import {
   type RetentionReader
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
+import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
 import {
@@ -138,6 +139,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
   'get /back-office/analytics/risk-view',
+  'get /back-office/analytics/nebras-liability-monitor',
   'get /back-office/analytics/executive-dashboard',
   'get /back-office/analytics/onboarding-funnel',
   'post /back-office/reports:generate',
@@ -349,13 +351,14 @@ export function createApp(deps: AppDeps = {}) {
     retention: deps.retentionReader ?? { retentionStatus: async () => [] }
   })
   // BACKOFFICE-30 — Risk View over risk_signal aggregates (anomalies + liability monitor).
-  const riskViewService = new RiskViewService({
-    metrics: deps.riskMetricsReader ?? {
-      summary: async () => ({ active_total: 0, by_type: {}, by_severity: {}, by_status: {} }),
-      liabilityMonitor: async () => ({ open_count: 0, by_severity: {}, recent: [] }),
-      recentActive: async () => []
-    }
-  })
+  const riskMetricsReader = deps.riskMetricsReader ?? {
+    summary: async () => ({ active_total: 0, by_type: {}, by_severity: {}, by_status: {} }),
+    liabilityMonitor: async () => ({ open_count: 0, by_severity: {}, recent: [] }),
+    recentActive: async () => []
+  }
+  const riskViewService = new RiskViewService({ metrics: riskMetricsReader })
+  // BACKOFFICE-36 — proactive Nebras-liability monitor read view (matrix + approaching triggers).
+  const liabilityViewService = new LiabilityViewService({ riskMetrics: riskMetricsReader })
   // BACKOFFICE-27 — Executive Dashboard: one canonical dashboard, persona-aware angles.
   // Commercial (commercial:read) = revenue/margin/pipeline; Programme (programme:read) =
   // adoption/certification. Margin is the non-asserting compute (the dashboard's own
@@ -400,6 +403,7 @@ export function createApp(deps: AppDeps = {}) {
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
     ...riskViewRoutes(riskViewService),
+    ...liabilityMonitorRoutes(liabilityViewService),
     ...executiveDashboardRoutes(executiveDashboardService),
     ...onboardingFunnelRoutes(onboardingFunnelService),
     ...reportRoutes(reportGenerationService, idempotencyStore)
