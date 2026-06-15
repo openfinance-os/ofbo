@@ -110,6 +110,26 @@ export function disputeRoutes(service: DisputeService, idempotency: IdempotencyS
 
     'post /disputes/{dispute_id}:initiate-refund': withIdempotency('disputes:refund', refundHandler),
 
+    'patch /disputes/{dispute_id}': withIdempotency('disputes:update-state', async (c, params) => {
+      let body: { state?: string; escalated_to?: string; resolution_note?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { state?, escalated_to?, resolution_note? }.', DOCS_BASE), 400)
+      }
+      try {
+        const record = await service.updateState(
+          c.get('principal'),
+          params.dispute_id!,
+          { state: body.state, escalated_to: body.escalated_to ?? null, resolution_note: body.resolution_note ?? null },
+          trace(c)
+        )
+        return c.json(dataEnvelope(record), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    }),
+
     'get /disputes': async (c) => {
       const q: DisputeListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),

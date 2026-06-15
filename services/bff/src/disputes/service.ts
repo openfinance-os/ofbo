@@ -2,7 +2,7 @@ import type { NebrasEgressPort } from '@ofbo/ports'
 import type { DisputeCreateInput, DisputeListQuery, DisputePage, StoredDisputeRecord } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
-import { endOfNextBusinessDay } from '../business-hours.js'
+import { endOfNextBusinessDay, endOfNthBusinessDay } from '../business-hours.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import type { PaymentAdminView, PaymentSource } from './payments.js'
@@ -55,7 +55,32 @@ export interface DisputeStore {
   get(id: string): Promise<StoredDisputeRecord | null>
   list(query: DisputeListQuery): Promise<DisputePage>
   markRefundInitiated(id: string, refundAmount: Money, refundRequiredBy: string, traceId: string): Promise<StoredDisputeRecord | null>
+  updateState(id: string, patch: { state?: string; escalated_to?: string | null; resolution_note?: string | null }, traceId: string): Promise<StoredDisputeRecord | null>
 }
+
+/**
+ * BACKOFFICE-24 — legal complaint/dispute lifecycle transitions. `refund_initiated`
+ * is entered ONLY by the four-eyes refund flow (BACKOFFICE-21), never via PATCH.
+ */
+export const DISPUTE_STATES = ['open', 'in_progress', 'escalated', 'refund_initiated', 'resolved', 'closed'] as const
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  open: ['in_progress', 'escalated', 'closed'],
+  in_progress: ['escalated', 'resolved', 'closed'],
+  escalated: ['in_progress', 'resolved', 'closed'],
+  refund_initiated: ['resolved', 'closed'],
+  resolved: ['closed', 'in_progress'],
+  closed: []
+}
+/** Default complaint SLA matrix — resolution due in N business days from the clock
+ *  start. Adopting-bank default (PRD §10) until BD-11 lands; keyed by dispute_type. */
+const COMPLAINT_SLA_DAYS: Record<string, number> = {
+  unauthorised_payment: 1,
+  unrecognised_tpp: 5,
+  consent_complaint: 5,
+  data_misuse_complaint: 5,
+  other: 5
+}
+const DEFAULT_SLA_DAYS = 5
 
 /** No-database default (tests / local dev). Not isolate-safe — the worker uses
  *  the durable PgDisputeStore. */
@@ -100,6 +125,14 @@ export class InMemoryDisputeStore implements DisputeStore {
     r.refund_initiated_at = new Date().toISOString()
     r.refund_required_by = refundRequiredBy
     r.refund_amount = refundAmount
+    return r
+  }
+  async updateState(id: string, patch: { state?: string; escalated_to?: string | null; resolution_note?: string | null }): Promise<StoredDisputeRecord | null> {
+    const r = this.rows.find((x) => x.id === id)
+    if (!r) return null
+    if (patch.state) r.state = patch.state
+    // escalated_to / resolution_note are write-only columns (not on the DisputeCase
+    // wire projection) — persisted by the Pg store; the in-memory store tracks state.
     return r
   }
 }
@@ -286,5 +319,73 @@ export class DisputeService {
       },
       traceId
     )
+  }
+
+  /**
+   * BACKOFFICE-24 — complaint/dispute case-management lifecycle transition:
+   * open → in_progress → escalated → resolved → closed (per the §6.3.1 state
+   * machine). Validates the transition (409 on an illegal move; refund_initiated is
+   * reserved for the four-eyes refund flow), records escalated_to / resolution_note,
+   * computes the SLA deadline from the complaint SLA matrix, and writes one
+   * High-class dispute_state_changed audit (from/to + SLA). 404 if unknown.
+   */
+  async updateState(
+    principal: Principal,
+    disputeId: string,
+    patch: { state?: string; escalated_to?: string | null; resolution_note?: string | null },
+    traceId: string
+  ): Promise<StoredDisputeRecord> {
+    assertScope(principal, DISPUTE_SCOPE)
+    const dispute = await this.deps.store.get(disputeId)
+    if (!dispute) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+
+    const target = patch.state
+    if (target !== undefined) {
+      if (!(DISPUTE_STATES as readonly string[]).includes(target)) {
+        throw new DisputeError('BACKOFFICE.INVALID_STATE', `state must be one of: ${DISPUTE_STATES.join(', ')}.`, 400)
+      }
+      if (target === 'refund_initiated') {
+        throw new DisputeError('BACKOFFICE.INVALID_TRANSITION', 'refund_initiated is set by the four-eyes refund flow (BACKOFFICE-21), not via a state update.', 409)
+      }
+      if (target !== dispute.state && !(ALLOWED_TRANSITIONS[dispute.state] ?? []).includes(target)) {
+        throw new DisputeError('BACKOFFICE.INVALID_TRANSITION', `cannot move a ${dispute.state} case to ${target}.`, 409)
+      }
+    }
+
+    const fromState = dispute.state // capture before the update (some stores mutate in place)
+    const newState = target ?? dispute.state
+    const slaDays = COMPLAINT_SLA_DAYS[dispute.dispute_type] ?? DEFAULT_SLA_DAYS
+    const resolutionDueAt = endOfNthBusinessDay(new Date(dispute.sla_clock_started_at), slaDays).toISOString()
+    const slaBreached = Date.now() > new Date(resolutionDueAt).getTime() && newState !== 'resolved' && newState !== 'closed'
+
+    const updated = await this.deps.store.updateState(
+      disputeId,
+      { state: target, escalated_to: patch.escalated_to ?? null, resolution_note: patch.resolution_note ?? null },
+      traceId
+    )
+    if (!updated) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+
+    await this.deps.audit.emit({
+      event_type: 'dispute_state_changed',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: DISPUTE_SCOPE,
+      target_psu_identifier: dispute.psu_identifier,
+      target_dispute_id: disputeId,
+      target_consent_id: dispute.originating_consent_id,
+      request_trace_id: traceId,
+      request_body: {
+        from_state: fromState,
+        to_state: newState,
+        escalated_to: patch.escalated_to ?? null,
+        resolution_note: patch.resolution_note ?? null,
+        sla_resolution_due_at: resolutionDueAt,
+        sla_breached: slaBreached
+      },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+
+    return updated
   }
 }
