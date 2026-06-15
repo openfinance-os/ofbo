@@ -553,6 +553,16 @@ export class ReconciliationService {
    */
   async marginForPeriod(principal: Principal, period: string): Promise<MarginSummary> {
     assertScope(principal, RECON_READ_SCOPE)
+    return this.computeMarginForPeriod(period)
+  }
+
+  /**
+   * BACKOFFICE-27 — the same per-fintech/per-family margin computation WITHOUT a
+   * reconciliation:read assertion, for composition into the Executive Dashboard
+   * (gated by the dashboard's own platform:analytics:read + commercial:read).
+   * Not a public read surface — only the dashboard wiring calls it.
+   */
+  async computeMarginForPeriod(period: string): Promise<MarginSummary> {
     const runs = await this.store.listForPrefix(`recon-${period}-`)
     const margin = emptyMargin()
     for (const run of runs) {

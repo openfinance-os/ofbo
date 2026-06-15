@@ -1,0 +1,145 @@
+import type { Context } from 'hono'
+import type { ConsentVolumes, StoredCertification } from '@ofbo/db'
+import type { OnboardingHandoverPort } from '@ofbo/ports'
+import type { MarginSummary } from '../reconciliation/margin.js'
+import type { Principal } from '../auth.js'
+import { assertScope, hasScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { dataEnvelope } from '../envelope.js'
+
+/**
+ * BACKOFFICE-27 — single consolidated Executive Dashboard with persona-aware angles.
+ * One canonical dashboard (base scope platform:analytics:read, enforced at the BFF
+ * middleware AND re-checked here); the two pivot angles are SCOPE-GATED so the matrix
+ * holds: Commercial (revenue/margin/pipeline) needs commercial:read, Programme
+ * (adoption/certification/release-calendar) needs programme:read. A shared headline
+ * (consent volumes, onboarding funnel, reconciliation throughput) is visible to every
+ * platform:analytics:read holder. Aggregate figures only, no PSU PII. With the
+ * freshness envelope (BACKOFFICE-40).
+ */
+
+export const EXEC_DASHBOARD_SCOPE = 'platform:analytics:read'
+const COMMERCIAL_SCOPE = 'commercial:read'
+const PROGRAMME_SCOPE = 'programme:read'
+
+export interface ExecConsentReader {
+  consentVolumes(): Promise<ConsentVolumes>
+}
+export interface ExecMarginReader {
+  marginForPeriod(period: string): Promise<MarginSummary>
+}
+export interface ExecPipelineReader {
+  pipelineCounts(): Promise<Record<string, number>>
+}
+export interface ExecCertificationReader {
+  list(): Promise<StoredCertification[]>
+}
+export interface ExecReconReader {
+  latestRun(): Promise<{ line_count_total: number; line_count_matched: number } | null>
+}
+
+export interface ExecutiveDashboardDeps {
+  consents: ExecConsentReader
+  margin: ExecMarginReader
+  pipeline: ExecPipelineReader
+  certifications: ExecCertificationReader
+  recon: ExecReconReader
+  handover: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
+  now?: () => Date
+}
+
+function revenueByFamily(margin: MarginSummary) {
+  const byFamily: Record<string, { nebras_fee: number; fintech_charge: number; margin: number }> = {}
+  for (const fm of Object.values(margin.by_fintech)) {
+    for (const [family, acc] of Object.entries(fm.by_family)) {
+      const b = (byFamily[family] ??= { nebras_fee: 0, fintech_charge: 0, margin: 0 })
+      b.nebras_fee += acc.nebras_fee
+      b.fintech_charge += acc.fintech_charge
+      b.margin += acc.margin
+    }
+  }
+  return byFamily
+}
+
+function summarizeHandover(events: { entry_path: string; stage: string; at: string }[]) {
+  const byEntryPath: Record<string, number> = {}
+  for (const e of events) byEntryPath[e.entry_path] = (byEntryPath[e.entry_path] ?? 0) + 1
+  return { by_entry_path: byEntryPath, total_events: events.length }
+}
+
+export class ExecutiveDashboardService {
+  constructor(private readonly deps: ExecutiveDashboardDeps) {}
+
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+    assertScope(principal, EXEC_DASHBOARD_SCOPE)
+    const now = (this.deps.now ?? (() => new Date()))()
+    const period = now.toISOString().slice(0, 7)
+    const windowEnd = now.toISOString()
+    const windowStart = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString()
+
+    const [consents, handoverEvents, latestRun] = await Promise.all([
+      this.deps.consents.consentVolumes(),
+      this.deps.handover.getFunnelEvents({ from: windowStart, to: windowEnd }),
+      this.deps.recon.latestRun()
+    ])
+
+    const reconThroughput = latestRun
+      ? { line_count_total: latestRun.line_count_total, line_count_matched: latestRun.line_count_matched, success_rate: latestRun.line_count_total > 0 ? Math.round((latestRun.line_count_matched / latestRun.line_count_total) * 1000) / 1000 : null }
+      : null
+
+    const data: Record<string, unknown> = {
+      period,
+      available_angles: [] as string[],
+      headline: {
+        consent_volumes: consents,
+        onboarding_funnel: summarizeHandover(handoverEvents),
+        reconciliation_throughput: reconThroughput
+      }
+    }
+    const available: string[] = []
+
+    if (hasScope(principal.scopes, COMMERCIAL_SCOPE)) {
+      const margin = await this.deps.margin.marginForPeriod(period)
+      const pipeline = await this.deps.pipeline.pipelineCounts()
+      data.commercial = {
+        revenue_by_product_family: revenueByFamily(margin),
+        tpp_aas_margin: { total_margin: margin.total_margin, total_nebras_fee: margin.total_nebras_fee, total_fintech_charge: margin.total_fintech_charge, currency: margin.currency },
+        integration_pipeline: { by_state: pipeline, total: Object.values(pipeline).reduce((a, b) => a + b, 0) }
+      }
+      available.push('commercial')
+    }
+
+    if (hasScope(principal.scopes, PROGRAMME_SCOPE)) {
+      const [certs, pipeline] = await Promise.all([this.deps.certifications.list(), this.deps.pipeline.pipelineCounts()])
+      const byRole = (role: string) => certs.filter((c) => c.role === role).map((c) => ({ subject: c.subject, current_stage: c.current_stage, status: c.status, stages_completed: c.stages_completed, stages_total: c.stages_total }))
+      data.programme = {
+        certification: { lfi: byRole('LFI'), tpp: byRole('TPP') },
+        tpp_adoption: { by_state: pipeline, total: Object.values(pipeline).reduce((a, b) => a + b, 0) },
+        // CBUAE mandatory-release-calendar alignment is the Programme reporting view's
+        // remit (BACKOFFICE-39) — no release-calendar substrate yet.
+        release_calendar: { status: 'deferred', owner: 'BACKOFFICE-39' }
+      }
+      available.push('programme')
+    }
+
+    data.available_angles = available
+    const refreshedAt = now.toISOString()
+    const freshness = { source_published_at: refreshedAt, view_refreshed_at: refreshedAt, stale: false, stale_cause: null }
+    return { data, freshness }
+  }
+}
+
+type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
+
+export function executiveDashboardRoutes(service: ExecutiveDashboardService): Record<string, Handler> {
+  return {
+    'get /back-office/analytics/executive-dashboard': async (c) => {
+      try {
+        const { data, freshness } = await service.view(c.get('principal'))
+        return c.json({ ...dataEnvelope(data), freshness }, 200)
+      } catch (e) {
+        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+        throw e
+      }
+    }
+  }
+}
