@@ -47,11 +47,25 @@ export interface RetentionStatusRow {
   hot_months: number
   immutable_months: number
   row_count: number
+  /** Records still in the hot tier (younger than hot_months). */
+  hot_tier_count: number
+  /** Records past hot but within the immutable window — the warm (columnar) tier. */
+  warm_tier_count: number
+  /** Records older than immutable_months — should be 0; a non-zero value flags an
+   *  overdue lifecycle the deletion-forbidden policy never purges (surface, never delete). */
+  past_immutable_count: number
+  /** Back-compat (BACKOFFICE-50): records due to leave the hot tier = warm + past-immutable. */
   due_for_warm_tier: number
   oldest_record_at: string | null
 }
 
-/** Per-table retention posture (Compliance View source; warm-tier mover lands with analytics). */
+/**
+ * Per-table retention posture across the full lifecycle — 24-month hot → warm
+ * (columnar) → 5-year immutable (BACKOFFICE-14). The warm-tier MOVER (Parquet
+ * export) lands with the analytics service; this reports the tier breakdown for
+ * the Compliance View (BACKOFFICE-29). Deletion is never a tier — regulated rows
+ * are surfaced, never purged.
+ */
 export async function retentionStatus(databaseUrl: string): Promise<RetentionStatusRow[]> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
@@ -62,16 +76,23 @@ export async function retentionStatus(databaseUrl: string): Promise<RetentionSta
       if (!/^[a-z_][a-z0-9_]*$/.test(p.table_name)) throw new Error(`invalid table name in retention_policy: ${p.table_name}`)
       const stats = await pool.query(
         `SELECT count(*)::int AS row_count,
+                count(*) FILTER (WHERE created_at >= now() - ($1 || ' months')::interval)::int AS hot_tier_count,
+                count(*) FILTER (WHERE created_at < now() - ($1 || ' months')::interval
+                                   AND created_at >= now() - ($2 || ' months')::interval)::int AS warm_tier_count,
+                count(*) FILTER (WHERE created_at < now() - ($2 || ' months')::interval)::int AS past_immutable_count,
                 count(*) FILTER (WHERE created_at < now() - ($1 || ' months')::interval)::int AS due_for_warm_tier,
                 min(created_at) AS oldest
          FROM ${p.table_name}`,
-        [p.hot_months]
+        [p.hot_months, p.immutable_months]
       )
       out.push({
         table_name: p.table_name,
         hot_months: p.hot_months,
         immutable_months: p.immutable_months,
         row_count: stats.rows[0].row_count,
+        hot_tier_count: stats.rows[0].hot_tier_count,
+        warm_tier_count: stats.rows[0].warm_tier_count,
+        past_immutable_count: stats.rows[0].past_immutable_count,
         due_for_warm_tier: stats.rows[0].due_for_warm_tier,
         oldest_record_at: stats.rows[0].oldest ? new Date(stats.rows[0].oldest).toISOString() : null
       })
