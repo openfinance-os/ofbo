@@ -215,6 +215,49 @@ export class PgReconciliationBreakStore {
     return row ? toBreak(row) : null
   }
 
+  /**
+   * BACKOFFICE-04 — resolve a non-terminal break to a terminal outcome with a
+   * mandatory note. The `status IN ('flagged','assigned')` guard prevents
+   * re-resolving an already-terminal break (returns null → 409).
+   */
+  async resolve(id: string, outcome: string, note: string, traceId: string): Promise<StoredReconciliationBreak | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE reconciliation_break
+            SET status = $2, resolution_outcome = $2, resolution_note = $3
+          WHERE id = $1 AND status IN ('flagged','assigned')
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, outcome, note]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toBreak(row) : null
+  }
+
+  /**
+   * BACKOFFICE-04 — reopen a resolved break (four-eyes approved): back to flagged,
+   * clear the assignment/resolution, increment reopened_count. The terminal-state
+   * guard prevents reopening a break that is not resolved (returns null).
+   */
+  async reopen(id: string, traceId: string): Promise<StoredReconciliationBreak | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE reconciliation_break
+            SET status = 'flagged', assigned_to = NULL, resolution_outcome = NULL,
+                resolution_note = NULL, sla_clock_started_at = NULL,
+                reopened_count = reopened_count + 1
+          WHERE id = $1
+            AND status IN ('resolved_matched','resolved_internal_correction','escalated_nebras_dispute','escalated_fintech_billing')
+          RETURNING ${SELECT_COLUMNS}`,
+        [id]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toBreak(row) : null
+  }
+
   /** Count breaks already recorded for a run — used to keep detection idempotent. */
   async countForRun(runId: string): Promise<number> {
     return this.asApp(async (c) => {

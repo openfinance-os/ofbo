@@ -12,6 +12,7 @@ import type { ItsmPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { runThreeWayReconciliation, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
@@ -40,11 +41,55 @@ export interface ReconciliationBreakStore {
   countForRun(runId: string): Promise<number>
   get(id: string): Promise<StoredReconciliationBreak | null>
   claim(id: string, assignedTo: string, traceId: string): Promise<StoredReconciliationBreak | null>
+  resolve(id: string, outcome: string, note: string, traceId: string): Promise<StoredReconciliationBreak | null>
+  reopen(id: string, traceId: string): Promise<StoredReconciliationBreak | null>
   list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
 }
 
 export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
 export const OPS_WRITE_SCOPE = 'platform:operations:write'
+export const COMPLIANCE_SCOPE = 'audit:read'
+export const BREAK_REOPEN_OPERATION = 'reconciliation.break_reopen'
+/** Resolve outcomes accepted by the resolve endpoint (escalated_nebras_dispute is
+ *  the separate escalate-nebras flow, BACKOFFICE-05). */
+export const RESOLVE_OUTCOMES = ['resolved_matched', 'resolved_internal_correction', 'escalated_fintech_billing'] as const
+const TERMINAL_STATUSES = new Set(['resolved_matched', 'resolved_internal_correction', 'escalated_nebras_dispute', 'escalated_fintech_billing'])
+const MIN_NOTE = 20
+
+export interface ReopenApprovalRequester {
+  requestApproval(
+    principal: Principal,
+    input: { operation_type: string; operation_payload: Record<string, unknown> },
+    traceId: string
+  ): Promise<ApprovalRecord>
+}
+
+/** BACKOFFICE-04 — the four-eyes reopen operation. A different audit:read
+ *  principal approves before a resolved break is reopened. */
+export function makeBreakReopenOperation(deps: { breakStore: ReconciliationBreakStore; audit: HighClassAuditSink }): GatedOperation {
+  return {
+    initiatorScope: COMPLIANCE_SCOPE,
+    approverScope: COMPLIANCE_SCOPE,
+    execute: async (payload) => {
+      const breakId = String(payload.break_id)
+      const traceId = String(payload.trace_id ?? 'unknown')
+      const initiatedBy = String(payload.initiated_by ?? 'unknown')
+      const initiatedByPersona = String(payload.initiated_by_persona ?? 'unknown')
+      const justification = String(payload.justification ?? '')
+      const reopened = await deps.breakStore.reopen(breakId, traceId)
+      await deps.audit.emit({
+        event_type: 'reconciliation_break_reopened',
+        acting_principal: initiatedBy,
+        acting_persona: initiatedByPersona,
+        scope_used: COMPLIANCE_SCOPE,
+        request_trace_id: traceId,
+        request_body: { break_id: breakId, justification, reopened: !!reopened, reopened_count: reopened?.reopened_count ?? null, four_eyes_approved: true },
+        response_status: 200
+      })
+      return { break_id: breakId, status: reopened?.status ?? 'unchanged', reopened: !!reopened, reopened_count: reopened?.reopened_count ?? null }
+    }
+  }
+}
 
 export class BreakWorkflowError extends Error {
   constructor(
@@ -74,6 +119,8 @@ export interface ReconciliationDeps {
   breakStore?: ReconciliationBreakStore
   itsm?: Pick<ItsmPort, 'createTicket'>
   thresholds?: BreakThreshold[]
+  /** BACKOFFICE-04 — four-eyes reopen initiation (omit to disable reopen). */
+  approvals?: ReopenApprovalRequester
   now?: () => Date
 }
 
@@ -94,6 +141,7 @@ export class ReconciliationService {
   private readonly breakStore?: ReconciliationBreakStore
   private readonly itsm?: Pick<ItsmPort, 'createTicket'>
   private readonly thresholds: BreakThreshold[]
+  private readonly approvals?: ReopenApprovalRequester
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -103,6 +151,7 @@ export class ReconciliationService {
     this.breakStore = deps.breakStore
     this.itsm = deps.itsm
     this.thresholds = deps.thresholds ?? DEFAULT_THRESHOLDS
+    this.approvals = deps.approvals
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -259,6 +308,75 @@ export class ReconciliationService {
     })
     return claimed
   }
+
+  /**
+   * BACKOFFICE-04 — resolve a break to a terminal outcome with a mandatory note
+   * (≥20 chars). Terminal-state transition; the immutable audit record carries
+   * the resolution. Re-resolving an already-terminal break → 409.
+   */
+  async resolveBreak(principal: Principal, breakId: string, outcome: string, note: string, traceId: string): Promise<StoredReconciliationBreak> {
+    assertScope(principal, RECON_WRITE_SCOPE)
+    if (!(RESOLVE_OUTCOMES as readonly string[]).includes(outcome)) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_OUTCOME', `resolution_outcome must be one of: ${RESOLVE_OUTCOMES.join(', ')}.`, 400)
+    }
+    if (!note || note.trim().length < MIN_NOTE) {
+      throw new BreakWorkflowError('BACKOFFICE.RESOLUTION_NOTE_REQUIRED', `resolution_note must be at least ${MIN_NOTE} characters.`, 400)
+    }
+    if (!this.breakStore) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    const existing = await this.breakStore.get(breakId)
+    if (!existing) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    if (TERMINAL_STATUSES.has(existing.status)) {
+      throw new BreakWorkflowError('BACKOFFICE.BREAK_ALREADY_RESOLVED', `break is ${existing.status} (terminal)`, 409)
+    }
+    const resolved = await this.breakStore.resolve(breakId, outcome, note, traceId)
+    if (!resolved) throw new BreakWorkflowError('BACKOFFICE.BREAK_ALREADY_RESOLVED', 'break was resolved concurrently', 409)
+
+    await this.audit.emit({
+      event_type: 'reconciliation_break_resolved',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: RECON_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { break_id: breakId, run_id: resolved.run_id, resolution_outcome: outcome, resolution_note: note },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return resolved
+  }
+
+  /**
+   * BACKOFFICE-04 — initiate a four-eyes reopen of a resolved break. Requires
+   * audit:read (Compliance) + a justification (≥20 chars); returns 202 +
+   * approval_request. A different audit:read principal approves before the break
+   * is reopened (the reconciliation.break_reopen operation executes on approval).
+   */
+  async initiateReopen(principal: Principal, breakId: string, justification: string, traceId: string): Promise<ApprovalRecord> {
+    assertScope(principal, COMPLIANCE_SCOPE)
+    if (!justification || justification.trim().length < MIN_NOTE) {
+      throw new BreakWorkflowError('BACKOFFICE.JUSTIFICATION_REQUIRED', `justification must be at least ${MIN_NOTE} characters.`, 400)
+    }
+    if (!this.breakStore) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    if (!this.approvals) throw new BreakWorkflowError('BACKOFFICE.REOPEN_UNAVAILABLE', 'Reopen is not configured.', 404)
+    const existing = await this.breakStore.get(breakId)
+    if (!existing) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    if (!TERMINAL_STATUSES.has(existing.status)) {
+      throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_RESOLVED', `break is ${existing.status}, not resolved — nothing to reopen`, 409)
+    }
+    return this.approvals.requestApproval(
+      principal,
+      {
+        operation_type: BREAK_REOPEN_OPERATION,
+        operation_payload: {
+          break_id: breakId,
+          justification,
+          initiated_by: principal.subject,
+          initiated_by_persona: principal.persona,
+          trace_id: traceId
+        }
+      },
+      traceId
+    )
+  }
 }
 
 /** No-database default (tests / local dev). */
@@ -335,6 +453,26 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     row.status = 'assigned'
     row.assigned_to = assignedTo
     row.sla_clock_started_at = new Date().toISOString()
+    return row
+  }
+  async resolve(id: string, outcome: string, note: string): Promise<StoredReconciliationBreak | null> {
+    const row = this.rows.find((r) => r.id === id)
+    if (!row || !(row.status === 'flagged' || row.status === 'assigned')) return null
+    row.status = outcome
+    row.resolution_outcome = outcome
+    row.resolution_note = note
+    return row
+  }
+  async reopen(id: string): Promise<StoredReconciliationBreak | null> {
+    const row = this.rows.find((r) => r.id === id)
+    const terminal = new Set(['resolved_matched', 'resolved_internal_correction', 'escalated_nebras_dispute', 'escalated_fintech_billing'])
+    if (!row || !terminal.has(row.status)) return null
+    row.status = 'flagged'
+    row.assigned_to = null
+    row.resolution_outcome = null
+    row.resolution_note = null
+    row.sla_clock_started_at = null
+    row.reopened_count += 1
     return row
   }
   async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
