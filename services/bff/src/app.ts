@@ -30,6 +30,12 @@ import {
   makeFraudRevokeOperation,
   FRAUD_REVOKE_OPERATION
 } from './consents/fraud-revoke.js'
+import {
+  ConsentBulkRevokeService,
+  consentBulkRevokeRoutes,
+  makeBulkRevokeOperation,
+  BULK_REVOKE_OPERATION
+} from './consents/bulk-revoke.js'
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
@@ -53,6 +59,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /approvals/{approval_id}:reject',
   'get /consents:search-psu',
   'post /consents/{consent_id}:revoke-admin',
+  'post /consents:revoke-bulk',
   'post /consents/{consent_id}:revoke-fraud',
   'get /consents/{consent_id}/audit-trail',
   'get /psu/{psu_identifier}/audit-trail',
@@ -112,9 +119,10 @@ export function createApp(deps: AppDeps = {}) {
   // auth audit when it exposes emit (PgAuditEmitter does), else in-memory.
   const highClassAudit: HighClassAuditSink =
     deps.highClassAudit ?? (hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
+  const consentDirectory = deps.consentDirectory ?? sharedDemoConsentDirectory()
   const consentSearch = new ConsentSearchService({
     audit: highClassAudit,
-    directory: deps.consentDirectory ?? sharedDemoConsentDirectory()
+    directory: consentDirectory
   })
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
   const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
@@ -125,15 +133,18 @@ export function createApp(deps: AppDeps = {}) {
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
+  const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: {
       ...deps.approvals?.operations,
       [REFUND_OPERATION]: refundOperation,
-      [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation
+      [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
+      [BULK_REVOKE_OPERATION]: bulkRevokeOperation
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
+  const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
   const paymentSource = deps.paymentSource ?? sharedDemoPaymentDirectory()
   const disputeService = new DisputeService({
     store: disputeStore,
@@ -143,7 +154,7 @@ export function createApp(deps: AppDeps = {}) {
     approvals
   })
   const inquiryService = new InquiryBundleService({
-    consents: deps.consentDirectory ?? sharedDemoConsentDirectory(),
+    consents: consentDirectory,
     payments: paymentSource,
     disputes: disputeStore,
     events: deps.consentEventSource ?? new InMemoryConsentEventSource(),
@@ -156,6 +167,7 @@ export function createApp(deps: AppDeps = {}) {
     ...approvalRoutes(approvals, deps.idempotency),
     ...consentRoutes(consentSearch),
     ...consentRevokeRoutes(revokeService, idempotencyStore),
+    ...consentBulkRevokeRoutes(bulkRevokeService, idempotencyStore),
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
