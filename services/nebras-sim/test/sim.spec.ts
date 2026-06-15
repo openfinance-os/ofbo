@@ -120,6 +120,39 @@ describe('Nebras simulator v1 — fault injection (the demo trigger)', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('injected report_rate_limit 429s the next N report/dataset calls then self-clears (BACKOFFICE-32)', async () => {
+    await app.request('/admin/faults', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fault: 'report_rate_limit', fail_times: 2 })
+    })
+    const first = await app.request('/tpp-reports/2026-05')
+    expect(first.status).toBe(429)
+    expect(first.headers.get('retry-after')).toBe('1')
+    const second = await app.request('/tpp-reports/2026-05')
+    expect(second.status).toBe(429)
+    const third = await app.request('/tpp-reports/2026-05')
+    expect(third.status).toBe(200) // budget exhausted — back-off succeeds
+  })
+
+  it('rejects a negative report_rate_limit fail_times', async () => {
+    const res = await app.request('/admin/faults', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fault: 'report_rate_limit', fail_times: -1 })
+    })
+    expect(res.status).toBe(400)
+  })
+})
+
+describe('Nebras simulator — publication freshness (BACKOFFICE-32)', () => {
+  it('reports + datasets carry a deterministic published_at roll-up timestamp', async () => {
+    const rep = (await (await app.request('/tpp-reports/2026-05')).json()) as { published_at: string }
+    expect(rep.published_at).toBe('2026-05-28T00:00:00.000Z')
+    const ds = (await (await app.request('/datasets/consents/2026-05')).json()) as { published_at: string }
+    expect(ds.published_at).toBe('2026-05-28T00:00:00.000Z')
+  })
 })
 
 describe('Nebras simulator — admin surface guard (M1-DEMO-DEPLOY: /admin off public ingress)', () => {

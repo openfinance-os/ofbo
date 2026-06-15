@@ -13,14 +13,24 @@ type Fault =
   | { fault: 'revoke_delay'; delay_ms: number }
   | { fault: 'fee_variance'; period: string; variance_minor_units: number }
   | { fault: 'consent_drift'; consent_id: string }
+  // BACKOFFICE-32: the Reports/Dataset surfaces reject the next `fail_times`
+  // requests with 429 + Retry-After, exercising the ingestion's exponential
+  // back-off (Nebras rate limits respected). Self-clearing once exhausted.
+  | { fault: 'report_rate_limit'; fail_times: number }
 
-const FAULT_TYPES = new Set(['revoke_delay', 'fee_variance', 'consent_drift'])
+const FAULT_TYPES = new Set(['revoke_delay', 'fee_variance', 'consent_drift', 'report_rate_limit'])
 
 /** Deterministic per-period seed: same period string → identical dataset. */
 function periodSeed(period: string): number {
   let h = 0
   for (const ch of period) h = (h * 31 + ch.charCodeAt(0)) >>> 0
   return h || 1
+}
+
+/** Deterministic publication timestamp for a billing period (end-of-period
+ *  roll-up) — lets the ingestion derive freshness without wall-clock coupling. */
+function publishedAt(period: string): string {
+  return /^\d{4}-\d{2}$/.test(period) ? `${period}-28T00:00:00.000Z` : `${period}T00:00:00.000Z`
 }
 
 export interface NebrasSimOptions {
@@ -48,6 +58,18 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
   const activeFault = <K extends Fault['fault']>(kind: K) =>
     faults.find((f): f is Extract<Fault, { fault: K }> => f.fault === kind)
 
+  // 429 the next request when a report_rate_limit fault has budget left; the
+  // fault decrements and self-clears so back-off eventually succeeds.
+  const rateLimited = (c: { header: (k: string, v: string) => void; json: (b: unknown, s?: number) => Response }): Response | null => {
+    const rl = activeFault('report_rate_limit')
+    if (rl && rl.fail_times > 0) {
+      rl.fail_times -= 1
+      c.header('retry-after', '1')
+      return c.json({ error: { code: 'NEBRAS.RATE_LIMITED', message: 'rate limit — retry with back-off' } }, 429)
+    }
+    return null
+  }
+
   // ── Consent Manager surface ───────────────────────────────────────────────
   app.post('/consent-manager/consents/:consent_id/revoke', (c) => {
     const consentId = c.req.param('consent_id')
@@ -73,6 +95,8 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
 
   // ── Reports surfaces ──────────────────────────────────────────────────────
   app.get('/tpp-reports/:period', (c) => {
+    const limited = rateLimited(c)
+    if (limited) return limited
     const period = c.req.param('period')
     const ds = generateDemoDataset(periodSeed(period))
     const rows = ds.billing_lines.map((l) => ({
@@ -89,17 +113,19 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
       const idx = periodSeed(period) % rows.length
       rows[idx] = { ...rows[idx]!, fee: { ...rows[idx]!.fee, amount: rows[idx]!.fee.amount + variance.variance_minor_units } }
     }
-    return c.json({ period, rows })
+    return c.json({ period, published_at: publishedAt(period), rows })
   })
 
   app.get('/datasets/:name/:period', (c) => {
+    const limited = rateLimited(c)
+    if (limited) return limited
     const { name, period } = c.req.param()
     const ds = generateDemoDataset(periodSeed(`${name}:${period}`))
     const rows =
       name === 'consents'
         ? ds.psus.flatMap((p) => p.consents.map((x) => ({ consent_id: x.consent_id, status: x.status, tpp_organisation_id: x.tpp_organisation_id })))
         : ds.billing_lines.map((l) => ({ line_ref: l.line_ref, line_type: l.line_type }))
-    return c.json({ dataset: name, period, rows })
+    return c.json({ dataset: name, period, published_at: publishedAt(period), rows })
   })
 
   // ── Fault-injection admin (the live-demo trigger) ─────────────────────────
@@ -119,6 +145,9 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
     }
     if (body.fault === 'revoke_delay' && !Number.isInteger(body.delay_ms)) {
       return c.json({ error: 'delay_ms must be an integer' }, 400)
+    }
+    if (body.fault === 'report_rate_limit' && !(Number.isInteger(body.fail_times) && (body.fail_times as number) >= 0)) {
+      return c.json({ error: 'fail_times must be a non-negative integer' }, 400)
     }
     faults.push(body as unknown as Fault)
     return c.json({ injected: body, active_faults: faults.length }, 201)

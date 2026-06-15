@@ -56,8 +56,11 @@ export interface NebrasEgressPort {
     reason: string,
     trace: TraceContext
   ): Promise<{ acknowledged_in_ms: number }>
-  fetchTppReports(period: string, trace: TraceContext): Promise<{ rows: Record<string, unknown>[] }>
-  fetchDataset(name: string, period: string, trace: TraceContext): Promise<{ rows: Record<string, unknown>[] }>
+  /** BACKOFFICE-32: TPP Reports / Dataset polling. published_at is the source
+   *  roll-up timestamp (drives freshness). Throws on non-2xx (incl. 429 rate
+   *  limit) so the ingestion job applies exponential back-off. */
+  fetchTppReports(period: string, trace: TraceContext): Promise<{ published_at: string; rows: Record<string, unknown>[] }>
+  fetchDataset(name: string, period: string, trace: TraceContext): Promise<{ published_at: string; rows: Record<string, unknown>[] }>
   createDisputeCase(payload: Record<string, unknown>, trace: TraceContext): Promise<{ nebras_case_id: string }>
   syncDirectory(trace: TraceContext): Promise<{ participants: { organisation_id: string; legal_name: string }[] }>
   /** BACKOFFICE-62: dispatch a refund via the formal Ozone Connect refund flow

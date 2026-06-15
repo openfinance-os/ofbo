@@ -11,11 +11,14 @@ import {
   PgRiskSignalEmitter,
   PgTppCounterpartyStore,
   PgBillingRecordStore,
-  PgInvoiceRunStore
+  PgInvoiceRunStore,
+  PgNebrasSnapshotStore,
+  PgNebrasAggregateStore
 } from '@ofbo/db'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
+import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -96,17 +99,21 @@ export default {
     const audit = new PgAuditEmitter(url, tenancy, lineage)
     const store = new PgReconciliationLogStore(url, tenancy, lineage)
     const breakStore = new PgReconciliationBreakStore(url, tenancy, lineage)
+    const snapshotStore = new PgNebrasSnapshotStore(url, tenancy, lineage)
+    const aggregateStore = new PgNebrasAggregateStore(url, tenancy, lineage)
     const profile = profileFromConfig(env as Record<string, string | undefined>)
     const itsm = getAdapter('p3-itsm', profile)
     const apm = getAdapter('p5-apm', profile)
+    const egress = getAdapter('p6-nebras-egress', profile)
     const service = new ReconciliationService({ store, breakStore, itsm, apm, audit })
+    // BACKOFFICE-32: the daily ingestion polls the current month's Nebras
+    // surfaces via P6 and refreshes the materialized aggregates the M4 views read.
+    const period = new Date().toISOString().slice(0, 7)
+    const ingestion = new NebrasIngestionService({ egress, snapshots: snapshotStore, aggregates: aggregateStore, audit, apm, warmExporter: new InMemoryWarmTierExporter() })
     ctx.waitUntil(
-      service
-        .runDaily(crypto.randomUUID())
-        .catch(() => undefined)
-        .finally(async () => {
-          await Promise.all([store.close(), breakStore.close(), audit.close(), lineage.close()])
-        })
+      Promise.allSettled([service.runDaily(crypto.randomUUID()), ingestion.runIngestion(period, crypto.randomUUID())]).finally(async () => {
+        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), audit.close(), lineage.close()])
+      })
     )
   }
 }
