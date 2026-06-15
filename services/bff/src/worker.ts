@@ -9,7 +9,9 @@ import {
   PgReconciliationBreakStore,
   PgReconciliationLogStore,
   PgRiskSignalEmitter,
-  PgTppCounterpartyStore
+  PgTppCounterpartyStore,
+  PgBillingRecordStore,
+  PgInvoiceRunStore
 } from '@ofbo/db'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { createApp } from './app.js'
@@ -55,6 +57,8 @@ export default {
     const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
     const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
     const tppCounterpartyStore = url ? new PgTppCounterpartyStore(url, tenancy, lineage) : undefined
+    const billingRecordStore = url ? new PgBillingRecordStore(url, tenancy, lineage) : undefined
+    const invoiceRunStore = url ? new PgInvoiceRunStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -66,12 +70,14 @@ export default {
       ...(complianceReportStore ? { complianceReportStore } : {}),
       ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
       ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
-      ...(tppCounterpartyStore ? { tppCounterpartyStore } : {})
+      ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
+      ...(billingRecordStore ? { billingRecordStore } : {}),
+      ...(invoiceRunStore ? { invoiceRunStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

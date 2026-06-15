@@ -56,7 +56,16 @@ import {
 } from './reconciliation/service.js'
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
-import { tppBillingRoutes } from './tpp-billing/routes.js'
+import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
+import {
+  InvoicingService,
+  InMemoryBillingRecordStore,
+  InMemoryInvoiceRunStore,
+  makeInvoiceRunOperation,
+  INVOICE_RUN_OPERATION,
+  type BillingRecordStore,
+  type InvoiceRunStore
+} from './tpp-billing/invoicing.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -93,7 +102,13 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/tpp-counterparties',
   'get /back-office/tpp-counterparties/{organisation_id}',
   'post /back-office/tpp-counterparties:sync-directory',
-  'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system'
+  'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system',
+  'get /back-office/billing-records',
+  'post /back-office/billing-records',
+  'post /back-office/billing-records/{record_set_id}:reconcile',
+  'get /back-office/invoice-runs',
+  'post /back-office/invoice-runs',
+  'get /back-office/invoice-runs/{invoice_run_id}'
 ])
 
 /**
@@ -124,6 +139,8 @@ export interface AppDeps {
   tppCounterpartyStore?: TppCounterpartyStore
   /** BACKOFFICE-71 — P6 Trust Framework Directory source (defaults to the P6 adapter). */
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
+  billingRecordStore?: BillingRecordStore
+  invoiceRunStore?: InvoiceRunStore
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -164,10 +181,12 @@ export function createApp(deps: AppDeps = {}) {
   // store, the reopen op (BACKOFFICE-04) needs the reconciliation break store.
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
   const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
+  const invoiceRunStore = deps.invoiceRunStore ?? new InMemoryInvoiceRunStore()
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
   const breakReopenOperation = makeBreakReopenOperation({ breakStore: reconciliationBreakStore, audit: highClassAudit })
+  const invoiceRunOperation = makeInvoiceRunOperation({ invoiceStore: invoiceRunStore, financialSystem: getAdapter('p9-financial-system', profileFromConfig(process.env)), audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: {
@@ -175,7 +194,8 @@ export function createApp(deps: AppDeps = {}) {
       [REFUND_OPERATION]: refundOperation,
       [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
       [BULK_REVOKE_OPERATION]: bulkRevokeOperation,
-      [BREAK_REOPEN_OPERATION]: breakReopenOperation
+      [BREAK_REOPEN_OPERATION]: breakReopenOperation,
+      [INVOICE_RUN_OPERATION]: invoiceRunOperation
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
@@ -215,6 +235,13 @@ export function createApp(deps: AppDeps = {}) {
     getAdapter('p9-financial-system', profileFromConfig(process.env)),
     deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env))
   )
+  const invoicingService = new InvoicingService({
+    billingStore: deps.billingRecordStore ?? new InMemoryBillingRecordStore(),
+    invoiceStore: invoiceRunStore,
+    breakSink: reconciliationBreakStore,
+    approvals,
+    audit: highClassAudit
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -227,7 +254,8 @@ export function createApp(deps: AppDeps = {}) {
     ...disputeRoutes(disputeService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
-    ...tppBillingRoutes(tppRegistryService, idempotencyStore)
+    ...tppBillingRoutes(tppRegistryService, idempotencyStore),
+    ...tppInvoicingRoutes(invoicingService, idempotencyStore)
   }
   const app = new Hono()
 
