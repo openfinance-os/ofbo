@@ -133,7 +133,7 @@ export const ROUTES: readonly Route[] = [
     "path": "/consents/{consent_id}:revoke-fraud",
     "tag": "consents-admin",
     "scope": "consents:admin:fraud-revoke",
-    "fourEyes": false
+    "fourEyes": true
   },
   {
     "method": "get",
@@ -280,7 +280,7 @@ export const ROUTES: readonly Route[] = [
     "path": "/back-office/reports/{report_id}:approve",
     "tag": "reports",
     "scope": "programme:read",
-    "fourEyes": true
+    "fourEyes": false
   },
   {
     "method": "post",
