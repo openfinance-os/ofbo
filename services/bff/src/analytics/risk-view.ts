@@ -3,6 +3,7 @@ import type { RiskSignalSummary, LiabilityMonitor, RiskSignalHeader } from '@ofb
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
+import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 
 /**
  * BACKOFFICE-30 — Risk View. A read-only analytics view (risk:read, enforced at the
@@ -36,7 +37,7 @@ const sumTypes = (by: Record<string, number>, types: string[]) => types.reduce((
 export class RiskViewService {
   constructor(private readonly deps: RiskViewDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, RISK_VIEW_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
 
@@ -53,15 +54,8 @@ export class RiskViewService {
       liability_monitor: liability,
       recent_signals: recent
     }
-    const refreshedAt = now.toISOString()
-    const freshness = {
-      // Live read over risk_signal — trivially fresh.
-      source_published_at: refreshedAt,
-      view_refreshed_at: refreshedAt,
-      stale: false,
-      stale_cause: null
-    }
-    return { data, freshness }
+    // BACKOFFICE-40 — live read over risk_signal → trivially fresh.
+    return { data, freshness: liveFreshness(now) }
   }
 }
 

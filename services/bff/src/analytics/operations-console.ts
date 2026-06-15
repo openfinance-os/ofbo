@@ -4,6 +4,7 @@ import type { OnboardingHandoverPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
+import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
 
 /**
  * BACKOFFICE-28 — Operations Console (platform health). A read-only analytics view
@@ -57,7 +58,7 @@ function summarizeHandover(events: { entry_path: string; stage: string; at: stri
 export class OperationsConsoleService {
   constructor(private readonly deps: OperationsConsoleDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, OPS_CONSOLE_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
     const windowEnd = now.toISOString()
@@ -90,12 +91,19 @@ export class OperationsConsoleService {
       active_outages: activeOutages.map((o) => ({ title: o.title, component: o.component, severity: o.severity, started_at: o.started_at })),
       active_outage_count: activeOutages.length
     }
-    const freshness = {
-      source_published_at: latestSnapshot?.published_at ?? null,
-      view_refreshed_at: now.toISOString(),
-      stale: connectivityStatus !== 'connected',
-      stale_cause: connectivityStatus === 'connected' ? null : connectivityStatus === 'unknown' ? 'no_nebras_ingestion_yet' : 'last_nebras_poll_stale'
-    }
+    // BACKOFFICE-40 — standard freshness: connectivity status is the domain signal
+    // (degraded/unknown → amber), else amber when the last poll is older than 2× the
+    // daily ingestion cadence.
+    // Connectivity freshness tracks the LAST SUCCESSFUL POLL (ingested_at), not the
+    // data's monthly roll-up date — the scheduled ingestion runs daily, so a poll
+    // older than 2× daily means ingestion silently stopped.
+    const freshness = computeFreshness({
+      sourcePublishedAt: latestSnapshot?.ingested_at ?? null,
+      now,
+      sourceCadenceMs: FRESHNESS_CADENCE.DAILY_MS,
+      missingCause: 'no_nebras_ingestion_yet',
+      extraStale: connectivityStatus === 'degraded' ? { stale: true, cause: 'last_nebras_poll_stale' } : null
+    })
     return { data, freshness }
   }
 }

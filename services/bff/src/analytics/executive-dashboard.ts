@@ -3,6 +3,7 @@ import type { ConsentVolumes, StoredCertification } from '@ofbo/db'
 import type { OnboardingHandoverPort } from '@ofbo/ports'
 import type { MarginSummary } from '../reconciliation/margin.js'
 import type { ProgrammeAngleBuilder } from './programme.js'
+import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
@@ -73,7 +74,7 @@ function summarizeHandover(events: { entry_path: string; stage: string; at: stri
 export class ExecutiveDashboardService {
   constructor(private readonly deps: ExecutiveDashboardDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, EXEC_DASHBOARD_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
     const period = now.toISOString().slice(0, 7)
@@ -122,9 +123,8 @@ export class ExecutiveDashboardService {
     }
 
     data.available_angles = available
-    const refreshedAt = now.toISOString()
-    const freshness = { source_published_at: refreshedAt, view_refreshed_at: refreshedAt, stale: false, stale_cause: null }
-    return { data, freshness }
+    // BACKOFFICE-40 — live-computed dashboard (no external source) → always fresh.
+    return { data, freshness: liveFreshness(now) }
   }
 }
 
