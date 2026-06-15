@@ -19,6 +19,10 @@ describe('BACKOFFICE-49 — BCBS 239 lineage emission at write time (P7 demo ada
     await applyMigrations(url)
     lineage = new PgLineageEmitter(url, { bankId: BANK, channel: 'internal_retail' })
     audit = new PgAuditEmitter(url, { bankId: BANK, channel: 'internal_retail' }, lineage)
+    // BACKOFFICE-71: the registry write path emits tpp_counterparty lineage. Emit it
+    // here so the coverage assertion is deterministic regardless of seed-spec ordering
+    // (this is also what permanently retired the old tpp_counterparty seed-race flake).
+    await lineage.emitLineage({ table: 'tpp_counterparty', columns: ['organisation_id', 'legal_name'], source: 'lineage-int-setup', trace_id: TRACE })
   })
   afterAll(async () => {
     await audit.close()
@@ -63,11 +67,12 @@ describe('BACKOFFICE-49 — BCBS 239 lineage emission at write time (P7 demo ada
     await broken.close()
   })
 
-  it('validateLineageCoverage (the Q4.5 check) confirms written tables have lineage and names gaps', async () => {
+  it('validateLineageCoverage (the Q4.5 check) confirms written tables have lineage; no gaps remain', async () => {
     const result = await validateLineageCoverage(url)
     expect(result.covered).toContain('audit_high_sensitivity')
-    // tpp_counterparty was seeded by the M0 seed without lineage — a genuine pre-existing
-    // gap the Q4.5 check MUST name (regression pin per review)
-    expect(result.gaps).toContain('tpp_counterparty')
+    // BACKOFFICE-71 closed the last gap: the consuming-TPP registry write path + the
+    // seed now emit tpp_counterparty lineage, so it is covered (not a gap).
+    expect(result.covered).toContain('tpp_counterparty')
+    expect(result.gaps).not.toContain('tpp_counterparty')
   })
 })
