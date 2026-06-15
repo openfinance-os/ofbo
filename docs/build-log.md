@@ -335,3 +335,12 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Out of scope: -31 Finance View / -27 Exec dashboard endpoints. No spec change.
 - Evidence: 323 unit green (6 new: margin correlation + per-fintech/per-family; orphan ignored; mergeMargin; sim margin > 0; run result carries margin; monthly sign-off now asserts a real positive margin); full integration 59/59 on a local Postgres mirroring CI Q3. gen no drift; lint + typecheck green; Q1–Q4.5 all pass; coverage 100% margin.ts / 99.7% service / 100% sources. Reviewers: hard-stop PASS (matching invariant preserved, integer money, no PII), conformance CONFORMANT (no contract surface; margin is internal report content).
 - Next eligible: BACKOFFICE-14 (reconciliation data retention lifecycle — 24-mo hot → warm → 5-yr immutable, deletion forbidden by RLS; deps 01 done) — M3.
+
+## 2026-06-15 — BACKOFFICE-14 (PR #44, loop iteration 39) — M3 / E1 reconciliation epic complete
+
+- Reconciliation data retention lifecycle: reconciliation_log + reconciliation_break carry the binding 24-mo hot → columnar warm → 5-yr immutable lifecycle, deletion forbidden by RLS. The mechanism (retention_policy 24/60, RLS no-DELETE, denial logging) shipped with BACKOFFICE-50; this story makes the full lifecycle explicit + proves it for the reconciliation tables.
+- retention.ts: retentionStatus now reports the full tier breakdown — hot_tier_count / warm_tier_count / past_immutable_count (plus the back-compat due_for_warm_tier) — for the Compliance View (-29). past_immutable_count surfaces overdue rows the deletion-forbidden policy never purges. Additive fields; the -50 retention spec still passes. The warm-tier MOVER (Parquet) stays deferred to the analytics service.
+- No contract path, no spec change, no DB schema change.
+- Evidence: integration proves both reconciliation tables deny DELETE under RLS + High-class log it (withDenialLogging), and retentionStatus classifies a 25-month-old row into the warm tier (row_count = hot + warm + past_immutable; past_immutable 0). 323 unit green; full integration 63/63 on a local Postgres mirroring CI Q3; gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers: hard-stop PASS (no deletion path introduced; deletion denied + logged), conformance CONFORMANT.
+- Milestone: M3 (E1 Reconciliation Console) is now functionally complete — BACKOFFICE-01,-02,-03,-04,-05,-06,-07,-08,-11,-13,-14 all done.
+- Next eligible: BACKOFFICE-71 (consuming-TPP registry with Trust Framework Directory sync; the tpp_counterparty lineage-gap owner) — M3a.
