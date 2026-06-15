@@ -162,6 +162,16 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     }),
 
+    'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras': withIdempotency(idempotency, 'reconciliation:escalate-nebras', async (c, params) => {
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const result = await service.escalateToNebras(c.get('principal'), params.break_id!, traceId)
+        return c.json(dataEnvelope(result), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    }),
+
     'post /back-office/reconciliation/breaks/{break_id}/reopen': withIdempotency(idempotency, 'reconciliation:reopen', async (c, params) => {
       let body: { justification?: string }
       try {

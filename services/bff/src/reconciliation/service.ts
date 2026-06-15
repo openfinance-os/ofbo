@@ -8,7 +8,7 @@ import type {
   ReconciliationBreakListQuery,
   ReconciliationBreakPage
 } from '@ofbo/db'
-import type { ItsmPort } from '@ofbo/ports'
+import type { ItsmPort, NebrasEgressPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
@@ -43,11 +43,13 @@ export interface ReconciliationBreakStore {
   claim(id: string, assignedTo: string, traceId: string): Promise<StoredReconciliationBreak | null>
   resolve(id: string, outcome: string, note: string, traceId: string): Promise<StoredReconciliationBreak | null>
   reopen(id: string, traceId: string): Promise<StoredReconciliationBreak | null>
+  escalateNebras(id: string, nebrasCaseId: string, traceId: string): Promise<StoredReconciliationBreak | null>
   list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
 }
 
 export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
 export const OPS_WRITE_SCOPE = 'platform:operations:write'
+export const DISPUTES_WRITE_SCOPE = 'finance:disputes:write'
 export const COMPLIANCE_SCOPE = 'audit:read'
 export const BREAK_REOPEN_OPERATION = 'reconciliation.break_reopen'
 /** Resolve outcomes accepted by the resolve endpoint (escalated_nebras_dispute is
@@ -121,6 +123,8 @@ export interface ReconciliationDeps {
   thresholds?: BreakThreshold[]
   /** BACKOFFICE-04 — four-eyes reopen initiation (omit to disable reopen). */
   approvals?: ReopenApprovalRequester
+  /** BACKOFFICE-05 — P6 egress for Nebras dispute-case creation (omit to disable escalate). */
+  egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   now?: () => Date
 }
 
@@ -142,6 +146,7 @@ export class ReconciliationService {
   private readonly itsm?: Pick<ItsmPort, 'createTicket'>
   private readonly thresholds: BreakThreshold[]
   private readonly approvals?: ReopenApprovalRequester
+  private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -152,6 +157,7 @@ export class ReconciliationService {
     this.itsm = deps.itsm
     this.thresholds = deps.thresholds ?? DEFAULT_THRESHOLDS
     this.approvals = deps.approvals
+    this.egress = deps.egress
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -377,6 +383,50 @@ export class ReconciliationService {
       traceId
     )
   }
+
+  /**
+   * BACKOFFICE-05 — one-click escalation of a break to a Nebras dispute case. Opens
+   * the case through the P6 egress gateway (FAPI 2.0 mTLS + evidence bundle handled
+   * by the gateway — no direct egress), persists the Nebras case id + transitions
+   * the break to escalated_nebras_dispute. Requires finance:disputes:write.
+   */
+  async escalateToNebras(principal: Principal, breakId: string, traceId: string): Promise<{ break_id: string; status: string; nebras_dispute_case_id: string }> {
+    assertScope(principal, DISPUTES_WRITE_SCOPE)
+    if (!this.breakStore) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    if (!this.egress) throw new BreakWorkflowError('BACKOFFICE.ESCALATE_UNAVAILABLE', 'Nebras escalation is not configured.', 404)
+    const existing = await this.breakStore.get(breakId)
+    if (!existing) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+    if (existing.status !== 'flagged' && existing.status !== 'assigned') {
+      throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_ESCALATABLE', `break is ${existing.status}, not open`, 409)
+    }
+
+    // Evidence bundle — the three source refs + variance for the dispute (no PSU PII).
+    const evidence = {
+      break_id: breakId,
+      run_id: existing.run_id,
+      line_type: existing.line_type,
+      variance_amount: existing.variance_amount,
+      variance_count: existing.variance_count,
+      source_a_ref: existing.source_a_ref,
+      source_b_ref: existing.source_b_ref,
+      source_c_ref: existing.source_c_ref
+    }
+    const { nebras_case_id } = await this.egress.createDisputeCase(evidence, { trace_id: traceId })
+    const escalated = await this.breakStore.escalateNebras(breakId, nebras_case_id, traceId)
+    if (!escalated) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_ESCALATABLE', 'break was escalated/resolved concurrently', 409)
+
+    await this.audit.emit({
+      event_type: 'reconciliation_break_escalated_nebras',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: DISPUTES_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { break_id: breakId, run_id: escalated.run_id, nebras_dispute_case_id: nebras_case_id, line_type: escalated.line_type },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return { break_id: breakId, status: escalated.status, nebras_dispute_case_id: nebras_case_id }
+  }
 }
 
 /** No-database default (tests / local dev). */
@@ -473,6 +523,13 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     row.resolution_note = null
     row.sla_clock_started_at = null
     row.reopened_count += 1
+    return row
+  }
+  async escalateNebras(id: string, nebrasCaseId: string): Promise<StoredReconciliationBreak | null> {
+    const row = this.rows.find((r) => r.id === id)
+    if (!row || !(row.status === 'flagged' || row.status === 'assigned')) return null
+    row.status = 'escalated_nebras_dispute'
+    row.nebras_dispute_case_id = nebrasCaseId
     return row
   }
   async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
