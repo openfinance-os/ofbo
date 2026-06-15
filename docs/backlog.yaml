@@ -74,7 +74,7 @@ milestones:
     items:
       - { id: BACKOFFICE-32, title: Nebras TPP Reports + Dataset ingestion (Parquet, materialized aggregates), status: done }
       - { id: BACKOFFICE-33, title: Cross-fintech aggregation via bank_internal_view + query_purpose_registry, status: blocked, reason: BD-13 governance sign-off required before cross-fintech aggregation (PRD default - sequence single-fintech views first) }
-      - { id: BACKOFFICE-31, title: Finance View, status: in-progress, depends_on: [BACKOFFICE-32] }
+      - { id: BACKOFFICE-31, title: Finance View, status: done, depends_on: [BACKOFFICE-32] }
       - { id: BACKOFFICE-28, title: Operations Console (platform health, certification per role), status: pending }
       - { id: BACKOFFICE-29, title: Compliance View, status: pending }
       - { id: BACKOFFICE-30, title: Risk View, status: pending }
