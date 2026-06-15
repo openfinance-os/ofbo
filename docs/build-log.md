@@ -203,3 +203,11 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Mid-iteration catch: I initially added a GET /disputes/{id} route, but the contract has no GET-by-id (only PATCH) — removed it; a dispute is viewed via the filtered list. DEFERRED to a dispute-lifecycle slice: PATCH /disputes/{id} state machine (§6.3.1, kept a 501 stub). initiate-refund is -21/-62. client_id list filter accepted-but-unsupported (no client_id column on dispute_case).
 - Evidence: 273 unit green (disputes 95% / payments 97%); integration proves the dispute persists with audit + dispute_case lineage under RLS, round-tripping via the store + list API; gen no drift; lint + typecheck green; Q1–Q4.5 all pass (dispute_case now lineage-covered). Reviewers: hard-stop PASS, conformance CONFORMANT.
 - Next eligible: BACKOFFICE-21 (next-business-day refund, four-eyes, SLA timer; deps 20 done).
+
+## 2026-06-15 — BACKOFFICE-21 (PR #28, loop iteration 24)
+
+- Next-business-day refund, four-eyes-gated: POST /disputes/{id}:initiate-refund → 202 + approval_request via the shared approvals primitive (never inline). On approval by a DIFFERENT disputes:admin principal, the registered disputes.initiate_refund operation moves the dispute → refund_initiated, records refund_required_by = endOfNextBusinessDay (weekends paused — the SLA timer), refund_amount (integer minor units), and a High-class refund_initiated audit + dispute_case lineage. Initiator≠approver enforced (super-admin self-approval → 409).
+- PgDisputeStore.markRefundInitiated: RLS-bound UPDATE on the mutable dispute_case table + lineage. Idempotency-Key on initiation. Money rejects non-integer amounts. Ozone Connect dispatch is -62.
+- Mid-review fix: refund_initiated audit now records the initiator's actual persona (from verified IdP claims) instead of a hardcoded value (hard-stop reviewer flag, non-blocking).
+- Evidence: 275 unit green (disputes dir 95% / service 99%) incl. initiate→approve→refund_initiated + self-approval rejection; integration proves markRefundInitiated under RLS + lineage; gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers (twice): hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-62 (refund dispatch via the formal Ozone Connect refund flow, P6, 5 IPP status codes; deps 21 done).
