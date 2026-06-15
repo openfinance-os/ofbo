@@ -7,6 +7,7 @@ import type {
   ItsmPort,
   LineagePort,
   NebrasEgressPort,
+  OnboardingCase,
   OnboardingHandoverPort,
   PortMap
 } from '../interfaces.js'
@@ -165,6 +166,23 @@ const simLineage: LineagePort = {
   }
 }
 
+/** Deterministic onboarding cases for the funnel metrics: a fixed mix across both
+ *  entry paths with completions, abandonments at each stage, and cross-sells —
+ *  no randomness, so the demo repeats. started_at/activated_at drive cycle time.
+ *  Canonical funnel stage order: initiated → kyc → consent_grant → activated. */
+const ONBOARDING_CASES: OnboardingCase[] = [
+  // DIRECT_SIGNUP — 3 activated (1 cross-sell), 1 abandoned at kyc, 1 at consent_grant
+  { case_id: 'ob-ds-01', entry_path: 'DIRECT_SIGNUP', reached_stages: ['initiated', 'kyc', 'consent_grant', 'activated'], abandoned_at_stage: null, started_at: '2026-06-01T09:00:00.000Z', activated_at: '2026-06-01T21:00:00.000Z', cross_sell: true },
+  { case_id: 'ob-ds-02', entry_path: 'DIRECT_SIGNUP', reached_stages: ['initiated', 'kyc', 'consent_grant', 'activated'], abandoned_at_stage: null, started_at: '2026-06-02T09:00:00.000Z', activated_at: '2026-06-02T18:00:00.000Z', cross_sell: false },
+  { case_id: 'ob-ds-03', entry_path: 'DIRECT_SIGNUP', reached_stages: ['initiated', 'kyc', 'consent_grant', 'activated'], abandoned_at_stage: null, started_at: '2026-06-03T09:00:00.000Z', activated_at: '2026-06-03T15:00:00.000Z', cross_sell: false },
+  { case_id: 'ob-ds-04', entry_path: 'DIRECT_SIGNUP', reached_stages: ['initiated', 'kyc'], abandoned_at_stage: 'kyc', started_at: '2026-06-04T09:00:00.000Z', activated_at: null, cross_sell: false },
+  { case_id: 'ob-ds-05', entry_path: 'DIRECT_SIGNUP', reached_stages: ['initiated', 'kyc', 'consent_grant'], abandoned_at_stage: 'consent_grant', started_at: '2026-06-05T09:00:00.000Z', activated_at: null, cross_sell: false },
+  // ONBOARDING_HANDOVER — 2 activated (1 cross-sell, faster cycle), 1 abandoned at kyc
+  { case_id: 'ob-ho-01', entry_path: 'ONBOARDING_HANDOVER', reached_stages: ['initiated', 'kyc', 'consent_grant', 'activated'], abandoned_at_stage: null, started_at: '2026-06-02T08:00:00.000Z', activated_at: '2026-06-02T12:00:00.000Z', cross_sell: true },
+  { case_id: 'ob-ho-02', entry_path: 'ONBOARDING_HANDOVER', reached_stages: ['initiated', 'kyc', 'consent_grant', 'activated'], abandoned_at_stage: null, started_at: '2026-06-03T08:00:00.000Z', activated_at: '2026-06-03T11:00:00.000Z', cross_sell: false },
+  { case_id: 'ob-ho-03', entry_path: 'ONBOARDING_HANDOVER', reached_stages: ['initiated', 'kyc'], abandoned_at_stage: 'kyc', started_at: '2026-06-04T08:00:00.000Z', activated_at: null, cross_sell: false }
+]
+
 const simOnboardingHandover: OnboardingHandoverPort = {
   async getFunnelEvents() {
     return [
@@ -172,6 +190,9 @@ const simOnboardingHandover: OnboardingHandoverPort = {
       { entry_path: 'ONBOARDING_HANDOVER', stage: 'handover_received', at: '2026-06-02T11:00:00Z' },
       { entry_path: 'ONBOARDING_HANDOVER', stage: 'activated', at: '2026-06-03T12:00:00Z' }
     ]
+  },
+  async getOnboardingCases() {
+    return ONBOARDING_CASES.map((c) => ({ ...c, reached_stages: [...c.reached_stages] }))
   }
 }
 

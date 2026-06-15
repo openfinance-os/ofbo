@@ -74,12 +74,29 @@ export interface LineagePort {
   emitLineage(event: { table: string; columns: string[]; source: string; trace_id: string }): Promise<void>
 }
 
+export type OnboardingEntryPath = 'DIRECT_SIGNUP' | 'ONBOARDING_HANDOVER'
+
+/** BACKOFFICE-34 — a single onboarding case journey for the funnel metrics:
+ *  reached stages (a prefix of the canonical funnel order), the stage it abandoned
+ *  at (null if it activated), timestamps for cycle time, and a cross-sell flag. */
+export interface OnboardingCase {
+  case_id: string
+  entry_path: OnboardingEntryPath
+  reached_stages: string[]
+  abandoned_at_stage: string | null
+  started_at: string
+  activated_at: string | null
+  cross_sell: boolean
+}
+
 /** P8 — Bank onboarding handover (optional port): funnel events with entry-path dimension. */
 export interface OnboardingHandoverPort {
   getFunnelEvents(window: {
     from: string
     to: string
-  }): Promise<{ entry_path: 'DIRECT_SIGNUP' | 'ONBOARDING_HANDOVER'; stage: string; at: string }[]>
+  }): Promise<{ entry_path: OnboardingEntryPath; stage: string; at: string }[]>
+  /** BACKOFFICE-34 — per-case onboarding journeys for the five funnel metrics. */
+  getOnboardingCases(window: { from: string; to: string }): Promise<OnboardingCase[]>
 }
 
 /** P9 — Financial management system: TPP counterparty registration + invoicing + settlement. */
