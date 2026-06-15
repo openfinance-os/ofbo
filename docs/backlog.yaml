@@ -109,7 +109,7 @@ milestones:
       - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: done }
       - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: done }
       - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: blocked, reason: "awaiting spec PR #76 (DAO is a new reconciliation line_type; dao_api_call added to the LineType enum, queued for human approval). After merge: fee-schedule + DEFAULT_THRESHOLDS + reconciliation_break CHECK migration + engine/sources." }
-      - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: pending }
+      - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: done }
       - { id: BACKOFFICE-74, title: Trust Framework participant administration, status: pending }
       - { id: BACKOFFICE-76, title: Cross-scheme dispute guard (Aani / Al Tareq), status: pending }
       - { id: BACKOFFICE-79, title: Nebras service-desk case tracking, status: pending }

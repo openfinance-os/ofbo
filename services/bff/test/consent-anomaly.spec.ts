@@ -21,6 +21,7 @@ function reader(over: Partial<AnomalyDetectionReader> = {}): AnomalyDetectionRea
     lookupCountByAgent: async (): Promise<AgentLookupRow[]> => [],
     scopeDenialsByAgent: async (): Promise<AgentLookupRow[]> => [],
     offHoursAdminByAgent: async (): Promise<AgentLookupRow[]> => [],
+    caapRegistrationsByDevice: async (): Promise<AgentLookupRow[]> => [],
     openAnomalyDedupKeys: async () => new Set<string>(),
     ...over
   }

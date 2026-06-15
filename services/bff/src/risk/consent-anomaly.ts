@@ -17,7 +17,8 @@ export const DEFAULT_ANOMALY_THRESHOLDS = {
   consent_churn_per_psu_24h: 5,
   lookups_per_agent_1h: 100,
   scope_denials_per_agent_1h: 10,
-  off_hours_admin_per_agent_24h: 15
+  off_hours_admin_per_agent_24h: 15,
+  caap_registrations_per_device_1h: 10
 }
 
 export interface AnomalySignalSink {
@@ -28,6 +29,8 @@ export interface AnomalyDetectionReader {
   lookupCountByAgent(sinceIso: string): Promise<AgentLookupRow[]>
   scopeDenialsByAgent(sinceIso: string): Promise<AgentLookupRow[]>
   offHoursAdminByAgent(sinceIso: string): Promise<AgentLookupRow[]>
+  /** BACKOFFICE-69 — CAAP registrations per device (the device is the acting principal). */
+  caapRegistrationsByDevice(sinceIso: string): Promise<AgentLookupRow[]>
   openAnomalyDedupKeys(): Promise<Set<string>>
 }
 
@@ -42,7 +45,7 @@ export interface ConsentAnomalyDeps {
   now?: () => Date
 }
 
-export type AnomalyRule = 'consent_churn' | 'agent_lookups' | 'repeated_403s' | 'off_hours_admin'
+export type AnomalyRule = 'consent_churn' | 'agent_lookups' | 'repeated_403s' | 'off_hours_admin' | 'caap_registration'
 export interface DetectedAnomaly {
   rule: AnomalyRule
   subject_ref: string
@@ -57,7 +60,7 @@ const psuRef = (psu: string): string => createHash('sha256').update(psu).digest(
 const RUN_PRINCIPAL = 'system:consent-anomaly-detector'
 type Severity = 'medium' | 'high' | 'critical'
 /** BACKOFFICE-46 — team routing per anomaly class. */
-const RULE_TEAM: Record<AnomalyRule, string> = { consent_churn: 'risk', agent_lookups: 'risk', repeated_403s: 'security', off_hours_admin: 'security' }
+const RULE_TEAM: Record<AnomalyRule, string> = { consent_churn: 'risk', agent_lookups: 'risk', repeated_403s: 'security', off_hours_admin: 'security', caap_registration: 'security' }
 /** Severity by how far over the threshold (1× → base, 2× → high, 3×+ → critical). */
 function severityBy(count: number, threshold: number, base: Severity): Severity {
   if (count > threshold * 3) return 'critical'
@@ -127,6 +130,10 @@ export class ConsentAnomalyDetector {
     // off-hours admin activity (per agent, 24h)
     for (const r of await this.deps.detection.offHoursAdminByAgent(h24)) {
       await handle('off_hours_admin', r.agent, r.lookups, r.lookups > this.t.off_hours_admin_per_agent_24h, severityBy(r.lookups, this.t.off_hours_admin_per_agent_24h, 'medium'), 'agent_anomaly', `Off-hours admin activity: ${r.lookups} admin actions outside business hours (>${this.t.off_hours_admin_per_agent_24h}) by ${r.agent} — session flagged`, `off_hours_admin|${r.agent}`, { off_hours_count: r.lookups }, r.agent)
+    }
+    // BACKOFFICE-69 — CAAP registration spike (per device, 1h)
+    for (const r of await this.deps.detection.caapRegistrationsByDevice(h1)) {
+      await handle('caap_registration', r.agent, r.lookups, r.lookups > this.t.caap_registrations_per_device_1h, severityBy(r.lookups, this.t.caap_registrations_per_device_1h, 'high'), 'agent_anomaly', `CAAP registration spike: ${r.lookups} registrations in 1h (>${this.t.caap_registrations_per_device_1h}) from device ${r.agent}`, `caap_registration|${r.agent}`, { caap_registration_count: r.lookups, rule: 'caap_registration_spike', device_ref: r.agent }, r.agent)
     }
     return out
   }
