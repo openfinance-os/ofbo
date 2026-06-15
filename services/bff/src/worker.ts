@@ -13,7 +13,9 @@ import {
   PgBillingRecordStore,
   PgInvoiceRunStore,
   PgNebrasSnapshotStore,
-  PgNebrasAggregateStore
+  PgNebrasAggregateStore,
+  PgCertificationStore,
+  PgOutageStore
 } from '@ofbo/db'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { createApp } from './app.js'
@@ -63,6 +65,9 @@ export default {
     const billingRecordStore = url ? new PgBillingRecordStore(url, tenancy, lineage) : undefined
     const invoiceRunStore = url ? new PgInvoiceRunStore(url, tenancy, lineage) : undefined
     const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, lineage) : undefined
+    const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
+    const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
+    const outageStore = url ? new PgOutageStore(url, tenancy) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -77,12 +82,15 @@ export default {
       ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
       ...(billingRecordStore ? { billingRecordStore } : {}),
       ...(invoiceRunStore ? { invoiceRunStore } : {}),
-      ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {})
+      ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {}),
+      ...(nebrasSnapshotStore ? { nebrasConnectivityReader: nebrasSnapshotStore } : {}),
+      ...(certificationStore ? { certificationReader: certificationStore } : {}),
+      ...(outageStore ? { outageReader: outageStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

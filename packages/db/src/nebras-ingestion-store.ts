@@ -188,6 +188,13 @@ export class PgNebrasSnapshotStore extends TenantStore {
     )
     return rows.map(toSnapshot)
   }
+
+  /** BACKOFFICE-28 — the most recent ingestion across any period: the Ops Console's
+   *  Nebras connectivity signal (last contact + freshness). */
+  async latest(): Promise<StoredSnapshot | null> {
+    const row = await this.asApp(async (c) => (await c.query(`SELECT ${SNAP_COLS} FROM nebras_ingest_snapshot ORDER BY ingested_at DESC LIMIT 1`)).rows[0] ?? null)
+    return row ? toSnapshot(row) : null
+  }
 }
 
 const AGG_LINEAGE = ['bank_id', 'channel', 'period', 'line_type', 'total_fee_minor', 'line_count', 'source_published_at', 'freshness']
