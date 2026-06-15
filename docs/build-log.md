@@ -188,3 +188,10 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Regenerated api-types + routes (revoke-fraud fourEyes:true; reports:approve fourEyes:false). No code change — both endpoints are still contract-pending stubs. 271 unit green; lint + typecheck green; pnpm gen committed (57 paths unchanged). Reviewers: contract-conformance CONFORMANT, hard-stop PASS (strengthens controls; no scope widened).
 - HUMAN DECISION: approve/merge spec PR #26. SPEC-FRAUD-REVOKE-FOUREYES is blocked until then; BACKOFFICE-22 (deps on it) stays blocked.
 - Loop continues with the next eligible item: BACKOFFICE-25 (care-surface token minting).
+
+## 2026-06-15 — BACKOFFICE-25 (loop iteration 22) — PARKED on ADR (human decision)
+
+- Care-surface token minting (act + sub claims, ≤15 min). The mechanism is already defined by the canon — P1 CareSurfacePort.mintCareToken returns { token, act, sub, expires_at }, and the spec's securityScheme documents care tokens as Platform Auth Service client_credentials with act/sub. What is NOT covered: HOW the console obtains the care token. The OpenAPI contract has no path, and a new auth path is a humans-decide decision (CLAUDE.md rule 6).
+- Wrote docs/adrs/0001-care-surface-token-minting.md (Proposed) with three exposure options — (1) a Back Office contract `:mint-token` endpoint via the Hono BFF (needs a spec-change PR), (2) a portal-server route outside the contract (the M1-PORTAL-SHELL session pattern), (3) transparent BFF middleware on PSU-scoped care-surface calls — recommending Option 1. BACKOFFICE-25 is blocked on the ADR.
+- HUMAN DECISION: choose the care-token exposure surface (ADR 0001). No code/PR this iteration.
+- Loop continues with the next eligible item: BACKOFFICE-20 (unauthorized-payment investigation workflow; deps 16 done).

@@ -43,7 +43,7 @@ milestones:
       - { id: BACKOFFICE-18, title: Emergency PSU-wide bulk revocation (four-eyes), status: pending, depends_on: [BACKOFFICE-17] }
       - { id: SPEC-FRAUD-REVOKE-FOUREYES, title: Spec-change PR - add x-four-eyes + 202 to revoke-fraud per binding BD-03 default; clarify reports:approve 200-vs-202; approval id format (human-approved merge), status: blocked, reason: "awaiting human-approved merge of spec PR #26 (contract changes are never auto-merged). Reviewers CONFORMANT + PASS, CI green" }
       - { id: BACKOFFICE-22, title: Fraud-suspected revocation (narrow Risk scope) + STR draft, status: pending, depends_on: [BACKOFFICE-17, SPEC-FRAUD-REVOKE-FOUREYES] }
-      - { id: BACKOFFICE-25, title: Care-surface token minting with act + sub claims (<=15 min), status: pending }
+      - { id: BACKOFFICE-25, title: Care-surface token minting with act + sub claims (<=15 min), status: blocked, reason: "uncovered auth-path (CLAUDE.md rule 6): no contract endpoint exists; care token is a Platform Auth Service client_credentials token (P1 CareSurfacePort). Exposure surface is a human decision — see docs/adrs/0001-care-surface-token-minting.md" }
       - { id: BACKOFFICE-20, title: Unauthorized-payment investigation workflow, status: pending, depends_on: [BACKOFFICE-16] }
       - { id: BACKOFFICE-21, title: Next-business-day refund (four-eyes, SLA timer), status: pending, depends_on: [BACKOFFICE-20] }
       - { id: BACKOFFICE-62, title: Refund via formal Ozone Connect refund flow (P6, 5 IPP status codes), status: pending, depends_on: [BACKOFFICE-21] }
