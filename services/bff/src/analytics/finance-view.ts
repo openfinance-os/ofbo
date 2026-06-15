@@ -91,15 +91,16 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 export function financeViewRoutes(service: FinanceViewService): Record<string, Handler> {
   return {
+    // The contract declares only x-fapi-interaction-id — the view is always
+    // month-to-date (current month). No period query parameter (no spec drift).
     'get /back-office/analytics/finance-view': async (c) => {
       try {
-        const period = c.req.query('period')
-        const { data, freshness } = await service.view(c.get('principal'), period)
+        const { data, freshness } = await service.view(c.get('principal'))
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
         if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
         if (e instanceof FinanceViewError) {
-          return c.json(errorEnvelope(e.code, e.message, 'Pass ?period=YYYY-MM or omit for the current month.', DOCS_BASE), e.status as ContentfulStatusCode)
+          return c.json(errorEnvelope(e.code, e.message, 'The Finance View is month-to-date; no parameters are required.', DOCS_BASE), e.status as ContentfulStatusCode)
         }
         throw e
       }

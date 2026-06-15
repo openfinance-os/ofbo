@@ -101,8 +101,9 @@ describe('GET /back-office/analytics/finance-view (HTTP)', () => {
     expect(res.status).toBe(403)
   })
 
-  it('rejects a malformed ?period (400)', async () => {
+  it('ignores an undeclared query parameter (always month-to-date — no contract drift)', async () => {
+    // ?period is not a contract parameter; the view stays MTD and returns 200.
     const res = await app.request('/back-office/analytics/finance-view?period=nope', { headers: auth('finance-analyst') })
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(200)
   })
 })
