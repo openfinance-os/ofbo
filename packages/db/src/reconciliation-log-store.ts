@@ -189,6 +189,16 @@ export class PgReconciliationLogStore {
     })
   }
 
+  /** BACKOFFICE-07 — all runs whose run_id matches a prefix (a month), for per-run
+   *  margin re-derivation during the monthly sign-off. */
+  async listForPrefix(runIdPrefix: string, limit = 1000): Promise<StoredReconciliationRun[]> {
+    const rows = await this.asApp(async (c) => {
+      const res = await c.query(`SELECT ${SELECT_COLUMNS} FROM reconciliation_log WHERE run_id LIKE $1 ORDER BY window_start, id LIMIT ${limit}`, [`${runIdPrefix}%`])
+      return res.rows
+    })
+    return rows.map(toRun)
+  }
+
   async get(runId: string): Promise<StoredReconciliationRun | null> {
     const row = await this.asApp(async (c) => {
       const res = await c.query(`SELECT ${SELECT_COLUMNS} FROM reconciliation_log WHERE run_id = $1`, [runId])

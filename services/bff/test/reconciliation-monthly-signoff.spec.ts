@@ -65,13 +65,14 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
     expect(body.data.generated_at).toBeTruthy()
 
     // the persisted summary aggregates the month's runs + break dispositions
-    const content = reports.created[0]!.content as { period: string; run_count: number; breaks: { total: number; open: number }; open_nebras_disputes: number; tpp_aas_margin: { status: string } }
+    const content = reports.created[0]!.content as { period: string; run_count: number; breaks: { total: number; open: number }; open_nebras_disputes: number; tpp_aas_margin: { total_margin: number; by_fintech: Record<string, unknown> } }
     expect(content.period).toBe('2026-07')
     expect(content.run_count).toBe(1)
     expect(content.breaks.total).toBe(8)
     expect(content.breaks.open).toBe(8) // all flagged
     expect(content.open_nebras_disputes).toBe(0)
-    expect(content.tpp_aas_margin.status).toBe('pending_backoffice_07') // margin enriched by -07
+    expect(content.tpp_aas_margin.total_margin).toBeGreaterThan(0) // BACKOFFICE-07 real margin
+    expect(Object.keys(content.tpp_aas_margin.by_fintech).length).toBeGreaterThan(0)
     const ev = audit.events.find((e) => e.event_type === 'reconciliation_monthly_signoff')
     expect((ev?.request_body as { period: string }).period).toBe('2026-07')
   })
