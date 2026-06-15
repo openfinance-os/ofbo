@@ -33,7 +33,9 @@ describe('BACKOFFICE-43 — RBAC enforcement, both layers, audited denials', () 
     const { app } = appWithAudit()
     const finance = await app.request('/back-office/reconciliation/runs', { headers: asPersona('finance-analyst') })
     expect(finance.status).toBe(501)
-    const care = await app.request('/consents:search-psu?identifier_type=bank_customer_id&identifier=cust-0001', {
+    // A still-stubbed consents:admin route — proves Customer Care passes the
+    // scope middleware (the implemented search route is covered in consents.spec).
+    const care = await app.request('/consents/4d2c2e2a-0000-4000-8000-000000000000:admin', {
       headers: asPersona('customer-care-agent')
     })
     expect(care.status).toBe(501)

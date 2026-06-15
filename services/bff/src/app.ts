@@ -14,6 +14,10 @@ import {
   type SuperAdminDeps
 } from './superadmin.js'
 import { approvalRoutes } from './approvals/routes.js'
+import { consentRoutes } from './consents/routes.js'
+import { ConsentSearchService } from './consents/service.js'
+import type { ConsentDirectory } from './consents/directory.js'
+import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import type { IdempotencyStore } from './idempotency.js'
 
@@ -24,7 +28,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /approvals/pending',
   'get /approvals/{approval_id}',
   'post /approvals/{approval_id}:approve',
-  'post /approvals/{approval_id}:reject'
+  'post /approvals/{approval_id}:reject',
+  'get /consents:search-psu'
 ])
 
 /**
@@ -41,6 +46,10 @@ export interface AppDeps {
   superadmin?: Partial<SuperAdminDeps>
   apm?: Pick<ApmPort, 'exportSpans'>
   idempotency?: IdempotencyStore
+  /** High-class audit for story services (BACKOFFICE-16+). Defaults to `audit`
+   *  when it exposes emit (PgAuditEmitter does), else an in-memory sink. */
+  highClassAudit?: HighClassAuditSink
+  consentDirectory?: ConsentDirectory
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -52,8 +61,16 @@ export function createApp(deps: AppDeps = {}) {
     riskSignals: deps.superadmin?.riskSignals ?? new InMemoryRiskSignalSink(),
     ...(deps.superadmin?.sessionTtlMs !== undefined ? { sessionTtlMs: deps.superadmin.sessionTtlMs } : {})
   })
+  // High-class audit for story services: prefer an explicit sink, else reuse the
+  // auth audit when it exposes emit (PgAuditEmitter does), else in-memory.
+  const highClassAudit: HighClassAuditSink =
+    deps.highClassAudit ?? (hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
+  const consentSearch = new ConsentSearchService({
+    audit: highClassAudit,
+    ...(deps.consentDirectory ? { directory: deps.consentDirectory } : {})
+  })
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
-  const handlers = approvalRoutes(approvals, deps.idempotency)
+  const handlers = { ...approvalRoutes(approvals, deps.idempotency), ...consentRoutes(consentSearch) }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
 
