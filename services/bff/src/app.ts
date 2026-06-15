@@ -48,7 +48,9 @@ import {
 import {
   ReconciliationService,
   InMemoryReconciliationLogStore,
-  type ReconciliationLogStore
+  InMemoryReconciliationBreakStore,
+  type ReconciliationLogStore,
+  type ReconciliationBreakStore
 } from './reconciliation/service.js'
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
@@ -75,7 +77,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /disputes/{dispute_id}:initiate-refund',
   'post /back-office/inquiries/psu',
   'get /back-office/reconciliation/runs',
-  'get /back-office/reconciliation/runs/{run_id}'
+  'get /back-office/reconciliation/runs/{run_id}',
+  'get /back-office/reconciliation/breaks'
 ])
 
 /**
@@ -102,6 +105,7 @@ export interface AppDeps {
   paymentSource?: PaymentSource
   complianceReportStore?: ComplianceReportStore
   reconciliationLogStore?: ReconciliationLogStore
+  reconciliationBreakStore?: ReconciliationBreakStore
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -172,6 +176,8 @@ export function createApp(deps: AppDeps = {}) {
   })
   const reconciliationService = new ReconciliationService({
     store: deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore(),
+    breakStore: deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore(),
+    itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()

@@ -48,3 +48,10 @@ export {
   type ReconciliationRunListQuery,
   type ReconciliationRunPage
 } from './reconciliation-log-store.js'
+export {
+  PgReconciliationBreakStore,
+  type StoredReconciliationBreak,
+  type ReconciliationBreakCreateInput,
+  type ReconciliationBreakListQuery,
+  type ReconciliationBreakPage
+} from './reconciliation-break-store.js'

@@ -6,9 +6,11 @@ import {
   PgDisputeStore,
   PgIdempotencyStore,
   PgLineageEmitter,
+  PgReconciliationBreakStore,
   PgReconciliationLogStore,
   PgRiskSignalEmitter
 } from '@ofbo/db'
+import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
 
@@ -50,6 +52,7 @@ export default {
     const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
     const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
     const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
+    const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -59,12 +62,13 @@ export default {
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
       ...(disputeStore ? { disputeStore } : {}),
       ...(complianceReportStore ? { complianceReportStore } : {}),
-      ...(reconciliationLogStore ? { reconciliationLogStore } : {})
+      ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
+      ...(reconciliationBreakStore ? { reconciliationBreakStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
@@ -82,13 +86,15 @@ export default {
     const lineage = new PgLineageEmitter(url, tenancy)
     const audit = new PgAuditEmitter(url, tenancy, lineage)
     const store = new PgReconciliationLogStore(url, tenancy, lineage)
-    const service = new ReconciliationService({ store, audit })
+    const breakStore = new PgReconciliationBreakStore(url, tenancy, lineage)
+    const itsm = getAdapter('p3-itsm', profileFromConfig(env as Record<string, string | undefined>))
+    const service = new ReconciliationService({ store, breakStore, itsm, audit })
     ctx.waitUntil(
       service
         .runDaily(crypto.randomUUID())
         .catch(() => undefined)
         .finally(async () => {
-          await Promise.all([store.close(), audit.close(), lineage.close()])
+          await Promise.all([store.close(), breakStore.close(), audit.close(), lineage.close()])
         })
     )
   }

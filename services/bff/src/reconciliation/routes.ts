@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
-import type { StoredReconciliationRun, ReconciliationRunListQuery } from '@ofbo/db'
+import type { StoredReconciliationRun, ReconciliationRunListQuery, StoredReconciliationBreak, ReconciliationBreakListQuery } from '@ofbo/db'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import type { ReconciliationService } from './service.js'
@@ -28,6 +28,30 @@ export function toWire(run: StoredReconciliationRun) {
     line_count_disputed: run.line_count_disputed,
     failure_reason: run.failure_reason,
     created_at: run.created_at
+  }
+}
+
+/** Map a stored break to the OpenAPI ReconciliationBreak wire shape. */
+export function breakToWire(b: StoredReconciliationBreak) {
+  return {
+    id: b.id,
+    run_id: b.run_id,
+    client_id: b.client_id,
+    channel: b.channel,
+    line_type: b.line_type,
+    status: b.status,
+    variance_amount: b.variance_amount,
+    variance_count: b.variance_count,
+    source_a_ref: b.source_a_ref,
+    source_b_ref: b.source_b_ref,
+    source_c_ref: b.source_c_ref,
+    assigned_to: b.assigned_to,
+    sla_clock_started_at: b.sla_clock_started_at,
+    resolution_outcome: b.resolution_outcome,
+    resolution_note: b.resolution_note,
+    nebras_dispute_case_id: b.nebras_dispute_case_id,
+    reopened_count: b.reopened_count,
+    created_at: b.created_at
   }
 }
 
@@ -63,6 +87,23 @@ export function reconciliationRoutes(service: ReconciliationService): Record<str
           )
         }
         return c.json(dataEnvelope(toWire(run)), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
+    'get /back-office/reconciliation/breaks': async (c) => {
+      const q: ReconciliationBreakListQuery = {
+        ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
+        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...(c.req.query('run_id') ? { run_id: c.req.query('run_id') } : {}),
+        ...(c.req.query('status') ? { status: c.req.query('status') } : {}),
+        ...(c.req.query('line_type') ? { line_type: c.req.query('line_type') } : {}),
+        ...(c.req.query('client_id') ? { client_id: c.req.query('client_id') } : {})
+      }
+      try {
+        const { rows, next_cursor } = await service.listBreaks(c.get('principal'), q)
+        return c.json(dataEnvelope(rows.map(breakToWire), { next_cursor }), 200)
       } catch (e) {
         return fail(c, e)
       }

@@ -1,9 +1,21 @@
-import type { StoredReconciliationRun, ReconciliationRunCreateInput, ReconciliationRunListQuery, ReconciliationRunPage } from '@ofbo/db'
+import type {
+  StoredReconciliationRun,
+  ReconciliationRunCreateInput,
+  ReconciliationRunListQuery,
+  ReconciliationRunPage,
+  StoredReconciliationBreak,
+  ReconciliationBreakCreateInput,
+  ReconciliationBreakListQuery,
+  ReconciliationBreakPage
+} from '@ofbo/db'
+import type { ItsmPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { runThreeWayReconciliation, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
+import { detectBreaks, type DetectedBreak } from './breaks.js'
+import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
 
 /**
  * BACKOFFICE-01 — reconciliation run orchestration + read surface. Executes the
@@ -23,6 +35,18 @@ export interface ReconciliationLogStore {
   list(query?: ReconciliationRunListQuery): Promise<ReconciliationRunPage>
 }
 
+export interface ReconciliationBreakStore {
+  createMany(inputs: ReconciliationBreakCreateInput[], traceId: string): Promise<StoredReconciliationBreak[]>
+  countForRun(runId: string): Promise<number>
+  list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
+}
+
+/** P3 ITSM teams a break routes to (PRD §7.1 BACKOFFICE-02). */
+const TEAM_ROUTE: Record<DetectedBreak['notify_team'], string> = {
+  finance: 'finance',
+  operations: 'payment_operations'
+}
+
 /** A bundle of the three sources plus the open-dispute refs for the window. */
 export type ReconSourcesBundle = ReconSources & { openDisputeRefs: Set<string> }
 
@@ -31,6 +55,10 @@ export interface ReconciliationDeps {
   audit: HighClassAuditSink
   /** Resolves the three sources for a period (defaults to the deterministic sim). */
   sourcesFor?: (period: string) => ReconSourcesBundle
+  /** BACKOFFICE-02 — break detection + team notification (omit to skip detection). */
+  breakStore?: ReconciliationBreakStore
+  itsm?: Pick<ItsmPort, 'createTicket'>
+  thresholds?: BreakThreshold[]
   now?: () => Date
 }
 
@@ -38,6 +66,7 @@ export interface ReconRunResult {
   run: StoredReconciliationRun
   created: boolean
   result: ReconResult
+  breaks: StoredReconciliationBreak[]
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -47,12 +76,18 @@ export class ReconciliationService {
   private readonly store: ReconciliationLogStore
   private readonly audit: HighClassAuditSink
   private readonly sourcesFor: (period: string) => ReconSourcesBundle
+  private readonly breakStore?: ReconciliationBreakStore
+  private readonly itsm?: Pick<ItsmPort, 'createTicket'>
+  private readonly thresholds: BreakThreshold[]
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
     this.store = deps.store
     this.audit = deps.audit
     this.sourcesFor = deps.sourcesFor ?? ((period: string) => buildSimReconSources(period))
+    this.breakStore = deps.breakStore
+    this.itsm = deps.itsm
+    this.thresholds = deps.thresholds ?? DEFAULT_THRESHOLDS
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -108,7 +143,56 @@ export class ReconciliationService {
       })
     }
 
-    return { run, created, result }
+    // BACKOFFICE-02 — break detection. Only on an actually-executed run, and
+    // only once per run_id (a re-run that already has breaks is a no-op).
+    const breaks = created ? await this.detectAndRecordBreaks(runId, result, traceId) : []
+
+    return { run, created, result, breaks }
+  }
+
+  private async detectAndRecordBreaks(runId: string, result: ReconResult, traceId: string): Promise<StoredReconciliationBreak[]> {
+    if (!this.breakStore) return []
+    if ((await this.breakStore.countForRun(runId)) > 0) return [] // already detected for this run
+    const detected = detectBreaks(result, this.thresholds)
+    if (detected.length === 0) return []
+
+    const inputs: ReconciliationBreakCreateInput[] = detected.map((b) => ({
+      run_id: runId,
+      client_id: b.client_id,
+      line_type: b.line_type,
+      variance_amount: b.variance_amount,
+      variance_count: b.variance_count,
+      source_a_ref: b.source_a_ref,
+      source_b_ref: b.source_b_ref,
+      source_c_ref: b.source_c_ref
+    }))
+    const stored = await this.breakStore.createMany(inputs, traceId)
+
+    // Route notifications: Finance for fee breaks, Operations for consent breaks.
+    const byTeam = new Map<DetectedBreak['notify_team'], number>()
+    for (const b of detected) byTeam.set(b.notify_team, (byTeam.get(b.notify_team) ?? 0) + 1)
+    for (const [team, count] of byTeam) {
+      await this.itsm?.createTicket(
+        { type: 'reconciliation_break', severity: 'medium', team: TEAM_ROUTE[team], summary: `${count} ${team} reconciliation break(s) in run ${runId}` },
+        { trace_id: traceId }
+      )
+    }
+
+    await this.audit.emit({
+      event_type: 'reconciliation_breaks_detected',
+      acting_principal: RUN_PRINCIPAL,
+      acting_persona: 'system',
+      scope_used: 'reconciliation:run',
+      request_trace_id: traceId,
+      request_body: {
+        run_id: runId,
+        break_count: detected.length,
+        finance_breaks: byTeam.get('finance') ?? 0,
+        operations_breaks: byTeam.get('operations') ?? 0
+      },
+      response_status: 200
+    })
+    return stored
   }
 
   async list(principal: Principal, query: ReconciliationRunListQuery = {}): Promise<ReconciliationRunPage> {
@@ -119,6 +203,12 @@ export class ReconciliationService {
   async getRun(principal: Principal, runId: string): Promise<StoredReconciliationRun | null> {
     assertScope(principal, RECON_READ_SCOPE)
     return this.store.get(runId)
+  }
+
+  async listBreaks(principal: Principal, query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
+    assertScope(principal, RECON_READ_SCOPE)
+    if (!this.breakStore) return { rows: [], next_cursor: null }
+    return this.breakStore.list(query)
   }
 }
 
@@ -152,6 +242,47 @@ export class InMemoryReconciliationLogStore implements ReconciliationLogStore {
     let rows = this.rows
     if (query.run_type) rows = rows.filter((r) => r.run_type === query.run_type)
     if (query.status) rows = rows.filter((r) => r.status === query.status)
+    return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
+  }
+}
+
+/** No-database default (tests / local dev). */
+export class InMemoryReconciliationBreakStore implements ReconciliationBreakStore {
+  private readonly rows: StoredReconciliationBreak[] = []
+  async createMany(inputs: ReconciliationBreakCreateInput[]): Promise<StoredReconciliationBreak[]> {
+    const now = new Date().toISOString()
+    const created = inputs.map((input) => ({
+      id: crypto.randomUUID(),
+      run_id: input.run_id,
+      client_id: input.client_id ?? null,
+      channel: 'internal_retail',
+      line_type: input.line_type,
+      status: 'flagged',
+      variance_amount: input.variance_amount ?? null,
+      variance_count: input.variance_count ?? null,
+      source_a_ref: input.source_a_ref,
+      source_b_ref: input.source_b_ref,
+      source_c_ref: input.source_c_ref ?? null,
+      assigned_to: null,
+      sla_clock_started_at: now,
+      resolution_outcome: null,
+      resolution_note: null,
+      nebras_dispute_case_id: null,
+      reopened_count: 0,
+      created_at: now
+    }))
+    this.rows.unshift(...created)
+    return created
+  }
+  async countForRun(runId: string): Promise<number> {
+    return this.rows.filter((r) => r.run_id === runId).length
+  }
+  async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
+    let rows = this.rows
+    if (query.run_id) rows = rows.filter((r) => r.run_id === query.run_id)
+    if (query.status) rows = rows.filter((r) => r.status === query.status)
+    if (query.line_type) rows = rows.filter((r) => r.line_type === query.line_type)
+    if (query.client_id) rows = rows.filter((r) => r.client_id === query.client_id)
     return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
   }
 }
