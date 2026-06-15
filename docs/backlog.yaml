@@ -106,7 +106,7 @@ milestones:
       - { id: BACKOFFICE-64, title: Call/transcript linkage on dispute cases, status: blocked, reason: "needs a contract + P1-port decision: originating_call_id is already captured + surfaced on disputes (BACKOFFICE-20, nullable for non-voice, disputes:admin RBAC), but resolving it to a contact-centre recording requires a new CareSurfacePort method (P1) + a recording-link surface (endpoint/field). New port primitive + contract choice — human-gated (ADR/spec)." }
       - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: done }
       - { id: BACKOFFICE-41, title: Analytics exports (PDF/XLSX/CSV), status: done }
-      - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: pending }
+      - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: done }
       - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: pending }
       - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: pending }
       - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: pending }

@@ -5,6 +5,7 @@ import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
+import { computeSlo, summarizeSlos, DemoSloReader, type SloReader } from './slo.js'
 
 /**
  * BACKOFFICE-28 — Operations Console (platform health). A read-only analytics view
@@ -42,6 +43,8 @@ export interface OperationsConsoleDeps {
   connectivity: OpsConnectivityReader
   pipeline: OpsPipelineReader
   handover: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
+  /** BACKOFFICE-58 — SLO observations (omit → deterministic demo reader). */
+  slo?: SloReader
   now?: () => Date
 }
 
@@ -64,13 +67,17 @@ export class OperationsConsoleService {
     const windowEnd = now.toISOString()
     const windowStart = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString()
 
-    const [certs, activeOutages, latestSnapshot, pipeline, handoverEvents] = await Promise.all([
+    const [certs, activeOutages, latestSnapshot, pipeline, handoverEvents, sloObs] = await Promise.all([
       this.deps.certifications.list(),
       this.deps.outages.listActive(),
       this.deps.connectivity.latest(),
       this.deps.pipeline.pipelineCounts(),
-      this.deps.handover.getFunnelEvents({ from: windowStart, to: windowEnd })
+      this.deps.handover.getFunnelEvents({ from: windowStart, to: windowEnd }),
+      (this.deps.slo ?? new DemoSloReader()).getSloObservations()
     ])
+    // BACKOFFICE-58 — SLO observability: target, error budget remaining + burn rate
+    // per SLO, surfaced in the console (no separate APM login).
+    const slos = sloObs.map(computeSlo)
 
     const connectivityStatus = latestSnapshot === null ? 'unknown' : latestSnapshot.freshness === 'fresh' ? 'connected' : 'degraded'
     const byRole = (role: string) =>
@@ -89,7 +96,8 @@ export class OperationsConsoleService {
       tpp_onboarding_pipeline: { by_state: pipeline, total: Object.values(pipeline).reduce((n, v) => n + v, 0) },
       onboarding_handover_health: summarizeHandover(handoverEvents),
       active_outages: activeOutages.map((o) => ({ title: o.title, component: o.component, severity: o.severity, started_at: o.started_at })),
-      active_outage_count: activeOutages.length
+      active_outage_count: activeOutages.length,
+      slo: { window_days: slos[0]?.window_days ?? 30, summary: summarizeSlos(slos), slos }
     }
     // BACKOFFICE-40 — standard freshness: connectivity status is the domain signal
     // (degraded/unknown → amber), else amber when the last poll is older than 2× the
