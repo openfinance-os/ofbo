@@ -4,7 +4,7 @@ import type { StoredTppCounterparty, TppCounterpartyListQuery } from '@ofbo/db'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import type { IdempotencyStore } from '../idempotency.js'
-import type { TppRegistryService } from './service.js'
+import { TppRegistryError, type TppRegistryService } from './service.js'
 
 /**
  * BACKOFFICE-71 — consuming-TPP registry routes. List/detail are billing:read;
@@ -32,6 +32,9 @@ export function toWire(r: StoredTppCounterparty) {
 
 function fail(c: Context, e: unknown): Response {
   if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+  if (e instanceof TppRegistryError) {
+    return c.json(errorEnvelope(e.code, e.message, 'See the TPP billing contract (BACKOFFICE-71/-72).', DOCS_BASE), e.status as ContentfulStatusCode)
+  }
   throw e
 }
 
@@ -80,6 +83,28 @@ export function tppBillingRoutes(service: TppRegistryService, idempotency: Idemp
       try {
         const result = await service.syncDirectory(c.get('principal'), traceId)
         const res = c.json(dataEnvelope(result), 202)
+        await idempotency.set(cacheKey, 202, await res.clone().json())
+        return res
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
+    'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system': async (c, params) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+          400
+        )
+      }
+      const cacheKey = `tpp:register-fs|${params.organisation_id}|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const row = await service.registerFinancialSystem(c.get('principal'), params.organisation_id!, traceId)
+        const res = c.json(dataEnvelope(toWire(row)), 202)
         await idempotency.set(cacheKey, 202, await res.clone().json())
         return res
       } catch (e) {

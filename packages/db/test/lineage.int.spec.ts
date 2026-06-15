@@ -3,6 +3,7 @@ import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { PgAuditEmitter } from '../src/audit.js'
 import { PgLineageEmitter, validateLineageCoverage } from '../src/lineage.js'
+import { PgTppCounterpartyStore } from '../src/tpp-counterparty-store.js'
 
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is required for integration tests')
@@ -19,10 +20,13 @@ describe('BACKOFFICE-49 — BCBS 239 lineage emission at write time (P7 demo ada
     await applyMigrations(url)
     lineage = new PgLineageEmitter(url, { bankId: BANK, channel: 'internal_retail' })
     audit = new PgAuditEmitter(url, { bankId: BANK, channel: 'internal_retail' }, lineage)
-    // BACKOFFICE-71: the registry write path emits tpp_counterparty lineage. Emit it
-    // here so the coverage assertion is deterministic regardless of seed-spec ordering
-    // (this is also what permanently retired the old tpp_counterparty seed-race flake).
-    await lineage.emitLineage({ table: 'tpp_counterparty', columns: ['organisation_id', 'legal_name'], source: 'lineage-int-setup', trace_id: TRACE })
+    // BACKOFFICE-71: the registry write path inserts a tpp_counterparty ROW and
+    // emits its lineage. Do that here (via the store) so the coverage assertion is
+    // deterministic — tpp_counterparty has BOTH rows and lineage regardless of
+    // seed-spec ordering (this permanently retired the old tpp_counterparty flake).
+    const tppStore = new PgTppCounterpartyStore(url, { bankId: BANK, channel: 'internal_retail' }, lineage)
+    await tppStore.syncDirectory([{ organisation_id: 'org-lineage-int-setup', legal_name: 'Lineage Int Setup Co' }], TRACE)
+    await tppStore.close()
   })
   afterAll(async () => {
     await audit.close()

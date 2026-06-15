@@ -92,7 +92,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reconciliation/exports:cbuae',
   'get /back-office/tpp-counterparties',
   'get /back-office/tpp-counterparties/{organisation_id}',
-  'post /back-office/tpp-counterparties:sync-directory'
+  'post /back-office/tpp-counterparties:sync-directory',
+  'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system'
 ])
 
 /**
@@ -210,7 +211,9 @@ export function createApp(deps: AppDeps = {}) {
   const tppRegistryService = new TppRegistryService(
     deps.tppCounterpartyStore ?? new InMemoryTppCounterpartyStore(),
     deps.tppDirectoryEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env)),
-    highClassAudit
+    highClassAudit,
+    getAdapter('p9-financial-system', profileFromConfig(process.env)),
+    deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env))
   )
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
