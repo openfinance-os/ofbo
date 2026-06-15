@@ -24,7 +24,7 @@ import {
   type ConsentEventSource
 } from './consents/audit-trail.js'
 import { ConsentRevokeService, consentRevokeRoutes } from './consents/revoke.js'
-import { DisputeService, InMemoryDisputeStore, type DisputeStore } from './disputes/service.js'
+import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
@@ -45,7 +45,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /psu/{psu_identifier}/audit-trail',
   'get /payments/{payment_id}:admin',
   'post /disputes',
-  'get /disputes'
+  'get /disputes',
+  'post /disputes/{dispute_id}:initiate-refund'
 ])
 
 /**
@@ -87,7 +88,6 @@ function sharedDemoPaymentDirectory(): PaymentSource {
 export function createApp(deps: AppDeps = {}) {
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
-  const approvals = new ApprovalsService(audit, deps.approvals ?? {})
   const guardrails = new SuperAdminGuardrails({
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     riskSignals: deps.superadmin?.riskSignals ?? new InMemoryRiskSignalSink(),
@@ -104,11 +104,21 @@ export function createApp(deps: AppDeps = {}) {
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
   const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
   const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit })
+
+  // Dispute store first → the four-eyes refund operation closes over it → the
+  // approvals service registers that operation → the dispute service initiates it.
+  const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
+  const refundOperation = makeRefundOperation({ store: disputeStore, audit: highClassAudit })
+  const approvals = new ApprovalsService(audit, {
+    ...deps.approvals,
+    operations: { ...deps.approvals?.operations, [REFUND_OPERATION]: refundOperation }
+  })
   const disputeService = new DisputeService({
-    store: deps.disputeStore ?? new InMemoryDisputeStore(),
+    store: disputeStore,
     payments: deps.paymentSource ?? sharedDemoPaymentDirectory(),
     egress: nebrasEgress,
-    audit: highClassAudit
+    audit: highClassAudit,
+    approvals
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.

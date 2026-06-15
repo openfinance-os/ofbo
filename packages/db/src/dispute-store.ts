@@ -178,6 +178,32 @@ export class PgDisputeStore {
     return row ? toRecord(row) : null
   }
 
+  /** BACKOFFICE-21: move a dispute to refund_initiated with the next-business-day
+   *  SLA deadline recorded. dispute_case is a mutable workflow table (RLS UPDATE). */
+  async markRefundInitiated(
+    id: string,
+    refundAmount: Money,
+    refundRequiredBy: string,
+    traceId: string
+  ): Promise<StoredDisputeRecord | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE dispute_case
+            SET state = 'refund_initiated',
+                refund_initiated_at = now(),
+                refund_required_by = $2,
+                refund_amount = $3,
+                refund_currency = $4
+          WHERE id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, refundRequiredBy, refundAmount.amount, refundAmount.currency]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toRecord(row) : null
+  }
+
   async list(query: DisputeListQuery = {}): Promise<DisputePage> {
     const limit = Math.min(Math.max(query.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
     const after = query.cursor ? decodeCursor(query.cursor) : null

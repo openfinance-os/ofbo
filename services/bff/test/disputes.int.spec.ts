@@ -78,4 +78,25 @@ describe('dispute creation — persistence + audit + lineage', () => {
     expect(list.status).toBe(200)
     expect(((await list.json()) as { data: Array<{ id: string }> }).data.some((d) => d.id === created.id)).toBe(true)
   })
+
+  it('BACKOFFICE-21: markRefundInitiated updates dispute_case (RLS UPDATE) + emits lineage', async () => {
+    const trace = randomUUID()
+    const created = await disputeStore.create({ psu_identifier: PSU, dispute_type: 'unauthorised_payment' }, randomUUID())
+    const requiredBy = '2026-07-15T23:59:59.999Z'
+    const updated = await disputeStore.markRefundInitiated(created.id, { amount: 150000, currency: 'AED' }, requiredBy, trace)
+    expect(updated?.state).toBe('refund_initiated')
+    expect(updated?.refund_amount).toEqual({ amount: 150000, currency: 'AED' })
+
+    const row = await admin.query(
+      `SELECT state, refund_required_by, refund_amount, refund_currency, refund_initiated_at FROM dispute_case WHERE id = $1`,
+      [created.id]
+    )
+    expect(row.rows[0].state).toBe('refund_initiated')
+    expect(Number(row.rows[0].refund_amount)).toBe(150000)
+    expect(row.rows[0].refund_currency).toBe('AED')
+    expect(row.rows[0].refund_initiated_at).toBeTruthy()
+
+    const lin = await admin.query(`SELECT 1 FROM lineage_events WHERE trace_id = $1 AND table_name = 'dispute_case'`, [trace])
+    expect(lin.rows.length).toBeGreaterThan(0)
+  })
 })

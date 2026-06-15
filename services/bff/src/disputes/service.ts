@@ -2,8 +2,26 @@ import type { NebrasEgressPort } from '@ofbo/ports'
 import type { DisputeCreateInput, DisputeListQuery, DisputePage, StoredDisputeRecord } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
+import { endOfNextBusinessDay } from '../business-hours.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import type { PaymentAdminView, PaymentSource } from './payments.js'
+
+export interface Money {
+  amount: number
+  currency: string
+}
+
+/** The four-eyes refund operation type registered with the approvals service. */
+export const REFUND_OPERATION = 'disputes.initiate_refund'
+
+export interface ApprovalRequester {
+  requestApproval(
+    principal: Principal,
+    input: { operation_type: string; operation_payload: Record<string, unknown> },
+    traceId: string
+  ): Promise<ApprovalRecord>
+}
 
 /**
  * BACKOFFICE-20 — unauthorised-payment investigation. The payment admin view is
@@ -36,6 +54,7 @@ export interface DisputeStore {
   create(input: DisputeCreateInput, traceId: string): Promise<StoredDisputeRecord>
   get(id: string): Promise<StoredDisputeRecord | null>
   list(query: DisputeListQuery): Promise<DisputePage>
+  markRefundInitiated(id: string, refundAmount: Money, refundRequiredBy: string, traceId: string): Promise<StoredDisputeRecord | null>
 }
 
 /** No-database default (tests / local dev). Not isolate-safe — the worker uses
@@ -74,6 +93,59 @@ export class InMemoryDisputeStore implements DisputeStore {
     if (query.psu_identifier) rows = rows.filter((r) => r.psu_identifier === query.psu_identifier)
     return { rows, next_cursor: null }
   }
+  async markRefundInitiated(id: string, refundAmount: Money, refundRequiredBy: string): Promise<StoredDisputeRecord | null> {
+    const r = this.rows.find((x) => x.id === id)
+    if (!r) return null
+    r.state = 'refund_initiated'
+    r.refund_initiated_at = new Date().toISOString()
+    r.refund_required_by = refundRequiredBy
+    r.refund_amount = refundAmount
+    return r
+  }
+}
+
+/**
+ * The four-eyes refund operation (BACKOFFICE-21). Registered with the approvals
+ * service; runs ONLY when a second principal approves — moving the dispute to
+ * refund_initiated with the next-business-day SLA deadline recorded, and writing
+ * a High-class refund_initiated audit. Never executes inline.
+ */
+export function makeRefundOperation(deps: {
+  store: Pick<DisputeStore, 'markRefundInitiated'>
+  audit: HighClassAuditSink
+  now?: () => Date
+}): GatedOperation {
+  const now = deps.now ?? (() => new Date())
+  return {
+    initiatorScope: DISPUTE_SCOPE,
+    approverScope: DISPUTE_SCOPE,
+    execute: async (payload) => {
+      const disputeId = String(payload.dispute_id)
+      const refundAmount = payload.refund_amount as Money
+      const traceId = String(payload.trace_id ?? 'unknown')
+      const initiatedBy = String(payload.initiated_by ?? 'unknown')
+      const initiatedByPersona = String(payload.initiated_by_persona ?? 'unknown')
+      const refundRequiredBy = endOfNextBusinessDay(now()).toISOString()
+      const updated = await deps.store.markRefundInitiated(disputeId, refundAmount, refundRequiredBy, traceId)
+      if (!updated) throw new Error(`dispute ${disputeId} not found at refund execution`)
+      await deps.audit.emit({
+        event_type: 'refund_initiated',
+        acting_principal: initiatedBy,
+        acting_persona: initiatedByPersona,
+        scope_used: DISPUTE_SCOPE,
+        target_dispute_id: disputeId,
+        request_trace_id: traceId,
+        request_body: { refund_amount: refundAmount, refund_required_by: refundRequiredBy, four_eyes_approved: true },
+        response_status: 200
+      })
+      return {
+        dispute_id: disputeId,
+        state: updated.state,
+        refund_required_by: updated.refund_required_by,
+        refund_amount: updated.refund_amount
+      }
+    }
+  }
 }
 
 export interface DisputeServiceDeps {
@@ -81,6 +153,7 @@ export interface DisputeServiceDeps {
   payments: PaymentSource
   egress: Pick<NebrasEgressPort, 'createDisputeCase'>
   audit: HighClassAuditSink
+  approvals: ApprovalRequester
 }
 
 /** Payment admin view — the wire shape (omits the internal psu_identifier). */
@@ -172,5 +245,35 @@ export class DisputeService {
   async list(principal: Principal, query: DisputeListQuery): Promise<DisputePage> {
     assertScope(principal, DISPUTE_SCOPE)
     return this.deps.store.list(query)
+  }
+
+  /**
+   * BACKOFFICE-21 — initiate a next-business-day refund. Four-eyes-gated: creates
+   * an approval_request (never executes inline); a second disputes:admin principal
+   * approves, which runs the refund operation. 404 if the dispute is unknown.
+   */
+  async initiateRefund(
+    principal: Principal,
+    disputeId: string,
+    refundAmount: Money,
+    traceId: string
+  ): Promise<ApprovalRecord> {
+    assertScope(principal, DISPUTE_SCOPE)
+    const dispute = await this.deps.store.get(disputeId)
+    if (!dispute) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+    return this.deps.approvals.requestApproval(
+      principal,
+      {
+        operation_type: REFUND_OPERATION,
+        operation_payload: {
+          dispute_id: disputeId,
+          refund_amount: refundAmount,
+          initiated_by: principal.subject,
+          initiated_by_persona: principal.persona,
+          trace_id: traceId
+        }
+      },
+      traceId
+    )
   }
 }
