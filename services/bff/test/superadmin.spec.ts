@@ -95,7 +95,7 @@ describe('BACKOFFICE-80 — super-admin guardrails (code-enforced)', () => {
 
   it('reads need no justification; ordinary personas mutate without one', async () => {
     const { app } = build()
-    const read = await app.request('/back-office/reconciliation/runs', { headers: SA })
+    const read = await app.request('/back-office/reconciliation/breaks', { headers: SA })
     expect(read.status).toBe(501)
     const finance = await app.request('/approvals', {
       method: 'POST',

@@ -41,3 +41,10 @@ export {
   type StoredComplianceReport,
   type ComplianceReportCreateInput
 } from './compliance-report-store.js'
+export {
+  PgReconciliationLogStore,
+  type StoredReconciliationRun,
+  type ReconciliationRunCreateInput,
+  type ReconciliationRunListQuery,
+  type ReconciliationRunPage
+} from './reconciliation-log-store.js'
