@@ -63,3 +63,15 @@ export {
   type TppCounterpartyPage,
   type DirectorySyncResult
 } from './tpp-counterparty-store.js'
+export {
+  PgBillingRecordStore,
+  PgInvoiceRunStore,
+  type StoredBillingRecordSet,
+  type BillingRecordCreateInput,
+  type BillingRecordListQuery,
+  type BillingRecordPage,
+  type StoredInvoiceRun,
+  type InvoiceRunCreateInput,
+  type InvoiceRunListQuery,
+  type InvoiceRunPage
+} from './tpp-invoicing-store.js'
