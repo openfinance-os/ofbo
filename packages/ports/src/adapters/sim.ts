@@ -88,6 +88,40 @@ const DIRECTORY = [
   { organisation_id: 'org-fictional-fintech-03', legal_name: 'Fictional Payments Co PSC' }
 ]
 
+/** Thrown when the Nebras sim returns a non-2xx (e.g. 429 rate limit). The
+ *  ingestion job (BACKOFFICE-32) treats it as retryable and backs off. */
+export class NebrasEgressError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryable: boolean,
+    message: string
+  ) {
+    super(message)
+    this.name = 'NebrasEgressError'
+  }
+}
+
+const periodPublishedAt = (period: string): string =>
+  /^\d{4}-\d{2}$/.test(period) ? `${period}-28T00:00:00.000Z` : `${period}T00:00:00.000Z`
+
+/** Calls the Nebras simulator (P6 — all Nebras-bound traffic via this adapter).
+ *  When NEBRAS_SIM_URL is unset (unit context), returns a deterministic empty
+ *  snapshot so the adapter is self-contained; the integration path sets it. */
+async function fetchNebras(
+  path: string,
+  trace: { trace_id: string },
+  period: string
+): Promise<{ published_at: string; rows: Record<string, unknown>[] }> {
+  const base = process.env.NEBRAS_SIM_URL
+  if (!base) return { published_at: periodPublishedAt(period), rows: [] }
+  const res = await fetch(`${base}${path}`, { headers: { 'x-fapi-interaction-id': trace.trace_id } })
+  if (!res.ok) {
+    throw new NebrasEgressError(res.status, res.status === 429 || res.status >= 500, `Nebras egress ${path} → ${res.status}`)
+  }
+  const body = (await res.json()) as { published_at?: string; rows?: Record<string, unknown>[] }
+  return { published_at: body.published_at ?? periodPublishedAt(period), rows: body.rows ?? [] }
+}
+
 const simNebrasEgress: NebrasEgressPort = {
   async revokeConsent(consentId, reason, trace) {
     // All Nebras-bound traffic goes through this P6 adapter (no direct egress).
@@ -106,11 +140,11 @@ const simNebrasEgress: NebrasEgressPort = {
     }
     return { acknowledged_in_ms: 420 }
   },
-  async fetchTppReports() {
-    return { rows: [] }
+  async fetchTppReports(period, trace) {
+    return fetchNebras(`/tpp-reports/${encodeURIComponent(period)}`, trace, period)
   },
-  async fetchDataset() {
-    return { rows: [] }
+  async fetchDataset(name, period, trace) {
+    return fetchNebras(`/datasets/${encodeURIComponent(name)}/${encodeURIComponent(period)}`, trace, period)
   },
   async createDisputeCase() {
     return { nebras_case_id: nextId('nebras-case') }
