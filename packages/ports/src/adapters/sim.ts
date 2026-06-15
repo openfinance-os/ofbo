@@ -117,6 +117,11 @@ const simNebrasEgress: NebrasEgressPort = {
   },
   async syncDirectory() {
     return { participants: DIRECTORY }
+  },
+  async dispatchRefund() {
+    // Ozone Connect refund accepted into settlement processing (deterministic
+    // for repeatable demos). The 5 IPP codes: ACCC, ACSP, ACSC, RJCT, PDNG.
+    return { ipp_status: 'ACSP' }
   }
 }
 

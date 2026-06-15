@@ -68,7 +68,7 @@ export interface AppDeps {
   highClassAudit?: HighClassAuditSink
   consentDirectory?: ConsentDirectory
   consentEventSource?: ConsentEventSource
-  nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent' | 'createDisputeCase'>
+  nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent' | 'createDisputeCase' | 'dispatchRefund'>
   disputeStore?: DisputeStore
   paymentSource?: PaymentSource
 }
@@ -108,7 +108,7 @@ export function createApp(deps: AppDeps = {}) {
   // Dispute store first → the four-eyes refund operation closes over it → the
   // approvals service registers that operation → the dispute service initiates it.
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
-  const refundOperation = makeRefundOperation({ store: disputeStore, audit: highClassAudit })
+  const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: { ...deps.approvals?.operations, [REFUND_OPERATION]: refundOperation }

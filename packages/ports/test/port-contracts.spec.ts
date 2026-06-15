@@ -78,6 +78,12 @@ function describePortContract(profile: 'demo') {
       expect(dir1).toEqual(dir2) // deterministic for repeatable demos
     })
 
+    it('P6 dispatches a refund via the Ozone Connect flow, returning an IPP status (BACKOFFICE-62)', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const r = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
+      expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(r.ipp_status)
+    })
+
     it('P7 accepts column-level lineage emission', async () => {
       const p7 = getAdapter('p7-lineage', profile)
       await expect(

@@ -23,6 +23,9 @@ class FakeEgress {
   async revokeConsent() {
     return { acknowledged_in_ms: 420 }
   }
+  async dispatchRefund() {
+    return { ipp_status: 'ACSP' }
+  }
 }
 
 const care = (extra: Record<string, string> = {}) => ({
