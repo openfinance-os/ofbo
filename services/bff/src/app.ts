@@ -71,6 +71,7 @@ import {
   type ComplianceMetricsReader,
   type RetentionReader
 } from './analytics/compliance-view.js'
+import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
 import {
   InvoicingService,
   InMemoryBillingRecordStore,
@@ -125,7 +126,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/invoice-runs/{invoice_run_id}',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
-  'get /back-office/analytics/compliance-view'
+  'get /back-office/analytics/compliance-view',
+  'get /back-office/analytics/risk-view'
 ])
 
 /**
@@ -172,6 +174,9 @@ export interface AppDeps {
    *  wires the Pg compliance-metrics store + retention reader. */
   complianceMetricsReader?: ComplianceMetricsReader
   retentionReader?: RetentionReader
+  /** BACKOFFICE-30 — Risk View source (risk_signal aggregates). Default empty reader;
+   *  the worker wires the Pg risk-metrics store. */
+  riskMetricsReader?: RiskMetricsReader
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -310,6 +315,14 @@ export function createApp(deps: AppDeps = {}) {
     metrics: deps.complianceMetricsReader ?? emptyMetrics,
     retention: deps.retentionReader ?? { retentionStatus: async () => [] }
   })
+  // BACKOFFICE-30 — Risk View over risk_signal aggregates (anomalies + liability monitor).
+  const riskViewService = new RiskViewService({
+    metrics: deps.riskMetricsReader ?? {
+      summary: async () => ({ active_total: 0, by_type: {}, by_severity: {}, by_status: {} }),
+      liabilityMonitor: async () => ({ open_count: 0, by_severity: {}, recent: [] }),
+      recentActive: async () => []
+    }
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -326,7 +339,8 @@ export function createApp(deps: AppDeps = {}) {
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
-    ...complianceViewRoutes(complianceViewService)
+    ...complianceViewRoutes(complianceViewService),
+    ...riskViewRoutes(riskViewService)
   }
   const app = new Hono()
 

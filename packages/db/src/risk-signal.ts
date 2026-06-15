@@ -71,3 +71,112 @@ export class PgRiskSignalEmitter {
     await this.pool.end()
   }
 }
+
+/**
+ * BACKOFFICE-30 — Risk View read aggregates over risk_signal. Read-only, RLS-bound
+ * (ofbo_app + tenancy). Surfaces typed fields + counts only — never the raw
+ * signal_data blob (the per-signal context lives behind the risk-signals detail
+ * endpoint). "Active" = not in a closed/false-positive terminal state.
+ */
+export interface RiskSignalSummary {
+  active_total: number
+  by_type: Record<string, number>
+  by_severity: Record<string, number>
+  by_status: Record<string, number>
+}
+export interface LiabilityMonitor {
+  open_count: number
+  by_severity: Record<string, number>
+  recent: { nebras_liability_event_ref: string | null; severity: string; created_at: string }[]
+}
+export interface RiskSignalHeader {
+  id: string
+  signal_type: string
+  severity: string
+  status: string
+  client_id: string | null
+  nebras_liability_event_ref: string | null
+  created_at: string
+}
+
+const ACTIVE = `status NOT IN ('closed_actioned','closed_no_action','false_positive')`
+const isoR = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v))
+const tallyR = (rows: { k: string; n: string | number }[]): Record<string, number> =>
+  rows.reduce<Record<string, number>>((acc, r) => ((acc[r.k] = Number(r.n)), acc), {})
+
+export class PgRiskMetricsStore {
+  private readonly pool: pg.Pool
+  constructor(
+    databaseUrl: string,
+    private readonly config: { bankId: string; channel: string }
+  ) {
+    this.pool = new pg.Pool({ connectionString: databaseUrl })
+  }
+
+  private async asApp<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
+    const c = await this.pool.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE ofbo_app')
+      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      const out = await fn(c)
+      await c.query('COMMIT')
+      return out
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => undefined)
+      throw e
+    } finally {
+      c.release()
+    }
+  }
+
+  async summary(): Promise<RiskSignalSummary> {
+    return this.asApp(async (c) => {
+      const [byType, bySeverity, byStatus] = await Promise.all([
+        c.query(`SELECT signal_type AS k, count(*) AS n FROM risk_signal WHERE ${ACTIVE} GROUP BY signal_type`),
+        c.query(`SELECT severity AS k, count(*) AS n FROM risk_signal WHERE ${ACTIVE} GROUP BY severity`),
+        c.query(`SELECT status AS k, count(*) AS n FROM risk_signal GROUP BY status`)
+      ])
+      const byT = tallyR(byType.rows)
+      return { active_total: Object.values(byT).reduce((a, b) => a + b, 0), by_type: byT, by_severity: tallyR(bySeverity.rows), by_status: tallyR(byStatus.rows) }
+    })
+  }
+
+  async liabilityMonitor(): Promise<LiabilityMonitor> {
+    return this.asApp(async (c) => {
+      const [bySeverity, recent] = await Promise.all([
+        c.query(`SELECT severity AS k, count(*) AS n FROM risk_signal WHERE signal_type = 'nebras_liability_approach' AND ${ACTIVE} GROUP BY severity`),
+        c.query(`SELECT nebras_liability_event_ref, severity, created_at FROM risk_signal WHERE signal_type = 'nebras_liability_approach' AND ${ACTIVE} ORDER BY created_at DESC LIMIT 10`)
+      ])
+      const by = tallyR(bySeverity.rows)
+      return {
+        open_count: Object.values(by).reduce((a, b) => a + b, 0),
+        by_severity: by,
+        recent: recent.rows.map((r) => ({ nebras_liability_event_ref: (r.nebras_liability_event_ref as string) ?? null, severity: r.severity as string, created_at: isoR(r.created_at) }))
+      }
+    })
+  }
+
+  async recentActive(limit = 20): Promise<RiskSignalHeader[]> {
+    const n = Math.min(Math.max(limit, 1), 100)
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT id, signal_type, severity, status, client_id, nebras_liability_event_ref, created_at
+           FROM risk_signal WHERE ${ACTIVE} ORDER BY created_at DESC LIMIT ${n}`
+      )
+      return res.rows.map((r) => ({
+        id: r.id as string,
+        signal_type: r.signal_type as string,
+        severity: r.severity as string,
+        status: r.status as string,
+        client_id: (r.client_id as string) ?? null,
+        nebras_liability_event_ref: (r.nebras_liability_event_ref as string) ?? null,
+        created_at: isoR(r.created_at)
+      }))
+    })
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end()
+  }
+}
