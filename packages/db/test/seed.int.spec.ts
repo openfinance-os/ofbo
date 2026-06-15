@@ -22,8 +22,12 @@ describe('demo seed', () => {
   })
 
   it('seeds consent lifecycle audit events and refreshes the mirror', async () => {
+    // Compare the mirror to the exact event set it materialises — not a broad
+    // `consent_%` (which also matches consent_search etc. from other suites in
+    // this shared DB), which would make the count order-dependent.
     const audit = await admin.query(
-      `SELECT count(*)::int AS n FROM audit_high_sensitivity WHERE event_type LIKE 'consent_%'`
+      `SELECT count(*)::int AS n FROM audit_high_sensitivity
+         WHERE event_type IN ('consent_granted','consent_accessed','consent_modified','consent_revoked')`
     )
     expect(audit.rows[0].n).toBeGreaterThan(0)
     const mirror = await admin.query(`SELECT count(*)::int AS n FROM consent_admin_event`)
