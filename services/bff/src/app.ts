@@ -66,6 +66,12 @@ import {
   type OpsConnectivityReader
 } from './analytics/operations-console.js'
 import {
+  ComplianceViewService,
+  complianceViewRoutes,
+  type ComplianceMetricsReader,
+  type RetentionReader
+} from './analytics/compliance-view.js'
+import {
   InvoicingService,
   InMemoryBillingRecordStore,
   InMemoryInvoiceRunStore,
@@ -118,7 +124,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/invoice-runs',
   'get /back-office/invoice-runs/{invoice_run_id}',
   'get /back-office/analytics/finance-view',
-  'get /back-office/analytics/operations-console'
+  'get /back-office/analytics/operations-console',
+  'get /back-office/analytics/compliance-view'
 ])
 
 /**
@@ -161,6 +168,10 @@ export interface AppDeps {
   nebrasConnectivityReader?: OpsConnectivityReader
   /** BACKOFFICE-28 — P8 onboarding-handover source (defaults to the P8 adapter). */
   onboardingHandover?: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
+  /** BACKOFFICE-29 — Compliance View sources. Default to empty readers; the worker
+   *  wires the Pg compliance-metrics store + retention reader. */
+  complianceMetricsReader?: ComplianceMetricsReader
+  retentionReader?: RetentionReader
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -287,6 +298,18 @@ export function createApp(deps: AppDeps = {}) {
     },
     handover: deps.onboardingHandover ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
   })
+  // BACKOFFICE-29 — Compliance View: regulatory posture over existing tables
+  // (consent volumes, retention lifecycle, dispute + risk-signal backlog, report library).
+  const emptyMetrics: ComplianceMetricsReader = {
+    consentVolumes: async () => ({ total: 0, by_event_type: {} }),
+    disputeBacklog: async () => ({ open: 0, by_state: {} }),
+    riskSignalBacklog: async () => ({ open: 0, by_severity: {} }),
+    reportLibrary: async () => ({ by_status: {}, by_type: {}, recent_inquiries: [] })
+  }
+  const complianceViewService = new ComplianceViewService({
+    metrics: deps.complianceMetricsReader ?? emptyMetrics,
+    retention: deps.retentionReader ?? { retentionStatus: async () => [] }
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -302,7 +325,8 @@ export function createApp(deps: AppDeps = {}) {
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
     ...financeViewRoutes(financeViewService),
-    ...operationsConsoleRoutes(operationsConsoleService)
+    ...operationsConsoleRoutes(operationsConsoleService),
+    ...complianceViewRoutes(complianceViewService)
   }
   const app = new Hono()
 
