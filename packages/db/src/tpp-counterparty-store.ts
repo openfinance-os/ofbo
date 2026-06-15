@@ -180,6 +180,48 @@ export class PgTppCounterpartyStore {
     return result
   }
 
+  /**
+   * BACKOFFICE-72 — record the P9 financial-system registration: registered +
+   * financial_system_ref, and clear the unbilled-traffic alert. Returns null if
+   * the org is not in the registry.
+   */
+  async registerFinancialSystem(organisationId: string, financialSystemRef: string, traceId: string): Promise<StoredTppCounterparty | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE tpp_counterparty
+            SET registration_state = 'registered', financial_system_ref = $2, unbilled_traffic = false
+          WHERE organisation_id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [organisationId, financialSystemRef]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toRow(row) : null
+  }
+
+  /**
+   * BACKOFFICE-72 — observe production traffic for a TPP: → active_traffic, stamp
+   * first_traffic_at once, and raise the unbilled-traffic flag when the TPP has no
+   * completed financial-system registration. Returns null if not in the registry.
+   */
+  async observeTraffic(organisationId: string, traceId: string): Promise<StoredTppCounterparty | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE tpp_counterparty
+            SET production_status = 'active_traffic',
+                first_traffic_at = COALESCE(first_traffic_at, now()),
+                unbilled_traffic = (registration_state <> 'registered')
+          WHERE organisation_id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [organisationId]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toRow(row) : null
+  }
+
   async get(organisationId: string): Promise<StoredTppCounterparty | null> {
     const row = await this.asApp(async (c) => {
       const res = await c.query(`SELECT ${SELECT_COLUMNS} FROM tpp_counterparty WHERE organisation_id = $1`, [organisationId])
