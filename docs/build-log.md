@@ -178,3 +178,13 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - First story exercising the P6 egress over HTTP and the simulator's revoke ack end to end.
 - Evidence: 271 unit green (revoke.ts 96% / consents dir 92.5%) incl. injected-fault SLA-breach + idempotency-isolation tests; integration proves the consent_revoked row persists under RLS; live sim revoke shape verified; gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers (twice — re-reviewed after the idempotency-key fix): hard-stop PASS, conformance CONFORMANT.
 - Next eligible: SPEC-FRAUD-REVOKE-FOUREYES (spec-change: add x-four-eyes + 202 to revoke-fraud per BD-03; human-approved) — the loop will open the spec PR and park BACKOFFICE-22 blocked, then continue with BACKOFFICE-25.
+
+## 2026-06-15 — SPEC-FRAUD-REVOKE-FOUREYES (spec PR #26, loop iteration 21) — PARKED awaiting human
+
+- Spec-change item (contract-first; human-approved merge, NOT self-merged). Closes three contract defects against binding conventions:
+  1. /consents/{consent_id}:revoke-fraud → x-four-eyes: true + 202 ApprovalPending (was 200 inline). "Four-eyes on fraud revoke" is a binding adopting-bank default (PRD §10 / CLAUDE.md); the old spec let fraud revoke execute inline — a latent control gap now closed. Matches /consents:revoke-bulk.
+  2. /back-office/reports/{report_id}:approve → removed contradictory x-four-eyes: true (it's the four-eyes resolution step, returns 200; flagging it regresses into an infinite gate).
+  3. approval id → format: uuid on ApprovalRequest.approval_request_id + the approval_id path param (matches crypto.randomUUID() + invoice_run.approval_id).
+- Regenerated api-types + routes (revoke-fraud fourEyes:true; reports:approve fourEyes:false). No code change — both endpoints are still contract-pending stubs. 271 unit green; lint + typecheck green; pnpm gen committed (57 paths unchanged). Reviewers: contract-conformance CONFORMANT, hard-stop PASS (strengthens controls; no scope widened).
+- HUMAN DECISION: approve/merge spec PR #26. SPEC-FRAUD-REVOKE-FOUREYES is blocked until then; BACKOFFICE-22 (deps on it) stays blocked.
+- Loop continues with the next eligible item: BACKOFFICE-25 (care-surface token minting).
