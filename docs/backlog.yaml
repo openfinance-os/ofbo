@@ -87,7 +87,7 @@ milestones:
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: done }
       - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: done }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: done, depends_on: [BACKOFFICE-37] }
-      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending }
+      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: blocked, reason: "awaiting spec PR #64 (baseline contract references BACKOFFICE-67 but has no LFI-report ingest path; new POST/GET /back-office/lfi-reports + LfiReportCadenceStatus schema queued for human approval)" }
 
   - name: M4a
     items:
