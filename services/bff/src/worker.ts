@@ -9,6 +9,7 @@ import {
   PgLineageEmitter,
   PgReconciliationBreakStore,
   PgReconciliationLogStore,
+  PgReconciliationThresholdStore,
   PgRiskSignalEmitter,
   PgTppCounterpartyStore,
   PgBillingRecordStore,
@@ -68,6 +69,7 @@ export default {
     const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
     const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
     const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
+    const reconciliationThresholdStore = url ? new PgReconciliationThresholdStore(url, tenancy, lineage) : undefined
     const tppCounterpartyStore = url ? new PgTppCounterpartyStore(url, tenancy, lineage) : undefined
     const billingRecordStore = url ? new PgBillingRecordStore(url, tenancy, lineage) : undefined
     const invoiceRunStore = url ? new PgInvoiceRunStore(url, tenancy, lineage) : undefined
@@ -89,6 +91,7 @@ export default {
       ...(complianceReportStore ? { complianceReportStore, reportStore: complianceReportStore } : {}),
       ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
       ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
+      ...(reconciliationThresholdStore ? { reconciliationThresholdStore } : {}),
       ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
       ...(billingRecordStore ? { billingRecordStore } : {}),
       ...(invoiceRunStore ? { invoiceRunStore } : {}),

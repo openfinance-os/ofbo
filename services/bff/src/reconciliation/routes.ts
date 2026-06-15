@@ -151,6 +151,46 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     },
 
+    'get /back-office/reconciliation/thresholds': async (c) => {
+      try {
+        const thresholds = await service.getThresholds(c.get('principal'))
+        return c.json(dataEnvelope(thresholds), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
+    'put /back-office/reconciliation/thresholds': async (c) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+          400
+        )
+      }
+      let body: unknown
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send an array of { fee_class, threshold_value, unit }.', DOCS_BASE), 400)
+      }
+      if (!Array.isArray(body)) {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'Body must be an array of thresholds.', 'Send an array of { fee_class, threshold_value, unit }.', DOCS_BASE), 400)
+      }
+      const cacheKey = `reconciliation:thresholds|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const updated = await service.updateThresholds(c.get('principal'), body as Parameters<ReconciliationService['updateThresholds']>[1], traceId)
+        const res = c.json(dataEnvelope(updated), 200)
+        await idempotency.set(cacheKey, 200, await res.clone().json())
+        return res
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
     'get /back-office/reconciliation/breaks': async (c) => {
       const q: ReconciliationBreakListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
