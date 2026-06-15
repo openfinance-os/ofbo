@@ -91,8 +91,8 @@ milestones:
 
   - name: M4a
     items:
-      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: pending }
-      - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: pending }
+      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: blocked, reason: "awaiting spec PR #65 (baseline contract has no fraud-incident / operational-pause / scheme-hold surface; new /back-office/fraud-incidents paths + NebrasSeverity + FraudIncident schema queued for human approval)" }
+      - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: blocked, reason: "awaiting spec PR #66 (baseline contract has no outbound-notification surface; new /back-office/scheme-notifications paths + SchemeNotification schema queued for human approval)" }
 
   - name: M5
     items:
