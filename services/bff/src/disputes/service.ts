@@ -112,6 +112,7 @@ export class InMemoryDisputeStore implements DisputeStore {
  */
 export function makeRefundOperation(deps: {
   store: Pick<DisputeStore, 'markRefundInitiated'>
+  egress: Pick<NebrasEgressPort, 'dispatchRefund'>
   audit: HighClassAuditSink
   now?: () => Date
 }): GatedOperation {
@@ -122,9 +123,16 @@ export function makeRefundOperation(deps: {
     execute: async (payload) => {
       const disputeId = String(payload.dispute_id)
       const refundAmount = payload.refund_amount as Money
+      const consentId = String(payload.originating_consent_id ?? '')
       const traceId = String(payload.trace_id ?? 'unknown')
       const initiatedBy = String(payload.initiated_by ?? 'unknown')
       const initiatedByPersona = String(payload.initiated_by_persona ?? 'unknown')
+
+      // BACKOFFICE-62: dispatch via the formal Ozone Connect refund flow through
+      // the P6 egress gateway; track the returned IPP status. The dispatch
+      // happens only here — on the second principal's approval.
+      const { ipp_status } = await deps.egress.dispatchRefund(consentId, refundAmount, { trace_id: traceId })
+
       const refundRequiredBy = endOfNextBusinessDay(now()).toISOString()
       const updated = await deps.store.markRefundInitiated(disputeId, refundAmount, refundRequiredBy, traceId)
       if (!updated) throw new Error(`dispute ${disputeId} not found at refund execution`)
@@ -135,14 +143,16 @@ export function makeRefundOperation(deps: {
         scope_used: DISPUTE_SCOPE,
         target_dispute_id: disputeId,
         request_trace_id: traceId,
-        request_body: { refund_amount: refundAmount, refund_required_by: refundRequiredBy, four_eyes_approved: true },
+        request_body: { refund_amount: refundAmount, refund_required_by: refundRequiredBy, ipp_status, four_eyes_approved: true },
         response_status: 200
       })
       return {
         dispute_id: disputeId,
         state: updated.state,
         refund_required_by: updated.refund_required_by,
-        refund_amount: updated.refund_amount
+        refund_amount: updated.refund_amount,
+        ipp_status,
+        refund_dispatched_at: updated.refund_initiated_at
       }
     }
   }
@@ -268,6 +278,7 @@ export class DisputeService {
         operation_payload: {
           dispute_id: disputeId,
           refund_amount: refundAmount,
+          originating_consent_id: dispute.originating_consent_id,
           initiated_by: principal.subject,
           initiated_by_persona: principal.persona,
           trace_id: traceId

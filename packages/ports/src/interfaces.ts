@@ -60,6 +60,10 @@ export interface NebrasEgressPort {
   fetchDataset(name: string, period: string, trace: TraceContext): Promise<{ rows: Record<string, unknown>[] }>
   createDisputeCase(payload: Record<string, unknown>, trace: TraceContext): Promise<{ nebras_case_id: string }>
   syncDirectory(trace: TraceContext): Promise<{ participants: { organisation_id: string; legal_name: string }[] }>
+  /** BACKOFFICE-62: dispatch a refund via the formal Ozone Connect refund flow
+   *  (GET /payment-consents/{consentId}/refund family) through the egress gateway;
+   *  returns one of the 5 IPP status codes. */
+  dispatchRefund(consentId: string, amount: Money, trace: TraceContext): Promise<{ ipp_status: string }>
 }
 
 /** P7 — Enterprise data catalogue: column-level BCBS 239 lineage at write time. */

@@ -23,6 +23,9 @@ class FakeEgress {
   async createDisputeCase() {
     return { nebras_case_id: 'nebras-unused' }
   }
+  async dispatchRefund() {
+    return { ipp_status: 'ACSP' }
+  }
 }
 
 const care = (extra: Record<string, string> = {}) => ({

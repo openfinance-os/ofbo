@@ -21,6 +21,9 @@ class FakeEgress {
   async revokeConsent() {
     return { acknowledged_in_ms: 420 }
   }
+  async dispatchRefund() {
+    return { ipp_status: 'ACSP' }
+  }
 }
 
 const care = (extra: Record<string, string> = {}) => ({
@@ -86,6 +89,9 @@ describe('POST /disputes/{dispute_id}:initiate-refund', () => {
     // a different disputes:admin principal (super-admin) approves → executes
     const ok = await app.request(`/approvals/${approvalId}:approve`, { method: 'POST', headers: superAdmin({ 'idempotency-key': 'a-ok' }) })
     expect(ok.status).toBe(200)
+    // BACKOFFICE-62: the Ozone Connect dispatch IPP status rides in execution_result
+    const exec = ((await ok.json()) as { data: { execution_result?: { ipp_status?: string } } }).data.execution_result
+    expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(exec?.ipp_status)
 
     const list = await app.request(`/disputes?psu_identifier=${psu.bank_customer_id}`, { headers: care() })
     const d = ((await list.json()) as { data: Array<{ id: string; state: string; refund_required_by: string | null; refund_amount: { amount: number } | null }> }).data.find((x) => x.id === id)
