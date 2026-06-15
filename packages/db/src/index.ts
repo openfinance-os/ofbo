@@ -36,3 +36,8 @@ export {
   type DisputeListQuery,
   type DisputePage
 } from './dispute-store.js'
+export {
+  PgComplianceReportStore,
+  type StoredComplianceReport,
+  type ComplianceReportCreateInput
+} from './compliance-report-store.js'
