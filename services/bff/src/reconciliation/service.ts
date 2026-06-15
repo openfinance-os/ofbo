@@ -10,7 +10,7 @@ import type {
 } from '@ofbo/db'
 import type { ItsmPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
-import { assertScope } from '../rbac.js'
+import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { runThreeWayReconciliation, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
@@ -38,7 +38,22 @@ export interface ReconciliationLogStore {
 export interface ReconciliationBreakStore {
   createMany(inputs: ReconciliationBreakCreateInput[], traceId: string): Promise<StoredReconciliationBreak[]>
   countForRun(runId: string): Promise<number>
+  get(id: string): Promise<StoredReconciliationBreak | null>
+  claim(id: string, assignedTo: string, traceId: string): Promise<StoredReconciliationBreak | null>
   list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
+}
+
+export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
+export const OPS_WRITE_SCOPE = 'platform:operations:write'
+
+export class BreakWorkflowError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number
+  ) {
+    super(message)
+  }
 }
 
 /** P3 ITSM teams a break routes to (PRD §7.1 BACKOFFICE-02). */
@@ -210,6 +225,40 @@ export class ReconciliationService {
     if (!this.breakStore) return { rows: [], next_cursor: null }
     return this.breakStore.list(query)
   }
+
+  /**
+   * BACKOFFICE-03 — claim a flagged break: → assigned, record the claimant, start
+   * the SLA clock, remove it from every other claimant's queue. Requires
+   * finance:reconciliation:write; consent-record breaks may alternatively be
+   * claimed with platform:operations:write (per the contract description).
+   */
+  async claimBreak(principal: Principal, breakId: string, traceId: string): Promise<StoredReconciliationBreak> {
+    if (!this.breakStore) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', 'No break store configured.', 404)
+    const existing = await this.breakStore.get(breakId)
+    if (!existing) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_FOUND', `No break ${breakId}.`, 404)
+
+    const canFinance = hasScope(principal.scopes, RECON_WRITE_SCOPE)
+    const canOps = existing.line_type === 'consent_record' && hasScope(principal.scopes, OPS_WRITE_SCOPE)
+    if (!canFinance && !canOps) throw new ScopeDeniedError(RECON_WRITE_SCOPE, principal.persona)
+
+    if (existing.status !== 'flagged') {
+      throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_CLAIMABLE', `break is ${existing.status}, not flagged`, 409)
+    }
+    const claimed = await this.breakStore.claim(breakId, principal.subject, traceId)
+    if (!claimed) throw new BreakWorkflowError('BACKOFFICE.BREAK_NOT_CLAIMABLE', 'break was claimed by another principal', 409)
+
+    await this.audit.emit({
+      event_type: 'reconciliation_break_claimed',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: canFinance ? RECON_WRITE_SCOPE : OPS_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { break_id: breakId, run_id: claimed.run_id, line_type: claimed.line_type, status: claimed.status },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return claimed
+  }
 }
 
 /** No-database default (tests / local dev). */
@@ -276,6 +325,17 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
   }
   async countForRun(runId: string): Promise<number> {
     return this.rows.filter((r) => r.run_id === runId).length
+  }
+  async get(id: string): Promise<StoredReconciliationBreak | null> {
+    return this.rows.find((r) => r.id === id) ?? null
+  }
+  async claim(id: string, assignedTo: string): Promise<StoredReconciliationBreak | null> {
+    const row = this.rows.find((r) => r.id === id)
+    if (!row || row.status !== 'flagged') return null
+    row.status = 'assigned'
+    row.assigned_to = assignedTo
+    row.sla_clock_started_at = new Date().toISOString()
+    return row
   }
   async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
     let rows = this.rows

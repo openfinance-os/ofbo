@@ -78,7 +78,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/inquiries/psu',
   'get /back-office/reconciliation/runs',
   'get /back-office/reconciliation/runs/{run_id}',
-  'get /back-office/reconciliation/breaks'
+  'get /back-office/reconciliation/breaks',
+  'post /back-office/reconciliation/breaks/{break_id}/claim'
 ])
 
 /**
@@ -191,7 +192,7 @@ export function createApp(deps: AppDeps = {}) {
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
-    ...reconciliationRoutes(reconciliationService)
+    ...reconciliationRoutes(reconciliationService, idempotencyStore)
   }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
