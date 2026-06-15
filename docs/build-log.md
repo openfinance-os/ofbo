@@ -293,3 +293,12 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Out of scope (stay stubs): -11 break diff view, -12 thresholds. No spec change.
 - Evidence: 310 unit green (8 new: escalate opens P6 case + persists id + audits; idempotency replay opens no duplicate; re-escalate 409; 404/400; 403 wrong persona); integration proves escalate persists Nebras id + status under RLS with lineage, second escalate a no-op. Full integration 57/57 on a local Postgres mirroring CI Q3. gen no drift; lint + typecheck green; Q1–Q4.5 all pass; coverage 100% service-stmts / 90% routes. Reviewers: hard-stop PASS (egress via P6, no duplicate cases), conformance CONFORMANT.
 - Next eligible: BACKOFFICE-11 (three-source side-by-side diff view per break — GET breaks/{break_id}; deps 02 done) — M3.
+
+## 2026-06-15 — BACKOFFICE-11 (PR #39, loop iteration 34)
+
+- Three-source side-by-side break diff view: GET /back-office/reconciliation/breaks/{break_id} (reconciliation:read) returns the full ReconciliationBreak — Nebras (source_a) / platform log (source_b) / fintech billing (source_c) refs + the variance to highlight; the originating FAPI transaction links via the propagated x-fapi-interaction-id. 404 unknown.
+- service.getBreak: reconciliation:read at BFF + service; reuses the existing RLS-bound store.get + breakToWire. Read-only — no DB write, no schema change.
+- Out of scope (stays stub): -12 thresholds GET/PUT. No spec change.
+- Evidence: 311 unit green (3 new: three source refs + highlighted variance, 404, 403); integration 57/57 on a local Postgres mirroring CI Q3 (store.get already exercised by claim/resolve/escalate); gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers: hard-stop PASS, conformance CONFORMANT (route matcher confirmed not to collide with the list/sub-routes).
+- Process note: iteration 33's deploy-watch background task reported exit 1, but the deploy actually succeeded (completed success) — the failure was a transient HTTP 404 on a trailing gh run view call after the watch finished, not a deploy failure.
+- Next eligible: BACKOFFICE-13 (OTel traces per run, per line; deps 01 done) — M3.
