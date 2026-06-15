@@ -1091,6 +1091,111 @@ paths:
                       data: { $ref: '#/components/schemas/RiskSignal' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/fraud-incidents:
+    get:
+      tags: [risk-signals]
+      summary: List fraud incidents with operational-pause + scheme-hold state (BACKOFFICE-77)
+      description: >
+        The fraud workflow (BACKOFFICE-22) escalates suspected fraud to the Nebras
+        helpdesk and tracks the customer's operational-pause state until resolution.
+        Scheme-imposed holds (systemic-fraud P1 events imposed on the bank) are also
+        surfaced here and in the Ops + Risk Views. Read-only; narrow Risk scope.
+      x-rate-limit-per-min: 200
+      x-required-scope: risk:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: status, in: query, schema: { type: string, enum: [open, reported, resolved] } }
+        - { name: nebras_severity, in: query, schema: { $ref: '#/components/schemas/NebrasSeverity' } }
+      responses:
+        '200':
+          description: Paginated fraud-incident list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/FraudIncident' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [risk-signals]
+      summary: Report a fraud incident to the Nebras helpdesk + open operational pause (BACKOFFICE-77)
+      description: >
+        Extends the BACKOFFICE-22 fraud workflow with the "report to Nebras helpdesk"
+        step. Captures the Nebras case reference, maps the Nebras P1–P4 severity taxonomy
+        to the ITSM (P3) priority scheme, raises a P3 ticket, and opens the customer's
+        operational-pause state. High-class audited; BCBS 239 lineage emitted.
+      x-rate-limit-per-min: 30
+      x-required-scope: risk:investigations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nebras_severity, summary]
+              properties:
+                consent_id: { type: string, format: uuid, description: Consent under investigation (links to the fraud revoke) }
+                client_id: { type: string, format: uuid, description: Consuming TPP, when systemic }
+                nebras_severity: { $ref: '#/components/schemas/NebrasSeverity' }
+                nebras_case_reference: { type: string, description: Helpdesk case reference, when already raised }
+                operational_pause: { type: boolean, default: true, description: Place the customer in operational pause until resolution }
+                summary: { type: string, description: Investigation context (no PSU PII) }
+      responses:
+        '201':
+          description: Fraud incident opened; reported to Nebras; operational pause set
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/FraudIncident' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/fraud-incidents/{incident_id}:resolve:
+    post:
+      tags: [risk-signals]
+      summary: Resolve a fraud incident and lift the operational pause (BACKOFFICE-77)
+      x-rate-limit-per-min: 30
+      x-required-scope: risk:investigations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - { name: incident_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution_note]
+              properties:
+                resolution_note: { type: string, description: Resolution outcome (no PSU PII) }
+      responses:
+        '200':
+          description: Incident resolved; operational pause lifted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/FraudIncident' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/lineage/{table_name}:
     get:
       tags: [audit]
@@ -1808,6 +1913,33 @@ components:
           nullable: true
           description: Liability-matrix key issue × liable party (LFI/TPP) × AED amount
         created_at: { type: string, format: date-time }
+    NebrasSeverity:
+      type: string
+      enum: [P1, P2, P3, P4]
+      description: >
+        Nebras incident severity taxonomy (BACKOFFICE-77). Mapped to the ITSM (P3)
+        priority scheme: P1→critical, P2→high, P3→medium, P4→low.
+    FraudIncident:
+      type: object
+      description: >
+        A fraud incident escalated to the Nebras helpdesk (BACKOFFICE-77), tracking the
+        captured case reference, the mapped ITSM priority, and the customer
+        operational-pause state until resolution.
+      properties:
+        id: { type: string, format: uuid }
+        consent_id: { type: string, format: uuid, nullable: true }
+        client_id: { type: string, format: uuid, nullable: true }
+        nebras_severity: { $ref: '#/components/schemas/NebrasSeverity' }
+        itsm_priority: { type: string, enum: [low, medium, high, critical], description: Derived from nebras_severity }
+        nebras_case_reference: { type: string, nullable: true }
+        status: { type: string, enum: [open, reported, resolved] }
+        operational_pause: { type: boolean, description: Customer operational-pause active until resolution }
+        scheme_imposed_hold: { type: boolean, description: True when Nebras imposed a hold/temporary revocation on the bank (systemic-fraud P1) }
+        summary: { type: string }
+        opened_by: { type: string }
+        opened_at: { type: string, format: date-time }
+        reported_at: { type: string, format: date-time, nullable: true }
+        resolved_at: { type: string, format: date-time, nullable: true }
     AuditEvent:
       type: object
       properties:

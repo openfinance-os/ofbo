@@ -2080,6 +2080,169 @@ export interface paths {
         };
         trace?: never;
     };
+    "/back-office/fraud-incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List fraud incidents with operational-pause + scheme-hold state (BACKOFFICE-77)
+         * @description The fraud workflow (BACKOFFICE-22) escalates suspected fraud to the Nebras helpdesk and tracks the customer's operational-pause state until resolution. Scheme-imposed holds (systemic-fraud P1 events imposed on the bank) are also surfaced here and in the Ops + Risk Views. Read-only; narrow Risk scope.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    status?: "open" | "reported" | "resolved";
+                    nebras_severity?: components["schemas"]["NebrasSeverity"];
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated fraud-incident list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["FraudIncident"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /**
+         * Report a fraud incident to the Nebras helpdesk + open operational pause (BACKOFFICE-77)
+         * @description Extends the BACKOFFICE-22 fraud workflow with the "report to Nebras helpdesk" step. Captures the Nebras case reference, maps the Nebras P1–P4 severity taxonomy to the ITSM (P3) priority scheme, raises a P3 ticket, and opens the customer's operational-pause state. High-class audited; BCBS 239 lineage emitted.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: uuid
+                         * @description Consent under investigation (links to the fraud revoke)
+                         */
+                        consent_id?: string;
+                        /**
+                         * Format: uuid
+                         * @description Consuming TPP
+                         */
+                        client_id?: string;
+                        nebras_severity: components["schemas"]["NebrasSeverity"];
+                        /** @description Helpdesk case reference */
+                        nebras_case_reference?: string;
+                        /**
+                         * @description Place the customer in operational pause until resolution
+                         * @default true
+                         */
+                        operational_pause?: boolean;
+                        /** @description Investigation context (no PSU PII) */
+                        summary: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Fraud incident opened; reported to Nebras; operational pause set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["FraudIncident"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/fraud-incidents/{incident_id}:resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a fraud incident and lift the operational pause (BACKOFFICE-77) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    incident_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Resolution outcome (no PSU PII) */
+                        resolution_note: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Incident resolved; operational pause lifted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["FraudIncident"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/lineage/{table_name}": {
         parameters: {
             query?: never;
@@ -2827,6 +2990,41 @@ export interface components {
             nebras_liability_event_ref?: string | null;
             /** Format: date-time */
             created_at?: string;
+        };
+        /**
+         * @description Nebras incident severity taxonomy (BACKOFFICE-77). Mapped to the ITSM (P3) priority scheme: P1→critical, P2→high, P3→medium, P4→low.
+         * @enum {string}
+         */
+        NebrasSeverity: "P1" | "P2" | "P3" | "P4";
+        /** @description A fraud incident escalated to the Nebras helpdesk (BACKOFFICE-77), tracking the captured case reference, the mapped ITSM priority, and the customer operational-pause state until resolution. */
+        FraudIncident: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            consent_id?: string | null;
+            /** Format: uuid */
+            client_id?: string | null;
+            nebras_severity?: components["schemas"]["NebrasSeverity"];
+            /**
+             * @description Derived from nebras_severity
+             * @enum {string}
+             */
+            itsm_priority?: "low" | "medium" | "high" | "critical";
+            nebras_case_reference?: string | null;
+            /** @enum {string} */
+            status?: "open" | "reported" | "resolved";
+            /** @description Customer operational-pause active until resolution */
+            operational_pause?: boolean;
+            /** @description True when Nebras imposed a hold/temporary revocation on the bank (systemic-fraud P1) */
+            scheme_imposed_hold?: boolean;
+            summary?: string;
+            opened_by?: string;
+            /** Format: date-time */
+            opened_at?: string;
+            /** Format: date-time */
+            reported_at?: string | null;
+            /** Format: date-time */
+            resolved_at?: string | null;
         };
         AuditEvent: {
             /** Format: uuid */

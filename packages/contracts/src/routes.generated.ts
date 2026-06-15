@@ -361,6 +361,27 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/fraud-incidents",
+    "tag": "risk-signals",
+    "scope": "risk:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/fraud-incidents",
+    "tag": "risk-signals",
+    "scope": "risk:investigations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/fraud-incidents/{incident_id}:resolve",
+    "tag": "risk-signals",
+    "scope": "risk:investigations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/lineage/{table_name}",
     "tag": "audit",
     "scope": "compliance:reports:read",
