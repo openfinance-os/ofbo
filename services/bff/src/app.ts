@@ -51,8 +51,10 @@ import {
   InMemoryReconciliationBreakStore,
   makeBreakReopenOperation,
   BREAK_REOPEN_OPERATION,
+  InMemoryReconciliationThresholdStore,
   type ReconciliationLogStore,
-  type ReconciliationBreakStore
+  type ReconciliationBreakStore,
+  type ThresholdStore
 } from './reconciliation/service.js'
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
@@ -127,6 +129,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/reconciliation/breaks/{break_id}/reopen',
   'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras',
   'post /back-office/reconciliation/monthly-signoff',
+  'get /back-office/reconciliation/thresholds',
+  'put /back-office/reconciliation/thresholds',
   'get /back-office/reconciliation/exports:cbuae',
   'get /back-office/tpp-counterparties',
   'get /back-office/tpp-counterparties/{organisation_id}',
@@ -180,6 +184,7 @@ export interface AppDeps {
   complianceReportStore?: ComplianceReportStore
   reconciliationLogStore?: ReconciliationLogStore
   reconciliationBreakStore?: ReconciliationBreakStore
+  reconciliationThresholdStore?: ThresholdStore
   tppCounterpartyStore?: TppCounterpartyStore
   /** BACKOFFICE-71 — P6 Trust Framework Directory source (defaults to the P6 adapter). */
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
@@ -290,9 +295,11 @@ export function createApp(deps: AppDeps = {}) {
   })
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const reconciliationLogStore = deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore()
+  const reconciliationThresholdStore = deps.reconciliationThresholdStore ?? new InMemoryReconciliationThresholdStore()
   const reconciliationService = new ReconciliationService({
     store: reconciliationLogStore,
     breakStore: reconciliationBreakStore,
+    thresholdStore: reconciliationThresholdStore,
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     approvals,
     egress: nebrasEgress,

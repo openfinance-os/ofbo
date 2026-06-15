@@ -154,6 +154,8 @@ export interface ReconciliationDeps {
   breakStore?: ReconciliationBreakStore
   itsm?: Pick<ItsmPort, 'createTicket'>
   thresholds?: BreakThreshold[]
+  /** BACKOFFICE-12 — persisted configurable thresholds (omit → static defaults). */
+  thresholdStore?: ThresholdStore
   /** BACKOFFICE-04 — four-eyes reopen initiation (omit to disable reopen). */
   approvals?: ReopenApprovalRequester
   /** BACKOFFICE-05 — P6 egress for Nebras dispute-case creation (omit to disable escalate). */
@@ -163,6 +165,13 @@ export interface ReconciliationDeps {
   /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (omit to disable). */
   reports?: MonthlyReportStore
   now?: () => Date
+}
+
+/** BACKOFFICE-12 — persisted per-fee-class break thresholds. The engine reads the
+ *  current set at run time so edits take effect next run, never retroactively. */
+export interface ThresholdStore {
+  list(): Promise<BreakThreshold[]>
+  replaceAll(thresholds: BreakThreshold[], updatedBy: string, traceId: string): Promise<BreakThreshold[]>
 }
 
 export interface ReconRunResult {
@@ -183,6 +192,7 @@ export class ReconciliationService {
   private readonly breakStore?: ReconciliationBreakStore
   private readonly itsm?: Pick<ItsmPort, 'createTicket'>
   private readonly thresholds: BreakThreshold[]
+  private readonly thresholdStore?: ThresholdStore
   private readonly approvals?: ReopenApprovalRequester
   private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   private readonly apm?: Pick<ApmPort, 'exportSpans'>
@@ -196,6 +206,7 @@ export class ReconciliationService {
     this.breakStore = deps.breakStore
     this.itsm = deps.itsm
     this.thresholds = deps.thresholds ?? DEFAULT_THRESHOLDS
+    this.thresholdStore = deps.thresholdStore
     this.approvals = deps.approvals
     this.egress = deps.egress
     this.apm = deps.apm
@@ -361,10 +372,23 @@ export class ReconciliationService {
     void Promise.resolve(this.apm.exportSpans(spans)).catch(() => undefined)
   }
 
+  /**
+   * BACKOFFICE-12 — the effective threshold set: stored overrides (per fee class)
+   * overlaid on the engine defaults, so every class always resolves. Read at run
+   * time so a threshold edit takes effect on the next run, never retroactively.
+   */
+  private async effectiveThresholds(): Promise<BreakThreshold[]> {
+    const stored = this.thresholdStore ? await this.thresholdStore.list() : []
+    if (stored.length === 0) return this.thresholds
+    const byClass = new Map(this.thresholds.map((t) => [t.fee_class, t]))
+    for (const s of stored) byClass.set(s.fee_class, s)
+    return [...byClass.values()]
+  }
+
   private async detectAndRecordBreaks(runId: string, result: ReconResult, traceId: string): Promise<StoredReconciliationBreak[]> {
     if (!this.breakStore) return []
     if ((await this.breakStore.countForRun(runId)) > 0) return [] // already detected for this run
-    const detected = detectBreaks(result, this.thresholds)
+    const detected = detectBreaks(result, await this.effectiveThresholds())
     if (detected.length === 0) return []
 
     const inputs: ReconciliationBreakCreateInput[] = detected.map((b) => ({
@@ -414,6 +438,68 @@ export class ReconciliationService {
   async getRun(principal: Principal, runId: string): Promise<StoredReconciliationRun | null> {
     assertScope(principal, RECON_READ_SCOPE)
     return this.store.get(runId)
+  }
+
+  /** BACKOFFICE-12 — read the effective break-threshold set (reconciliation:read). */
+  async getThresholds(principal: Principal): Promise<BreakThreshold[]> {
+    assertScope(principal, RECON_READ_SCOPE)
+    return this.effectiveThresholds()
+  }
+
+  /**
+   * BACKOFFICE-12 — update break thresholds per fee class (platform:operations:write).
+   * Edits take effect on the NEXT run (the engine reads the set at run time), never
+   * retroactively. High-class audited with old/new values; Finance + Compliance are
+   * notified via P3 ITSM. Validates fee_class / unit / non-negative integer value.
+   */
+  async updateThresholds(principal: Principal, input: BreakThreshold[], traceId: string): Promise<BreakThreshold[]> {
+    assertScope(principal, OPS_WRITE_SCOPE)
+    if (!Array.isArray(input) || input.length === 0) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_THRESHOLDS', 'Provide a non-empty array of thresholds.', 400)
+    }
+    const validClasses = new Set(DEFAULT_THRESHOLDS.map((t) => t.fee_class))
+    const seen = new Set<string>()
+    for (const t of input) {
+      if (!validClasses.has(t.fee_class)) {
+        throw new BreakWorkflowError('BACKOFFICE.INVALID_THRESHOLDS', `Unknown fee_class "${t.fee_class}".`, 400)
+      }
+      if (seen.has(t.fee_class)) {
+        throw new BreakWorkflowError('BACKOFFICE.INVALID_THRESHOLDS', `Duplicate fee_class "${t.fee_class}".`, 400)
+      }
+      seen.add(t.fee_class)
+      if (!Number.isInteger(t.threshold_value) || t.threshold_value < 0) {
+        throw new BreakWorkflowError('BACKOFFICE.INVALID_THRESHOLDS', 'threshold_value must be a non-negative integer.', 400)
+      }
+      if (t.unit !== 'aed' && t.unit !== 'count') {
+        throw new BreakWorkflowError('BACKOFFICE.INVALID_THRESHOLDS', 'unit must be "aed" or "count".', 400)
+      }
+    }
+    const before = await this.effectiveThresholds()
+    if (!this.thresholdStore) {
+      throw new BreakWorkflowError('BACKOFFICE.THRESHOLDS_READ_ONLY', 'No threshold store configured.', 503)
+    }
+    await this.thresholdStore.replaceAll(input, principal.subject, traceId)
+    const after = await this.effectiveThresholds()
+
+    // High-class audit with the old/new values (never retroactive — next-run effect).
+    await this.audit.emit({
+      event_type: 'reconciliation_thresholds_updated',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: OPS_WRITE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { changed: input, old_values: before, new_values: after, effect: 'next_run_only' },
+      response_status: 200
+    })
+
+    // Finance + Compliance notified (PRD §7 BACKOFFICE-12).
+    for (const team of ['finance', 'compliance']) {
+      await this.itsm?.createTicket(
+        { type: 'threshold_change', severity: 'low', team, summary: `Break thresholds updated by ${principal.persona} (${input.length} class(es)) — effective next run` },
+        { trace_id: traceId }
+      )
+    }
+    return after
   }
 
   async listBreaks(principal: Principal, query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
@@ -886,5 +972,21 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     if (query.line_type) rows = rows.filter((r) => r.line_type === query.line_type)
     if (query.client_id) rows = rows.filter((r) => r.client_id === query.client_id)
     return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
+  }
+}
+
+/**
+ * BACKOFFICE-12 — in-memory thresholds for the demo default + tests. Mirrors the
+ * Pg store: upsert per fee class, list returns the current overrides (the service
+ * overlays them on the engine defaults).
+ */
+export class InMemoryReconciliationThresholdStore implements ThresholdStore {
+  private readonly byClass = new Map<string, BreakThreshold>()
+  async list(): Promise<BreakThreshold[]> {
+    return [...this.byClass.values()]
+  }
+  async replaceAll(thresholds: BreakThreshold[], _updatedBy: string, _traceId: string): Promise<BreakThreshold[]> {
+    for (const t of thresholds) this.byClass.set(t.fee_class, { fee_class: t.fee_class, threshold_value: t.threshold_value, unit: t.unit })
+    return [...this.byClass.values()]
   }
 }

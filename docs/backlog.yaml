@@ -98,7 +98,7 @@ milestones:
     items:
       - { id: BACKOFFICE-09, title: Reconciliation SLO dashboard, status: blocked, reason: "awaiting spec PR #67 (no reconciliation-slo read surface; new GET /back-office/analytics/reconciliation-slo queued for human approval)" }
       - { id: BACKOFFICE-10, title: Reconciliation replay (idempotent), status: done }
-      - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: pending }
+      - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: done }
       - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: pending }
       - { id: BACKOFFICE-24, title: Complaint case management lifecycle, status: pending }
       - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: pending }

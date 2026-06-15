@@ -72,6 +72,7 @@ export {
   type ReconciliationBreakListQuery,
   type ReconciliationBreakPage
 } from './reconciliation-break-store.js'
+export { PgReconciliationThresholdStore, type StoredThreshold, type ThresholdInput } from './reconciliation-threshold-store.js'
 export {
   PgTppCounterpartyStore,
   type StoredTppCounterparty,
