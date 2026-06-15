@@ -1,6 +1,7 @@
 import {
   PgApprovalStore,
   PgAuditEmitter,
+  PgAuditReader,
   PgComplianceReportStore,
   PgConsentEventReader,
   PgDisputeStore,
@@ -76,6 +77,7 @@ export default {
     const outageStore = url ? new PgOutageStore(url, tenancy) : undefined
     const complianceMetricsStore = url ? new PgComplianceMetricsStore(url, tenancy) : undefined
     const riskMetricsStore = url ? new PgRiskMetricsStore(url, tenancy) : undefined
+    const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -96,12 +98,13 @@ export default {
       ...(outageStore ? { outageReader: outageStore } : {}),
       ...(complianceMetricsStore ? { complianceMetricsReader: complianceMetricsStore } : {}),
       ...(riskMetricsStore ? { riskMetricsReader: riskMetricsStore } : {}),
+      ...(auditReader ? { auditEventReader: auditReader } : {}),
       ...(url ? { retentionReader: { retentionStatus: () => retentionStatus(url) } } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, auditReader]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

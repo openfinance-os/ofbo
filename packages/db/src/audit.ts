@@ -212,7 +212,128 @@ export class PgAuditReader {
     }
   }
 
+  /** BACKOFFICE-42 — the FULL High-class audit record for the drill-down surface
+   *  (target ids + the redacted body). PII was redacted at emission, so audit:read
+   *  consumers see the record as stored. */
+  async query(filters: AuditEventQuery = {}): Promise<{ rows: StoredAuditEvent[]; next_cursor: string | null }> {
+    const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200)
+    const after = filters.cursor ? decodeAuditCursor(filters.cursor) : null
+    const rows = await this.asAppRead(async (c) => {
+      const params: unknown[] = []
+      const where: string[] = []
+      const eq = (col: string, v?: string) => {
+        if (v) {
+          params.push(v)
+          where.push(`${col} = $${params.length}`)
+        }
+      }
+      eq('acting_principal', filters.acting_principal)
+      eq('target_psu_identifier', filters.target_psu_identifier)
+      eq('event_type', filters.event_type)
+      if (filters.from) {
+        params.push(filters.from)
+        where.push(`created_at >= $${params.length}`)
+      }
+      if (filters.to) {
+        params.push(filters.to)
+        where.push(`created_at <= $${params.length}`)
+      }
+      if (after) {
+        params.push(after.createdAt, after.id)
+        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+      }
+      return (
+        await c.query(
+          `SELECT ${AUDIT_FULL_COLS} FROM audit_high_sensitivity ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+           ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC LIMIT ${limit + 1}`,
+          params
+        )
+      ).rows
+    })
+    const hasMore = rows.length > limit
+    const slice = (hasMore ? rows.slice(0, limit) : rows).map(toAuditEvent)
+    const last = slice[slice.length - 1]
+    return { rows: slice, next_cursor: hasMore && last ? encodeAuditCursor(last.created_at, last.id) : null }
+  }
+
+  async get(id: string): Promise<StoredAuditEvent | null> {
+    const row = await this.asAppRead(async (c) => (await c.query(`SELECT ${AUDIT_FULL_COLS} FROM audit_high_sensitivity WHERE id = $1`, [id])).rows[0] ?? null)
+    return row ? toAuditEvent(row) : null
+  }
+
+  private async asAppRead<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
+    const c = await this.pool.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE ofbo_app')
+      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      const out = await fn(c)
+      await c.query('COMMIT')
+      return out
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => undefined)
+      throw e
+    } finally {
+      c.release()
+    }
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
+  }
+}
+
+/** Full High-class audit record (BACKOFFICE-42 drill-down). PII already redacted at emission. */
+export interface StoredAuditEvent {
+  id: string
+  event_type: string
+  acting_principal: string
+  acting_persona: string
+  scope_used: string
+  target_psu_identifier: string | null
+  target_consent_id: string | null
+  target_dispute_id: string | null
+  request_trace_id: string
+  superadmin_marker: boolean
+  request_body_redacted: Record<string, unknown>
+  response_status: number
+  created_at: string
+}
+export interface AuditEventQuery {
+  cursor?: string
+  limit?: number
+  acting_principal?: string
+  target_psu_identifier?: string
+  event_type?: string
+  from?: string
+  to?: string
+}
+
+const AUDIT_FULL_COLS = `id, event_type, acting_principal, acting_persona, scope_used, target_psu_identifier, target_consent_id, target_dispute_id, request_trace_id, superadmin_marker, request_body_redacted, response_status, created_at`
+const auditIso = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v))
+function toAuditEvent(r: Record<string, unknown>): StoredAuditEvent {
+  return {
+    id: r.id as string,
+    event_type: r.event_type as string,
+    acting_principal: r.acting_principal as string,
+    acting_persona: r.acting_persona as string,
+    scope_used: r.scope_used as string,
+    target_psu_identifier: (r.target_psu_identifier as string) ?? null,
+    target_consent_id: (r.target_consent_id as string) ?? null,
+    target_dispute_id: (r.target_dispute_id as string) ?? null,
+    request_trace_id: r.request_trace_id as string,
+    superadmin_marker: r.superadmin_marker === true,
+    request_body_redacted: (r.request_body_redacted as Record<string, unknown>) ?? {},
+    response_status: Number(r.response_status),
+    created_at: auditIso(r.created_at)
+  }
+}
+const encodeAuditCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
+function decodeAuditCursor(cursor: string): { createdAt: string; id: string } | null {
+  try {
+    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
+    return createdAt && id ? { createdAt, id } : null
+  } catch {
+    return null
   }
 }

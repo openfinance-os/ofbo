@@ -74,6 +74,7 @@ import {
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
 import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
 import { ProgrammeReportService } from './analytics/programme.js'
+import { AuditEventsService, auditEventsRoutes, InMemoryAuditEventReader, type AuditEventReader } from './audit/events.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
 import {
@@ -148,7 +149,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reports/{report_id}',
   'get /back-office/reports/{report_id}/download',
   'post /back-office/reports/{report_id}:approve',
-  'post /back-office/reports/{report_id}:submit'
+  'post /back-office/reports/{report_id}:submit',
+  'get /audit/events',
+  'get /audit/events/{event_id}'
 ])
 
 /**
@@ -184,6 +187,8 @@ export interface AppDeps {
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
   reportStore?: ReportStore
+  /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
+  auditEventReader?: AuditEventReader
   /** BACKOFFICE-31 — Finance View fee-accrual source (the BACKOFFICE-32 materialized
    *  aggregates). Defaults to an empty reader; the worker wires the Pg aggregate store. */
   nebrasAggregateReader?: FinanceFeeAccrualReader
@@ -387,6 +392,8 @@ export function createApp(deps: AppDeps = {}) {
   // BACKOFFICE-35 — self-service periodic report generation (templates + four-eyes
   // for CBUAE-bound reports via the approvals primitive, registered above).
   const reportGenerationService = new ReportGenerationService({ store: reportStore, approvals, audit: highClassAudit })
+  // BACKOFFICE-42 — audit-trail drill-down (audit:read); the drill-down access is logged.
+  const auditEventsService = new AuditEventsService({ reader: deps.auditEventReader ?? new InMemoryAuditEventReader(), audit: highClassAudit })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -408,7 +415,8 @@ export function createApp(deps: AppDeps = {}) {
     ...liabilityMonitorRoutes(liabilityViewService),
     ...executiveDashboardRoutes(executiveDashboardService),
     ...onboardingFunnelRoutes(onboardingFunnelService),
-    ...reportRoutes(reportGenerationService, idempotencyStore)
+    ...reportRoutes(reportGenerationService, idempotencyStore),
+    ...auditEventsRoutes(auditEventsService)
   }
   const app = new Hono()
 
