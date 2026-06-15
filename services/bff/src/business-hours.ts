@@ -26,3 +26,14 @@ export function endOfNextBusinessDay(from: Date): Date {
   d.setUTCHours(23, 59, 59, 999)
   return d
 }
+
+/**
+ * The end (23:59:59.999Z) of the Nth business day after `from`, skipping weekends
+ * (BD default calendar). N=1 equals endOfNextBusinessDay. Drives the complaint SLA
+ * matrix (BACKOFFICE-24): resolution due `n` business days after the clock starts.
+ */
+export function endOfNthBusinessDay(from: Date, n: number): Date {
+  let d = new Date(from)
+  for (let i = 0; i < Math.max(1, n); i++) d = endOfNextBusinessDay(d)
+  return d
+}

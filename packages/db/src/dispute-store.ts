@@ -204,6 +204,35 @@ export class PgDisputeStore {
     return row ? toRecord(row) : null
   }
 
+  /**
+   * BACKOFFICE-24: the dispute/complaint state-machine transition. Updates state
+   * and the lifecycle metadata (escalated_to / resolution_note) and stamps
+   * state_changed_at. Those metadata columns are write-only here — the returned
+   * record is the DisputeCase wire projection (SELECT_COLUMNS), so the contract
+   * shape is unchanged. dispute_case is a mutable workflow table (RLS UPDATE).
+   */
+  async updateState(
+    id: string,
+    patch: { state?: string; escalated_to?: string | null; resolution_note?: string | null },
+    traceId: string
+  ): Promise<StoredDisputeRecord | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE dispute_case
+            SET state = COALESCE($2, state),
+                escalated_to = COALESCE($3, escalated_to),
+                resolution_note = COALESCE($4, resolution_note),
+                state_changed_at = now()
+          WHERE id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, patch.state ?? null, patch.escalated_to ?? null, patch.resolution_note ?? null]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toRecord(row) : null
+  }
+
   async list(query: DisputeListQuery = {}): Promise<DisputePage> {
     const limit = Math.min(Math.max(query.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
     const after = query.cursor ? decodeCursor(query.cursor) : null

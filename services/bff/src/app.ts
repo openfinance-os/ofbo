@@ -117,6 +117,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /payments/{payment_id}:admin',
   'post /disputes',
   'get /disputes',
+  'patch /disputes/{dispute_id}',
   'post /disputes/{dispute_id}:initiate-refund',
   'post /back-office/inquiries/psu',
   'get /back-office/reconciliation/runs',
