@@ -73,6 +73,7 @@ import {
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
 import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
+import { ProgrammeReportService } from './analytics/programme.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
 import {
@@ -375,7 +376,8 @@ export function createApp(deps: AppDeps = {}) {
         return r ? { line_count_total: r.line_count_total ?? 0, line_count_matched: r.line_count_matched ?? 0 } : null
       }
     },
-    handover: onboardingHandover
+    handover: onboardingHandover,
+    programme: new ProgrammeReportService() // BACKOFFICE-39
   })
   // BACKOFFICE-34 — onboarding funnel metrics (cycle time, handover count, stage
   // abandonment, cross-sell conversion, entry-path mix) over the P8 onboarding cases.

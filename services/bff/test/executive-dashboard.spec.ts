@@ -5,6 +5,7 @@ import { ScopeDeniedError } from '../src/rbac.js'
 import type { Principal } from '../src/auth.js'
 import { emptyMargin, type MarginSummary } from '../src/reconciliation/margin.js'
 import type { StoredCertification } from '@ofbo/db'
+import { ProgrammeReportService } from '../src/analytics/programme.js'
 import { FAPI_HEADERS } from './helpers.js'
 
 /**
@@ -41,6 +42,7 @@ function svc(over: Partial<ExecutiveDashboardDeps> = {}) {
     certifications: { list: async () => certs },
     recon: { latestRun: async () => ({ line_count_total: 100, line_count_matched: 95 }) },
     handover: { getFunnelEvents: async () => [{ entry_path: 'ONBOARDING_HANDOVER', stage: 'activated', at: '2026-06-03T12:00:00Z' }] },
+    programme: new ProgrammeReportService(),
     now: () => new Date('2026-06-15T12:00:00.000Z'),
     ...over
   })

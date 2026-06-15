@@ -3,6 +3,7 @@ import { applyMigrations, seedDemoDataset, PgLineageEmitter, PgReconciliationLog
 import { ReconciliationService, InMemoryReconciliationBreakStore } from '../src/reconciliation/service.js'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
 import { ExecutiveDashboardService } from '../src/analytics/executive-dashboard.js'
+import { ProgrammeReportService } from '../src/analytics/programme.js'
 import type { Principal } from '../src/auth.js'
 
 /**
@@ -60,6 +61,7 @@ describe('Executive Dashboard — composition over real stores (RLS)', () => {
         }
       },
       handover: { getFunnelEvents: async () => [] },
+      programme: new ProgrammeReportService(),
       now
     })
 
@@ -68,8 +70,11 @@ describe('Executive Dashboard — composition over real stores (RLS)', () => {
     const commercial = data.commercial as { tpp_aas_margin: { total_margin: number }; integration_pipeline: { total: number } }
     expect(commercial.tpp_aas_margin.total_margin).toBeGreaterThan(0) // real margin from the run
     expect(commercial.integration_pipeline.total).toBeGreaterThan(0) // seeded TPP registry
-    const programme = data.programme as { certification: { lfi: unknown[]; tpp: unknown[] } }
+    const programme = data.programme as { certification: { lfi: unknown[]; tpp: unknown[] }; release_calendar: { releases: unknown[] }; multi_entity: { entity_count: number } }
     expect(programme.certification.lfi.length + programme.certification.tpp.length).toBeGreaterThan(0) // seeded certs
+    // BACKOFFICE-39 — the enriched Programme angle: release-calendar alignment + multi-entity
+    expect(programme.release_calendar.releases.length).toBeGreaterThan(0)
+    expect(programme.multi_entity.entity_count).toBeGreaterThan(0)
     const headline = data.headline as { consent_volumes: { total: number } }
     expect(headline.consent_volumes.total).toBeGreaterThan(0) // seeded consent events
   })

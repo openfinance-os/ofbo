@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import type { ConsentVolumes, StoredCertification } from '@ofbo/db'
 import type { OnboardingHandoverPort } from '@ofbo/ports'
 import type { MarginSummary } from '../reconciliation/margin.js'
+import type { ProgrammeAngleBuilder } from './programme.js'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
@@ -44,6 +45,9 @@ export interface ExecutiveDashboardDeps {
   certifications: ExecCertificationReader
   recon: ExecReconReader
   handover: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
+  /** BACKOFFICE-39 — builds the Programme angle (certification, onboarding readiness,
+   *  release-calendar alignment, multi-entity visibility). */
+  programme: ProgrammeAngleBuilder
   now?: () => Date
 }
 
@@ -109,15 +113,11 @@ export class ExecutiveDashboardService {
     }
 
     if (hasScope(principal.scopes, PROGRAMME_SCOPE)) {
+      // BACKOFFICE-39 — the Programme angle (certification, TPP onboarding readiness,
+      // CBUAE release-calendar alignment, multi-entity group visibility) is built by
+      // the Programme reporting service.
       const [certs, pipeline] = await Promise.all([this.deps.certifications.list(), this.deps.pipeline.pipelineCounts()])
-      const byRole = (role: string) => certs.filter((c) => c.role === role).map((c) => ({ subject: c.subject, current_stage: c.current_stage, status: c.status, stages_completed: c.stages_completed, stages_total: c.stages_total }))
-      data.programme = {
-        certification: { lfi: byRole('LFI'), tpp: byRole('TPP') },
-        tpp_adoption: { by_state: pipeline, total: Object.values(pipeline).reduce((a, b) => a + b, 0) },
-        // CBUAE mandatory-release-calendar alignment is the Programme reporting view's
-        // remit (BACKOFFICE-39) — no release-calendar substrate yet.
-        release_calendar: { status: 'deferred', owner: 'BACKOFFICE-39' }
-      }
+      data.programme = this.deps.programme.build(certs, pipeline, now)
       available.push('programme')
     }
 
