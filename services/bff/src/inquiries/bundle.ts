@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { redactPii } from '@ofbo/redaction'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ComplianceReportCreateInput, StoredComplianceReport } from '@ofbo/db'
@@ -92,7 +93,10 @@ export class InquiryBundleService {
     const payments = this.deps.payments.byPsu(psuId)
     const disputes = (await this.deps.disputes.list({ psu_identifier: psuId, limit: MAX_PERIOD_MONTHS * 50 })).rows
     const consentTrail = (await this.deps.events.byPsu(psuId, { limit: 200 })).events
-    const sections = {
+    // Redact BEFORE hashing so the line-level hashes are computed over exactly
+    // what is persisted — the store's redaction is idempotent, so a verifier can
+    // re-hash the stored bundle and reproduce these hashes (evidence-grade).
+    const sections = redactPii({
       consents: psu.consents,
       payments: payments.map((p) => ({
         payment_id: p.payment_id,
@@ -102,7 +106,7 @@ export class InquiryBundleService {
       })),
       disputes,
       consent_trail: consentTrail
-    }
+    }) as { consents: unknown[]; payments: unknown[]; disputes: unknown[]; consent_trail: unknown[] }
 
     // Line-level integrity hashes (one sha256 per record) + an overall bundle hash.
     const line_hashes = Object.fromEntries(

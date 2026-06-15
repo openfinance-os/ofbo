@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { generateDemoDataset } from '@ofbo/synthetic-data'
 import type { ComplianceReportCreateInput, StoredComplianceReport } from '@ofbo/db'
 import { createApp } from '../src/app.js'
@@ -79,6 +80,18 @@ describe('POST /back-office/inquiries/psu', () => {
     expect(content.line_hashes.consents).toHaveLength(psu.consents.length)
     expect(content.line_hashes.payments).toHaveLength(psu.payments.length)
     expect(content.line_hashes.consents.every((h) => /^[0-9a-f]{64}$/.test(h))).toBe(true)
+    // verifiable: re-hashing the PERSISTED line reproduces the stored hash
+    const canonical = (v: unknown): string => {
+      const norm = (x: unknown): unknown =>
+        x === null || typeof x !== 'object'
+          ? x
+          : Array.isArray(x)
+            ? x.map(norm)
+            : Object.fromEntries(Object.keys(x as object).sort().map((k) => [k, norm((x as Record<string, unknown>)[k])]))
+      return JSON.stringify(norm(v))
+    }
+    const reHash = createHash('sha256').update(canonical(content.sections.consents[0])).digest('hex')
+    expect(reHash).toBe(content.line_hashes.consents[0])
     const ev = audit.events.find((e) => e.event_type === 'inquiry_bundle_generated')
     expect(ev?.target_psu_identifier).toBe(psu.bank_customer_id)
     expect((ev?.request_body as { line_count: number }).line_count).toBeGreaterThan(0)
