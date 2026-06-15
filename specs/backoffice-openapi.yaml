@@ -650,6 +650,22 @@ paths:
         '200': { $ref: '#/components/responses/AnalyticsView' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/analytics/reconciliation-slo:
+    get:
+      tags: [analytics]
+      summary: Reconciliation Console SLO dashboard (BACKOFFICE-09)
+      description: >
+        Aggregated reconciliation health for the console: open breaks by age bucket,
+        p50/p90 break-resolution time (30-day rolling), dispute pipeline, last/next run,
+        and pass rate. Server-side aggregation to meet the <1.5s p95 target. Returns the
+        standard AnalyticsView envelope (free-form `data` + freshness).
+      x-rate-limit-per-min: 100
+      x-required-scope: reconciliation:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/analytics/onboarding-funnel:
     get:
       tags: [analytics]
