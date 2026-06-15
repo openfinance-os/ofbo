@@ -73,6 +73,7 @@ import {
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
+import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
 import {
   InvoicingService,
   InMemoryBillingRecordStore,
@@ -129,7 +130,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
   'get /back-office/analytics/risk-view',
-  'get /back-office/analytics/executive-dashboard'
+  'get /back-office/analytics/executive-dashboard',
+  'get /back-office/analytics/onboarding-funnel'
 ])
 
 /**
@@ -172,6 +174,8 @@ export interface AppDeps {
   nebrasConnectivityReader?: OpsConnectivityReader
   /** BACKOFFICE-28 — P8 onboarding-handover source (defaults to the P8 adapter). */
   onboardingHandover?: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
+  /** BACKOFFICE-34 — P8 onboarding-case source for the funnel metrics (defaults to the P8 adapter). */
+  onboardingCaseReader?: OnboardingCaseReader
   /** BACKOFFICE-29 — Compliance View sources. Default to empty readers; the worker
    *  wires the Pg compliance-metrics store + retention reader. */
   complianceMetricsReader?: ComplianceMetricsReader
@@ -350,6 +354,11 @@ export function createApp(deps: AppDeps = {}) {
     },
     handover: onboardingHandover
   })
+  // BACKOFFICE-34 — onboarding funnel metrics (cycle time, handover count, stage
+  // abandonment, cross-sell conversion, entry-path mix) over the P8 onboarding cases.
+  const onboardingFunnelService = new OnboardingFunnelService({
+    cases: deps.onboardingCaseReader ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -368,7 +377,8 @@ export function createApp(deps: AppDeps = {}) {
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
     ...riskViewRoutes(riskViewService),
-    ...executiveDashboardRoutes(executiveDashboardService)
+    ...executiveDashboardRoutes(executiveDashboardService),
+    ...onboardingFunnelRoutes(onboardingFunnelService)
   }
   const app = new Hono()
 
