@@ -7,7 +7,9 @@ export {
   type HighClassAuditEvent,
   type AuthSinkEvent,
   type AuditEmitterConfig,
-  type AuditEventSummary
+  type AuditEventSummary,
+  type StoredAuditEvent,
+  type AuditEventQuery
 } from './audit.js'
 export { PgIdempotencyStore, type CachedIdempotentResponse } from './idempotency-store.js'
 export { redactPii, redactText } from '@ofbo/redaction'
