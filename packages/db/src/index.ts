@@ -31,6 +31,11 @@ export {
   type RiskSignalHeader
 } from './risk-signal.js'
 export {
+  PgAnomalyDetectionStore,
+  type ConsentChurnRow,
+  type AgentLookupRow
+} from './anomaly-detection-store.js'
+export {
   PgConsentEventReader,
   encodeCursor,
   type ConsentTimelineEvent,

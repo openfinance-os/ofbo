@@ -18,6 +18,7 @@ import {
   PgOutageStore,
   PgComplianceMetricsStore,
   PgRiskMetricsStore,
+  PgAnomalyDetectionStore,
   retentionStatus
 } from '@ofbo/db'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
@@ -25,6 +26,7 @@ import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
 import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
 import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
+import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -141,9 +143,17 @@ export default {
       const events = await new DemoLiabilityEventSource().getLiabilityEvents()
       await liabilityMonitor.evaluate(events, openRefs, crypto.randomUUID())
     }
+    // BACKOFFICE-37 — streaming consent-pattern anomaly detection (windowed scan).
+    const anomalyStore = new PgAnomalyDetectionStore(url, tenancy)
+    const anomalyDetector = new ConsentAnomalyDetector({ detection: anomalyStore, signals: riskSignals })
     ctx.waitUntil(
-      Promise.allSettled([service.runDaily(crypto.randomUUID()), ingestion.runIngestion(period, crypto.randomUUID()), runLiability()]).finally(async () => {
-        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), audit.close(), lineage.close()])
+      Promise.allSettled([
+        service.runDaily(crypto.randomUUID()),
+        ingestion.runIngestion(period, crypto.randomUUID()),
+        runLiability(),
+        anomalyDetector.detect(crypto.randomUUID())
+      ]).finally(async () => {
+        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), audit.close(), lineage.close()])
       })
     )
   }

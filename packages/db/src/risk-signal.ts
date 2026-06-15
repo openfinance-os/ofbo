@@ -18,6 +18,10 @@ export interface RiskSignalSinkEvent {
   /** BACKOFFICE-36 — liability proximity ref (issue × liable party × AED). */
   nebras_liability_event_ref?: string
   client_id?: string
+  /** BACKOFFICE-37 — cross-run dedup key for the streaming anomaly detector (in signal_data). */
+  dedup_key?: string
+  /** BACKOFFICE-37 — extra signal context (e.g. session_flagged), merged into signal_data. */
+  context?: Record<string, unknown>
 }
 
 const RISK_SIGNAL_COLUMNS = ['bank_id', 'channel', 'signal_type', 'severity', 'status', 'signal_data', 'nebras_liability_event_ref']
@@ -47,7 +51,7 @@ export class PgRiskSignalEmitter {
           event.signal_type,
           event.severity,
           event.client_id ?? null,
-          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id }),
+          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id, ...(event.dedup_key ? { dedup_key: event.dedup_key } : {}), ...(event.context ?? {}) }),
           event.nebras_liability_event_ref ?? null
         ]
       )
