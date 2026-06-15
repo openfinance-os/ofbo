@@ -29,6 +29,7 @@ import { ReconciliationService } from './reconciliation/service.js'
 import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
 import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
+import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -153,12 +154,16 @@ export default {
     // BACKOFFICE-46 — anomaly ITSM escalation (team-routed + critical paging) via P3.
     const anomalyStore = new PgAnomalyDetectionStore(url, tenancy)
     const anomalyDetector = new ConsentAnomalyDetector({ detection: anomalyStore, signals: riskSignals, itsm })
+    // BACKOFFICE-38 — TPP behavioural profiling: 3σ deviations (volume / hour-of-day /
+    // CoP mismatch) → tpp_behaviour Risk signal, deduped against open signals.
+    const tppProfiler = new TppBehaviourProfiler({ source: new DemoTppActivitySource(), signals: riskSignals, dedup: anomalyStore })
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
         ingestion.runIngestion(period, crypto.randomUUID()),
         runLiability(),
-        anomalyDetector.detect(crypto.randomUUID())
+        anomalyDetector.detect(crypto.randomUUID()),
+        tppProfiler.profile(crypto.randomUUID())
       ]).finally(async () => {
         await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), audit.close(), lineage.close()])
       })
