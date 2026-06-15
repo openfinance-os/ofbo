@@ -86,6 +86,19 @@ describe('POST /consents/{consent_id}:revoke-admin', () => {
     expect(egress.calls).toBe(1) // no duplicate Nebras revocation
   })
 
+  it('does not replay across different consents reusing the same Idempotency-Key', async () => {
+    const { app, egress } = appWith()
+    await post(app, care(), 'TPP_REQUEST') // revoke CONSENT with key idem-revoke-1
+    const other = await app.request(`/consents/33333333-3333-4333-8333-333333333333:revoke-admin`, {
+      method: 'POST',
+      headers: care(), // SAME idempotency-key, different consent
+      body: JSON.stringify({ reason_code: 'TPP_REQUEST' })
+    })
+    expect(other.status).toBe(200)
+    expect(((await other.json()) as { data: { consent_id: string } }).data.consent_id).toBe('33333333-3333-4333-8333-333333333333')
+    expect(egress.calls).toBe(2) // both consents actually revoked
+  })
+
   it('surfaces an SLA breach when the Nebras propagation exceeds 5s (injected fault)', async () => {
     const { app, audit } = appWith(9000)
     const res = await post(app, care(), 'REGULATORY')

@@ -134,7 +134,10 @@ export function consentRevokeRoutes(service: ConsentRevokeService, idempotency: 
         400
       )
     }
-    const cacheKey = `revoke-admin|${c.get('principal').subject}|${key}`
+    // Scope the replay key by consent_id too: a key reused across different
+    // consents must NOT replay the first result (which would silently skip the
+    // second revoke).
+    const cacheKey = `revoke-admin|${params.consent_id}|${c.get('principal').subject}|${key}`
     const cached = await idempotency.get(cacheKey)
     if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
     const res = await handler(c, params)
