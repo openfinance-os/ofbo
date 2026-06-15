@@ -218,3 +218,8 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - P6 NebrasEgressPort extended with dispatchRefund (sim returns ACSP deterministically; enterprise adapter unchanged — whole-port NotImplemented until M6); port-contract test binds it. No OpenAPI change — IPP rides the approval execution_result (spec declares it as an open object on the approve response). Dispatch only on approval; all egress via P6.
 - Evidence: 276 unit green (port-contracts + initiate→approve→dispatch asserting the IPP status; disputes service 99%); gen no drift; lint + typecheck green; Q1–Q4.5 all pass. No DB-schema change. Reviewers: hard-stop PASS, conformance CONFORMANT.
 - Next eligible: BACKOFFICE-23 (CBUAE inquiry response bundle per PSU; deps 19 done) — the last eligible M2 item before the blocked ones (-22 on spec PR #26, -25 on ADR 0001).
+
+## 2026-06-15 — spec PR #26 merged (human-approved) — BACKOFFICE-22 unblocked
+
+- The user approved and the spec-change PR #26 (SPEC-FRAUD-REVOKE-FOUREYES) merged: revoke-fraud now x-four-eyes + 202 ApprovalPending (closes the latent inline-fraud-revoke gap, a binding adopting-bank default), reports:approve four-eyes flag removed (it's the resolution step), approval ids standardised to format:uuid. Generated artifacts current on main (no gen drift). SPEC-FRAUD-REVOKE-FOUREYES → done.
+- BACKOFFICE-22 (fraud-suspected revocation + STR draft; deps 17 + SPEC-FRAUD-REVOKE-FOUREYES) is now eligible and is next in file order. Remaining blocked: BACKOFFICE-25 (ADR 0001 — care-token surface, awaiting human decision).
