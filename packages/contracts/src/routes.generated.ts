@@ -186,6 +186,34 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/disputes/respondent",
+    "tag": "disputes",
+    "scope": "finance:disputes:write",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/disputes/respondent",
+    "tag": "disputes",
+    "scope": "finance:disputes:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/disputes/respondent/{respondent_dispute_id}",
+    "tag": "disputes",
+    "scope": "finance:disputes:write",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/disputes/respondent/{respondent_dispute_id}:advance",
+    "tag": "disputes",
+    "scope": "finance:disputes:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/analytics/executive-dashboard",
     "tag": "analytics",
     "scope": "platform:analytics:read",

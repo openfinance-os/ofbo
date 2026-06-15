@@ -1048,6 +1048,200 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/disputes/respondent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List respondent disputes (filter by state / breach status) */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    state?: components["schemas"]["RespondentDisputeState"];
+                    /** @description Filter to clocks at risk (amber) or breached (red) */
+                    breach_status?: components["schemas"]["SchemeClockStatus"];
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated respondent-dispute list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["RespondentDispute"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /**
+         * Register a Nebras-raised dispute where the bank is the respondent (BACKOFFICE-75)
+         * @description Ingests a dispute Nebras has raised against the bank. The response (3 bd) and formal-resolution (15 bd) clocks start from raised_at on registration; appeal and implementation clocks start when the respective verdicts are recorded via :advance.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RespondentDisputeCreate"];
+                };
+            };
+            responses: {
+                /** @description Respondent dispute registered; response + resolution clocks started */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["RespondentDispute"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/disputes/respondent/{respondent_dispute_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Respondent dispute detail — scheme clocks + per-clock breach status */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    respondent_dispute_id: components["parameters"]["respondentDisputeId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Respondent dispute detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["RespondentDispute"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/disputes/respondent/{respondent_dispute_id}:advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a respondent-side lifecycle action that stops / starts a scheme clock
+         * @description respond → stops the response clock (state responded). record_verdict → resolution met, starts the appeal clock (3 bd). appeal → records the bank's appeal. record_final_verdict → starts the implementation clock (3 bd). implement → stops implementation (state implemented). Each action requires a note (≥20 chars) and writes an immutable High-class audit record.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    respondent_dispute_id: components["parameters"]["respondentDisputeId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "respond" | "record_verdict" | "appeal" | "record_final_verdict" | "implement";
+                        /** @description Mandatory action note (immutable audit) */
+                        note: string;
+                        /**
+                         * @description Required for record_verdict / record_final_verdict
+                         * @enum {string|null}
+                         */
+                        verdict_outcome?: "upheld" | "partially_upheld" | "rejected" | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Action recorded; affected clock updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["RespondentDispute"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/analytics/executive-dashboard": {
         parameters: {
             query?: never;
@@ -2776,6 +2970,73 @@ export interface components {
             /** Format: date-time */
             created_at?: string;
         };
+        RespondentDisputeCreate: {
+            /** @description Nebras Case & Dispute Management reference for the dispute raised against the bank */
+            nebras_dispute_ref: string;
+            /** @enum {string} */
+            category: "billing" | "consent" | "data_sharing" | "liability" | "conduct" | "other";
+            /** @description Short synthetic summary — no PSU PII */
+            subject_summary?: string | null;
+            /**
+             * Format: date-time
+             * @description When Nebras raised the dispute; the response + resolution clocks start here
+             */
+            raised_at: string;
+            /**
+             * Format: uuid
+             * @description Linked reconciliation break where one exists
+             */
+            originating_break_id?: string | null;
+        };
+        /** @enum {string} */
+        RespondentDisputeState: "received" | "responded" | "under_resolution" | "resolved" | "appealed" | "awaiting_implementation" | "implemented" | "closed";
+        /**
+         * @description on_track; amber within the warning window before due; red past due (breach)
+         * @enum {string}
+         */
+        SchemeClockStatus: "on_track" | "amber" | "red";
+        RespondentDispute: components["schemas"]["RespondentDisputeCreate"] & {
+            /** Format: uuid */
+            id?: string;
+            state?: components["schemas"]["RespondentDisputeState"];
+            /**
+             * Format: date-time
+             * @description raised_at + 3 business days
+             */
+            response_due_at?: string;
+            /** Format: date-time */
+            responded_at?: string | null;
+            /**
+             * Format: date-time
+             * @description raised_at + 15 business days
+             */
+            resolution_due_at?: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            /**
+             * Format: date-time
+             * @description verdict + 3 business days
+             */
+            appeal_due_at?: string | null;
+            /** Format: date-time */
+            appealed_at?: string | null;
+            /**
+             * Format: date-time
+             * @description final verdict + 3 business days
+             */
+            implementation_due_at?: string | null;
+            /** Format: date-time */
+            implemented_at?: string | null;
+            response_clock_status?: components["schemas"]["SchemeClockStatus"];
+            resolution_clock_status?: components["schemas"]["SchemeClockStatus"];
+            appeal_clock_status?: components["schemas"]["SchemeClockStatus"];
+            implementation_clock_status?: components["schemas"]["SchemeClockStatus"];
+            overall_breach_status?: components["schemas"]["SchemeClockStatus"];
+            /** @enum {string|null} */
+            verdict_outcome?: "upheld" | "partially_upheld" | "rejected" | null;
+            /** Format: date-time */
+            created_at?: string;
+        };
         ComplianceReport: {
             /** Format: uuid */
             id?: string;
@@ -3073,6 +3334,7 @@ export interface components {
         breakId: string;
         consentId: string;
         disputeId: string;
+        respondentDisputeId: string;
         reportId: string;
         /** @description Trust Framework Directory OrganisationId */
         organisationId: string;
