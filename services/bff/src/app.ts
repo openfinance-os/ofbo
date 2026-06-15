@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
-import type { ApmPort, IdentityProviderPort } from '@ofbo/ports'
+import type { ApmPort, IdentityProviderPort, NebrasEgressPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
@@ -23,9 +23,10 @@ import {
   InMemoryConsentEventSource,
   type ConsentEventSource
 } from './consents/audit-trail.js'
+import { ConsentRevokeService, consentRevokeRoutes } from './consents/revoke.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
-import type { IdempotencyStore } from './idempotency.js'
+import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
  *  suites to exclude them from the contract-pending it.fails layer. */
@@ -36,6 +37,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /approvals/{approval_id}:approve',
   'post /approvals/{approval_id}:reject',
   'get /consents:search-psu',
+  'post /consents/{consent_id}:revoke-admin',
   'get /consents/{consent_id}/audit-trail',
   'get /psu/{psu_identifier}/audit-trail'
 ])
@@ -59,6 +61,7 @@ export interface AppDeps {
   highClassAudit?: HighClassAuditSink
   consentDirectory?: ConsentDirectory
   consentEventSource?: ConsentEventSource
+  nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent'>
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -86,10 +89,15 @@ export function createApp(deps: AppDeps = {}) {
     directory: deps.consentDirectory ?? sharedDemoConsentDirectory()
   })
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
+  const revokeService = new ConsentRevokeService({
+    egress: deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env)),
+    audit: highClassAudit
+  })
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
     ...approvalRoutes(approvals, deps.idempotency),
     ...consentRoutes(consentSearch),
+    ...consentRevokeRoutes(revokeService, deps.idempotency ?? new IdempotencyCache()),
     ...consentAuditTrailRoutes(auditTrail)
   }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))

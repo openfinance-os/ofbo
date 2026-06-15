@@ -9,6 +9,8 @@ compatibility_flags = ["nodejs_compat"]
 DEPLOY_PROFILE = "demo"
 # Demo bank tenant — matches the seeded dataset and the node entry's default.
 BANK_ID = "11111111-1111-4111-8111-111111111111"
+# P6 egress target: ALL Nebras-bound traffic (consent revoke, etc.) routes here.
+NEBRAS_SIM_URL = "https://nebras-sim-production.up.railway.app"
 
 [observability]
 enabled = true

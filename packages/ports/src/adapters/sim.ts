@@ -89,7 +89,21 @@ const DIRECTORY = [
 ]
 
 const simNebrasEgress: NebrasEgressPort = {
-  async revokeConsent() {
+  async revokeConsent(consentId, reason, trace) {
+    // All Nebras-bound traffic goes through this P6 adapter (no direct egress).
+    // When the Nebras simulator service is reachable (NEBRAS_SIM_URL), propagate
+    // the revoke to its Consent Manager so the <5s ack + fault injection
+    // (revoke_delay) are exercised end to end; otherwise a deterministic ack.
+    const base = process.env.NEBRAS_SIM_URL
+    if (base) {
+      const res = await fetch(`${base}/consent-manager/consents/${encodeURIComponent(consentId)}/revoke`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-fapi-interaction-id': trace.trace_id },
+        body: JSON.stringify({ reason })
+      })
+      const body = (await res.json()) as { acknowledged_in_ms: number }
+      return { acknowledged_in_ms: body.acknowledged_in_ms }
+    }
     return { acknowledged_in_ms: 420 }
   },
   async fetchTppReports() {
