@@ -1713,15 +1713,19 @@ components:
         multi_auth:
           type: object
           nullable: true
-          description: Present for multi-authorisation consents (BACKOFFICE-61, fast-follow)
+          description: Present for multi-authorisation payment consents (BACKOFFICE-61) — M-of-N authoriser visibility.
           properties:
+            threshold: { type: integer, description: M — authorisers required to authorise the consent }
+            received: { type: integer, description: Authorisers who have authorised so far }
+            pending: { type: boolean, description: True while received < threshold (still pending the authorisation threshold) }
             authorisers:
               type: array
               items:
                 type: object
                 properties:
                   authoriser_ref: { type: string }
-                  status: { type: string }
+                  status: { type: string, description: Per-authoriser status (e.g. authorised, pending, rejected) }
+                  authorised_at: { type: string, format: date-time, nullable: true }
     ConsentEvent:
       type: object
       properties:

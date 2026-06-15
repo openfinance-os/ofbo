@@ -2709,11 +2709,20 @@ export interface components {
             expires_at?: string | null;
             /** Format: date-time */
             last_access_at?: string | null;
-            /** @description Present for multi-authorisation consents (BACKOFFICE-61, fast-follow) */
+            /** @description Present for multi-authorisation payment consents (BACKOFFICE-61) — M-of-N authoriser visibility. */
             multi_auth?: {
+                /** @description M — authorisers required to authorise the consent */
+                threshold?: number;
+                /** @description Authorisers who have authorised so far */
+                received?: number;
+                /** @description True while received < threshold (still pending the authorisation threshold) */
+                pending?: boolean;
                 authorisers?: {
                     authoriser_ref?: string;
+                    /** @description Per-authoriser status (e.g. authorised */
                     status?: string;
+                    /** Format: date-time */
+                    authorised_at?: string | null;
                 }[];
             } | null;
         };
