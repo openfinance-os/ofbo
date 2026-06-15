@@ -6,9 +6,11 @@ import {
   PgDisputeStore,
   PgIdempotencyStore,
   PgLineageEmitter,
+  PgReconciliationLogStore,
   PgRiskSignalEmitter
 } from '@ofbo/db'
 import { createApp } from './app.js'
+import { ReconciliationService } from './reconciliation/service.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -47,6 +49,7 @@ export default {
     const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
     const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
     const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
+    const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -55,14 +58,38 @@ export default {
       ...(riskSignals ? { superadmin: { riskSignals } } : {}),
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
       ...(disputeStore ? { disputeStore } : {}),
-      ...(complianceReportStore ? { complianceReportStore } : {})
+      ...(complianceReportStore ? { complianceReportStore } : {}),
+      ...(reconciliationLogStore ? { reconciliationLogStore } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, complianceReportStore, reconciliationLogStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
+  },
+
+  /**
+   * BACKOFFICE-01 — the daily three-way reconciliation is a headless scheduled
+   * job (no public ingress). Cron-triggered; run_id is derived from the date so
+   * a retried/overlapping trigger is idempotent (the store ON CONFLICT no-ops).
+   */
+  async scheduled(_event: unknown, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
+    const url = env.DATABASE_URL
+    if (!url) return
+    const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+    const lineage = new PgLineageEmitter(url, tenancy)
+    const audit = new PgAuditEmitter(url, tenancy, lineage)
+    const store = new PgReconciliationLogStore(url, tenancy, lineage)
+    const service = new ReconciliationService({ store, audit })
+    ctx.waitUntil(
+      service
+        .runDaily(crypto.randomUUID())
+        .catch(() => undefined)
+        .finally(async () => {
+          await Promise.all([store.close(), audit.close(), lineage.close()])
+        })
+    )
   }
 }

@@ -45,6 +45,12 @@ import {
   inquiryRoutes,
   type ComplianceReportStore
 } from './inquiries/bundle.js'
+import {
+  ReconciliationService,
+  InMemoryReconciliationLogStore,
+  type ReconciliationLogStore
+} from './reconciliation/service.js'
+import { reconciliationRoutes } from './reconciliation/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -67,7 +73,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /disputes',
   'get /disputes',
   'post /disputes/{dispute_id}:initiate-refund',
-  'post /back-office/inquiries/psu'
+  'post /back-office/inquiries/psu',
+  'get /back-office/reconciliation/runs',
+  'get /back-office/reconciliation/runs/{run_id}'
 ])
 
 /**
@@ -93,6 +101,7 @@ export interface AppDeps {
   disputeStore?: DisputeStore
   paymentSource?: PaymentSource
   complianceReportStore?: ComplianceReportStore
+  reconciliationLogStore?: ReconciliationLogStore
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -161,6 +170,10 @@ export function createApp(deps: AppDeps = {}) {
     reports: deps.complianceReportStore ?? new InMemoryComplianceReportStore(),
     audit: highClassAudit
   })
+  const reconciliationService = new ReconciliationService({
+    store: deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore(),
+    audit: highClassAudit
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -171,7 +184,8 @@ export function createApp(deps: AppDeps = {}) {
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
-    ...inquiryRoutes(inquiryService, idempotencyStore)
+    ...inquiryRoutes(inquiryService, idempotencyStore),
+    ...reconciliationRoutes(reconciliationService)
   }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
