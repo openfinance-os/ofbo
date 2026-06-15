@@ -5,6 +5,7 @@ import type { MarginSummary } from '../reconciliation/margin.js'
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
+import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
 
 /**
  * BACKOFFICE-31 — Finance View. A read-only analytics view (reconciliation:read,
@@ -55,7 +56,7 @@ export class FinanceViewError extends Error {
 export class FinanceViewService {
   constructor(private readonly deps: FinanceViewDeps) {}
 
-  async view(principal: Principal, period?: string): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal, period?: string): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, FINANCE_VIEW_SCOPE)
     const p = period ?? (this.deps.now ?? (() => new Date()))().toISOString().slice(0, 7)
     if (!MONTH.test(p)) throw new FinanceViewError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
@@ -67,7 +68,6 @@ export class FinanceViewService {
       this.deps.unbilled.unbilledTrafficCount()
     ])
 
-    const refreshedAt = (this.deps.now ?? (() => new Date()))().toISOString()
     const data = {
       period: p,
       mtd_nebras_fee_accrual: { amount: accrual?.total_fee_minor ?? 0, currency: accrual?.currency ?? 'AED' },
@@ -77,12 +77,15 @@ export class FinanceViewService {
       unbilled_traffic_alert_count: unbilled,
       reconciliation_console_deeplink: RECON_CONSOLE_DEEPLINK
     }
-    const freshness = {
-      source_published_at: accrual?.source_published_at ?? null,
-      view_refreshed_at: refreshedAt,
-      stale: accrual === null ? true : accrual.stale,
-      stale_cause: accrual === null ? 'no_ingested_aggregates_for_period' : accrual.stale ? 'last_ingestion_failed' : null
-    }
+    // BACKOFFICE-40 — standard freshness: a failed ingestion (accrual.stale) wins,
+    // else amber when the source roll-up is older than 2× the monthly publish cadence.
+    const freshness = computeFreshness({
+      sourcePublishedAt: accrual?.source_published_at ?? null,
+      now: (this.deps.now ?? (() => new Date()))(),
+      sourceCadenceMs: FRESHNESS_CADENCE.MONTHLY_MS,
+      missingCause: 'no_ingested_aggregates_for_period',
+      extraStale: accrual?.stale ? { stale: true, cause: 'last_ingestion_failed' } : null
+    })
     return { data, freshness }
   }
 }

@@ -3,6 +3,7 @@ import type { OnboardingCase, OnboardingEntryPath } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
+import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 
 /**
  * BACKOFFICE-34 — onboarding funnel metric surfacing. A read-only analytics view
@@ -73,7 +74,7 @@ function metricsFor(cases: OnboardingCase[]) {
 export class OnboardingFunnelService {
   constructor(private readonly deps: OnboardingFunnelDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, ONBOARDING_FUNNEL_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
     const windowEnd = now.toISOString()
@@ -95,9 +96,8 @@ export class OnboardingFunnelService {
       overall: metricsFor(cases),
       by_entry_path: byEntryPath
     }
-    const refreshedAt = now.toISOString()
-    const freshness = { source_published_at: refreshedAt, view_refreshed_at: refreshedAt, stale: false, stale_cause: null }
-    return { data, freshness }
+    // BACKOFFICE-40 — live-computed view (no external source) → always fresh.
+    return { data, freshness: liveFreshness(now) }
   }
 }
 

@@ -3,6 +3,7 @@ import type { ConsentVolumes, DisputeBacklog, RiskSignalBacklog, ReportLibrary, 
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
+import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 
 /**
  * BACKOFFICE-29 — Compliance View. A read-only analytics view (compliance:reports:read,
@@ -38,7 +39,7 @@ export interface ComplianceViewDeps {
 export class ComplianceViewService {
   constructor(private readonly deps: ComplianceViewDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, COMPLIANCE_VIEW_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
 
@@ -65,16 +66,10 @@ export class ComplianceViewService {
       inquiry_history: reports.recent_inquiries,
       periodic_report_generation_deeplink: REPORT_GENERATION_DEEPLINK
     }
-    const refreshedAt = now.toISOString()
-    const freshness = {
-      // Live aggregates computed on read — trivially fresh; the deletion-forbidden
-      // retention policy makes an overdue-immutable row a posture flag, not staleness.
-      source_published_at: refreshedAt,
-      view_refreshed_at: refreshedAt,
-      stale: false,
-      stale_cause: null
-    }
-    return { data, freshness }
+    // BACKOFFICE-40 — live aggregates computed on read → trivially fresh; the
+    // deletion-forbidden retention policy makes an overdue-immutable row a posture
+    // flag (in data.retention_status.overdue_tables), not view staleness.
+    return { data, freshness: liveFreshness(now) }
   }
 }
 

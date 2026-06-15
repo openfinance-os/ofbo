@@ -4,6 +4,7 @@ import type { LiabilityMonitor } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { dataEnvelope } from '../envelope.js'
+import { liveFreshness, type FreshnessEnvelope } from '../analytics/freshness.js'
 
 /**
  * BACKOFFICE-36 — proactive Nebras-liability event monitor (threshold-based). The
@@ -124,7 +125,7 @@ export class LiabilityViewService {
     this.now = deps.now ?? (() => new Date())
   }
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: Record<string, unknown> }> {
+  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, LIABILITY_MONITOR_SCOPE)
     const monitor = await this.deps.riskMetrics.liabilityMonitor()
     // accrual breakdown parsed from the open signals' refs (issue|party|aed)
@@ -139,8 +140,8 @@ export class LiabilityViewService {
       by_severity: monitor.by_severity,
       approaching_triggers: accrual
     }
-    const refreshedAt = this.now().toISOString()
-    return { data, freshness: { source_published_at: refreshedAt, view_refreshed_at: refreshedAt, stale: false, stale_cause: null } }
+    // BACKOFFICE-40 — live read over risk_signal → trivially fresh.
+    return { data, freshness: liveFreshness(this.now()) }
   }
 }
 
