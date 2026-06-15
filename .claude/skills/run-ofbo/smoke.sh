@@ -72,8 +72,11 @@ check "BFF: no bearer token -> 401" 401 \
 check "BFF: demo persona token -> 200 approvals list" 200 \
   "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/approvals/pending" \
      -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:customer-care-agent")"
+# Probe a contract path whose scope the persona holds but whose story is unbuilt
+# (M4 analytics) so the check exercises the 501 path, not a scope denial. Update
+# this if finance-view ever gets implemented.
 check "BFF: unimplemented contract path -> 501 envelope" 501 \
-  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/reconciliation/runs" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/analytics/finance-view" \
      -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:finance-analyst")"
 
 # --- Nebras simulator: deterministic data + fault injection round-trip ---
