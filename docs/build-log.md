@@ -211,3 +211,10 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Mid-review fix: refund_initiated audit now records the initiator's actual persona (from verified IdP claims) instead of a hardcoded value (hard-stop reviewer flag, non-blocking).
 - Evidence: 275 unit green (disputes dir 95% / service 99%) incl. initiate→approve→refund_initiated + self-approval rejection; integration proves markRefundInitiated under RLS + lineage; gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers (twice): hard-stop PASS, conformance CONFORMANT.
 - Next eligible: BACKOFFICE-62 (refund dispatch via the formal Ozone Connect refund flow, P6, 5 IPP status codes; deps 21 done).
+
+## 2026-06-15 — BACKOFFICE-62 (PR #29, loop iteration 25)
+
+- Refund dispatch via the formal Ozone Connect flow through P6, completing the four-eyes refund (-21). On approval, the disputes.initiate_refund operation calls the P6 egress port's new dispatchRefund (keyed by the dispute's originating_consent_id) and tracks the returned IPP status (5 codes ACCC/ACSP/ACSC/RJCT/PDNG) in the approval execution_result + refund_initiated audit; refund_initiated_at is the RPSCS SLA-evidence timestamp.
+- P6 NebrasEgressPort extended with dispatchRefund (sim returns ACSP deterministically; enterprise adapter unchanged — whole-port NotImplemented until M6); port-contract test binds it. No OpenAPI change — IPP rides the approval execution_result (spec declares it as an open object on the approve response). Dispatch only on approval; all egress via P6.
+- Evidence: 276 unit green (port-contracts + initiate→approve→dispatch asserting the IPP status; disputes service 99%); gen no drift; lint + typecheck green; Q1–Q4.5 all pass. No DB-schema change. Reviewers: hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-23 (CBUAE inquiry response bundle per PSU; deps 19 done) — the last eligible M2 item before the blocked ones (-22 on spec PR #26, -25 on ADR 0001).
