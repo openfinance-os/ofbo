@@ -16,7 +16,7 @@ import {
 import { approvalRoutes } from './approvals/routes.js'
 import { consentRoutes } from './consents/routes.js'
 import { ConsentSearchService } from './consents/service.js'
-import type { ConsentDirectory } from './consents/directory.js'
+import { DemoConsentDirectory, type ConsentDirectory } from './consents/directory.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import type { IdempotencyStore } from './idempotency.js'
@@ -52,6 +52,13 @@ export interface AppDeps {
   consentDirectory?: ConsentDirectory
 }
 
+/** Built once per isolate, not per request — the deterministic demo dataset is
+ *  immutable, so a Worker that handles many requests pays the (tiny) build once. */
+let demoConsentDirectory: ConsentDirectory | undefined
+function sharedDemoConsentDirectory(): ConsentDirectory {
+  return (demoConsentDirectory ??= new DemoConsentDirectory())
+}
+
 export function createApp(deps: AppDeps = {}) {
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
@@ -67,7 +74,7 @@ export function createApp(deps: AppDeps = {}) {
     deps.highClassAudit ?? (hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
   const consentSearch = new ConsentSearchService({
     audit: highClassAudit,
-    ...(deps.consentDirectory ? { directory: deps.consentDirectory } : {})
+    directory: deps.consentDirectory ?? sharedDemoConsentDirectory()
   })
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = { ...approvalRoutes(approvals, deps.idempotency), ...consentRoutes(consentSearch) }

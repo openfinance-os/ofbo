@@ -71,6 +71,15 @@ describe('demo BFF (Cloudflare Worker)', () => {
   it.skipIf(!DATABASE_URL)(
     'persists a High-class audit record for the sign-in (request_trace_id = x-fapi-interaction-id)',
     async () => {
+      // Demo profile is sleep-tolerant / free-tier (CLAUDE.md §3.1): a just-
+      // deployed Worker can cold-start for several seconds, and the CI→Supabase
+      // pooler adds latency. Warm the Worker first, then verify persistence with
+      // a generous budget — this is a liveness + eventual-persistence check, not
+      // the <500ms p95 API SLA (which is asserted against real infra, not here).
+      await fetch(`${BFF}/approvals/pending`, {
+        headers: { 'x-fapi-interaction-id': fapi(), authorization: 'Bearer demo-token:operations-analyst' }
+      }).catch(() => undefined)
+
       const traceId = fapi()
       const res = await fetch(`${BFF}/approvals/pending`, {
         headers: {
@@ -83,7 +92,7 @@ describe('demo BFF (Cloudflare Worker)', () => {
       const pool = new pg.Pool({ connectionString: DATABASE_URL })
       try {
         let rows: Array<{ event_type: string }> = []
-        for (let attempt = 0; attempt < 10 && rows.length === 0; attempt++) {
+        for (let attempt = 0; attempt < 20 && rows.length === 0; attempt++) {
           if (attempt > 0) await new Promise((r) => setTimeout(r, 1000))
           const result = await pool.query(
             `SELECT event_type FROM audit_high_sensitivity WHERE request_trace_id = $1`,
@@ -96,7 +105,7 @@ describe('demo BFF (Cloudflare Worker)', () => {
         await pool.end()
       }
     },
-    30_000
+    60_000
   )
 })
 
