@@ -258,6 +258,26 @@ export class PgReconciliationBreakStore {
     return row ? toBreak(row) : null
   }
 
+  /**
+   * BACKOFFICE-05 — escalate a non-terminal break to a Nebras dispute: persist the
+   * Nebras case id + status escalated_nebras_dispute. The flagged/assigned guard
+   * prevents escalating an already-terminal break (returns null → 409).
+   */
+  async escalateNebras(id: string, nebrasCaseId: string, traceId: string): Promise<StoredReconciliationBreak | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE reconciliation_break
+            SET status = 'escalated_nebras_dispute', nebras_dispute_case_id = $2
+          WHERE id = $1 AND status IN ('flagged','assigned')
+          RETURNING ${SELECT_COLUMNS}`,
+        [id, nebrasCaseId]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toBreak(row) : null
+  }
+
   /** Count breaks already recorded for a run — used to keep detection idempotent. */
   async countForRun(runId: string): Promise<number> {
     return this.asApp(async (c) => {

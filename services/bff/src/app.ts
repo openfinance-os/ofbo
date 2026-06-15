@@ -83,7 +83,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reconciliation/breaks',
   'post /back-office/reconciliation/breaks/{break_id}/claim',
   'post /back-office/reconciliation/breaks/{break_id}/resolve',
-  'post /back-office/reconciliation/breaks/{break_id}/reopen'
+  'post /back-office/reconciliation/breaks/{break_id}/reopen',
+  'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras'
 ])
 
 /**
@@ -188,6 +189,7 @@ export function createApp(deps: AppDeps = {}) {
     breakStore: reconciliationBreakStore,
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     approvals,
+    egress: nebrasEgress,
     audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
