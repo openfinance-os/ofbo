@@ -162,6 +162,21 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     }),
 
+    'get /back-office/reconciliation/breaks/{break_id}': async (c, params) => {
+      try {
+        const b = await service.getBreak(c.get('principal'), params.break_id!)
+        if (!b) {
+          return c.json(
+            errorEnvelope('BACKOFFICE.BREAK_NOT_FOUND', `No break ${params.break_id}.`, 'List breaks at GET /back-office/reconciliation/breaks.', DOCS_BASE),
+            404 as ContentfulStatusCode
+          )
+        }
+        return c.json(dataEnvelope(breakToWire(b)), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
     'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras': withIdempotency(idempotency, 'reconciliation:escalate-nebras', async (c, params) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
