@@ -195,3 +195,11 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 - Wrote docs/adrs/0001-care-surface-token-minting.md (Proposed) with three exposure options — (1) a Back Office contract `:mint-token` endpoint via the Hono BFF (needs a spec-change PR), (2) a portal-server route outside the contract (the M1-PORTAL-SHELL session pattern), (3) transparent BFF middleware on PSU-scoped care-surface calls — recommending Option 1. BACKOFFICE-25 is blocked on the ADR.
 - HUMAN DECISION: choose the care-token exposure surface (ADR 0001). No code/PR this iteration.
 - Loop continues with the next eligible item: BACKOFFICE-20 (unauthorized-payment investigation workflow; deps 16 done).
+
+## 2026-06-15 — BACKOFFICE-20 (PR #27, loop iteration 23)
+
+- Unauthorised-payment investigation slice: GET /payments/{id}:admin (IPP status + CoP outcome + Risk Info Block + consent-validity-at-time-of-payment), POST /disputes (one-click, Nebras-linked via P6, dispute_created High-class audit + dispute_case lineage, Idempotency-Key keyed by subject → no duplicate Nebras case), GET /disputes (list, cursor + state/psu filters). disputes:admin at BFF+service.
+- Payments derived deterministically into @ofbo/synthetic-data (reused "existing LFI/TPP services"; M6 swaps the source) — no RNG-sequence disturbance; deterministicClientId generalised to deterministicUuid. PgDisputeStore (@ofbo/db): RLS-bound create/get/list with lineage. Payment view projects off the internal psu_identifier.
+- Mid-iteration catch: I initially added a GET /disputes/{id} route, but the contract has no GET-by-id (only PATCH) — removed it; a dispute is viewed via the filtered list. DEFERRED to a dispute-lifecycle slice: PATCH /disputes/{id} state machine (§6.3.1, kept a 501 stub). initiate-refund is -21/-62. client_id list filter accepted-but-unsupported (no client_id column on dispute_case).
+- Evidence: 273 unit green (disputes 95% / payments 97%); integration proves the dispute persists with audit + dispute_case lineage under RLS, round-tripping via the store + list API; gen no drift; lint + typecheck green; Q1–Q4.5 all pass (dispute_case now lineage-covered). Reviewers: hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-21 (next-business-day refund, four-eyes, SLA timer; deps 20 done).
