@@ -185,12 +185,14 @@ export function createApp(deps: AppDeps = {}) {
     reports: deps.complianceReportStore ?? new InMemoryComplianceReportStore(),
     audit: highClassAudit
   })
+  const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const reconciliationService = new ReconciliationService({
     store: deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore(),
     breakStore: reconciliationBreakStore,
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     approvals,
     egress: nebrasEgress,
+    apm,
     audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
@@ -206,7 +208,6 @@ export function createApp(deps: AppDeps = {}) {
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore)
   }
-  const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()
 
   // outermost: every request — including 400/401/404 — is spanned (BACKOFFICE-48)
