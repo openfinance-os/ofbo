@@ -13,3 +13,16 @@ export function addBusinessHours(from: Date, hours: number): Date {
   }
   return d
 }
+
+/**
+ * The next-business-day refund SLA deadline (BACKOFFICE-21): end (23:59:59.999Z)
+ * of the next business day after `from`, skipping weekends (BD default calendar).
+ */
+export function endOfNextBusinessDay(from: Date): Date {
+  const d = new Date(from)
+  do {
+    d.setUTCDate(d.getUTCDate() + 1)
+  } while (d.getUTCDay() === 0 || d.getUTCDay() === 6)
+  d.setUTCHours(23, 59, 59, 999)
+  return d
+}

@@ -2,6 +2,7 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { DisputeListQuery } from '@ofbo/db'
 import { DisputeError, DisputeService } from './service.js'
+import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import type { IdempotencyStore } from '../idempotency.js'
@@ -18,8 +19,11 @@ const trace = (c: Context) => c.req.header('x-fapi-interaction-id') ?? 'unknown'
 function fail(c: Context, e: unknown): Response {
   if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
   if (e instanceof DisputeError) {
+    return c.json(errorEnvelope(e.code, e.message, 'See the disputes contract (BACKOFFICE-20).', DOCS_BASE), e.status as ContentfulStatusCode)
+  }
+  if (e instanceof ApprovalError) {
     return c.json(
-      errorEnvelope(e.code, e.message, 'See the disputes contract (BACKOFFICE-20).', DOCS_BASE),
+      errorEnvelope(e.code, e.message, 'A refund is four-eyes-gated; a second authorised principal approves before it executes.', DOCS_BASE),
       e.status as ContentfulStatusCode
     )
   }
@@ -27,6 +31,30 @@ function fail(c: Context, e: unknown): Response {
 }
 
 export function disputeRoutes(service: DisputeService, idempotency: IdempotencyStore): Record<string, Handler> {
+  /** Mutating-route wrapper: Idempotency-Key required, successful 2xx replays verbatim (24h). */
+  const withIdempotency =
+    (routeKey: string, handler: Handler): Handler =>
+    async (c, params) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope(
+            'BACKOFFICE.MISSING_IDEMPOTENCY_KEY',
+            'The Idempotency-Key header is required on every mutating endpoint.',
+            'Send a unique Idempotency-Key; replays within 24h return the original result.',
+            DOCS_BASE
+          ),
+          400
+        )
+      }
+      const cacheKey = `${routeKey}|${params.dispute_id ?? ''}|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const res = await handler(c, params)
+      if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
+      return res
+    }
+
   const createHandler: Handler = async (c) => {
     let body: Record<string, unknown>
     try {
@@ -42,25 +70,31 @@ export function disputeRoutes(service: DisputeService, idempotency: IdempotencyS
     }
   }
 
-  const withIdempotency: Handler = async (c, params) => {
-    const key = c.req.header('idempotency-key')
-    if (!key) {
+  const refundHandler: Handler = async (c, params) => {
+    let body: { refund_amount?: { amount?: unknown; currency?: unknown } }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { refund_amount }.', DOCS_BASE), 400)
+    }
+    const m = body.refund_amount
+    if (!m || !Number.isInteger(m.amount) || typeof m.currency !== 'string') {
       return c.json(
-        errorEnvelope(
-          'BACKOFFICE.MISSING_IDEMPOTENCY_KEY',
-          'The Idempotency-Key header is required on every mutating endpoint.',
-          'Send a unique Idempotency-Key; replays within 24h return the original result.',
-          DOCS_BASE
-        ),
+        errorEnvelope('BACKOFFICE.INVALID_BODY', 'refund_amount { amount (integer minor units), currency (ISO 4217) } is required.', 'Money is integer minor units + ISO 4217.', DOCS_BASE),
         400
       )
     }
-    const cacheKey = `disputes:create|${c.get('principal').subject}|${key}`
-    const cached = await idempotency.get(cacheKey)
-    if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-    const res = await createHandler(c, params)
-    if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
-    return res
+    try {
+      const record = await service.initiateRefund(
+        c.get('principal'),
+        params.dispute_id!,
+        { amount: m.amount as number, currency: m.currency },
+        trace(c)
+      )
+      return c.json(dataEnvelope(toWire(record)), 202)
+    } catch (e) {
+      return fail(c, e)
+    }
   }
 
   return {
@@ -72,7 +106,9 @@ export function disputeRoutes(service: DisputeService, idempotency: IdempotencyS
       }
     },
 
-    'post /disputes': withIdempotency,
+    'post /disputes': withIdempotency('disputes:create', createHandler),
+
+    'post /disputes/{dispute_id}:initiate-refund': withIdempotency('disputes:refund', refundHandler),
 
     'get /disputes': async (c) => {
       const q: DisputeListQuery = {
