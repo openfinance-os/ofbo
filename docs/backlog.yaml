@@ -99,7 +99,7 @@ milestones:
       - { id: BACKOFFICE-09, title: Reconciliation SLO dashboard, status: blocked, reason: "awaiting spec PR #67 (no reconciliation-slo read surface; new GET /back-office/analytics/reconciliation-slo queued for human approval)" }
       - { id: BACKOFFICE-10, title: Reconciliation replay (idempotent), status: done }
       - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: done }
-      - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: pending }
+      - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: blocked, depends_on: [UI-03-RECON-CONSOLE], reason: "a11y over the break list + detail views requires the reconciliation console UI (UI-03), which is in the deferred UI track gated on the UI-00 Tailwind ADR (human-approved). Nothing to make accessible until those screens exist." }
       - { id: BACKOFFICE-24, title: Complaint case management lifecycle, status: pending }
       - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: pending }
       - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: pending }
