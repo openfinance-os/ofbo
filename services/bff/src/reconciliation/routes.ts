@@ -177,6 +177,21 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     },
 
+    'get /back-office/reconciliation/exports:cbuae': async (c) => {
+      const periodStart = c.req.query('period_start')
+      const periodEnd = c.req.query('period_end')
+      if (!periodStart || !periodEnd) {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_QUERY', 'period_start and period_end (YYYY-MM-DD) are required.', 'Pass both query params.', DOCS_BASE), 400)
+      }
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const report = await service.generateCbuaeExport(c.get('principal'), periodStart, periodEnd, traceId)
+        return c.json(dataEnvelope(report), 202)
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
     'post /back-office/reconciliation/monthly-signoff': async (c) => {
       const key = c.req.header('idempotency-key')
       if (!key) {

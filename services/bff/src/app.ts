@@ -86,7 +86,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/reconciliation/breaks/{break_id}/resolve',
   'post /back-office/reconciliation/breaks/{break_id}/reopen',
   'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras',
-  'post /back-office/reconciliation/monthly-signoff'
+  'post /back-office/reconciliation/monthly-signoff',
+  'get /back-office/reconciliation/exports:cbuae'
 ])
 
 /**
