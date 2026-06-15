@@ -116,7 +116,7 @@ export class PgAnomalyDetectionStore {
     return this.asApp(async (c) => {
       const res = await c.query(
         `SELECT signal_data->>'dedup_key' AS k FROM risk_signal
-          WHERE signal_type IN ('consent_anomaly','agent_anomaly')
+          WHERE signal_type IN ('consent_anomaly','agent_anomaly','tpp_behaviour')
             AND status NOT IN ('closed_actioned','closed_no_action','false_positive')
             AND signal_data->>'dedup_key' IS NOT NULL`
       )

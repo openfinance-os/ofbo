@@ -104,7 +104,7 @@ milestones:
       - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: blocked, depends_on: [UI-00-DESIGN-SYSTEM], reason: "console design-system + brand conformance is the UI-00 design-system foundation (Tailwind token preset) applied across the console screens — gated on the UI-00 Tailwind ADR (human-approved) and the deferred UI track. No console UI exists beyond the M1 shell to apply brand conformance to." }
       - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: blocked, reason: "awaiting spec PR #71 (multi_auth schema lacks the M-of-N pending threshold the PRD requires; threshold/received/pending fields queued for human approval). Also needs synthetic-data multi-auth consents + the :admin detail endpoint once merged." }
       - { id: BACKOFFICE-64, title: Call/transcript linkage on dispute cases, status: blocked, reason: "needs a contract + P1-port decision: originating_call_id is already captured + surfaced on disputes (BACKOFFICE-20, nullable for non-voice, disputes:admin RBAC), but resolving it to a contact-centre recording requires a new CareSurfacePort method (P1) + a recording-link surface (endpoint/field). New port primitive + contract choice — human-gated (ADR/spec)." }
-      - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: pending }
+      - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: done }
       - { id: BACKOFFICE-41, title: Analytics exports (PDF/XLSX/CSV), status: pending }
       - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: pending }
       - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: pending }
