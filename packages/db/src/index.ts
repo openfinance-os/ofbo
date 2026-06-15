@@ -92,3 +92,10 @@ export {
   type StoredCertification,
   type StoredOutage
 } from './operations-store.js'
+export {
+  PgComplianceMetricsStore,
+  type ConsentVolumes,
+  type DisputeBacklog,
+  type RiskSignalBacklog,
+  type ReportLibrary
+} from './compliance-view-store.js'
