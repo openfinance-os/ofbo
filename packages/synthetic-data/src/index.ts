@@ -55,6 +55,15 @@ export interface DemoDataset {
       expires_at: string | null
       last_access_at: string | null
     }[]
+    payments: {
+      payment_id: string
+      originating_consent_id: string
+      amount: Money
+      ipp_status: (typeof IPP_STATUSES)[number]
+      cop_outcome: { matched: boolean; name_match: 'full' | 'partial' | 'none' }
+      risk_information_block: { fraud_score: number; flagged: boolean }
+      channel: (typeof CHANNELS)[number]
+    }[]
   }[]
   billing_lines: {
     line_ref: string
@@ -76,13 +85,26 @@ const SCOPE_BY_PURPOSE: Record<string, string[]> = {
 /** Statuses for which the PSU's data was actually accessed → a last_access exists. */
 const ACCESSED_STATUSES = new Set(['Authorized', 'Consumed', 'Expired', 'Revoked'])
 
-/** Deterministic UUID-v4-shaped client id from an organisation id (no RNG draw,
- *  so enrichment never shifts the generator's byte-repeatable sequence). */
-function deterministicClientId(org: string): string {
+/** The 5 IPP (Instant Payment Platform) status codes the dispute workflow tracks. */
+const IPP_STATUSES = ['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG'] as const
+
+/** FNV-1a hash of a string → uint32. Deterministic, no RNG draw. */
+function fnv1a(seed: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+/** Deterministic UUID-v4-shaped id from a seed string (no RNG draw, so enrichment
+ *  never shifts the generator's byte-repeatable sequence). */
+function deterministicUuid(seed: string): string {
   let h = 0x811c9dc5
   const out: string[] = []
   for (let i = 0; i < 32; i++) {
-    h ^= org.charCodeAt(i % org.length) + i
+    h ^= seed.charCodeAt(i % seed.length) + i
     h = Math.imul(h, 0x01000193) >>> 0
     out.push((h & 0xf).toString(16))
   }
@@ -125,7 +147,7 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
       return {
         consent_id,
         tpp_organisation_id,
-        tpp_client_id: deterministicClientId(tpp_organisation_id),
+        tpp_client_id: deterministicUuid(tpp_organisation_id),
         tpp_display_name: tppDisplayName(tpp_organisation_id),
         purpose,
         scope: SCOPE_BY_PURPOSE[purpose] ?? [],
@@ -135,12 +157,29 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
         last_access_at: ACCESSED_STATUSES.has(status) ? addMonthsIso(granted_at, 1) : null
       }
     })
+    // One payment per consent, derived deterministically from the consent id —
+    // the "existing LFI/TPP API services" the investigation reads (Phase-0 reuse);
+    // the enterprise data source swaps in at M6.
+    const nameMatch = ['full', 'partial', 'none'] as const
+    const payments = consents.map((c) => {
+      const h = fnv1a(`pay:${c.consent_id}`)
+      return {
+        payment_id: deterministicUuid(`pay:${c.consent_id}`),
+        originating_consent_id: c.consent_id,
+        amount: { amount: 5000 + (h % 495000), currency: 'AED' as const },
+        ipp_status: IPP_STATUSES[h % IPP_STATUSES.length]!,
+        cop_outcome: { matched: h % 3 !== 0, name_match: nameMatch[h % 3]! },
+        risk_information_block: { fraud_score: h % 100, flagged: h % 7 === 0 },
+        channel: CHANNELS[h % CHANNELS.length]!
+      }
+    })
     return {
       bank_customer_id: `cust-${String(i + 1).padStart(4, '0')}`,
       emirates_id: `999-${pick.int(1960, 2005)}-${pick.digits(7)}-${pick.digits(1)}`,
       full_name: `${pick.of(FIRST_NAMES)} ${pick.of(LAST_NAMES)}`,
       accounts,
-      consents
+      consents,
+      payments
     }
   })
 

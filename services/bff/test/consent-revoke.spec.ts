@@ -20,6 +20,9 @@ class FakeEgress {
     this.calls++
     return { acknowledged_in_ms: this.ms }
   }
+  async createDisputeCase() {
+    return { nebras_case_id: 'nebras-unused' }
+  }
 }
 
 const care = (extra: Record<string, string> = {}) => ({

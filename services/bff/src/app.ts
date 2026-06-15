@@ -24,6 +24,9 @@ import {
   type ConsentEventSource
 } from './consents/audit-trail.js'
 import { ConsentRevokeService, consentRevokeRoutes } from './consents/revoke.js'
+import { DisputeService, InMemoryDisputeStore, type DisputeStore } from './disputes/service.js'
+import { disputeRoutes } from './disputes/routes.js'
+import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -39,7 +42,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /consents:search-psu',
   'post /consents/{consent_id}:revoke-admin',
   'get /consents/{consent_id}/audit-trail',
-  'get /psu/{psu_identifier}/audit-trail'
+  'get /psu/{psu_identifier}/audit-trail',
+  'get /payments/{payment_id}:admin',
+  'post /disputes',
+  'get /disputes'
 ])
 
 /**
@@ -61,7 +67,9 @@ export interface AppDeps {
   highClassAudit?: HighClassAuditSink
   consentDirectory?: ConsentDirectory
   consentEventSource?: ConsentEventSource
-  nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent'>
+  nebrasEgress?: Pick<NebrasEgressPort, 'revokeConsent' | 'createDisputeCase'>
+  disputeStore?: DisputeStore
+  paymentSource?: PaymentSource
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -69,6 +77,11 @@ export interface AppDeps {
 let demoConsentDirectory: ConsentDirectory | undefined
 function sharedDemoConsentDirectory(): ConsentDirectory {
   return (demoConsentDirectory ??= new DemoConsentDirectory())
+}
+
+let demoPaymentDirectory: PaymentSource | undefined
+function sharedDemoPaymentDirectory(): PaymentSource {
+  return (demoPaymentDirectory ??= new DemoPaymentDirectory())
 }
 
 export function createApp(deps: AppDeps = {}) {
@@ -89,16 +102,22 @@ export function createApp(deps: AppDeps = {}) {
     directory: deps.consentDirectory ?? sharedDemoConsentDirectory()
   })
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
-  const revokeService = new ConsentRevokeService({
-    egress: deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env)),
+  const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
+  const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit })
+  const disputeService = new DisputeService({
+    store: deps.disputeStore ?? new InMemoryDisputeStore(),
+    payments: deps.paymentSource ?? sharedDemoPaymentDirectory(),
+    egress: nebrasEgress,
     audit: highClassAudit
   })
+  const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
     ...approvalRoutes(approvals, deps.idempotency),
     ...consentRoutes(consentSearch),
-    ...consentRevokeRoutes(revokeService, deps.idempotency ?? new IdempotencyCache()),
-    ...consentAuditTrailRoutes(auditTrail)
+    ...consentRevokeRoutes(revokeService, idempotencyStore),
+    ...consentAuditTrailRoutes(auditTrail),
+    ...disputeRoutes(disputeService, idempotencyStore)
   }
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
   const app = new Hono()

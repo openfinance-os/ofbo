@@ -29,3 +29,10 @@ export {
   type ConsentEventPage,
   type ConsentEventQuery
 } from './consent-events.js'
+export {
+  PgDisputeStore,
+  type StoredDisputeRecord,
+  type DisputeCreateInput,
+  type DisputeListQuery,
+  type DisputePage
+} from './dispute-store.js'
