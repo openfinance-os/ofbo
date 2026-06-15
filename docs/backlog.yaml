@@ -65,7 +65,7 @@ milestones:
 
   - name: M3a
     items:
-      - { id: BACKOFFICE-71, title: Consuming-TPP registry with Trust Framework Directory sync, status: pending }
+      - { id: BACKOFFICE-71, title: Consuming-TPP registry with Trust Framework Directory sync, status: done }
       - { id: BACKOFFICE-72, title: TPP financial-system onboarding workflow + unbilled-traffic alert, status: pending, depends_on: [BACKOFFICE-71] }
       - { id: BACKOFFICE-73, title: Monthly TPP invoicing - reconcile before invoice (four-eyes, 409 if unreconciled), status: pending, depends_on: [BACKOFFICE-72] }
       - { id: BACKOFFICE-75, title: Respondent-side Nebras dispute scheme clocks, status: pending }

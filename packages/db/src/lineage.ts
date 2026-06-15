@@ -73,14 +73,12 @@ export async function validateLineageCoverage(
 
 /**
  * Tables that legitimately carry rows without write-time lineage today, each
- * mapped to the story that closes the gap. tpp_counterparty is bulk-seeded
- * reference data; its write path (and lineage emission) lands with BACKOFFICE-71.
- * The Q4.5 gate fails on ANY gap not listed here — so a real regression (a
- * write-path table that stops emitting lineage) blocks merge.
+ * mapped to the story that closes the gap. The Q4.5 gate fails on ANY gap not
+ * listed here — so a real regression (a write-path table that stops emitting
+ * lineage) blocks merge. Empty as of BACKOFFICE-71: the consuming-TPP registry's
+ * write path + the seed now emit tpp_counterparty lineage, closing the last gap.
  */
-export const KNOWN_LINEAGE_GAPS: Record<string, string> = {
-  tpp_counterparty: 'BACKOFFICE-71 — TPP registry write path emits lineage'
-}
+export const KNOWN_LINEAGE_GAPS: Record<string, string> = {}
 
 export interface LineageGateResult {
   ok: boolean

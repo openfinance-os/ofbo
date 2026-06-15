@@ -55,3 +55,11 @@ export {
   type ReconciliationBreakListQuery,
   type ReconciliationBreakPage
 } from './reconciliation-break-store.js'
+export {
+  PgTppCounterpartyStore,
+  type StoredTppCounterparty,
+  type TppCounterpartyUpsertInput,
+  type TppCounterpartyListQuery,
+  type TppCounterpartyPage,
+  type DirectorySyncResult
+} from './tpp-counterparty-store.js'

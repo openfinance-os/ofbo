@@ -55,6 +55,8 @@ import {
   type ReconciliationBreakStore
 } from './reconciliation/service.js'
 import { reconciliationRoutes } from './reconciliation/routes.js'
+import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
+import { tppBillingRoutes } from './tpp-billing/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -87,7 +89,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/reconciliation/breaks/{break_id}/reopen',
   'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras',
   'post /back-office/reconciliation/monthly-signoff',
-  'get /back-office/reconciliation/exports:cbuae'
+  'get /back-office/reconciliation/exports:cbuae',
+  'get /back-office/tpp-counterparties',
+  'get /back-office/tpp-counterparties/{organisation_id}',
+  'post /back-office/tpp-counterparties:sync-directory'
 ])
 
 /**
@@ -115,6 +120,9 @@ export interface AppDeps {
   complianceReportStore?: ComplianceReportStore
   reconciliationLogStore?: ReconciliationLogStore
   reconciliationBreakStore?: ReconciliationBreakStore
+  tppCounterpartyStore?: TppCounterpartyStore
+  /** BACKOFFICE-71 — P6 Trust Framework Directory source (defaults to the P6 adapter). */
+  tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -199,6 +207,11 @@ export function createApp(deps: AppDeps = {}) {
     reports: complianceReportStore,
     audit: highClassAudit
   })
+  const tppRegistryService = new TppRegistryService(
+    deps.tppCounterpartyStore ?? new InMemoryTppCounterpartyStore(),
+    deps.tppDirectoryEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env)),
+    highClassAudit
+  )
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -210,7 +223,8 @@ export function createApp(deps: AppDeps = {}) {
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
-    ...reconciliationRoutes(reconciliationService, idempotencyStore)
+    ...reconciliationRoutes(reconciliationService, idempotencyStore),
+    ...tppBillingRoutes(tppRegistryService, idempotencyStore)
   }
   const app = new Hono()
 

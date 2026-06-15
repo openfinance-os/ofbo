@@ -21,6 +21,15 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
         [DEMO_BANK_ID, org, `Fictional ${org.replace('org-fictional-', '').replace(/-/g, ' ')}`]
       )
     }
+    // BACKOFFICE-71: the consuming-TPP registry's write path emits BCBS 239 lineage.
+    // Emit it for the seeded rows too so a freshly-seeded DB has tpp_counterparty
+    // covered (closes the formerly-allowlisted Q4.5 gap). Idempotent on trace_id.
+    await pool.query(
+      `INSERT INTO lineage_events (bank_id, channel, table_name, columns, source, trace_id)
+       SELECT $1, 'external_tpp_aas', 'tpp_counterparty', $2::text[], 'seed-tpp-registry', 'seed-tpp-counterparty'
+        WHERE NOT EXISTS (SELECT 1 FROM lineage_events WHERE table_name = 'tpp_counterparty' AND trace_id = 'seed-tpp-counterparty')`,
+      [DEMO_BANK_ID, ['bank_id', 'channel', 'organisation_id', 'legal_name', 'directory_synced_at']]
+    )
 
     for (const psu of ds.psus) {
       for (const consent of psu.consents) {
