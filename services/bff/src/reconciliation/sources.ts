@@ -31,6 +31,21 @@ const fnv1a = (s: string): number => {
   return h >>> 0
 }
 
+/** Deterministic UUID v4-shaped id (consuming-TPP client_id is a uuid column). */
+function deterministicUuid(seed: string): string {
+  let h = 0x811c9dc5
+  const out: string[] = []
+  for (let i = 0; i < 32; i++) {
+    h ^= seed.charCodeAt(i % seed.length) + i
+    h = Math.imul(h, 0x01000193) >>> 0
+    out.push((h & 0xf).toString(16))
+  }
+  out[12] = '4'
+  out[16] = ((parseInt(out[16]!, 16) & 0x3) | 0x8).toString(16)
+  const s = out.join('')
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
+}
+
 const CHANNELS = ['internal_retail', 'internal_corporate'] as const
 const MATCHED_TYPES: ReconLineType[] = ['payment_settlement', 'consent_record', 'lfi_access_log', 'tpp_aas_pass_through', 'nebras_fees']
 
@@ -74,7 +89,7 @@ function build(period: string, cfg: Required<SimReconConfig>): Built {
   const openDisputeRefs = new Set<string>()
   const ref = (kind: string, i: number) => `recon-${period}-${kind}-${String(i).padStart(4, '0')}`
   const chan = (i: number) => CHANNELS[i % CHANNELS.length]!
-  const client = (i: number) => `client-${String(fnv1a(`${period}:${i}`) % 8).padStart(2, '0')}`
+  const client = (i: number) => deterministicUuid(`client:${fnv1a(`${period}:${i}`) % 8}`)
 
   // Matched lines: present in both sources with fees that tie out.
   for (let i = 0; i < cfg.matchedLines; i++) {

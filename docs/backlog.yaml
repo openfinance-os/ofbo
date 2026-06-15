@@ -52,7 +52,7 @@ milestones:
   - name: M3
     items:
       - { id: BACKOFFICE-01, title: Daily three-way reconciliation run, status: done }
-      - { id: BACKOFFICE-02, title: Break detection with configurable thresholds, status: pending, depends_on: [BACKOFFICE-01] }
+      - { id: BACKOFFICE-02, title: Break detection with configurable thresholds, status: done, depends_on: [BACKOFFICE-01] }
       - { id: BACKOFFICE-03, title: Break investigation workflow (claim, SLA clock), status: pending, depends_on: [BACKOFFICE-02] }
       - { id: BACKOFFICE-04, title: Resolution outcomes + immutable audit + four-eyes reopen, status: pending, depends_on: [BACKOFFICE-03] }
       - { id: BACKOFFICE-11, title: Three-source side-by-side diff view per break, status: pending, depends_on: [BACKOFFICE-02] }

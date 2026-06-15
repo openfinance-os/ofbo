@@ -31,7 +31,7 @@ describe('BACKOFFICE-43 — RBAC enforcement, both layers, audited denials', () 
 
   it('allows in-matrix access through to the stub (501)', async () => {
     const { app } = appWithAudit()
-    const finance = await app.request('/back-office/reconciliation/breaks', { headers: asPersona('finance-analyst') })
+    const finance = await app.request('/back-office/reconciliation/thresholds', { headers: asPersona('finance-analyst') })
     expect(finance.status).toBe(501)
     // A still-stubbed consents:admin route — proves Customer Care passes the
     // scope middleware (the implemented search route is covered in consents.spec).
@@ -51,7 +51,7 @@ describe('BACKOFFICE-43 — RBAC enforcement, both layers, audited denials', () 
 
   it('super-admin passes every scope check and the audit record carries the marker (BACKOFFICE-43/-80)', async () => {
     const { app, audit } = appWithAudit()
-    const res = await app.request('/back-office/reconciliation/breaks', { headers: asPersona('platform-super-admin') })
+    const res = await app.request('/back-office/reconciliation/thresholds', { headers: asPersona('platform-super-admin') })
     expect(res.status).toBe(501)
     const ok = audit.events.find((e) => e.event_type === 'signin_success')
     expect(ok?.superadmin_marker).toBe(true)

@@ -61,10 +61,16 @@ export interface ReconLineResult {
   line_ref: string
   line_type: ReconLineType
   channel: string
+  client_id: string | null
   classification: ReconClassification
   expected_fee: Money | null
   nebras_fee: Money | null
   variance: Money | null
+  /** Per-source line refs (A = Nebras, B = platform, C = fintech) — break records
+   *  carry all three (BACKOFFICE-02). 'MISSING' marks a source with no line. */
+  source_a_ref: string
+  source_b_ref: string
+  source_c_ref: string | null
   reason: string | null
 }
 
@@ -124,10 +130,14 @@ export async function runThreeWayReconciliation(
       line_ref: ref,
       line_type: lineType,
       channel,
+      client_id: p?.client_id ?? n?.client_id ?? null,
       classification,
       expected_fee: expected,
       nebras_fee: n?.billed_fee ?? null,
       variance,
+      source_a_ref: n?.line_ref ?? 'MISSING',
+      source_b_ref: p?.line_ref ?? 'MISSING',
+      source_c_ref: fintechRefs.has(ref) ? ref : null,
       reason
     })
 
