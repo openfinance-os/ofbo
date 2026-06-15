@@ -72,6 +72,7 @@ import {
   type RetentionReader
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
+import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import {
   InvoicingService,
   InMemoryBillingRecordStore,
@@ -127,7 +128,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
-  'get /back-office/analytics/risk-view'
+  'get /back-office/analytics/risk-view',
+  'get /back-office/analytics/executive-dashboard'
 ])
 
 /**
@@ -254,8 +256,9 @@ export function createApp(deps: AppDeps = {}) {
     audit: highClassAudit
   })
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
+  const reconciliationLogStore = deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore()
   const reconciliationService = new ReconciliationService({
-    store: deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore(),
+    store: reconciliationLogStore,
     breakStore: reconciliationBreakStore,
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
     approvals,
@@ -288,31 +291,37 @@ export function createApp(deps: AppDeps = {}) {
     disputes: reconciliationService,
     unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length }
   })
-  // BACKOFFICE-28 — Operations Console: certification per role + active outages (new
-  // substrate) composed with the TPP onboarding pipeline (registration-state counts),
-  // P8 onboarding-handover health, and Nebras connectivity (latest BACKOFFICE-32 snapshot).
-  const operationsConsoleService = new OperationsConsoleService({
-    certifications: deps.certificationReader ?? { list: async () => [] },
-    outages: deps.outageReader ?? { listActive: async () => [] },
-    connectivity: deps.nebrasConnectivityReader ?? { latest: async () => null },
-    pipeline: {
-      pipelineCounts: async () => {
-        const { rows } = await tppCounterpartyStore.list({ limit: 200 })
-        return rows.reduce<Record<string, number>>((acc, r) => ((acc[r.registration_state] = (acc[r.registration_state] ?? 0) + 1), acc), {})
-      }
-    },
-    handover: deps.onboardingHandover ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
-  })
-  // BACKOFFICE-29 — Compliance View: regulatory posture over existing tables
-  // (consent volumes, retention lifecycle, dispute + risk-signal backlog, report library).
+  // Shared analytics readers (BACKOFFICE-28/-29/-30/-27): the TPP onboarding pipeline
+  // (registration-state counts), certification per role, the P8 onboarding-handover
+  // source, and the compliance-metrics reader — composed by several views.
+  const onboardingHandover = deps.onboardingHandover ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
+  const certificationReader = deps.certificationReader ?? { list: async () => [] }
+  const pipelineReader = {
+    pipelineCounts: async () => {
+      const { rows } = await tppCounterpartyStore.list({ limit: 200 })
+      return rows.reduce<Record<string, number>>((acc, r) => ((acc[r.registration_state] = (acc[r.registration_state] ?? 0) + 1), acc), {})
+    }
+  }
   const emptyMetrics: ComplianceMetricsReader = {
     consentVolumes: async () => ({ total: 0, by_event_type: {} }),
     disputeBacklog: async () => ({ open: 0, by_state: {} }),
     riskSignalBacklog: async () => ({ open: 0, by_severity: {} }),
     reportLibrary: async () => ({ by_status: {}, by_type: {}, recent_inquiries: [] })
   }
+  const complianceMetrics = deps.complianceMetricsReader ?? emptyMetrics
+  // BACKOFFICE-28 — Operations Console: certification per role + active outages composed
+  // with the TPP onboarding pipeline, P8 handover health, Nebras connectivity (latest snapshot).
+  const operationsConsoleService = new OperationsConsoleService({
+    certifications: certificationReader,
+    outages: deps.outageReader ?? { listActive: async () => [] },
+    connectivity: deps.nebrasConnectivityReader ?? { latest: async () => null },
+    pipeline: pipelineReader,
+    handover: onboardingHandover
+  })
+  // BACKOFFICE-29 — Compliance View: regulatory posture over existing tables
+  // (consent volumes, retention lifecycle, dispute + risk-signal backlog, report library).
   const complianceViewService = new ComplianceViewService({
-    metrics: deps.complianceMetricsReader ?? emptyMetrics,
+    metrics: complianceMetrics,
     retention: deps.retentionReader ?? { retentionStatus: async () => [] }
   })
   // BACKOFFICE-30 — Risk View over risk_signal aggregates (anomalies + liability monitor).
@@ -322,6 +331,24 @@ export function createApp(deps: AppDeps = {}) {
       liabilityMonitor: async () => ({ open_count: 0, by_severity: {}, recent: [] }),
       recentActive: async () => []
     }
+  })
+  // BACKOFFICE-27 — Executive Dashboard: one canonical dashboard, persona-aware angles.
+  // Commercial (commercial:read) = revenue/margin/pipeline; Programme (programme:read) =
+  // adoption/certification. Margin is the non-asserting compute (the dashboard's own
+  // scope gate governs access). Composes existing readers only — no new substrate.
+  const executiveDashboardService = new ExecutiveDashboardService({
+    consents: complianceMetrics,
+    margin: { marginForPeriod: (period) => reconciliationService.computeMarginForPeriod(period) },
+    pipeline: pipelineReader,
+    certifications: certificationReader,
+    recon: {
+      latestRun: async () => {
+        const { rows } = await reconciliationLogStore.list({ limit: 1 })
+        const r = rows[0]
+        return r ? { line_count_total: r.line_count_total ?? 0, line_count_matched: r.line_count_matched ?? 0 } : null
+      }
+    },
+    handover: onboardingHandover
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
@@ -340,7 +367,8 @@ export function createApp(deps: AppDeps = {}) {
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
-    ...riskViewRoutes(riskViewService)
+    ...riskViewRoutes(riskViewService),
+    ...executiveDashboardRoutes(executiveDashboardService)
   }
   const app = new Hono()
 
