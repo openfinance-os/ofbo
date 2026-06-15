@@ -290,6 +290,20 @@ export const ROUTES: readonly Route[] = [
     "fourEyes": false
   },
   {
+    "method": "get",
+    "path": "/back-office/lfi-reports",
+    "tag": "reports",
+    "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/lfi-reports",
+    "tag": "reports",
+    "scope": "compliance:reports:generate",
+    "fourEyes": false
+  },
+  {
     "method": "post",
     "path": "/back-office/inquiries/psu",
     "tag": "reports",
