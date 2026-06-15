@@ -101,7 +101,7 @@ milestones:
       - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: done }
       - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: blocked, depends_on: [UI-03-RECON-CONSOLE], reason: "a11y over the break list + detail views requires the reconciliation console UI (UI-03), which is in the deferred UI track gated on the UI-00 Tailwind ADR (human-approved). Nothing to make accessible until those screens exist." }
       - { id: BACKOFFICE-24, title: Complaint case management lifecycle, status: done }
-      - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: pending }
+      - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: blocked, depends_on: [UI-00-DESIGN-SYSTEM], reason: "console design-system + brand conformance is the UI-00 design-system foundation (Tailwind token preset) applied across the console screens — gated on the UI-00 Tailwind ADR (human-approved) and the deferred UI track. No console UI exists beyond the M1 shell to apply brand conformance to." }
       - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: pending }
       - { id: BACKOFFICE-64, title: Call/transcript linkage on dispute cases, status: pending }
       - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: pending }
