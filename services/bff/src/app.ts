@@ -75,6 +75,14 @@ import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analy
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
 import {
+  ReportGenerationService,
+  reportRoutes,
+  makeReportGenerationOperation,
+  InMemoryReportStore,
+  REPORT_GENERATION_OPERATION,
+  type ReportStore
+} from './reports/generation.js'
+import {
   InvoicingService,
   InMemoryBillingRecordStore,
   InMemoryInvoiceRunStore,
@@ -131,7 +139,13 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/compliance-view',
   'get /back-office/analytics/risk-view',
   'get /back-office/analytics/executive-dashboard',
-  'get /back-office/analytics/onboarding-funnel'
+  'get /back-office/analytics/onboarding-funnel',
+  'post /back-office/reports:generate',
+  'get /back-office/reports',
+  'get /back-office/reports/{report_id}',
+  'get /back-office/reports/{report_id}/download',
+  'post /back-office/reports/{report_id}:approve',
+  'post /back-office/reports/{report_id}:submit'
 ])
 
 /**
@@ -164,6 +178,9 @@ export interface AppDeps {
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
   billingRecordStore?: BillingRecordStore
   invoiceRunStore?: InvoiceRunStore
+  /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
+   *  compliance_report store, shared with the inquiry bundle). */
+  reportStore?: ReportStore
   /** BACKOFFICE-31 — Finance View fee-accrual source (the BACKOFFICE-32 materialized
    *  aggregates). Defaults to an empty reader; the worker wires the Pg aggregate store. */
   nebrasAggregateReader?: FinanceFeeAccrualReader
@@ -224,6 +241,8 @@ export function createApp(deps: AppDeps = {}) {
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
   const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
   const invoiceRunStore = deps.invoiceRunStore ?? new InMemoryInvoiceRunStore()
+  const reportStore = deps.reportStore ?? new InMemoryReportStore()
+  const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
@@ -237,7 +256,8 @@ export function createApp(deps: AppDeps = {}) {
       [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
       [BULK_REVOKE_OPERATION]: bulkRevokeOperation,
       [BREAK_REOPEN_OPERATION]: breakReopenOperation,
-      [INVOICE_RUN_OPERATION]: invoiceRunOperation
+      [INVOICE_RUN_OPERATION]: invoiceRunOperation,
+      [REPORT_GENERATION_OPERATION]: reportGenerationOperation
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
@@ -359,6 +379,9 @@ export function createApp(deps: AppDeps = {}) {
   const onboardingFunnelService = new OnboardingFunnelService({
     cases: deps.onboardingCaseReader ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
   })
+  // BACKOFFICE-35 — self-service periodic report generation (templates + four-eyes
+  // for CBUAE-bound reports via the approvals primitive, registered above).
+  const reportGenerationService = new ReportGenerationService({ store: reportStore, approvals, audit: highClassAudit })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -378,7 +401,8 @@ export function createApp(deps: AppDeps = {}) {
     ...complianceViewRoutes(complianceViewService),
     ...riskViewRoutes(riskViewService),
     ...executiveDashboardRoutes(executiveDashboardService),
-    ...onboardingFunnelRoutes(onboardingFunnelService)
+    ...onboardingFunnelRoutes(onboardingFunnelService),
+    ...reportRoutes(reportGenerationService, idempotencyStore)
   }
   const app = new Hono()
 

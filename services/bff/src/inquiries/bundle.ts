@@ -169,6 +169,7 @@ export class InMemoryComplianceReportStore implements ComplianceReportStore {
       integrity_hash: input.integrity_hash ?? null,
       generated_at: input.generated_at ?? null,
       submitted_at: null,
+      approval_id: input.approval_id ?? null,
       created_at: now
     }
     this.rows.push(record)

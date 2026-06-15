@@ -21,6 +21,7 @@ export interface StoredComplianceReport {
   integrity_hash: string | null
   generated_at: string | null
   submitted_at: string | null
+  approval_id: string | null
   created_at: string
 }
 
@@ -35,11 +36,34 @@ export interface ComplianceReportCreateInput {
   approved_by?: string | null
   integrity_hash?: string | null
   generated_at?: string | null
+  /** BACKOFFICE-35 — four-eyes link for a CBUAE-bound report (resolved via :approve). */
+  approval_id?: string | null
   content?: unknown
 }
 
+export interface ComplianceReportListQuery {
+  cursor?: string
+  limit?: number
+  report_type?: string
+  status?: string
+}
+export interface ComplianceReportPage {
+  rows: StoredComplianceReport[]
+  next_cursor: string | null
+}
+
 const SELECT_COLUMNS = `id, report_type, status, reporting_period_start, reporting_period_end,
-  classification, requested_by, approved_by, integrity_hash, generated_at, submitted_at, created_at`
+  classification, requested_by, approved_by, integrity_hash, generated_at, submitted_at, approval_id, created_at`
+
+const encodeCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
+function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
+  try {
+    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
+    return createdAt && id ? { createdAt, id } : null
+  } catch {
+    return null
+  }
+}
 
 const LINEAGE_COLUMNS = [
   'bank_id', 'channel', 'report_type', 'status', 'reporting_period_start',
@@ -61,6 +85,7 @@ function toRecord(r: Record<string, unknown>): StoredComplianceReport {
     integrity_hash: (r.integrity_hash as string) ?? null,
     generated_at: r.generated_at ? iso(r.generated_at) : null,
     submitted_at: r.submitted_at ? iso(r.submitted_at) : null,
+    approval_id: (r.approval_id as string) ?? null,
     created_at: iso(r.created_at)
   }
 }
@@ -98,8 +123,8 @@ export class PgComplianceReportStore {
       const res = await c.query(
         `INSERT INTO compliance_report
            (bank_id, channel, report_type, status, reporting_period_start, reporting_period_end,
-            classification, requested_by, approved_by, integrity_hash, generated_at, content)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
+            classification, requested_by, approved_by, integrity_hash, generated_at, approval_id, content)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)
          RETURNING ${SELECT_COLUMNS}`,
         [
           this.config.bankId,
@@ -113,6 +138,7 @@ export class PgComplianceReportStore {
           input.approved_by ?? null,
           input.integrity_hash ?? null,
           input.generated_at ?? null,
+          input.approval_id ?? null,
           content
         ]
       )
@@ -137,6 +163,75 @@ export class PgComplianceReportStore {
       return res.rows[0] ?? null
     })
     return row ? toRecord(row) : null
+  }
+
+  /** BACKOFFICE-35 — the stored (PII-redacted) content for the download endpoint. */
+  async getContent(id: string): Promise<unknown | null> {
+    return this.asApp(async (c) => {
+      const res = await c.query(`SELECT content FROM compliance_report WHERE id = $1`, [id])
+      return res.rows[0]?.content ?? null
+    })
+  }
+
+  /** BACKOFFICE-35 — status lifecycle transitions (awaiting_approval → approved → submitted). */
+  async markStatus(
+    id: string,
+    status: string,
+    patch: { approved_by?: string | null; submitted_at?: string | null; approval_id?: string | null } = {},
+    traceId?: string
+  ): Promise<StoredComplianceReport | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE compliance_report
+            SET status = $2,
+                approved_by = COALESCE($3, approved_by),
+                submitted_at = COALESCE($4, submitted_at),
+                approval_id = COALESCE($5, approval_id)
+          WHERE id = $1 RETURNING ${SELECT_COLUMNS}`,
+        [id, status, patch.approved_by ?? null, patch.submitted_at ?? null, patch.approval_id ?? null]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row && traceId) {
+      try {
+        await this.lineage?.emitLineage({ table: 'compliance_report', columns: LINEAGE_COLUMNS, source: 'bff-report-generation', trace_id: traceId })
+      } catch {
+        /* catalogue unavailable — the regulated write stands */
+      }
+    }
+    return row ? toRecord(row) : null
+  }
+
+  async list(query: ComplianceReportListQuery = {}): Promise<ComplianceReportPage> {
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 200)
+    const after = query.cursor ? decodeCursor(query.cursor) : null
+    const rows = await this.asApp(async (c) => {
+      const params: unknown[] = []
+      const where: string[] = []
+      if (query.report_type) {
+        params.push(query.report_type)
+        where.push(`report_type = $${params.length}`)
+      }
+      if (query.status) {
+        params.push(query.status)
+        where.push(`status = $${params.length}`)
+      }
+      if (after) {
+        params.push(after.createdAt, after.id)
+        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+      }
+      return (
+        await c.query(
+          `SELECT ${SELECT_COLUMNS} FROM compliance_report ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+           ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC LIMIT ${limit + 1}`,
+          params
+        )
+      ).rows
+    })
+    const hasMore = rows.length > limit
+    const slice = (hasMore ? rows.slice(0, limit) : rows).map(toRecord)
+    const last = slice[slice.length - 1]
+    return { rows: slice, next_cursor: hasMore && last ? encodeCursor(last.created_at, last.id) : null }
   }
 
   async close(): Promise<void> {
