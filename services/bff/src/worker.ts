@@ -147,8 +147,9 @@ export default {
       await liabilityMonitor.evaluate(events, openRefs, crypto.randomUUID())
     }
     // BACKOFFICE-37 — streaming consent-pattern anomaly detection (windowed scan).
+    // BACKOFFICE-46 — anomaly ITSM escalation (team-routed + critical paging) via P3.
     const anomalyStore = new PgAnomalyDetectionStore(url, tenancy)
-    const anomalyDetector = new ConsentAnomalyDetector({ detection: anomalyStore, signals: riskSignals })
+    const anomalyDetector = new ConsentAnomalyDetector({ detection: anomalyStore, signals: riskSignals, itsm })
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
