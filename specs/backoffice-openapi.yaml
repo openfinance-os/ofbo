@@ -418,8 +418,13 @@ paths:
     post:
       tags: [consents-admin]
       summary: Risk Analyst narrow-scope fraud revocation (BACKOFFICE-22)
+      description: >
+        Four-eyes-gated (binding adopting-bank default, PRD §10 / CLAUDE.md: four-eyes
+        on fraud revoke). Returns 202 + approval_request; a different principal approves
+        before the revoke executes — it never executes inline.
       x-rate-limit-per-min: 30
       x-required-scope: consents:admin:fraud-revoke
+      x-four-eyes: true
       parameters:
         - $ref: '#/components/parameters/fapiInteractionId'
         - $ref: '#/components/parameters/idempotencyKey'
@@ -435,7 +440,7 @@ paths:
               properties:
                 case_context: { type: string, description: Investigation context carried into the STR draft }
       responses:
-        '200': { $ref: '#/components/responses/RevocationResult' }
+        '202': { $ref: '#/components/responses/ApprovalPending' }
         default: { $ref: '#/components/responses/Error' }
 
   /consents/{consent_id}/audit-trail:
@@ -797,10 +802,15 @@ paths:
   /back-office/reports/{report_id}:approve:
     post:
       tags: [reports]
-      summary: Programme Manager approval for a CBUAE-bound report (four-eyes)
+      summary: Programme Manager approval for a CBUAE-bound report (four-eyes resolution)
+      description: >
+        This IS the four-eyes resolution step — the second principal authorising a
+        CBUAE-bound report that was gated on generation. It executes the approval and
+        returns 200 with the approved report; it is NOT itself a four-eyes-gated
+        operation (which would regress), so it carries no x-four-eyes flag. The
+        initiator ≠ approver rule is enforced by the approvals service.
       x-rate-limit-per-min: 10
       x-required-scope: programme:read
-      x-four-eyes: true
       parameters:
         - $ref: '#/components/parameters/fapiInteractionId'
         - $ref: '#/components/parameters/idempotencyKey'
@@ -1452,7 +1462,9 @@ components:
       name: approval_id
       in: path
       required: true
-      schema: { type: string }
+      # Approval ids are UUID v4 (approvals service: crypto.randomUUID()) — kept
+      # consistent with ApprovalRequest.approval_request_id and invoice_run.approval_id.
+      schema: { type: string, format: uuid }
 
   responses:
     Error:
@@ -1773,7 +1785,7 @@ components:
     ApprovalRequest:
       type: object
       properties:
-        approval_request_id: { type: string }
+        approval_request_id: { type: string, format: uuid }
         operation_type: { type: string }
         state: { type: string, enum: [pending, approved, rejected, timed_out] }
         initiator: { type: string }

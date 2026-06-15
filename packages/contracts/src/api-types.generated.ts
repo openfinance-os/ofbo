@@ -726,7 +726,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Risk Analyst narrow-scope fraud revocation (BACKOFFICE-22) */
+        /**
+         * Risk Analyst narrow-scope fraud revocation (BACKOFFICE-22)
+         * @description Four-eyes-gated (binding adopting-bank default, PRD §10 / CLAUDE.md: four-eyes on fraud revoke). Returns 202 + approval_request; a different principal approves before the revoke executes — it never executes inline.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -752,7 +755,7 @@ export interface paths {
                 };
             };
             responses: {
-                200: components["responses"]["RevocationResult"];
+                202: components["responses"]["ApprovalPending"];
                 default: components["responses"]["Error"];
             };
         };
@@ -1539,7 +1542,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Programme Manager approval for a CBUAE-bound report (four-eyes) */
+        /**
+         * Programme Manager approval for a CBUAE-bound report (four-eyes resolution)
+         * @description This IS the four-eyes resolution step — the second principal authorising a CBUAE-bound report that was gated on generation. It executes the approval and returns 200 with the approved report; it is NOT itself a four-eyes-gated operation (which would regress), so it carries no x-four-eyes flag. The initiator ≠ approver rule is enforced by the approvals service.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -2789,6 +2795,7 @@ export interface components {
             submitted_at?: string | null;
         };
         ApprovalRequest: {
+            /** Format: uuid */
             approval_request_id?: string;
             operation_type?: string;
             /** @enum {string} */
