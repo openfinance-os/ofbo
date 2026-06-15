@@ -4,6 +4,7 @@ import type { StoredReconciliationRun, ReconciliationRunListQuery, StoredReconci
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { BreakWorkflowError, type ReconciliationService } from './service.js'
+import { ApprovalError, toWire as approvalToWire } from '../approvals/service.js'
 import type { IdempotencyStore } from '../idempotency.js'
 
 /**
@@ -59,9 +60,31 @@ export function breakToWire(b: StoredReconciliationBreak) {
 function fail(c: Context, e: unknown): Response {
   if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
   if (e instanceof BreakWorkflowError) {
-    return c.json(errorEnvelope(e.code, e.message, 'See the break workflow contract (BACKOFFICE-03).', DOCS_BASE), e.status as ContentfulStatusCode)
+    return c.json(errorEnvelope(e.code, e.message, 'See the break workflow contract (BACKOFFICE-03/-04).', DOCS_BASE), e.status as ContentfulStatusCode)
+  }
+  if (e instanceof ApprovalError) {
+    return c.json(errorEnvelope(e.code, e.message, 'Reopen is four-eyes-gated (a different audit:read principal approves).', DOCS_BASE), e.status as ContentfulStatusCode)
   }
   throw e
+}
+
+/** Mutating-route wrapper: Idempotency-Key required, 2xx replays verbatim (24h). */
+function withIdempotency(idempotency: IdempotencyStore, routeKey: string, run: (c: Context, params: Record<string, string>) => Promise<Response>): Handler {
+  return async (c, params) => {
+    const key = c.req.header('idempotency-key')
+    if (!key) {
+      return c.json(
+        errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+        400
+      )
+    }
+    const cacheKey = `${routeKey}|${params.break_id}|${c.get('principal').subject}|${key}`
+    const cached = await idempotency.get(cacheKey)
+    if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    const res = await run(c, params)
+    if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
+    return res
+  }
 }
 
 export function reconciliationRoutes(service: ReconciliationService, idempotency: IdempotencyStore): Record<string, Handler> {
@@ -113,26 +136,46 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     },
 
-    'post /back-office/reconciliation/breaks/{break_id}/claim': async (c, params) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-          400
-        )
-      }
-      const cacheKey = `reconciliation:claim|${params.break_id}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    'post /back-office/reconciliation/breaks/{break_id}/claim': withIdempotency(idempotency, 'reconciliation:claim', async (c, params) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
         const claimed = await service.claimBreak(c.get('principal'), params.break_id!, traceId)
-        const res = c.json(dataEnvelope(breakToWire(claimed)), 200)
-        await idempotency.set(cacheKey, 200, await res.clone().json())
-        return res
+        return c.json(dataEnvelope(breakToWire(claimed)), 200)
       } catch (e) {
         return fail(c, e)
       }
-    }
+    }),
+
+    'post /back-office/reconciliation/breaks/{break_id}/resolve': withIdempotency(idempotency, 'reconciliation:resolve', async (c, params) => {
+      let body: { resolution_outcome?: string; resolution_note?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { resolution_outcome, resolution_note }.', DOCS_BASE), 400)
+      }
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const resolved = await service.resolveBreak(c.get('principal'), params.break_id!, body.resolution_outcome ?? '', body.resolution_note ?? '', traceId)
+        return c.json(dataEnvelope(breakToWire(resolved)), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    }),
+
+    'post /back-office/reconciliation/breaks/{break_id}/reopen': withIdempotency(idempotency, 'reconciliation:reopen', async (c, params) => {
+      let body: { justification?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { justification }.', DOCS_BASE), 400)
+      }
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const record = await service.initiateReopen(c.get('principal'), params.break_id!, body.justification ?? '', traceId)
+        return c.json(dataEnvelope(approvalToWire(record)), 202)
+      } catch (e) {
+        return fail(c, e)
+      }
+    })
   }
 }

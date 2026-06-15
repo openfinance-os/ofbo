@@ -49,6 +49,8 @@ import {
   ReconciliationService,
   InMemoryReconciliationLogStore,
   InMemoryReconciliationBreakStore,
+  makeBreakReopenOperation,
+  BREAK_REOPEN_OPERATION,
   type ReconciliationLogStore,
   type ReconciliationBreakStore
 } from './reconciliation/service.js'
@@ -79,7 +81,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reconciliation/runs',
   'get /back-office/reconciliation/runs/{run_id}',
   'get /back-office/reconciliation/breaks',
-  'post /back-office/reconciliation/breaks/{break_id}/claim'
+  'post /back-office/reconciliation/breaks/{break_id}/claim',
+  'post /back-office/reconciliation/breaks/{break_id}/resolve',
+  'post /back-office/reconciliation/breaks/{break_id}/reopen'
 ])
 
 /**
@@ -142,19 +146,23 @@ export function createApp(deps: AppDeps = {}) {
   const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
   const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit })
 
-  // Dispute store first → the four-eyes refund operation closes over it → the
-  // approvals service registers that operation → the dispute service initiates it.
+  // Stores that four-eyes operations close over are built before the approvals
+  // service so the operations can be registered: the refund op needs the dispute
+  // store, the reopen op (BACKOFFICE-04) needs the reconciliation break store.
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
+  const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
+  const breakReopenOperation = makeBreakReopenOperation({ breakStore: reconciliationBreakStore, audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: {
       ...deps.approvals?.operations,
       [REFUND_OPERATION]: refundOperation,
       [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
-      [BULK_REVOKE_OPERATION]: bulkRevokeOperation
+      [BULK_REVOKE_OPERATION]: bulkRevokeOperation,
+      [BREAK_REOPEN_OPERATION]: breakReopenOperation
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
@@ -177,8 +185,9 @@ export function createApp(deps: AppDeps = {}) {
   })
   const reconciliationService = new ReconciliationService({
     store: deps.reconciliationLogStore ?? new InMemoryReconciliationLogStore(),
-    breakStore: deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore(),
+    breakStore: reconciliationBreakStore,
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
+    approvals,
     audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
