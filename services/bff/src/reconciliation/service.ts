@@ -8,12 +8,13 @@ import type {
   ReconciliationBreakListQuery,
   ReconciliationBreakPage
 } from '@ofbo/db'
-import type { ItsmPort, NebrasEgressPort } from '@ofbo/ports'
+import type { ApmPort, ItsmPort, NebrasEgressPort, OtelSpan } from '@ofbo/ports'
+import { redactText } from '@ofbo/redaction'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
-import { runThreeWayReconciliation, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
+import { runThreeWayReconciliation, type ReconLineResult, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
 import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
@@ -125,6 +126,8 @@ export interface ReconciliationDeps {
   approvals?: ReopenApprovalRequester
   /** BACKOFFICE-05 — P6 egress for Nebras dispute-case creation (omit to disable escalate). */
   egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
+  /** BACKOFFICE-13 — P5 APM sink for per-run/per-line OTel spans (omit to skip). */
+  apm?: Pick<ApmPort, 'exportSpans'>
   now?: () => Date
 }
 
@@ -147,6 +150,7 @@ export class ReconciliationService {
   private readonly thresholds: BreakThreshold[]
   private readonly approvals?: ReopenApprovalRequester
   private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
+  private readonly apm?: Pick<ApmPort, 'exportSpans'>
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -158,6 +162,7 @@ export class ReconciliationService {
     this.thresholds = deps.thresholds ?? DEFAULT_THRESHOLDS
     this.approvals = deps.approvals
     this.egress = deps.egress
+    this.apm = deps.apm
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -174,6 +179,7 @@ export class ReconciliationService {
     const period = dateKey(start)
     const runId = `recon-${period}-${runType}`
 
+    const spanStart = this.now().getTime()
     const bundle = opts.simConfig ? buildSimReconSources(period, opts.simConfig) : this.sourcesFor(period)
     const result = await runThreeWayReconciliation(bundle, window, { openDisputeRefs: bundle.openDisputeRefs })
 
@@ -217,7 +223,60 @@ export class ReconciliationService {
     // only once per run_id (a re-run that already has breaks is a no-op).
     const breaks = created ? await this.detectAndRecordBreaks(runId, result, traceId) : []
 
+    // BACKOFFICE-13 — OTel: one run span + one span per reconciled line.
+    if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart)
+
     return { run, created, result, breaks }
+  }
+
+  /**
+   * BACKOFFICE-13 — emit a parent run span plus one child span per reconciled
+   * line, exported via the P5 APM bridge (OTel is the canonical stream; never a
+   * second instrumentation path). Span attributes carry run_id, line_type, the
+   * three source refs, the variance and the decision. Telemetry never fails a run.
+   */
+  private emitRunSpans(runId: string, runType: string, result: ReconResult, traceId: string, startMs: number): void {
+    if (!this.apm) return
+    const trace = redactText(traceId)
+    const endMs = this.now().getTime()
+    const runSpanId = crypto.randomUUID()
+    const runSpan: OtelSpan = {
+      name: 'reconciliation.run',
+      trace_id: trace,
+      span_id: runSpanId,
+      start_time: startMs,
+      end_time: endMs,
+      status_code: 'ok',
+      attributes: {
+        'recon.run_id': runId,
+        'recon.run_type': runType,
+        'recon.line_count_total': result.line_count_total,
+        'recon.line_count_matched': result.line_count_matched,
+        'recon.line_count_unmatched': result.line_count_unmatched,
+        'recon.line_count_disputed': result.line_count_disputed
+      }
+    }
+    const lineSpan = (line: ReconLineResult): OtelSpan => ({
+      name: 'reconciliation.line',
+      trace_id: trace,
+      span_id: crypto.randomUUID(),
+      parent_span_id: runSpanId,
+      start_time: startMs,
+      end_time: endMs,
+      status_code: 'ok',
+      attributes: {
+        'recon.run_id': runId,
+        'recon.line_type': line.line_type,
+        'recon.source_a_ref': line.source_a_ref, // Nebras
+        'recon.source_b_ref': line.source_b_ref, // platform log
+        'recon.source_c_ref': line.source_c_ref ?? '', // fintech billing
+        'recon.variance_amount': line.variance?.amount ?? 0,
+        'recon.decision': line.classification
+      }
+    })
+    const spans: OtelSpan[] = [runSpan, ...result.lines.map(lineSpan)]
+    // fire-and-forget: a P5 sink outage must never take a reconciliation run down
+    void Promise.resolve(this.apm.exportSpans(spans)).catch(() => undefined)
   }
 
   private async detectAndRecordBreaks(runId: string, result: ReconResult, traceId: string): Promise<StoredReconciliationBreak[]> {

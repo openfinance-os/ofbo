@@ -87,8 +87,10 @@ export default {
     const audit = new PgAuditEmitter(url, tenancy, lineage)
     const store = new PgReconciliationLogStore(url, tenancy, lineage)
     const breakStore = new PgReconciliationBreakStore(url, tenancy, lineage)
-    const itsm = getAdapter('p3-itsm', profileFromConfig(env as Record<string, string | undefined>))
-    const service = new ReconciliationService({ store, breakStore, itsm, audit })
+    const profile = profileFromConfig(env as Record<string, string | undefined>)
+    const itsm = getAdapter('p3-itsm', profile)
+    const apm = getAdapter('p5-apm', profile)
+    const service = new ReconciliationService({ store, breakStore, itsm, apm, audit })
     ctx.waitUntil(
       service
         .runDaily(crypto.randomUUID())
