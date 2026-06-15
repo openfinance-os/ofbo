@@ -1,4 +1,5 @@
 export { applyMigrations } from './apply.js'
+export { seedDemoDataset } from './seed.js'
 export { PgApprovalStore, type StoredApprovalRecord, type StoredApprovalState } from './approvals-store.js'
 export {
   PgAuditEmitter,
@@ -85,3 +86,9 @@ export {
   type AggregateInput,
   type FeeAccrual
 } from './nebras-ingestion-store.js'
+export {
+  PgCertificationStore,
+  PgOutageStore,
+  type StoredCertification,
+  type StoredOutage
+} from './operations-store.js'

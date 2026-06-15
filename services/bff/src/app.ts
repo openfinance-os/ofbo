@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
-import type { ApmPort, IdentityProviderPort, NebrasEgressPort } from '@ofbo/ports'
+import type { ApmPort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
@@ -59,6 +59,13 @@ import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyS
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
 import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader } from './analytics/finance-view.js'
 import {
+  OperationsConsoleService,
+  operationsConsoleRoutes,
+  type OpsCertificationReader,
+  type OpsOutageReader,
+  type OpsConnectivityReader
+} from './analytics/operations-console.js'
+import {
   InvoicingService,
   InMemoryBillingRecordStore,
   InMemoryInvoiceRunStore,
@@ -110,7 +117,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/invoice-runs',
   'post /back-office/invoice-runs',
   'get /back-office/invoice-runs/{invoice_run_id}',
-  'get /back-office/analytics/finance-view'
+  'get /back-office/analytics/finance-view',
+  'get /back-office/analytics/operations-console'
 ])
 
 /**
@@ -146,6 +154,13 @@ export interface AppDeps {
   /** BACKOFFICE-31 — Finance View fee-accrual source (the BACKOFFICE-32 materialized
    *  aggregates). Defaults to an empty reader; the worker wires the Pg aggregate store. */
   nebrasAggregateReader?: FinanceFeeAccrualReader
+  /** BACKOFFICE-28 — Operations Console sources. Default to empty readers; the worker
+   *  wires the Pg certification / outage / snapshot stores. */
+  certificationReader?: OpsCertificationReader
+  outageReader?: OpsOutageReader
+  nebrasConnectivityReader?: OpsConnectivityReader
+  /** BACKOFFICE-28 — P8 onboarding-handover source (defaults to the P8 adapter). */
+  onboardingHandover?: Pick<OnboardingHandoverPort, 'getFunnelEvents'>
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -257,6 +272,21 @@ export function createApp(deps: AppDeps = {}) {
     disputes: reconciliationService,
     unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length }
   })
+  // BACKOFFICE-28 — Operations Console: certification per role + active outages (new
+  // substrate) composed with the TPP onboarding pipeline (registration-state counts),
+  // P8 onboarding-handover health, and Nebras connectivity (latest BACKOFFICE-32 snapshot).
+  const operationsConsoleService = new OperationsConsoleService({
+    certifications: deps.certificationReader ?? { list: async () => [] },
+    outages: deps.outageReader ?? { listActive: async () => [] },
+    connectivity: deps.nebrasConnectivityReader ?? { latest: async () => null },
+    pipeline: {
+      pipelineCounts: async () => {
+        const { rows } = await tppCounterpartyStore.list({ limit: 200 })
+        return rows.reduce<Record<string, number>>((acc, r) => ((acc[r.registration_state] = (acc[r.registration_state] ?? 0) + 1), acc), {})
+      }
+    },
+    handover: deps.onboardingHandover ?? getAdapter('p8-onboarding-handover', profileFromConfig(process.env))
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -271,7 +301,8 @@ export function createApp(deps: AppDeps = {}) {
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
-    ...financeViewRoutes(financeViewService)
+    ...financeViewRoutes(financeViewService),
+    ...operationsConsoleRoutes(operationsConsoleService)
   }
   const app = new Hono()
 
