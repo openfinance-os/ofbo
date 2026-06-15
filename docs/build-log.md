@@ -223,3 +223,10 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 
 - The user approved and the spec-change PR #26 (SPEC-FRAUD-REVOKE-FOUREYES) merged: revoke-fraud now x-four-eyes + 202 ApprovalPending (closes the latent inline-fraud-revoke gap, a binding adopting-bank default), reports:approve four-eyes flag removed (it's the resolution step), approval ids standardised to format:uuid. Generated artifacts current on main (no gen drift). SPEC-FRAUD-REVOKE-FOUREYES → done.
 - BACKOFFICE-22 (fraud-suspected revocation + STR draft; deps 17 + SPEC-FRAUD-REVOKE-FOUREYES) is now eligible and is next in file order. Remaining blocked: BACKOFFICE-25 (ADR 0001 — care-token surface, awaiting human decision).
+
+## 2026-06-15 — BACKOFFICE-22 (PR #30, loop iteration 26)
+
+- Fraud-suspected revocation: POST /consents/{id}:revoke-fraud — narrow Risk scope (consents:admin:fraud-revoke), four-eyes (202 + approval, per merged spec #26). On approval the consents.fraud_revoke op P6-revokes with FRAUD_SUSPECTED (<5s), auto-creates an STR draft ref (submission is -63), notifies Compliance via the High-class consent_revoked audit, and defers PSU notification per fraud policy. case_context PII-redacted at emission.
+- Reuses approvals + P6 + audit; no new table/port/contract. Initiator≠approver (super-admin self-approval → 409). Narrow scope enforced at BFF + service (Customer Care's consents:admin is rejected — only :fraud-revoke admits).
+- Evidence: 278 unit green (fraud-revoke 92%) incl. the full four-eyes flow + narrow-scope 403; integration proves the FRAUD_SUSPECTED audit persists under RLS with case_context Emirates-ID redacted; gen no drift; lint + typecheck green; Q1–Q4.5 all pass. Reviewers: hard-stop PASS, conformance CONFORMANT.
+- Next eligible: BACKOFFICE-23 (CBUAE inquiry response bundle per PSU; deps 19 done) — the last eligible M2 item. Remaining blocked: BACKOFFICE-25 (ADR 0001 — care-token surface, awaiting human decision).
