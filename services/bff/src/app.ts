@@ -85,7 +85,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/reconciliation/breaks/{break_id}/claim',
   'post /back-office/reconciliation/breaks/{break_id}/resolve',
   'post /back-office/reconciliation/breaks/{break_id}/reopen',
-  'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras'
+  'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras',
+  'post /back-office/reconciliation/monthly-signoff'
 ])
 
 /**
@@ -177,12 +178,13 @@ export function createApp(deps: AppDeps = {}) {
     audit: highClassAudit,
     approvals
   })
+  const complianceReportStore = deps.complianceReportStore ?? new InMemoryComplianceReportStore()
   const inquiryService = new InquiryBundleService({
     consents: consentDirectory,
     payments: paymentSource,
     disputes: disputeStore,
     events: deps.consentEventSource ?? new InMemoryConsentEventSource(),
-    reports: deps.complianceReportStore ?? new InMemoryComplianceReportStore(),
+    reports: complianceReportStore,
     audit: highClassAudit
   })
   const apm = deps.apm ?? getAdapter('p5-apm', profileFromConfig(process.env))
@@ -193,6 +195,7 @@ export function createApp(deps: AppDeps = {}) {
     approvals,
     egress: nebrasEgress,
     apm,
+    reports: complianceReportStore,
     audit: highClassAudit
   })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()

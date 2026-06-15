@@ -165,7 +165,7 @@ export class InMemoryComplianceReportStore implements ComplianceReportStore {
       reporting_period_end: input.reporting_period_end,
       classification: input.classification ?? 'restricted',
       requested_by: input.requested_by,
-      approved_by: null,
+      approved_by: input.approved_by ?? null,
       integrity_hash: input.integrity_hash ?? null,
       generated_at: input.generated_at ?? null,
       submitted_at: null,

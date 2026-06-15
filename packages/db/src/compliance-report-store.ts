@@ -31,6 +31,8 @@ export interface ComplianceReportCreateInput {
   reporting_period_end: string
   classification?: string
   requested_by: string
+  /** BACKOFFICE-06 — the IdP-attested sign-off principal (set when generated+locked). */
+  approved_by?: string | null
   integrity_hash?: string | null
   generated_at?: string | null
   content?: unknown
@@ -41,7 +43,7 @@ const SELECT_COLUMNS = `id, report_type, status, reporting_period_start, reporti
 
 const LINEAGE_COLUMNS = [
   'bank_id', 'channel', 'report_type', 'status', 'reporting_period_start',
-  'reporting_period_end', 'classification', 'requested_by', 'integrity_hash', 'content'
+  'reporting_period_end', 'classification', 'requested_by', 'approved_by', 'integrity_hash', 'content'
 ]
 
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v))
@@ -96,8 +98,8 @@ export class PgComplianceReportStore {
       const res = await c.query(
         `INSERT INTO compliance_report
            (bank_id, channel, report_type, status, reporting_period_start, reporting_period_end,
-            classification, requested_by, integrity_hash, generated_at, content)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+            classification, requested_by, approved_by, integrity_hash, generated_at, content)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
          RETURNING ${SELECT_COLUMNS}`,
         [
           this.config.bankId,
@@ -108,6 +110,7 @@ export class PgComplianceReportStore {
           input.reporting_period_end,
           input.classification ?? 'restricted',
           input.requested_by,
+          input.approved_by ?? null,
           input.integrity_hash ?? null,
           input.generated_at ?? null,
           content

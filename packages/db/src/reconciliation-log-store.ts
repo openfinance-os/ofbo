@@ -165,6 +165,14 @@ export class PgReconciliationLogStore {
     return { run: toRun(result.row), created: result.created }
   }
 
+  /** BACKOFFICE-06 — count runs whose run_id matches a prefix (a month). */
+  async countForPrefix(runIdPrefix: string): Promise<number> {
+    return this.asApp(async (c) => {
+      const res = await c.query(`SELECT count(*)::int AS n FROM reconciliation_log WHERE run_id LIKE $1`, [`${runIdPrefix}%`])
+      return Number(res.rows[0].n)
+    })
+  }
+
   async get(runId: string): Promise<StoredReconciliationRun | null> {
     const row = await this.asApp(async (c) => {
       const res = await c.query(`SELECT ${SELECT_COLUMNS} FROM reconciliation_log WHERE run_id = $1`, [runId])

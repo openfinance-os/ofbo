@@ -177,6 +177,35 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       }
     },
 
+    'post /back-office/reconciliation/monthly-signoff': async (c) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) {
+        return c.json(
+          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
+          400
+        )
+      }
+      let body: { period?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { period: "YYYY-MM" }.', DOCS_BASE), 400)
+      }
+      // Scope the replay key by period so a reused key cannot replay a different month's sign-off.
+      const cacheKey = `reconciliation:monthly-signoff|${body.period ?? ''}|${c.get('principal').subject}|${key}`
+      const cached = await idempotency.get(cacheKey)
+      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const report = await service.monthlySignoff(c.get('principal'), body.period ?? '', traceId)
+        const res = c.json(dataEnvelope(report), 200)
+        await idempotency.set(cacheKey, 200, await res.clone().json())
+        return res
+      } catch (e) {
+        return fail(c, e)
+      }
+    },
+
     'post /back-office/reconciliation/breaks/{break_id}/escalate-nebras': withIdempotency(idempotency, 'reconciliation:escalate-nebras', async (c, params) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
