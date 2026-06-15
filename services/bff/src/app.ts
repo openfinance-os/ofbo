@@ -81,6 +81,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reconciliation/runs',
   'get /back-office/reconciliation/runs/{run_id}',
   'get /back-office/reconciliation/breaks',
+  'get /back-office/reconciliation/breaks/{break_id}',
   'post /back-office/reconciliation/breaks/{break_id}/claim',
   'post /back-office/reconciliation/breaks/{break_id}/resolve',
   'post /back-office/reconciliation/breaks/{break_id}/reopen',

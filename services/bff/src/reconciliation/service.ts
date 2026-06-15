@@ -282,6 +282,17 @@ export class ReconciliationService {
   }
 
   /**
+   * BACKOFFICE-11 — break detail for the three-source side-by-side diff view: the
+   * Nebras / platform / fintech source refs + the highlighted variance. The
+   * originating FAPI transaction is linked via the propagated x-fapi-interaction-id.
+   */
+  async getBreak(principal: Principal, breakId: string): Promise<StoredReconciliationBreak | null> {
+    assertScope(principal, RECON_READ_SCOPE)
+    if (!this.breakStore) return null
+    return this.breakStore.get(breakId)
+  }
+
+  /**
    * BACKOFFICE-03 — claim a flagged break: → assigned, record the claimant, start
    * the SLA clock, remove it from every other claimant's queue. Requires
    * finance:reconciliation:write; consent-record breaks may alternatively be
