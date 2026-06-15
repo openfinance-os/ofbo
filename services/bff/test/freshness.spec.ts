@@ -34,9 +34,10 @@ describe('computeFreshness (BO-OQ-23 2× cadence)', () => {
     expect(f.stale).toBe(false)
   })
 
-  it('a missing source is stale with the supplied cause', () => {
+  it('a missing source is stale with the supplied cause, and omits source_published_at (non-nullable contract field)', () => {
     const f = computeFreshness({ sourcePublishedAt: null, now: NOW, sourceCadenceMs: FRESHNESS_CADENCE.DAILY_MS, missingCause: 'no_ingested_aggregates_for_period' })
-    expect(f).toMatchObject({ source_published_at: null, stale: true, stale_cause: 'no_ingested_aggregates_for_period' })
+    expect(f).toMatchObject({ stale: true, stale_cause: 'no_ingested_aggregates_for_period' })
+    expect(f.source_published_at).toBeUndefined() // omitted, never null
   })
 
   it('a domain staleness signal (extraStale) wins over the age check', () => {

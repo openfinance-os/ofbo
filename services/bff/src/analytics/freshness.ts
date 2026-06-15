@@ -14,7 +14,9 @@ export const FRESHNESS_CADENCE = {
 } as const
 
 export interface FreshnessEnvelope {
-  source_published_at: string | null
+  /** Optional per the contract (Freshness.source_published_at is a non-nullable
+   *  string) — omitted (never null) when the view has no upstream source. */
+  source_published_at?: string
   view_refreshed_at: string
   stale: boolean
   stale_cause: string | null
@@ -29,6 +31,8 @@ export function liveFreshness(now: Date): FreshnessEnvelope {
 /**
  * BO-OQ-23: amber when the source is older than 2× its refresh cadence. A domain
  * staleness signal (extraStale) wins over the age check; a missing source is stale.
+ * source_published_at is omitted (not null) when there is no source, to honour the
+ * non-nullable contract field.
  */
 export function computeFreshness(input: {
   sourcePublishedAt: string | null
@@ -38,13 +42,14 @@ export function computeFreshness(input: {
   extraStale?: { stale: boolean; cause: string } | null
 }): FreshnessEnvelope {
   const view_refreshed_at = input.now.toISOString()
+  const withSource = input.sourcePublishedAt !== null ? { source_published_at: input.sourcePublishedAt } : {}
   if (input.extraStale?.stale) {
-    return { source_published_at: input.sourcePublishedAt, view_refreshed_at, stale: true, stale_cause: input.extraStale.cause }
+    return { ...withSource, view_refreshed_at, stale: true, stale_cause: input.extraStale.cause }
   }
   if (input.sourcePublishedAt === null) {
-    return { source_published_at: null, view_refreshed_at, stale: true, stale_cause: input.missingCause ?? 'no_source_data' }
+    return { view_refreshed_at, stale: true, stale_cause: input.missingCause ?? 'no_source_data' }
   }
   const ageMs = input.now.getTime() - new Date(input.sourcePublishedAt).getTime()
   const stale = ageMs > 2 * input.sourceCadenceMs
-  return { source_published_at: input.sourcePublishedAt, view_refreshed_at, stale, stale_cause: stale ? 'older_than_2x_source_cadence' : null }
+  return { ...withSource, view_refreshed_at, stale, stale_cause: stale ? 'older_than_2x_source_cadence' : null }
 }
