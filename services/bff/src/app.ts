@@ -24,6 +24,12 @@ import {
   type ConsentEventSource
 } from './consents/audit-trail.js'
 import { ConsentRevokeService, consentRevokeRoutes } from './consents/revoke.js'
+import {
+  ConsentFraudRevokeService,
+  consentFraudRevokeRoutes,
+  makeFraudRevokeOperation,
+  FRAUD_REVOKE_OPERATION
+} from './consents/fraud-revoke.js'
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
@@ -41,6 +47,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /approvals/{approval_id}:reject',
   'get /consents:search-psu',
   'post /consents/{consent_id}:revoke-admin',
+  'post /consents/{consent_id}:revoke-fraud',
   'get /consents/{consent_id}/audit-trail',
   'get /psu/{psu_identifier}/audit-trail',
   'get /payments/{payment_id}:admin',
@@ -109,10 +116,16 @@ export function createApp(deps: AppDeps = {}) {
   // approvals service registers that operation → the dispute service initiates it.
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
+  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
-    operations: { ...deps.approvals?.operations, [REFUND_OPERATION]: refundOperation }
+    operations: {
+      ...deps.approvals?.operations,
+      [REFUND_OPERATION]: refundOperation,
+      [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation
+    }
   })
+  const fraudRevokeService = new ConsentFraudRevokeService(approvals)
   const disputeService = new DisputeService({
     store: disputeStore,
     payments: deps.paymentSource ?? sharedDemoPaymentDirectory(),
@@ -126,6 +139,7 @@ export function createApp(deps: AppDeps = {}) {
     ...approvalRoutes(approvals, deps.idempotency),
     ...consentRoutes(consentSearch),
     ...consentRevokeRoutes(revokeService, idempotencyStore),
+    ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore)
   }
