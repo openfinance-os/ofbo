@@ -79,6 +79,7 @@ import { ProgrammeReportService } from './analytics/programme.js'
 import { AuditEventsService, auditEventsRoutes, InMemoryAuditEventReader, type AuditEventReader } from './audit/events.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
 import { OnboardingFunnelService, onboardingFunnelRoutes, type OnboardingCaseReader } from './analytics/onboarding-funnel.js'
+import { AnalyticsExportService, analyticsExportRoutes, type ViewDataSource } from './analytics/exports.js'
 import {
   ReportGenerationService,
   reportRoutes,
@@ -150,6 +151,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/nebras-liability-monitor',
   'get /back-office/analytics/executive-dashboard',
   'get /back-office/analytics/onboarding-funnel',
+  'post /back-office/analytics/exports',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -403,6 +405,24 @@ export function createApp(deps: AppDeps = {}) {
   const reportGenerationService = new ReportGenerationService({ store: reportStore, approvals, audit: highClassAudit })
   // BACKOFFICE-42 — audit-trail drill-down (audit:read); the drill-down access is logged.
   const auditEventsService = new AuditEventsService({ reader: deps.auditEventReader ?? new InMemoryAuditEventReader(), audit: highClassAudit })
+  // BACKOFFICE-41 — analytics exports: delegate to the view services (each re-asserts
+  // its own scope) so an export carries the live view data + per-view scope enforcement.
+  const exportViewData: ViewDataSource = {
+    async getViewData(view, principal) {
+      const fetchers: Record<string, () => Promise<{ data: Record<string, unknown> }>> = {
+        'executive-dashboard': () => executiveDashboardService.view(principal),
+        'operations-console': () => operationsConsoleService.view(principal),
+        'compliance-view': () => complianceViewService.view(principal),
+        'risk-view': () => riskViewService.view(principal),
+        'finance-view': () => financeViewService.view(principal),
+        'onboarding-funnel': () => onboardingFunnelService.view(principal),
+        'nebras-liability-monitor': () => liabilityViewService.view(principal)
+      }
+      const f = fetchers[view]
+      return f ? (await f()).data : {}
+    }
+  }
+  const analyticsExportService = new AnalyticsExportService({ views: exportViewData, audit: highClassAudit })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -424,6 +444,7 @@ export function createApp(deps: AppDeps = {}) {
     ...liabilityMonitorRoutes(liabilityViewService),
     ...executiveDashboardRoutes(executiveDashboardService),
     ...onboardingFunnelRoutes(onboardingFunnelService),
+    ...analyticsExportRoutes(analyticsExportService, idempotencyStore),
     ...reportRoutes(reportGenerationService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService)
   }
