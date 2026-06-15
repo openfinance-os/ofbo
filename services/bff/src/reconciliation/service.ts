@@ -12,7 +12,7 @@ import type {
 } from '@ofbo/db'
 import { createHash } from 'node:crypto'
 import type { ApmPort, ItsmPort, NebrasEgressPort, OtelSpan } from '@ofbo/ports'
-import { redactText } from '@ofbo/redaction'
+import { redactPii, redactText } from '@ofbo/redaction'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
@@ -38,6 +38,7 @@ export interface ReconciliationLogStore {
   create(input: ReconciliationRunCreateInput, traceId: string): Promise<{ run: StoredReconciliationRun; created: boolean }>
   get(runId: string): Promise<StoredReconciliationRun | null>
   countForPrefix(runIdPrefix: string): Promise<number>
+  listForRange(start: string, end: string): Promise<StoredReconciliationRun[]>
   list(query?: ReconciliationRunListQuery): Promise<ReconciliationRunPage>
 }
 
@@ -50,6 +51,7 @@ export interface ReconciliationBreakStore {
   reopen(id: string, traceId: string): Promise<StoredReconciliationBreak | null>
   escalateNebras(id: string, nebrasCaseId: string, traceId: string): Promise<StoredReconciliationBreak | null>
   summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>>
+  listForRange(start: string, end: string): Promise<StoredReconciliationBreak[]>
   list(query?: ReconciliationBreakListQuery): Promise<ReconciliationBreakPage>
 }
 
@@ -62,6 +64,9 @@ export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
 export const OPS_WRITE_SCOPE = 'platform:operations:write'
 export const DISPUTES_WRITE_SCOPE = 'finance:disputes:write'
 export const MONTHLY_REPORT_TYPE = 'monthly_reconciliation'
+export const CBUAE_EXPORT_REPORT_TYPE = 'cbuae_reconciliation_export'
+export const COMPLIANCE_GENERATE_SCOPE = 'compliance:reports:generate'
+const lineHash = (line: unknown): string => createHash('sha256').update(canonicalJson(line)).digest('hex')
 const OPEN_STATUSES = ['flagged', 'assigned']
 const RESOLVED_STATUSES = ['resolved_matched', 'resolved_internal_correction']
 const ESCALATED_STATUSES = ['escalated_nebras_dispute', 'escalated_fintech_billing']
@@ -591,6 +596,79 @@ export class ReconciliationService {
     })
     return report
   }
+
+  /**
+   * BACKOFFICE-08 — CBUAE-format reconciliation audit-trail export for a date
+   * range: every run + break in the window becomes a line with a per-line SHA-256
+   * integrity hash, plus an overall hash. Persisted as a compliance_report
+   * (awaiting_approval — CBUAE submission is four-eyes, BACKOFFICE-35). Returns the
+   * report (202). The XLSX + PDF cover are rendered downstream off this record.
+   * compliance:reports:generate (Compliance Officer).
+   */
+  async generateCbuaeExport(principal: Principal, periodStart: string, periodEnd: string, traceId: string): Promise<StoredComplianceReport> {
+    assertScope(principal, COMPLIANCE_GENERATE_SCOPE)
+    const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`))
+    if (!isDate(periodStart) || !isDate(periodEnd) || periodStart > periodEnd) {
+      throw new BreakWorkflowError('BACKOFFICE.INVALID_PERIOD', 'period_start and period_end must be dates (YYYY-MM-DD) with start <= end.', 400)
+    }
+    if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.EXPORT_UNAVAILABLE', 'CBUAE export is not configured.', 404)
+    const start = `${periodStart}T00:00:00.000Z`
+    // period_end is inclusive of the whole day → exclusive bound is the next day 00:00
+    const endExclusive = new Date(Date.parse(`${periodEnd}T00:00:00.000Z`) + 24 * 60 * 60 * 1000).toISOString()
+
+    const [runs, breaks] = await Promise.all([this.store.listForRange(start, endExclusive), this.breakStore.listForRange(start, endExclusive)])
+    const runLines = runs.map((r) => ({
+      run_id: r.run_id, run_type: r.run_type, status: r.status,
+      window_start: r.window_start, window_end: r.window_end,
+      line_count_total: r.line_count_total, line_count_matched: r.line_count_matched,
+      line_count_unmatched: r.line_count_unmatched, line_count_disputed: r.line_count_disputed
+    }))
+    const breakLines = breaks.map((b) => ({
+      run_id: b.run_id, line_type: b.line_type, status: b.status,
+      variance_amount: b.variance_amount, variance_count: b.variance_count,
+      source_a_ref: b.source_a_ref, source_b_ref: b.source_b_ref, source_c_ref: b.source_c_ref,
+      resolution_outcome: b.resolution_outcome, nebras_dispute_case_id: b.nebras_dispute_case_id
+    }))
+    // Redact before hashing so a verifier re-hashing the persisted (redacted) export
+    // reproduces the line hashes (redactPii is idempotent) — same evidence-grade
+    // pattern as the inquiry bundle (BACKOFFICE-23).
+    const sections = redactPii({ runs: runLines, breaks: breakLines }) as { runs: unknown[]; breaks: unknown[] }
+    const line_hashes = {
+      runs: sections.runs.map(lineHash),
+      breaks: sections.breaks.map(lineHash)
+    }
+    const period = { start: periodStart, end: periodEnd }
+    const content = { format: 'cbuae_reconciliation_v1', period, sections, line_hashes, run_count: runs.length, break_count: breaks.length }
+    const integrity_hash = createHash('sha256').update(canonicalJson({ content_line_hashes: line_hashes, period })).digest('hex')
+    const generatedAt = this.now().toISOString()
+
+    const report = await this.reports.create(
+      {
+        report_type: CBUAE_EXPORT_REPORT_TYPE,
+        status: 'awaiting_approval', // CBUAE-bound submission is four-eyes (BACKOFFICE-35)
+        reporting_period_start: start,
+        reporting_period_end: endExclusive,
+        classification: 'restricted',
+        requested_by: principal.subject,
+        integrity_hash,
+        generated_at: generatedAt,
+        content
+      },
+      traceId
+    )
+
+    await this.audit.emit({
+      event_type: 'cbuae_reconciliation_export_generated',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: COMPLIANCE_GENERATE_SCOPE,
+      request_trace_id: traceId,
+      request_body: { report_id: report.id, period, run_count: runs.length, break_count: breaks.length, integrity_hash },
+      response_status: 202,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return report
+  }
 }
 
 /** No-database default (tests / local dev). */
@@ -621,6 +699,9 @@ export class InMemoryReconciliationLogStore implements ReconciliationLogStore {
   }
   async countForPrefix(runIdPrefix: string): Promise<number> {
     return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).length
+  }
+  async listForRange(start: string, end: string): Promise<StoredReconciliationRun[]> {
+    return this.rows.filter((r) => r.created_at >= start && r.created_at < end).sort((a, b) => a.created_at.localeCompare(b.created_at))
   }
   async list(query: ReconciliationRunListQuery = {}): Promise<ReconciliationRunPage> {
     let rows = this.rows
@@ -703,6 +784,9 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     const out: Record<string, number> = {}
     for (const r of this.rows) if (r.run_id.startsWith(runIdPrefix)) out[r.status] = (out[r.status] ?? 0) + 1
     return out
+  }
+  async listForRange(start: string, end: string): Promise<StoredReconciliationBreak[]> {
+    return this.rows.filter((r) => r.created_at >= start && r.created_at < end).sort((a, b) => a.created_at.localeCompare(b.created_at))
   }
   async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
     let rows = this.rows

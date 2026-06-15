@@ -165,6 +165,22 @@ export class PgReconciliationLogStore {
     return { run: toRun(result.row), created: result.created }
   }
 
+  /** BACKOFFICE-08 — all runs whose created_at falls in [start, end] (for the CBUAE
+   *  export audit trail). Ordered oldest-first; capped to keep the export bounded. */
+  async listForRange(start: string, end: string, limit = 5000): Promise<StoredReconciliationRun[]> {
+    const rows = await this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT ${SELECT_COLUMNS} FROM reconciliation_log
+          WHERE created_at >= $1 AND created_at < $2
+          ORDER BY created_at, id
+          LIMIT ${limit}`,
+        [start, end]
+      )
+      return res.rows
+    })
+    return rows.map(toRun)
+  }
+
   /** BACKOFFICE-06 — count runs whose run_id matches a prefix (a month). */
   async countForPrefix(runIdPrefix: string): Promise<number> {
     return this.asApp(async (c) => {

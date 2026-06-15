@@ -278,6 +278,22 @@ export class PgReconciliationBreakStore {
     return row ? toBreak(row) : null
   }
 
+  /** BACKOFFICE-08 — all breaks whose created_at falls in [start, end] (for the
+   *  CBUAE export audit trail). Ordered oldest-first; capped to keep it bounded. */
+  async listForRange(start: string, end: string, limit = 5000): Promise<StoredReconciliationBreak[]> {
+    const rows = await this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT ${SELECT_COLUMNS} FROM reconciliation_break
+          WHERE created_at >= $1 AND created_at < $2
+          ORDER BY created_at, id
+          LIMIT ${limit}`,
+        [start, end]
+      )
+      return res.rows
+    })
+    return rows.map(toBreak)
+  }
+
   /** BACKOFFICE-06 — counts of breaks by status for a run_id prefix (a month's
    *  runs share the prefix recon-YYYY-MM-). Feeds the monthly sign-off summary. */
   async summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>> {
