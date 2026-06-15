@@ -81,7 +81,7 @@ export default {
       ...(riskSignals ? { superadmin: { riskSignals } } : {}),
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
       ...(disputeStore ? { disputeStore } : {}),
-      ...(complianceReportStore ? { complianceReportStore } : {}),
+      ...(complianceReportStore ? { complianceReportStore, reportStore: complianceReportStore } : {}),
       ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
       ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
       ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),

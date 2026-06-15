@@ -32,6 +32,7 @@ class CapturingReportStore implements ComplianceReportStore {
       integrity_hash: input.integrity_hash ?? null,
       generated_at: input.generated_at ?? null,
       submitted_at: null,
+      approval_id: null,
       created_at: '2026-08-01T00:00:00.000Z'
     }
   }

@@ -47,7 +47,9 @@ export {
 export {
   PgComplianceReportStore,
   type StoredComplianceReport,
-  type ComplianceReportCreateInput
+  type ComplianceReportCreateInput,
+  type ComplianceReportListQuery,
+  type ComplianceReportPage
 } from './compliance-report-store.js'
 export {
   PgReconciliationLogStore,
