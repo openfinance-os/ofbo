@@ -83,7 +83,7 @@ milestones:
       - { id: BACKOFFICE-35, title: Self-service CBUAE periodic report generation (four-eyes when CBUAE-bound), status: done }
       - { id: BACKOFFICE-36, title: Proactive Nebras-liability monitor (issue x liable party x AED), status: done, depends_on: [BACKOFFICE-30] }
       - { id: BACKOFFICE-37, title: Consent-pattern anomaly detection (streaming), status: done, depends_on: [BACKOFFICE-30] }
-      - { id: BACKOFFICE-39, title: Programme-level reporting view, status: in-progress }
+      - { id: BACKOFFICE-39, title: Programme-level reporting view, status: done }
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: pending }
       - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: pending }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: pending, depends_on: [BACKOFFICE-37] }
