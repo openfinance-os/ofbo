@@ -85,7 +85,7 @@ milestones:
       - { id: BACKOFFICE-37, title: Consent-pattern anomaly detection (streaming), status: done, depends_on: [BACKOFFICE-30] }
       - { id: BACKOFFICE-39, title: Programme-level reporting view, status: done }
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: done }
-      - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: in-progress }
+      - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: done }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: pending, depends_on: [BACKOFFICE-37] }
       - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending }
 
