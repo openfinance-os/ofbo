@@ -80,6 +80,37 @@ export class PgAnomalyDetectionStore {
     })
   }
 
+  /** BACKOFFICE-46 — repeated authorization denials per agent since `sinceIso`. */
+  async scopeDenialsByAgent(sinceIso: string): Promise<AgentLookupRow[]> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT acting_principal AS agent, count(*)::int AS lookups
+           FROM audit_high_sensitivity
+          WHERE event_type = 'scope_denied' AND created_at >= $1
+          GROUP BY acting_principal`,
+        [sinceIso]
+      )
+      return res.rows.map((r) => ({ agent: r.agent as string, lookups: Number(r.lookups) }))
+    })
+  }
+
+  /** BACKOFFICE-46 — off-hours admin activity per agent since `sinceIso` (outside
+   *  06:00–18:00 UTC; admin-scope actions only; excludes system principals). */
+  async offHoursAdminByAgent(sinceIso: string): Promise<AgentLookupRow[]> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT acting_principal AS agent, count(*)::int AS lookups
+           FROM audit_high_sensitivity
+          WHERE created_at >= $1 AND scope_used LIKE '%admin%'
+            AND acting_principal NOT LIKE 'system:%'
+            AND (extract(hour FROM created_at AT TIME ZONE 'UTC') < 6 OR extract(hour FROM created_at AT TIME ZONE 'UTC') >= 18)
+          GROUP BY acting_principal`,
+        [sinceIso]
+      )
+      return res.rows.map((r) => ({ agent: r.agent as string, lookups: Number(r.lookups) }))
+    })
+  }
+
   /** Dedup keys of OPEN anomaly signals — so the detector does not re-emit. */
   async openAnomalyDedupKeys(): Promise<Set<string>> {
     return this.asApp(async (c) => {
