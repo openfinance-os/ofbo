@@ -1625,7 +1625,11 @@ components:
       description: §6.0 channel dimension (attribute, not tenant key)
     LineType:
       type: string
-      enum: [nebras_fees, payment_settlement, consent_record, tpp_aas_pass_through, lfi_access_log]
+      enum: [nebras_fees, payment_settlement, consent_record, tpp_aas_pass_through, lfi_access_log, dao_api_call]
+      description: >
+        Reconciliation line classes. dao_api_call (BACKOFFICE-68) covers Dynamic Account
+        Opening API calls in the three-way match; it defaults to the data-sharing fee +
+        break threshold until DAO-specific volumes/pricing are observed.
     BreakStatus:
       type: string
       enum: [flagged, assigned, resolved_matched, resolved_internal_correction, escalated_nebras_dispute, escalated_fintech_billing]
