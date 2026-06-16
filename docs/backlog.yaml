@@ -113,7 +113,7 @@ milestones:
       - { id: BACKOFFICE-74, title: Trust Framework participant administration, status: blocked, reason: "contract gap — new resource (bank's own Trust Framework directory roles: Org Admin/PBC/PTC/STC holders, T&C/DocuSign status, turnover workflow, onboarding-stage SLA); no spec surface. Spec PR to be authored (deferred during the GitHub Actions billing outage to keep build-ahead focused on code-buildable items)." }
       - { id: BACKOFFICE-76, title: Cross-scheme dispute guard (Aani / Al Tareq), status: blocked, reason: "contract gap — DisputeCase/DisputeCreate lack cross-scheme fields (aani_case_id, recall-window, sanadak escalation) + a double-compensation guard. Spec PR to be authored (deferred during the CI billing outage)." }
       - { id: BACKOFFICE-79, title: Nebras service-desk case tracking, status: blocked, reason: "contract gap — no service-desk case resource (track by Nebras case ref with type/priority/SLA, linked to break/dispute/signal). Spec PR to be authored (deferred during the CI billing outage)." }
-      - { id: BACKOFFICE-70, title: LFI Ozone Connect health-check surfacing, status: pending }
+      - { id: BACKOFFICE-70, title: LFI Ozone Connect health-check surfacing, status: done }
 
   - name: UI
     # Portal screen build-out from the Stitch project (8050269076066130289) "Regulated Institutional
