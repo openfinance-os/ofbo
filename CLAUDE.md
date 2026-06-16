@@ -5,6 +5,7 @@ Bank-neutral back office for UAE Open Finance (CBUAE / Al Tareq / Nebras), for a
 ## Stack (defaults — change only via an ADR in docs/adrs/)
 
 - **Frontend:** React/Next.js (TypeScript), TanStack Query, OpenAPI-generated client. Vitest + Testing Library + Playwright.
+- **UI/UX reference (binding):** build **every** portal screen — anywhere, not just the UI-00..09 track — against the **Stitch** project (`8050269076066130289`, "Regulated Institutional Interface") as the appearance reference. Division of truth: **Stitch = layout + design tokens**; **`specs/backoffice-openapi.yaml` = behaviour + data**. Screens are token-only (no raw hex/px), OpenAPI-bound (no Stitch mock values), DEMO-bannered, persona scope-gated, zero PII, four-eyes via `202` + `approval_request` (never inline). Cite the Stitch screen id in the PR; push token/design edits back via `upload_design_md`. If a needed screen isn't in Stitch, generate it there first.
 - **Backend:** Node.js/TypeScript services. Reconciliation Engine and analytics are headless scheduled jobs (no public ingress).
 - **Data:** Relational store (PostgreSQL-compatible) with row-level security from day one for all Back Office tables. Columnar warm storage (Parquet on object storage) for the 24-month+ tier.
 - **Gateway:** The bank's existing API gateway; admin-scope enforcement at the gateway AND the service layer (defence in depth).
