@@ -18,6 +18,9 @@ export interface NavModule {
 
 export const NAV_MODULES: NavModule[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'dashboard', scope: null },
+  // Four-eyes approvals are cross-cutting (any persona may hold an approver scope); the
+  // queue self-filters by approver_required_scope, so the entry is always visible (UI-05).
+  { key: 'approvals', label: 'Approvals', href: '/approvals', icon: 'how_to_reg', scope: null },
   { key: 'customer-care', label: 'Customer Care', href: '/care', icon: 'support_agent', scope: 'consents:admin' },
   { key: 'finance', label: 'Finance', href: '/reconciliation', icon: 'account_balance', scope: 'reconciliation:read' },
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: 'compliance:reports:read' },
