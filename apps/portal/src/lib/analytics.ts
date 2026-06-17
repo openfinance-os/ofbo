@@ -65,11 +65,20 @@ async function analyticsView(res: Response): Promise<AnalyticsView> {
   return { data: body.data ?? {}, freshness: body.freshness ?? FALLBACK_FRESHNESS }
 }
 
+/**
+ * Generic getter for any BFF analytics-style view (a `{ data, meta, freshness }` GET).
+ * `path` is the contract path under the BFF root (e.g. '/back-office/analytics/risk-view').
+ * Shared by the analytics + risk consoles, which return the same envelope shape.
+ */
+export async function getAnalyticsView(token: string, path: string, deps: AnalyticsApiDeps = {}): Promise<AnalyticsView> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(`${base}${path}`, { headers: authHeaders(token, trace) })
+  return analyticsView(res)
+}
+
 /** BACKOFFICE-27 — Executive Dashboard (platform:analytics:read; commercial/programme angles scope-gated server-side). */
 export async function getExecutiveDashboard(token: string, deps: AnalyticsApiDeps = {}): Promise<AnalyticsView> {
-  const { base, f, trace } = resolve(deps)
-  const res = await f(`${base}${ANALYTICS_BASE}/executive-dashboard`, { headers: authHeaders(token, trace) })
-  return analyticsView(res)
+  return getAnalyticsView(token, `${ANALYTICS_BASE}/executive-dashboard`, deps)
 }
 
 /**
@@ -78,9 +87,7 @@ export async function getExecutiveDashboard(token: string, deps: AnalyticsApiDep
  * none — matching the contract surface exactly.
  */
 export async function getFinanceView(token: string, deps: AnalyticsApiDeps = {}): Promise<AnalyticsView> {
-  const { base, f, trace } = resolve(deps)
-  const res = await f(`${base}${ANALYTICS_BASE}/finance-view`, { headers: authHeaders(token, trace) })
-  return analyticsView(res)
+  return getAnalyticsView(token, `${ANALYTICS_BASE}/finance-view`, deps)
 }
 
 /** Money guard for the generic renderer: integer minor units + ISO 4217. */
