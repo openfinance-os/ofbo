@@ -1,0 +1,40 @@
+- generic [active] [ref=e1]:
+  - alert "demo environment" [ref=e2]: DEMO — synthetic data only. No real PSU data, ever. Open Finance Back Office (non-prod).
+  - main [ref=e3]:
+    - region "persona sign-in" [ref=e4]:
+      - heading "Sign in to the Internal Portal" [level=1] [ref=e5]
+      - paragraph [ref=e6]: MFA is enforced on every sign-in. Choose a persona to continue.
+      - list [ref=e7]:
+        - listitem [ref=e8]:
+          - button "OF Operations Analyst (operations-analyst)" [ref=e10] [cursor=pointer]:
+            - text: OF Operations Analyst
+            - generic [ref=e11]: (operations-analyst)
+        - listitem [ref=e12]:
+          - button "Customer Care Agent (OF) (customer-care-agent)" [ref=e14] [cursor=pointer]:
+            - text: Customer Care Agent (OF)
+            - generic [ref=e15]: (customer-care-agent)
+        - listitem [ref=e16]:
+          - button "OF Compliance Officer (compliance-officer)" [ref=e18] [cursor=pointer]:
+            - text: OF Compliance Officer
+            - generic [ref=e19]: (compliance-officer)
+        - listitem [ref=e20]:
+          - button "OF Finance Analyst (finance-analyst)" [ref=e22] [cursor=pointer]:
+            - text: OF Finance Analyst
+            - generic [ref=e23]: (finance-analyst)
+        - listitem [ref=e24]:
+          - button "OF Risk Analyst (risk-analyst)" [ref=e26] [cursor=pointer]:
+            - text: OF Risk Analyst
+            - generic [ref=e27]: (risk-analyst)
+        - listitem [ref=e28]:
+          - button "Commercial Desk Head (commercial-desk-head)" [ref=e30] [cursor=pointer]:
+            - text: Commercial Desk Head
+            - generic [ref=e31]: (commercial-desk-head)
+        - listitem [ref=e32]:
+          - button "OF Programme Manager (programme-manager)" [ref=e34] [cursor=pointer]:
+            - text: OF Programme Manager
+            - generic [ref=e35]: (programme-manager)
+        - listitem [ref=e36]:
+          - button "Platform Super Administrator (platform-super-admin)" [ref=e38] [cursor=pointer]:
+            - text: Platform Super Administrator
+            - generic [ref=e39]: (platform-super-admin)
+  - alert [ref=e40]

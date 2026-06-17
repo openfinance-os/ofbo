@@ -1,0 +1,167 @@
+- generic [active] [ref=e1]:
+  - alert "demo environment" [ref=e2]: DEMO — synthetic data only. No real PSU data, ever. Open Finance Back Office (non-prod).
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: OFBO Portal
+        - paragraph [ref=e7]: Open Finance Infrastructure
+      - navigation "primary" [ref=e8]:
+        - link "Dashboard" [ref=e9] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e10]: dashboard
+          - generic [ref=e11]: Dashboard
+        - link "Approvals" [ref=e12] [cursor=pointer]:
+          - /url: /approvals
+          - generic [ref=e13]: how_to_reg
+          - generic [ref=e14]: Approvals
+        - link "Customer Care" [ref=e15] [cursor=pointer]:
+          - /url: /care
+          - generic [ref=e16]: support_agent
+          - generic [ref=e17]: Customer Care
+        - link "Finance" [ref=e18] [cursor=pointer]:
+          - /url: /reconciliation
+          - generic [ref=e19]: account_balance
+          - generic [ref=e20]: Finance
+        - link "Analytics" [ref=e21] [cursor=pointer]:
+          - /url: /analytics
+          - generic [ref=e22]: insights
+          - generic [ref=e23]: Analytics
+        - link "TPP Billing" [ref=e24] [cursor=pointer]:
+          - /url: /tpp-billing
+          - generic [ref=e25]: receipt_long
+          - generic [ref=e26]: TPP Billing
+        - link "Compliance" [ref=e27] [cursor=pointer]:
+          - /url: /compliance
+          - generic [ref=e28]: gavel
+          - generic [ref=e29]: Compliance
+        - link "Risk" [ref=e30] [cursor=pointer]:
+          - /url: /risk
+          - generic [ref=e31]: shield
+          - generic [ref=e32]: Risk
+        - link "Operations" [ref=e33] [cursor=pointer]:
+          - /url: /operations
+          - generic [ref=e34]: monitoring
+          - generic [ref=e35]: Operations
+      - button "Switch persona" [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: switch_account
+        - generic [ref=e39]: Switch persona
+    - generic [ref=e40]:
+      - banner [ref=e41]:
+        - generic [ref=e42]:
+          - button "toggle sidebar" [ref=e43] [cursor=pointer]: menu
+          - searchbox "global search" [ref=e44]
+        - generic [ref=e45]:
+          - button "Comfortable" [ref=e46] [cursor=pointer]
+          - generic [ref=e47]:
+            - generic [ref=e48]: platform-super-admin
+            - generic [ref=e49]: super-admin
+            - generic [ref=e50]: 21 scopes
+      - main [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - heading "Risk Management & Anomaly Detection" [level=1] [ref=e54]
+            - generic [ref=e55]: Narrow Risk scope
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - heading "Risk Signals & Anomalies" [level=2] [ref=e58]
+              - generic "fresh" [ref=e59]: Fresh
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - paragraph [ref=e62]: Signal Summary
+                - generic [ref=e64]:
+                  - generic [ref=e65]:
+                    - term [ref=e66]: Active Total
+                    - definition [ref=e67]: "0"
+                  - generic [ref=e68]:
+                    - term [ref=e69]: By Type
+                    - definition
+                  - generic [ref=e70]:
+                    - term [ref=e71]: By Severity
+                    - definition
+                  - generic [ref=e72]:
+                    - term [ref=e73]: By Status
+                    - definition
+              - generic [ref=e74]:
+                - paragraph [ref=e75]: Consent Anomalies
+                - generic [ref=e78]:
+                  - term [ref=e79]: Active
+                  - definition [ref=e80]: "0"
+              - generic [ref=e81]:
+                - paragraph [ref=e82]: Tpp Behaviour Anomalies
+                - generic [ref=e85]:
+                  - term [ref=e86]: Active
+                  - definition [ref=e87]: "0"
+              - generic [ref=e88]:
+                - paragraph [ref=e89]: Liability Monitor
+                - generic [ref=e91]:
+                  - generic [ref=e92]:
+                    - term [ref=e93]: Open Count
+                    - definition [ref=e94]: "0"
+                  - generic [ref=e95]:
+                    - term [ref=e96]: By Severity
+                    - definition
+                  - generic [ref=e97]:
+                    - term [ref=e98]: Recent
+                    - definition [ref=e99]: none
+              - generic [ref=e100]:
+                - paragraph [ref=e101]: Recent Signals
+                - generic [ref=e102]: none
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - heading "Nebras Liability Monitor" [level=2] [ref=e105]
+              - generic "fresh" [ref=e106]: Fresh
+            - generic [ref=e107]:
+              - generic [ref=e108]:
+                - paragraph [ref=e109]: Liability Matrix
+                - generic [ref=e111]:
+                  - generic [ref=e112]:
+                    - term [ref=e113]: Per Incident Aed
+                    - definition [ref=e114]:
+                      - generic [ref=e115]:
+                        - generic [ref=e116]:
+                          - term [ref=e117]: Consent State Failure
+                          - definition [ref=e118]: "500"
+                        - generic [ref=e119]:
+                          - term [ref=e120]: Revocation Failure
+                          - definition [ref=e121]: "350"
+                        - generic [ref=e122]:
+                          - term [ref=e123]: Sca Auth Error
+                          - definition [ref=e124]: "500"
+                        - generic [ref=e125]:
+                          - term [ref=e126]: Data Breach
+                          - definition [ref=e127]: "750"
+                        - generic [ref=e128]:
+                          - term [ref=e129]: Sla Execution Failure
+                          - definition [ref=e130]: "350"
+                        - generic [ref=e131]:
+                          - term [ref=e132]: Consumer Protection Violation
+                          - definition [ref=e133]: 1,000
+                        - generic [ref=e134]:
+                          - term [ref=e135]: Deprecation Mismanagement
+                          - definition [ref=e136]: 2,500
+                        - generic [ref=e137]:
+                          - term [ref=e138]: Lfi Breaking Change
+                          - definition [ref=e139]: 5,000
+                        - generic [ref=e140]:
+                          - term [ref=e141]: Fraud Prevention Failure
+                          - definition [ref=e142]: 10,000
+                  - generic [ref=e143]:
+                    - term [ref=e144]: Sla Execution Tiers Aed
+                    - definition [ref=e145]:
+                      - generic [ref=e146]:
+                        - generic [ref=e147]:
+                          - term [ref=e148]: "1"
+                          - definition [ref=e149]: "350"
+                        - generic [ref=e150]:
+                          - term [ref=e151]: "2"
+                          - definition [ref=e152]: "250"
+                        - generic [ref=e153]:
+                          - term [ref=e154]: "3"
+                          - definition [ref=e155]: "200"
+              - generic [ref=e156]:
+                - paragraph [ref=e157]: Open Count
+                - generic [ref=e158]: "0"
+              - paragraph [ref=e160]: By Severity
+              - generic [ref=e161]:
+                - paragraph [ref=e162]: Approaching Triggers
+                - generic [ref=e163]: none

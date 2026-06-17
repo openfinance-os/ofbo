@@ -1,0 +1,86 @@
+- generic [active] [ref=e1]:
+  - alert "demo environment" [ref=e2]: DEMO — synthetic data only. No real PSU data, ever. Open Finance Back Office (non-prod).
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: OFBO Portal
+        - paragraph [ref=e7]: Open Finance Infrastructure
+      - navigation "primary" [ref=e8]:
+        - link "Dashboard" [ref=e9] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e10]: dashboard
+          - generic [ref=e11]: Dashboard
+        - link "Approvals" [ref=e12] [cursor=pointer]:
+          - /url: /approvals
+          - generic [ref=e13]: how_to_reg
+          - generic [ref=e14]: Approvals
+        - link "Customer Care" [ref=e15] [cursor=pointer]:
+          - /url: /care
+          - generic [ref=e16]: support_agent
+          - generic [ref=e17]: Customer Care
+        - link "Finance" [ref=e18] [cursor=pointer]:
+          - /url: /reconciliation
+          - generic [ref=e19]: account_balance
+          - generic [ref=e20]: Finance
+        - link "Analytics" [ref=e21] [cursor=pointer]:
+          - /url: /analytics
+          - generic [ref=e22]: insights
+          - generic [ref=e23]: Analytics
+        - link "TPP Billing" [ref=e24] [cursor=pointer]:
+          - /url: /tpp-billing
+          - generic [ref=e25]: receipt_long
+          - generic [ref=e26]: TPP Billing
+        - link "Compliance" [ref=e27] [cursor=pointer]:
+          - /url: /compliance
+          - generic [ref=e28]: gavel
+          - generic [ref=e29]: Compliance
+        - link "Risk" [ref=e30] [cursor=pointer]:
+          - /url: /risk
+          - generic [ref=e31]: shield
+          - generic [ref=e32]: Risk
+        - link "Operations" [ref=e33] [cursor=pointer]:
+          - /url: /operations
+          - generic [ref=e34]: monitoring
+          - generic [ref=e35]: Operations
+      - button "Switch persona" [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: switch_account
+        - generic [ref=e39]: Switch persona
+    - generic [ref=e40]:
+      - banner [ref=e41]:
+        - generic [ref=e42]:
+          - button "toggle sidebar" [ref=e43] [cursor=pointer]: menu
+          - searchbox "global search" [ref=e44]
+        - generic [ref=e45]:
+          - button "Comfortable" [ref=e46] [cursor=pointer]
+          - generic [ref=e47]:
+            - generic [ref=e48]: platform-super-admin
+            - generic [ref=e49]: super-admin
+            - generic [ref=e50]: 21 scopes
+      - main [ref=e51]:
+        - generic [ref=e52]:
+          - heading "Four-Eyes Approval Portal" [level=1] [ref=e53]
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - heading "Pending Approvals" [level=2] [ref=e56]
+              - generic [ref=e57]: "1"
+            - generic [ref=e59]:
+              - generic [ref=e60]:
+                - generic [ref=e61]: consents.fraud_revoke
+                - generic [ref=e62]: pending
+              - generic [ref=e63]:
+                - generic [ref=e64]:
+                  - paragraph [ref=e65]: Initiator
+                  - paragraph [ref=e66]: demo:risk-analyst
+                - generic [ref=e67]:
+                  - paragraph [ref=e68]: Approver
+                  - paragraph [ref=e69]: awaiting · consents:admin:fraud-revoke
+              - paragraph [ref=e70]: Expires 2026-06-17T10:38:21.221Z
+              - generic [ref=e71]:
+                - button "Approve" [ref=e73] [cursor=pointer]
+                - generic [ref=e74]:
+                  - textbox "reject reason" [ref=e75]:
+                    - /placeholder: Reject reason (≥ 10 chars)…
+                  - button "Reject" [ref=e76] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e82] [cursor=pointer]:
+    - img [ref=e83]
+  - alert [ref=e86]

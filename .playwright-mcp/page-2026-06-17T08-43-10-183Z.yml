@@ -1,0 +1,189 @@
+- generic [active] [ref=e1]:
+  - alert "demo environment" [ref=e2]: DEMO — synthetic data only. No real PSU data, ever. Open Finance Back Office (non-prod).
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: OFBO Portal
+        - paragraph [ref=e7]: Open Finance Infrastructure
+      - navigation "primary" [ref=e8]:
+        - link "Dashboard" [ref=e9] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e10]: dashboard
+          - generic [ref=e11]: Dashboard
+        - link "Approvals" [ref=e12] [cursor=pointer]:
+          - /url: /approvals
+          - generic [ref=e13]: how_to_reg
+          - generic [ref=e14]: Approvals
+        - link "Customer Care" [ref=e15] [cursor=pointer]:
+          - /url: /care
+          - generic [ref=e16]: support_agent
+          - generic [ref=e17]: Customer Care
+        - link "Finance" [ref=e18] [cursor=pointer]:
+          - /url: /reconciliation
+          - generic [ref=e19]: account_balance
+          - generic [ref=e20]: Finance
+        - link "Analytics" [ref=e21] [cursor=pointer]:
+          - /url: /analytics
+          - generic [ref=e22]: insights
+          - generic [ref=e23]: Analytics
+        - link "TPP Billing" [ref=e24] [cursor=pointer]:
+          - /url: /tpp-billing
+          - generic [ref=e25]: receipt_long
+          - generic [ref=e26]: TPP Billing
+        - link "Compliance" [ref=e27] [cursor=pointer]:
+          - /url: /compliance
+          - generic [ref=e28]: gavel
+          - generic [ref=e29]: Compliance
+        - link "Risk" [ref=e30] [cursor=pointer]:
+          - /url: /risk
+          - generic [ref=e31]: shield
+          - generic [ref=e32]: Risk
+        - link "Operations" [ref=e33] [cursor=pointer]:
+          - /url: /operations
+          - generic [ref=e34]: monitoring
+          - generic [ref=e35]: Operations
+      - button "Switch persona" [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: switch_account
+        - generic [ref=e39]: Switch persona
+    - generic [ref=e40]:
+      - banner [ref=e41]:
+        - generic [ref=e42]:
+          - button "toggle sidebar" [ref=e43] [cursor=pointer]: menu
+          - searchbox "global search" [ref=e44]
+        - generic [ref=e45]:
+          - button "Comfortable" [ref=e46] [cursor=pointer]
+          - generic [ref=e47]:
+            - generic [ref=e48]: platform-super-admin
+            - generic [ref=e49]: super-admin
+            - generic [ref=e50]: 21 scopes
+      - main [ref=e51]:
+        - generic [ref=e52]:
+          - heading "Operations Console" [level=1] [ref=e53]
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - heading "Platform Operations" [level=2] [ref=e56]
+              - generic "no_nebras_ingestion_yet" [ref=e57]: Stale · no_nebras_ingestion_yet
+            - generic [ref=e58]:
+              - generic [ref=e59]:
+                - paragraph [ref=e60]: Nebras Connectivity
+                - generic [ref=e62]:
+                  - generic [ref=e63]:
+                    - term [ref=e64]: Status
+                    - definition [ref=e65]: unknown
+                  - generic [ref=e66]:
+                    - term [ref=e67]: Last Contact At
+                    - definition [ref=e68]: —
+                  - generic [ref=e69]:
+                    - term [ref=e70]: Last Poll Freshness
+                    - definition [ref=e71]: —
+                  - generic [ref=e72]:
+                    - term [ref=e73]: Sla Targets
+                    - definition [ref=e74]:
+                      - generic [ref=e75]:
+                        - generic [ref=e76]:
+                          - term [ref=e77]: End To End Ms
+                          - definition [ref=e78]: "500"
+                        - generic [ref=e79]:
+                          - term [ref=e80]: Lfi Internal Ms
+                          - definition [ref=e81]: "250"
+              - generic [ref=e82]:
+                - paragraph [ref=e83]: Certification
+                - generic [ref=e85]:
+                  - generic [ref=e86]:
+                    - term [ref=e87]: Lfi
+                    - definition [ref=e88]: none
+                  - generic [ref=e89]:
+                    - term [ref=e90]: Tpp
+                    - definition [ref=e91]: none
+              - generic [ref=e92]:
+                - paragraph [ref=e93]: Tpp Onboarding Pipeline
+                - generic [ref=e95]:
+                  - generic [ref=e96]:
+                    - term [ref=e97]: By State
+                    - definition [ref=e98]:
+                      - generic [ref=e100]:
+                        - term [ref=e101]: Unregistered
+                        - definition [ref=e102]: "3"
+                  - generic [ref=e103]:
+                    - term [ref=e104]: Total
+                    - definition [ref=e105]: "3"
+              - generic [ref=e106]:
+                - paragraph [ref=e107]: Onboarding Handover Health
+                - generic [ref=e109]:
+                  - generic [ref=e110]:
+                    - term [ref=e111]: By Entry Path
+                    - definition [ref=e112]:
+                      - generic [ref=e113]:
+                        - generic [ref=e114]:
+                          - term [ref=e115]: DIRECT SIGNUP
+                          - definition [ref=e116]: "1"
+                        - generic [ref=e117]:
+                          - term [ref=e118]: ONBOARDING HANDOVER
+                          - definition [ref=e119]: "2"
+                  - generic [ref=e120]:
+                    - term [ref=e121]: Total Events
+                    - definition [ref=e122]: "3"
+                  - generic [ref=e123]:
+                    - term [ref=e124]: Latest Event At
+                    - definition [ref=e125]: 2026-06-03T12:00:00Z
+              - generic [ref=e126]:
+                - paragraph [ref=e127]: Active Outages
+                - generic [ref=e128]: none
+              - generic [ref=e129]:
+                - paragraph [ref=e130]: Active Outage Count
+                - generic [ref=e131]: "0"
+              - generic [ref=e132]:
+                - paragraph [ref=e133]: Slo
+                - generic [ref=e135]:
+                  - generic [ref=e136]:
+                    - term [ref=e137]: Window Days
+                    - definition [ref=e138]: "30"
+                  - generic [ref=e139]:
+                    - term [ref=e140]: Summary
+                    - definition [ref=e141]:
+                      - generic [ref=e142]:
+                        - generic [ref=e143]:
+                          - term [ref=e144]: Healthy
+                          - definition [ref=e145]: "2"
+                        - generic [ref=e146]:
+                          - term [ref=e147]: At Risk
+                          - definition [ref=e148]: "1"
+                        - generic [ref=e149]:
+                          - term [ref=e150]: Breach
+                          - definition [ref=e151]: "1"
+                  - generic [ref=e152]:
+                    - term [ref=e153]: Slos
+                    - definition [ref=e154]:
+                      - list [ref=e155]:
+                        - listitem [ref=e156]: "{…}"
+                        - listitem [ref=e157]: "{…}"
+                        - listitem [ref=e158]: "{…}"
+                        - listitem [ref=e159]: "{…}"
+              - generic [ref=e160]:
+                - paragraph [ref=e161]: Scheme Certificates
+                - generic [ref=e163]:
+                  - generic [ref=e164]:
+                    - term [ref=e165]: Chain
+                    - definition [ref=e166]:
+                      - list [ref=e167]:
+                        - listitem [ref=e168]: "{…}"
+                        - listitem [ref=e169]: "{…}"
+                        - listitem [ref=e170]: "{…}"
+                  - generic [ref=e171]:
+                    - term [ref=e172]: Worst Status
+                    - definition [ref=e173]: critical
+              - generic [ref=e174]:
+                - paragraph [ref=e175]: Ozone Connect
+                - generic [ref=e177]:
+                  - generic [ref=e178]:
+                    - term [ref=e179]: Status
+                    - definition [ref=e180]: up
+                  - generic [ref=e181]:
+                    - term [ref=e182]: Checked At
+                    - definition [ref=e183]: 2026-06-17T08:43:09.701Z
+                  - generic [ref=e184]:
+                    - term [ref=e185]: Uptime Pct 30d
+                    - definition [ref=e186]: "99.8"
+                  - generic [ref=e187]:
+                    - term [ref=e188]: Last Failure At
+                    - definition [ref=e189]: 2026-06-11T08:43:09.701Z
