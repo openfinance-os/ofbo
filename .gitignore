@@ -7,3 +7,7 @@ dist/
 .open-next/
 coverage/
 *.tsbuildinfo
+
+# Playwright MCP visual-sweep artifacts (local only)
+.playwright-mcp/
+portal-*.png
