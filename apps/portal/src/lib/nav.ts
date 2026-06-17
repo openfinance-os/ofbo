@@ -26,6 +26,7 @@ export const NAV_MODULES: NavModule[] = [
   // Analytics & Insights binds the Executive Dashboard (platform:analytics:read) + the
   // Finance View (reconciliation:read); visible to either audience (UI-06, any-of).
   { key: 'analytics', label: 'Analytics', href: '/analytics', icon: 'insights', scope: ['platform:analytics:read', 'reconciliation:read'] },
+  { key: 'billing', label: 'TPP Billing', href: '/tpp-billing', icon: 'receipt_long', scope: 'billing:read' },
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: 'compliance:reports:read' },
   { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: 'risk:read' },
   { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: 'platform:operations:read' }
