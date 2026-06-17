@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <DemoBanner />
-        <main className="portal-main">{children}</main>
+        {children}
       </body>
     </html>
   )

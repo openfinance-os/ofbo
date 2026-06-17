@@ -1,0 +1,85 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import '@testing-library/jest-dom/vitest'
+import { AppShell } from '../src/components/app-shell.js'
+import { visibleModules, NAV_MODULES } from '../src/lib/nav.js'
+
+afterEach(cleanup)
+
+/**
+ * UI-01 — app shell: scope-aware nav (hides modules outside the §2 matrix), persona
+ * badge (absorbs the M1 scope-echo), density toggle, collapsible sidebar.
+ */
+
+describe('visibleModules (scope-gated nav)', () => {
+  it('shows only the dashboard + in-scope modules for a finance analyst', () => {
+    const keys = visibleModules(['reconciliation:read', 'billing:read'], false).map((m) => m.key)
+    expect(keys).toContain('dashboard')
+    expect(keys).toContain('finance')
+    expect(keys).not.toContain('risk')
+    expect(keys).not.toContain('customer-care')
+    expect(keys).not.toContain('operations')
+  })
+
+  it('shows Customer Care for a care agent, Risk for a risk analyst', () => {
+    expect(visibleModules(['consents:admin', 'disputes:admin'], false).map((m) => m.key)).toContain('customer-care')
+    expect(visibleModules(['risk:read'], false).map((m) => m.key)).toContain('risk')
+  })
+
+  it('super-admin sees every module', () => {
+    expect(visibleModules([], true)).toHaveLength(NAV_MODULES.length)
+  })
+
+  it('dashboard (no required scope) is always visible', () => {
+    expect(visibleModules([], false).map((m) => m.key)).toEqual(['dashboard'])
+  })
+})
+
+const finance = { subject: 'demo:finance', persona: 'finance-analyst', scopes: ['reconciliation:read', 'billing:read'], superadmin: false }
+
+describe('AppShell', () => {
+  it('renders the scope-aware sidebar + the persona badge (scope echo absorbed), hiding out-of-scope modules', () => {
+    render(
+      <AppShell principal={finance} active="dashboard">
+        <p>content</p>
+      </AppShell>
+    )
+    expect(screen.getByTestId('sidebar')).toBeInTheDocument()
+    expect(screen.getByTestId('nav-finance')).toBeInTheDocument()
+    expect(screen.queryByTestId('nav-risk')).not.toBeInTheDocument()
+    expect(screen.getByTestId('role-badge')).toHaveTextContent('finance-analyst')
+    expect(screen.getByTestId('badge-scope-count')).toHaveTextContent('2 scopes')
+    expect(screen.queryByTestId('superadmin-badge')).not.toBeInTheDocument()
+    expect(screen.getByTestId('shell-content')).toHaveTextContent('content')
+    // the DEMO banner is regulatory — it lives in the root layout, above the shell
+  })
+
+  it('marks the active module and shows the super-admin badge for a super admin', () => {
+    render(
+      <AppShell principal={{ subject: 'demo:sa', persona: 'platform-super-admin', scopes: ['platform:superadmin'], superadmin: true }} active="risk">
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.getByTestId('superadmin-badge')).toBeInTheDocument()
+    expect(screen.getByTestId('nav-risk')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByTestId('nav-operations')).toBeInTheDocument() // super-admin sees all
+  })
+
+  it('toggles density (comfortable ↔ compact) and collapses the sidebar', () => {
+    render(
+      <AppShell principal={finance}>
+        <p>x</p>
+      </AppShell>
+    )
+    const shell = screen.getByTestId('app-shell')
+    expect(shell).toHaveAttribute('data-density', 'comfortable')
+    fireEvent.click(screen.getByTestId('density-toggle'))
+    expect(shell).toHaveAttribute('data-density', 'compact')
+
+    const sidebar = screen.getByTestId('sidebar')
+    expect(sidebar).toHaveAttribute('data-collapsed', 'false')
+    fireEvent.click(screen.getByTestId('toggle-sidebar'))
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+  })
+})

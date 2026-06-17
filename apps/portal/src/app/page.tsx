@@ -12,5 +12,10 @@ export default async function LoginPage({
 }) {
   const personas = await listPersonaLogins()
   const { error } = await searchParams
-  return <PersonaLoginList personas={personas} error={error} />
+  // Login is the one surface outside the app shell — keep it centred (token-styled).
+  return (
+    <main className="portal-main">
+      <PersonaLoginList personas={personas} error={error} />
+    </main>
+  )
 }

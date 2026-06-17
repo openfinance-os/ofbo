@@ -27,6 +27,12 @@ function tsxFiles(dir: string): string[] {
 const RAW_HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b|\b(?:rgba?|hsla?)\(/
 const RAW_PX = /\b\d+px\b/
 
+/** Strip comments — prose may legitimately mention px/hex; the rule targets code. */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+const read = (f: string) => stripComments(readFileSync(f, 'utf8'))
+
 describe('portal components are token-only (no raw hex/px)', () => {
   const files = tsxFiles(srcDir)
 
@@ -35,12 +41,12 @@ describe('portal components are token-only (no raw hex/px)', () => {
   })
 
   it('no raw 6-digit hex colour in any component', () => {
-    const offenders = files.filter((f) => RAW_HEX.test(readFileSync(f, 'utf8'))).map((f) => f.replace(srcDir, 'src'))
+    const offenders = files.filter((f) => RAW_HEX.test(read(f))).map((f) => f.replace(srcDir, 'src'))
     expect(offenders, `raw hex found — use a Stitch design token utility instead: ${offenders.join(', ')}`).toEqual([])
   })
 
   it('no raw px size in any component', () => {
-    const offenders = files.filter((f) => RAW_PX.test(readFileSync(f, 'utf8'))).map((f) => f.replace(srcDir, 'src'))
+    const offenders = files.filter((f) => RAW_PX.test(read(f))).map((f) => f.replace(srcDir, 'src'))
     expect(offenders, `raw px found — use a token-based Tailwind utility instead: ${offenders.join(', ')}`).toEqual([])
   })
 })
