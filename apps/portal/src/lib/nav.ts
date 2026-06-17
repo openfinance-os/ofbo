@@ -12,8 +12,8 @@ export interface NavModule {
   href: string
   /** Material Symbols Outlined glyph name. */
   icon: string
-  /** Scope required to see the module; null = always visible. */
-  scope: string | null
+  /** Scope(s) required to see the module: a single scope, an any-of list, or null = always visible. */
+  scope: string | string[] | null
 }
 
 export const NAV_MODULES: NavModule[] = [
@@ -23,6 +23,9 @@ export const NAV_MODULES: NavModule[] = [
   { key: 'approvals', label: 'Approvals', href: '/approvals', icon: 'how_to_reg', scope: null },
   { key: 'customer-care', label: 'Customer Care', href: '/care', icon: 'support_agent', scope: 'consents:admin' },
   { key: 'finance', label: 'Finance', href: '/reconciliation', icon: 'account_balance', scope: 'reconciliation:read' },
+  // Analytics & Insights binds the Executive Dashboard (platform:analytics:read) + the
+  // Finance View (reconciliation:read); visible to either audience (UI-06, any-of).
+  { key: 'analytics', label: 'Analytics', href: '/analytics', icon: 'insights', scope: ['platform:analytics:read', 'reconciliation:read'] },
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: 'compliance:reports:read' },
   { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: 'risk:read' },
   { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: 'platform:operations:read' }
@@ -35,5 +38,9 @@ export const NAV_MODULES: NavModule[] = [
  */
 export function visibleModules(scopes: readonly string[], superadmin: boolean): NavModule[] {
   if (superadmin) return NAV_MODULES
-  return NAV_MODULES.filter((m) => m.scope === null || scopes.includes(m.scope))
+  return NAV_MODULES.filter((m) => {
+    if (m.scope === null) return true
+    if (Array.isArray(m.scope)) return m.scope.some((s) => scopes.includes(s))
+    return scopes.includes(m.scope)
+  })
 }

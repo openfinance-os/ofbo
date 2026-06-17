@@ -34,6 +34,12 @@ describe('visibleModules (scope-gated nav)', () => {
   it('the no-scope modules (dashboard + cross-cutting approvals) are always visible', () => {
     expect(visibleModules([], false).map((m) => m.key)).toEqual(['dashboard', 'approvals'])
   })
+
+  it('shows an any-of-scoped module (analytics) to either audience', () => {
+    expect(visibleModules(['platform:analytics:read'], false).map((m) => m.key)).toContain('analytics')
+    expect(visibleModules(['reconciliation:read'], false).map((m) => m.key)).toContain('analytics')
+    expect(visibleModules(['risk:read'], false).map((m) => m.key)).not.toContain('analytics')
+  })
 })
 
 const finance = { subject: 'demo:finance', persona: 'finance-analyst', scopes: ['reconciliation:read', 'billing:read'], superadmin: false }
