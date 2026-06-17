@@ -696,3 +696,12 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - Demo data: applied the 6 missing migrations (0011–0016) to the Supabase demo DB, then seeded the synthetic dataset (zero PII). Live-computed views (Analytics/Risk/Operations/Dashboard) show data immediately; Reconciliation runs + the TPP registry are still empty until a recon replay / directory sync is triggered.
 - Known UI gaps on main: the 'Compliance' nav item routes to /compliance, which has no page (there was never a compliance-console story in the UI-00..09 track) → 404. The Stitch screens are token-faithful STRUCTURAL translations, not pixel reproductions; intentional regulatory deviations remain (UI-02 renders no PSU name/balances — internal id + account count only; UI-06/07/09 use a generic metric grid, not the Stitch charts).
 - STILL human-gated (NOT on main, NOT built): code PRs #77 (BACKOFFICE-69) / #78 (BACKOFFICE-70) — build-ahead, reviewer-passed, could be merged the same way on request; spec PRs #49/#64/#65/#66/#67/#71/#76 (+ author -74/-76/-79); ADR-0001 (-25); BD-13 (-33); the -64 P1 port decision; M6 enterprise port-swaps (not started).
+
+## 2026-06-17 — BACKOFFICE-69 (#77) + BACKOFFICE-70 (#78) MERGED TO MAIN — build-ahead backend stories landed
+
+- Owner asked to land the two remaining build-ahead backend PRs alongside the UI. Both reviewer-passed (hard-stop PASS, conformance CONFORMANT); no schema migration in either.
+- #77 BACKOFFICE-69 (CAAP registration/deregistration audit + >10/device/hour anomaly watch) — merged with a backlog.yaml conflict resolved: -69 → done; kept main's blocked reasons for -74/-76/-79.
+- #78 BACKOFFICE-70 (LFI Ozone Connect health surfacing → operations-console data.ozone_connect) — clean merge; GitHub auto-marked the PR merged once the commits landed on main.
+- CI never ran (org billing). Substitute gate on the merged tree before push: gen no-drift + lint + typecheck + 510 unit tests green (502 UI + 8 new BFF: ozone-health + CAAP audit). Merged on owner instruction in lieu of CI.
+- Backlog -69/-70 now done on main. Open PRs reduced to the 7 human-gated spec PRs only (#49/#64/#65/#66/#67/#71/#76).
+- OPERATIONAL NOTE: the locally-running BFF (tsx, started before #78 landed on disk) must be RESTARTED to serve the new ozone_connect block on the Operations Console — restart: `lsof -ti :8787 | xargs kill` then re-run the run-ofbo serve, or re-run smoke.sh --keep.
