@@ -155,6 +155,9 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
         {b.sla_clock_started_at ? ` · SLA started ${b.sla_clock_started_at}` : ''}
         {b.reopened_count > 0 ? ` · reopened ×${b.reopened_count}` : ''}
       </p>
+      <a href={`/reconciliation/breaks/${encodeURIComponent(b.id)}`} data-testid={`investigate-${b.id}`} className="mt-2 inline-block text-xs text-secondary hover:underline">
+        Investigate →
+      </a>
       {canWrite && CLAIMABLE.has(b.status) && claimAction ? (
         <form action={claimAction} data-testid={`claim-form-${b.id}`} className="mt-3">
           <input type="hidden" name="break_id" value={b.id} />

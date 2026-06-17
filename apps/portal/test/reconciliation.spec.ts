@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { claimBreak, formatMoney, listBreaks, listRuns, resolveBreak, ReconApiError, RESOLVE_OUTCOMES } from '../src/lib/reconciliation.js'
+import { claimBreak, escalateToNebras, formatMoney, getBreak, listBreaks, listRuns, resolveBreak, ESCALATABLE_STATES, ReconApiError, RESOLVE_OUTCOMES } from '../src/lib/reconciliation.js'
 
 /**
  * UI-03 — Reconciliation BFF client (BACKOFFICE-01/-02/-03/-04/-06). Asserts the
@@ -70,6 +70,29 @@ describe('recon client — resolve (BACKOFFICE-04/-06)', () => {
 
   it('exposes the three contract resolution outcomes', () => {
     expect([...RESOLVE_OUTCOMES]).toEqual(['resolved_matched', 'resolved_internal_correction', 'escalated_fintech_billing'])
+  })
+})
+
+describe('recon client — break detail + escalation (BACKOFFICE-11/-05)', () => {
+  it('GETs /breaks/{id} for the three-source diff detail', async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: { id: 'b1', status: 'flagged', source_a_ref: 'NB-1' } }))
+    const out = await getBreak(TOKEN, 'b1', { baseUrl: BASE, fetchImpl })
+    expect(out.source_a_ref).toBe('NB-1')
+    expect(fetchImpl.mock.calls[0]![0]).toBe(`${BASE}${R}/breaks/b1`)
+  })
+
+  it('POSTs /breaks/{id}/escalate-nebras with a mandatory Idempotency-Key', async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: { break_id: 'b1', status: 'escalated_nebras_dispute', nebras_dispute_case_id: 'NBR-9' } }))
+    const out = await escalateToNebras(TOKEN, 'b1', 'idem-3', { baseUrl: BASE, fetchImpl })
+    expect(out.nebras_dispute_case_id).toBe('NBR-9')
+    const [url, init] = fetchImpl.mock.calls[0]!
+    expect(url).toBe(`${BASE}${R}/breaks/b1/escalate-nebras`)
+    expect(init!.method).toBe('POST')
+    expect(init!.headers).toMatchObject({ 'idempotency-key': 'idem-3' })
+  })
+
+  it('exposes the escalatable states (flagged|assigned)', () => {
+    expect([...ESCALATABLE_STATES]).toEqual(['flagged', 'assigned'])
   })
 })
 

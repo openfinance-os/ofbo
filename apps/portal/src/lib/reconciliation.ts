@@ -161,6 +161,36 @@ export async function resolveBreak(
   return (await envelope<ReconciliationBreak>(res)).data
 }
 
+/** BACKOFFICE-11 — single break detail, the three-source side-by-side diff view (reconciliation:read). */
+export async function getBreak(token: string, breakId: string, deps: ReconApiDeps = {}): Promise<ReconciliationBreak> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(`${base}${RECON_BASE}/breaks/${encodeURIComponent(breakId)}`, { headers: authHeaders(token, trace) })
+  return (await envelope<ReconciliationBreak>(res)).data
+}
+
+/** Result of a Nebras escalation (BACKOFFICE-05). */
+export interface NebrasEscalationResult {
+  break_id: string
+  status: string
+  nebras_dispute_case_id: string
+}
+/** Break states from which a one-click Nebras dispute can be raised (BFF: flagged|assigned). */
+export const ESCALATABLE_STATES = ['flagged', 'assigned'] as const
+
+/**
+ * BACKOFFICE-05 — one-click Nebras dispute escalation (finance:disputes:write).
+ * POST /breaks/{id}/escalate-nebras; mutating → Idempotency-Key mandatory. Propagates
+ * to the Nebras Case & Dispute Management surface via P6 in the BFF.
+ */
+export async function escalateToNebras(token: string, breakId: string, idempotencyKey: string, deps: ReconApiDeps = {}): Promise<NebrasEscalationResult> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(`${base}${RECON_BASE}/breaks/${encodeURIComponent(breakId)}/escalate-nebras`, {
+    method: 'POST',
+    headers: { ...authHeaders(token, trace), 'idempotency-key': idempotencyKey }
+  })
+  return (await envelope<NebrasEscalationResult>(res)).data
+}
+
 /** Format integer minor units + ISO 4217 as a display string (no locale PII). */
 export function formatMoney(m: Money | null): string {
   if (!m) return '—'
