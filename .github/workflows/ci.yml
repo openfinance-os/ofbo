@@ -73,6 +73,60 @@ jobs:
       - run: pnpm db:seed
       - run: pnpm test:integration
 
+  q3-e2e:
+    name: Q3 — portal E2E (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ofbo
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ofbo
+      BFF_URL: http://localhost:8787
+      NEBRAS_SIM_URL: http://localhost:8788
+      SIM_ADMIN_TOKEN: ci-demo-token-not-a-secret
+      DEPLOY_PROFILE: demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen
+      - run: pnpm db:apply
+      - run: pnpm db:seed
+      - name: install Playwright Chromium
+        run: pnpm --filter @ofbo/portal exec playwright install --with-deps chromium
+      # The E2E drives the full demo stack: Nebras sim + BFF + a production portal build.
+      - name: start Nebras sim + BFF
+        run: |
+          (cd services/nebras-sim && PORT=8788 ADMIN_TOKEN="$SIM_ADMIN_TOKEN" pnpm exec tsx scripts/serve.ts > /tmp/sim.log 2>&1 &)
+          (cd services/bff && PORT=8787 pnpm exec tsx scripts/serve.ts > /tmp/bff.log 2>&1 &)
+          until curl -sf http://localhost:8788/tpp-reports/2026-05 >/dev/null; do sleep 1; done
+          until curl -s -o /dev/null http://localhost:8787; do sleep 1; done
+      - name: build + start portal
+        run: |
+          pnpm --filter @ofbo/portal build
+          (cd apps/portal && PORT=3000 pnpm start > /tmp/portal.log 2>&1 &)
+          until curl -sf http://localhost:3000 >/dev/null; do sleep 1; done
+      - run: pnpm --filter @ofbo/portal e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/portal/playwright-report
+          retention-days: 7
+
   q4-security-deps:
     name: Q4 — security review + dependency scan
     runs-on: ubuntu-latest

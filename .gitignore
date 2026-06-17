@@ -11,3 +11,8 @@ coverage/
 # Playwright MCP visual-sweep artifacts (local only)
 .playwright-mcp/
 portal-*.png
+
+# Playwright E2E run artifacts (local only)
+apps/portal/test-results/
+apps/portal/playwright-report/
+apps/portal/.last-run.json
