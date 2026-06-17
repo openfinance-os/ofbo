@@ -1,112 +1,70 @@
-:root {
-  --ofbo-ink: #0b1f33;
-  --ofbo-accent: #0a6cff;
-  --ofbo-demo: #b54708;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * UI-00b — portal base styles on the Stitch Material 3 tokens (apps/portal/design).
+ * The ad-hoc --ofbo-* palette is retired; all colour comes from token utilities
+ * (no raw hex). Geometry stays rem-based. UI-01 refactors this into the design-system
+ * app shell; this keeps the M1 shell rendering on tokens in the meantime.
+ */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-surface text-on-surface font-sans m-0;
+  }
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  color: var(--ofbo-ink);
-  background: #f6f8fb;
-}
-
-.demo-banner {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  padding: 0.5rem 1rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
-  background: var(--ofbo-demo);
-  text-align: center;
-}
-
-.portal-main {
-  max-width: 60rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
-}
-
-.persona-list {
-  list-style: none;
-  padding: 0;
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-}
-
-.persona-list button,
-.dashboard button {
-  width: 100%;
-  text-align: left;
-  padding: 0.75rem 1rem;
-  border: 1px solid #d0d7e2;
-  border-radius: 0.5rem;
-  background: #fff;
-  cursor: pointer;
-  font: inherit;
-}
-
-.persona-list button:hover {
-  border-color: var(--ofbo-accent);
-}
-
-.persona-id {
-  color: #6b7785;
-  font-size: 0.85em;
-}
-
-.mfa-note {
-  color: #475467;
-}
-
-.signin-error {
-  color: #b42318;
-  font-weight: 600;
-}
-
-.dashboard {
-  display: grid;
-  gap: 2rem;
-}
-
-.scope-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0;
-  list-style: none;
-}
-
-.scope-list li {
-  padding: 0.25rem 0.6rem;
-  background: #eef4ff;
-  border: 1px solid #cfe0ff;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.9rem;
-}
-
-th,
-td {
-  text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid #e4e9f0;
-}
-
-.trace-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8rem;
+@layer components {
+  .demo-banner {
+    @apply sticky top-0 z-50 px-4 py-2 font-bold text-center text-white bg-demo tracking-wide;
+  }
+  .portal-main {
+    @apply mx-auto px-4 pt-6 pb-16;
+    max-width: 60rem;
+  }
+  .persona-list {
+    @apply grid gap-2 p-0 list-none;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  }
+  .persona-list button,
+  .dashboard button {
+    @apply w-full text-left px-4 py-3 rounded-xl bg-surface-container-lowest border border-outline-variant cursor-pointer;
+    font: inherit;
+  }
+  .persona-list button:hover {
+    @apply border-secondary;
+  }
+  .persona-id {
+    @apply text-on-surface-variant text-sm;
+  }
+  .mfa-note {
+    @apply text-on-surface-variant;
+  }
+  .signin-error {
+    @apply text-error font-semibold;
+  }
+  .dashboard {
+    @apply grid gap-8;
+  }
+  .scope-list {
+    @apply flex flex-wrap gap-2 p-0 list-none;
+  }
+  .scope-list li {
+    @apply px-2 py-1 rounded-full bg-secondary-fixed border border-secondary-fixed-dim font-mono text-sm;
+  }
+  table {
+    @apply w-full text-sm;
+    border-collapse: collapse;
+  }
+  th,
+  td {
+    @apply text-left px-2 py-1 border-b border-surface-container-high;
+  }
+  .trace-id {
+    @apply font-mono text-xs;
+  }
 }
