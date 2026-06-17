@@ -1,96 +1,110 @@
 /**
  * UI-00 — OFBO portal design tokens (repo-canonical source of truth).
  *
- * Codified from the Stitch "Regulated Institutional Interface" design system
- * (project 8050269076066130289). Stitch = appearance source of truth; this file is
- * the repo mirror that the Tailwind preset (UI-00b) consumes. Framework-agnostic
- * data — no Tailwind/React import — so it stays usable whether tokens feed Tailwind,
- * CSS variables, or tests.
- *
- * RECONCILE against the live Stitch `design.md` once the Stitch MCP connection is
- * restored (it was unreachable when this was authored); values below are the
- * documented spec (PRD/backlog UI-00 note).
+ * RECONCILED 2026-06-17 against the live Stitch project (8050269076066130289,
+ * "Open Finance Back Office"). `color`, `borderRadius`, and `spacing` below are
+ * codified VERBATIM from the Stitch screens' `tailwind-config` (cross-checked across
+ * the Customer Care Console + Reconciliation Console — identical Material 3 base).
+ * Fonts confirmed from the screens' Google-Fonts links. Framework-agnostic data
+ * (no Tailwind/React import) so it stays usable for the Tailwind preset (UI-00b),
+ * CSS variables, or tests. Stitch = appearance source of truth; OpenAPI = behaviour.
  */
 
-/** Typography — Inter for UI text, JetBrains Mono for ids/amounts/code. */
+/** Confirmed from the Stitch font links: Inter (UI), JetBrains Mono (ids/amounts),
+ *  Material Symbols Outlined (icons). */
 export const fontFamily = {
   sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-  mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
-} as const
-
-/** Modular type scale (rem). */
-export const fontSize = {
-  xs: '0.75rem',
-  sm: '0.875rem',
-  base: '1rem',
-  lg: '1.125rem',
-  xl: '1.25rem',
-  '2xl': '1.5rem',
-  '3xl': '1.875rem'
-} as const
-
-/** 4px spacing base — keys are the 4px multiple. */
-export const space = {
-  0: '0',
-  1: '0.25rem', // 4px
-  2: '0.5rem', // 8px
-  3: '0.75rem', // 12px
-  4: '1rem', // 16px
-  5: '1.25rem', // 20px
-  6: '1.5rem', // 24px
-  8: '2rem', // 32px
-  10: '2.5rem', // 40px
-  12: '3rem' // 48px
-} as const
-
-export const radius = {
-  none: '0',
-  sm: '0.25rem',
-  md: '0.5rem',
-  lg: '0.75rem',
-  full: '9999px'
+  mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+  symbols: ['Material Symbols Outlined']
 } as const
 
 /**
- * Colour palette. `primary` is the Regulated Institutional navy (#0F172A). The
- * `status` ramp is load-bearing semantics used across every console:
- *   breach = red, break = amber, reconciled = green (PRD §7 / backlog UI-00).
+ * Material 3 colour roles — verbatim from the Stitch design system (light theme).
+ * Keys keep the M3 role names so the Tailwind preset maps 1:1 to the Stitch screens.
  */
 export const color = {
-  primary: {
-    DEFAULT: '#0F172A', // navy — primary brand ink / nav
-    fg: '#FFFFFF',
-    muted: '#334155',
-    subtle: '#64748B'
-  },
-  accent: '#0A6CFF',
-  surface: {
-    DEFAULT: '#FFFFFF',
-    raised: '#F8FAFC',
-    sunken: '#F1F5F9',
-    border: '#E2E8F0'
-  },
-  ink: {
-    DEFAULT: '#0B1F33',
-    muted: '#475569',
-    inverse: '#FFFFFF'
-  },
-  /** Operational status semantics — the same triad everywhere. */
+  primary: '#000000',
+  'primary-container': '#131b2e',
+  'on-primary': '#ffffff',
+  'on-primary-container': '#7c839b',
+  'primary-fixed': '#dae2fd',
+  'primary-fixed-dim': '#bec6e0',
+  'on-primary-fixed': '#131b2e',
+  'on-primary-fixed-variant': '#3f465c',
+  'inverse-primary': '#bec6e0',
+  secondary: '#0058be',
+  'secondary-container': '#2170e4',
+  'on-secondary': '#ffffff',
+  'on-secondary-container': '#fefcff',
+  'secondary-fixed': '#d8e2ff',
+  'secondary-fixed-dim': '#adc6ff',
+  'on-secondary-fixed': '#001a42',
+  'on-secondary-fixed-variant': '#004395',
+  tertiary: '#000000',
+  'tertiary-fixed': '#d3e4fe',
+  'tertiary-fixed-dim': '#b7c8e1',
+  'on-tertiary': '#ffffff',
+  'on-tertiary-container': '#75859d',
+  'on-tertiary-fixed': '#0b1c30',
+  'on-tertiary-fixed-variant': '#38485d',
+  error: '#ba1a1a',
+  'error-container': '#ffdad6',
+  'on-error': '#ffffff',
+  'on-error-container': '#93000a',
+  background: '#f7f9fb',
+  'on-background': '#191c1e',
+  surface: '#f7f9fb',
+  'surface-dim': '#d8dadc',
+  'surface-bright': '#f7f9fb',
+  'surface-variant': '#e0e3e5',
+  'surface-tint': '#565e74',
+  'surface-container-lowest': '#ffffff',
+  'surface-container-low': '#f2f4f6',
+  'surface-container': '#eceef0',
+  'surface-container-high': '#e6e8ea',
+  'surface-container-highest': '#e0e3e5',
+  'on-surface': '#191c1e',
+  'on-surface-variant': '#45464d',
+  'inverse-surface': '#2d3133',
+  'inverse-on-surface': '#eff1f3',
+  outline: '#76777d',
+  'outline-variant': '#c6c6cd'
+} as const
+
+/**
+ * OFBO semantic extensions layered on the Stitch base (the M3 config ships only
+ * `error`). The operational status triad is load-bearing across every console
+ * (PRD §7): breach = the Stitch error red; break = amber; reconciled = green.
+ * `demo` is the mandatory persistent DEMO-banner colour (regulatory hard-stop).
+ * NOTE: break/reconciled are OFBO additions (Stitch screens colour these with
+ * Tailwind defaults) — keep aligned with the Recon/Risk consoles.
+ */
+export const ext = {
   status: {
-    breach: '#DC2626', // red — SLA/limit breach
-    break: '#D97706', // amber — reconciliation break / warning
-    reconciled: '#16A34A', // green — matched / healthy
-    info: '#0A6CFF'
+    breach: '#ba1a1a', // = Stitch `error`
+    break: '#b26a00', // amber — reconciliation break / warning
+    reconciled: '#146c2e' // green — matched / healthy
   },
-  /** The persistent DEMO banner colour (regulatory: every screen). */
-  demo: '#B54708'
+  demo: '#b54708'
 } as const
 
-/** Density toggles — comfortable (default) and compact, as a row-height + padding pair. */
-export const density = {
-  comfortable: { rowHeight: '2.75rem', padY: space[3] },
-  compact: { rowHeight: '2rem', padY: space[1] }
+/** Verbatim from the Stitch config. */
+export const borderRadius = {
+  DEFAULT: '0.125rem',
+  lg: '0.25rem',
+  xl: '0.5rem',
+  full: '0.75rem'
 } as const
 
-export const tokens = { fontFamily, fontSize, space, radius, color, density } as const
+/** Verbatim from the Stitch config — 4px base unit + named layout tokens. The numeric
+ *  spacing + type scales come from Tailwind defaults (also 4px-based). */
+export const spacing = {
+  unit: '4px',
+  gutter: '16px',
+  'container-padding': '24px',
+  'row-height-standard': '48px', // density: comfortable
+  'row-height-dense': '32px' // density: compact
+} as const
+
+export const tokens = { fontFamily, color, ext, borderRadius, spacing } as const
 export type DesignTokens = typeof tokens

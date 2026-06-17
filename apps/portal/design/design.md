@@ -1,32 +1,46 @@
 # OFBO Portal Design System (repo-canonical mirror)
 
 Source of truth for **appearance** is the Stitch project **`8050269076066130289`**
-("Regulated Institutional Interface"). This file is the repo mirror of Stitch's
-`design.md`; `tokens.ts` is the machine-readable token source the Tailwind preset
-consumes (UI-00b). **Behaviour + data** remain governed by `specs/backoffice-openapi.yaml`.
+("Open Finance Back Office"). `tokens.ts` is the machine-readable token source the
+Tailwind preset consumes (UI-00b); this file is the human-readable mirror.
+**Behaviour + data** remain governed by `specs/backoffice-openapi.yaml`.
 
-> ⚠️ Authored while the Stitch MCP connection was unreachable — values are the
-> documented spec. **Reconcile against the live Stitch `design.md`** once Stitch is
-> restored, and push any repo-side edits back via `upload_design_md`.
+> ✅ **Reconciled 2026-06-17** against the live Stitch screens' `tailwind-config`
+> (Customer Care Console + Reconciliation Console — identical Material 3 base). The
+> design system is **Material 3 (light theme)**. Re-pull + reconcile if Stitch changes;
+> push repo-side edits back via `upload_design_md`.
 
 ## Typography
-- **Inter** — all UI text. **JetBrains Mono** — ids, money amounts, trace ids, code.
-- Type scale: `xs .75 / sm .875 / base 1 / lg 1.125 / xl 1.25 / 2xl 1.5 / 3xl 1.875` rem.
+- **Inter** — all UI text. **JetBrains Mono** — ids, money amounts, trace ids.
+  **Material Symbols Outlined** — icons. (From the Stitch Google-Fonts links.)
 
-## Colour
-- **Primary navy `#0F172A`** — brand ink, sidebar/topbar.
-- **Status triad (load-bearing, used on every console):** breach = red `#DC2626`,
-  break = amber `#D97706`, reconciled = green `#16A34A`; info = `#0A6CFF`.
-- Surfaces: white / `#F8FAFC` raised / `#F1F5F9` sunken / `#E2E8F0` border.
-- **DEMO banner `#B54708`** — persistent on every screen (regulatory hard-stop).
+## Colour — Material 3 roles (verbatim from Stitch)
+- **`primary` `#000000`**, **`primary-container` `#131b2e`** (the navy), `on-primary` white.
+- **`secondary` `#0058be`** (blue), `secondary-container` `#2170e4`.
+- Surfaces: `background`/`surface` `#f7f9fb`, `surface-container-lowest` `#ffffff` →
+  `…-container-highest` `#e0e3e5`; `on-surface` `#191c1e`; `outline` `#76777d`.
+- **`error` `#ba1a1a`** / `error-container` `#ffdad6`.
+- Full M3 role set (fixed/inverse/tertiary/etc.) is in `tokens.ts`.
 
-## Spacing & shape
-- **4px spacing base** (`space[1]` = 4px); scale 0,1,2,3,4,5,6,8,10,12.
-- Radii: `sm .25 / md .5 / lg .75` rem, `full`.
+### OFBO semantic extensions (layered on the Stitch base)
+The M3 config ships only `error`, so these are OFBO additions in `tokens.ts → ext`:
+- **Status triad (load-bearing, every console):** breach = `#ba1a1a` (= Stitch error),
+  break = amber `#b26a00`, reconciled = green `#146c2e`.
+- **DEMO banner `#b54708`** — persistent on every screen (regulatory hard-stop).
 
-## Density
-- **comfortable** (default) and **compact** row-height/padding pairs for dense tables
-  (break queues, run lists).
+## Spacing & shape (verbatim from Stitch)
+- **4px base unit**; `gutter` 16px, `container-padding` 24px.
+- **Density:** `row-height-standard` 48px (comfortable), `row-height-dense` 32px (compact).
+- Radii: `DEFAULT` .125 / `lg` .25 / `xl` .5 / `full` .75 rem.
+- Numeric spacing + type scales come from Tailwind defaults (also 4px-based).
+
+## Screen inventory (Stitch, for UI-02..09 + extras)
+Consoles: Customer Care, Reconciliation, Investigation Detail, Four-Eyes Approval,
+Analytics & Insights, Risk Management & Anomaly Detection, TPP Billing & Registry,
+Operations Console (each with Refined/Hardened iterations). Plus: Certificate Expiry &
+Health Monitor, SLO & Error Budget, Shadow TPP Discovery, Bulk Revocation, CBUAE Inquiry,
+Granular Consent Manager, PSU Consent Deep-Dive, Customer Interaction History, Incident
+Command, and 4 mobile screens. Translate the latest (Refined/Hardened) variant per screen.
 
 ## Rules (binding — CLAUDE.md UI/UX convention)
 - Token-only: no raw hex/px in components (CI lint enforces — UI-00b).
