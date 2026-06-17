@@ -111,6 +111,21 @@ export class PgAnomalyDetectionStore {
     })
   }
 
+  /** BACKOFFICE-69 — CAAP registrations per device since `sinceIso` (the device is
+   *  the acting principal on a caap_registered High-class event). */
+  async caapRegistrationsByDevice(sinceIso: string): Promise<AgentLookupRow[]> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT acting_principal AS agent, count(*)::int AS lookups
+           FROM audit_high_sensitivity
+          WHERE event_type = 'caap_registered' AND created_at >= $1
+          GROUP BY acting_principal`,
+        [sinceIso]
+      )
+      return res.rows.map((r) => ({ agent: r.agent as string, lookups: Number(r.lookups) }))
+    })
+  }
+
   /** Dedup keys of OPEN anomaly signals — so the detector does not re-emit. */
   async openAnomalyDedupKeys(): Promise<Set<string>> {
     return this.asApp(async (c) => {

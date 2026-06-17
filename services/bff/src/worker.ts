@@ -31,6 +31,7 @@ import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liabil
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
+import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -161,12 +162,15 @@ export default {
     // BACKOFFICE-66 — scheme certificate expiry monitor: red ≤30d → P3 ITSM ticket,
     // critical ≤7d → ticket + High-class audit (chain handled by P6).
     const certMonitor = new CertExpiryMonitor({ source: new DemoCertChainSource(), itsm, audit })
+    // BACKOFFICE-69 — record CAAP register/deregister events (High-class audit); the
+    // anomaly detector above scans caap_registered for the >10/device/hour spike.
+    const recordCaap = async () => new CaapRegistrationRecorder({ audit }).record(await new DemoCaapEventSource().getEvents(), crypto.randomUUID())
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
         ingestion.runIngestion(period, crypto.randomUUID()),
         runLiability(),
-        anomalyDetector.detect(crypto.randomUUID()),
+        recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
         tppProfiler.profile(crypto.randomUUID()),
         certMonitor.check(crypto.randomUUID())
       ]).finally(async () => {
