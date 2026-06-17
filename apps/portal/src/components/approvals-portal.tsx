@@ -1,0 +1,145 @@
+import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
+
+/**
+ * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
+ * Approval Portal" screen (project 8050269076066130289). Presentational + server-
+ * rendered: the pending-approval queue, each as dual initiator/approver cards with a
+ * permission lockout (approve/reject disabled when the principal is the initiator —
+ * no self-approval — or lacks the approver scope). NEVER executes inline: approval is
+ * a server action that POSTs to the BFF, which runs the gated op on approval. Token-only.
+ */
+
+export interface ApprovalsPortalProps {
+  approvals?: ApprovalRequest[]
+  subject: string
+  scopes: string[]
+  superadmin?: boolean
+  error?: string | null
+  notice?: string | null
+  approveAction?: (formData: FormData) => void | Promise<void>
+  rejectAction?: (formData: FormData) => void | Promise<void>
+}
+
+const STATE_TONE: Record<string, string> = {
+  pending: 'bg-break/10 text-break',
+  approved: 'bg-reconciled/10 text-reconciled',
+  rejected: 'bg-breach/10 text-breach',
+  timed_out: 'bg-surface-container-high text-on-surface-variant'
+}
+
+export function ApprovalStateBadge({ state }: { state: string }) {
+  const tone = STATE_TONE[state] ?? 'bg-surface-container-high text-on-surface-variant'
+  return (
+    <span data-testid={`state-${state}`} className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
+      {state}
+    </span>
+  )
+}
+
+export function ApprovalCard({
+  approval,
+  subject,
+  scopes,
+  superadmin,
+  approveAction,
+  rejectAction
+}: {
+  approval: ApprovalRequest
+  subject: string
+  scopes: string[]
+  superadmin?: boolean
+  approveAction?: ApprovalsPortalProps['approveAction']
+  rejectAction?: ApprovalsPortalProps['rejectAction']
+}) {
+  const actable = canActOn(approval, subject, scopes, superadmin ?? false)
+  const isInitiator = approval.initiator === subject
+  return (
+    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm" data-testid={`approval-${approval.approval_request_id}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-sm text-primary">{approval.operation_type}</span>
+        <ApprovalStateBadge state={approval.state} />
+      </div>
+
+      {/* dual initiator / approver cards */}
+      <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3" data-testid="initiator-card">
+          <p className="text-xs text-on-surface-variant uppercase tracking-wider">Initiator</p>
+          <p className="font-mono text-xs text-primary mt-1 break-all">{approval.initiator}</p>
+        </div>
+        <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3" data-testid="approver-card">
+          <p className="text-xs text-on-surface-variant uppercase tracking-wider">Approver</p>
+          <p className="font-mono text-xs text-primary mt-1 break-all">{approval.approver ?? `awaiting · ${approval.approver_required_scope}`}</p>
+        </div>
+      </div>
+
+      <p className="text-xs text-on-surface-variant mt-2">Expires {approval.expires_at}</p>
+      {approval.reject_reason ? <p className="text-xs text-breach mt-1">Rejected: {approval.reject_reason}</p> : null}
+
+      {actable && approveAction && rejectAction ? (
+        <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant pt-3">
+          <form action={approveAction} data-testid={`approve-form-${approval.approval_request_id}`}>
+            <input type="hidden" name="approval_id" value={approval.approval_request_id} />
+            <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
+              Approve
+            </button>
+          </form>
+          <form action={rejectAction} data-testid={`reject-form-${approval.approval_request_id}`} className="space-y-2">
+            <input type="hidden" name="approval_id" value={approval.approval_request_id} />
+            <textarea
+              name="reject_reason"
+              aria-label="reject reason"
+              required
+              minLength={MIN_REJECT_REASON}
+              placeholder={`Reject reason (≥ ${MIN_REJECT_REASON} chars)…`}
+              className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1"
+            />
+            <button type="submit" className="w-full bg-breach text-on-error py-1.5 rounded text-xs font-bold hover:bg-error transition-colors">
+              Reject
+            </button>
+          </form>
+        </div>
+      ) : approval.state === 'pending' ? (
+        <p className="mt-3 text-xs text-on-surface-variant border-t border-outline-variant pt-3" data-testid={`lockout-${approval.approval_request_id}`}>
+          {isInitiator ? 'You initiated this request — a second authorised approver must act (four-eyes).' : `Locked — requires the ${approval.approver_required_scope} scope.`}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, notice, approveAction, rejectAction }: ApprovalsPortalProps) {
+  return (
+    <div className="space-y-6" data-testid="approvals-portal">
+      <h1 className="text-2xl font-semibold">Four-Eyes Approval Portal</h1>
+
+      {notice ? (
+        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="approvals-notice">
+          {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="approvals-error">
+          {error}
+        </p>
+      ) : null}
+
+      <section className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
+        <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
+          <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Pending Approvals</h2>
+          <span className="bg-break/10 text-break px-2 py-0.5 rounded-full text-xs font-bold">{approvals.length}</span>
+        </div>
+        <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {approvals.length === 0 ? (
+            <p className="text-xs text-on-surface-variant p-1" data-testid="approvals-empty">
+              No pending approvals for your scope.
+            </p>
+          ) : (
+            approvals.map((a) => (
+              <ApprovalCard key={a.approval_request_id} approval={a} subject={subject} scopes={scopes} superadmin={superadmin} approveAction={approveAction} rejectAction={rejectAction} />
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}

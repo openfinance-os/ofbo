@@ -1,0 +1,80 @@
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { AppShell } from '../../components/app-shell'
+import { TppBilling } from '../../components/tpp-billing'
+import { TOKEN_COOKIE } from '../../lib/cookies'
+import { verifyAndMint } from '../../lib/portal'
+import { listCounterparties, listInvoiceRuns, TppBillingApiError, type InvoiceRun, type TppCounterparty } from '../../lib/tpp-billing'
+import { createInvoiceRunAction, registerFinancialSystemAction, syncDirectoryAction } from './actions'
+
+/**
+ * UI-08 — TPP Billing & Registry (BACKOFFICE-71 registry + -72 P9 registration + -73
+ * monthly invoicing). Wired over the OpenAPI contract, server-side (httpOnly token never
+ * in the browser). billing:read gates the screen; billing:write gates registration + invoice
+ * runs; platform:operations:write gates the directory sync (all re-enforced at the BFF).
+ * Invoice-run creation is four-eyes — submitted to the approvals queue, never dispatched inline.
+ */
+export const dynamic = 'force-dynamic'
+
+const NOTICE: Record<string, string> = {
+  synced: 'Registry synced from the Trust Framework Directory.',
+  registered: 'Counterparty registered in the P9 financial-management system.',
+  invoice_submitted: 'Invoice run submitted to four-eyes — a second authorised principal approves before P9 dispatch.'
+}
+const FAILURE: Record<string, string> = {
+  sync_failed: 'Directory sync failed. Try again.',
+  register_failed: 'Could not register the counterparty. It may already be registered.',
+  invoice_failed: 'Could not create the invoice run. The record set must be reconciled with all breaks cleared.'
+}
+
+export default async function TppBillingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const token = (await cookies()).get(TOKEN_COOKIE)?.value
+  if (!token) redirect('/')
+
+  let principal
+  try {
+    principal = await verifyAndMint(token)
+  } catch {
+    redirect('/')
+  }
+  if (!principal.superadmin && !principal.scopes.includes('billing:read')) redirect('/dashboard')
+
+  const sp = await searchParams
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
+  const status = one(sp.status) ?? ''
+  const canBilling = principal.superadmin || principal.scopes.includes('billing:write')
+  const canOps = principal.superadmin || principal.scopes.includes('platform:operations:write')
+
+  let counterparties: TppCounterparty[] = []
+  let invoiceRuns: InvoiceRun[] = []
+  let error: string | null = FAILURE[status] ?? null
+  try {
+    counterparties = (await listCounterparties(token, { limit: 50 })).counterparties
+  } catch (e) {
+    error = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
+  }
+  try {
+    invoiceRuns = (await listInvoiceRuns(token, { limit: 20 })).runs
+  } catch {
+    error = error ?? 'Failed to load invoice runs.'
+  }
+
+  return (
+    <AppShell
+      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
+      active="billing"
+    >
+      <TppBilling
+        counterparties={counterparties}
+        invoiceRuns={invoiceRuns}
+        error={error}
+        notice={NOTICE[status] ?? null}
+        canBilling={canBilling}
+        canOps={canOps}
+        registerAction={registerFinancialSystemAction}
+        syncAction={syncDirectoryAction}
+        invoiceRunAction={createInvoiceRunAction}
+      />
+    </AppShell>
+  )
+}
