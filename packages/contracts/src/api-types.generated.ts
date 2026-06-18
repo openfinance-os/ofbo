@@ -1647,6 +1647,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/lfi-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cadence health of the 16 login-only Nebras LFI reports (BACKOFFICE-67)
+         * @description The 16 Nebras LFI Reports (availability, performance, billing, consent, payments, CoP et al. per API Hub Docs v8) are login-only with no API equivalent (PRD §3 known scheme limitation). This returns, per report type, the latest verified manual ingest and whether it is overdue against its defined cadence (daily availability/performance, weekly consent, monthly billing). A missed cadence raises an ITSM ticket + Risk signal via a headless monitor.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Per-report cadence status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["LfiReportCadenceStatus"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /**
+         * Manual verified ingest of a login-only Nebras LFI report (BACKOFFICE-67)
+         * @description The 16 Nebras LFI Reports are downloaded from the Nebras portal (no API) and uploaded here. The upload computes an integrity hash, writes a compliance_report record, and emits BCBS 239 lineage — the same verified-ingest pattern as the Nebras billing-record upload (BACKOFFICE-73). High-class audited with the acting principal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        /** @description One of the 16 login-only LFI report types, e.g. availability, performance, consent, billing */
+                        report_type: string;
+                        /** @description Reporting period the file covers (ISO date for daily, ISO week for weekly, YYYY-MM for monthly) */
+                        report_period: string;
+                        /** @description e.g. portal download timestamp / operator note */
+                        source_note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Report ingested — compliance_report written with integrity hash; BCBS 239 lineage emitted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ComplianceReport"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/inquiries/psu": {
         parameters: {
             query?: never;
@@ -3161,6 +3252,33 @@ export interface components {
             generated_at?: string | null;
             /** Format: date-time */
             submitted_at?: string | null;
+        };
+        /**
+         * @description Ingest cadence for a login-only Nebras LFI report (BACKOFFICE-67) — daily for availability/performance, weekly for consent, monthly for billing (PRD §7).
+         * @enum {string}
+         */
+        LfiReportCadence: "daily" | "weekly" | "monthly";
+        /** @description Cadence health for one of the 16 login-only Nebras LFI report types (BACKOFFICE-67). */
+        LfiReportCadenceStatus: {
+            /** @example availability */
+            report_type?: string;
+            cadence?: components["schemas"]["LfiReportCadence"];
+            /** Format: date-time */
+            last_ingested_at?: string | null;
+            /** @description Reporting period of the most recent ingest */
+            last_period?: string | null;
+            /**
+             * Format: uuid
+             * @description compliance_report record of the most recent ingest
+             */
+            last_report_id?: string | null;
+            /**
+             * Format: date-time
+             * @description When the next ingest is due per cadence
+             */
+            next_due_at?: string;
+            /** @description True when now > next_due_at; drives the missed-cadence ITSM ticket + Risk signal */
+            overdue?: boolean;
         };
         ApprovalRequest: {
             /** Format: uuid */

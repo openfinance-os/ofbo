@@ -851,6 +851,79 @@ paths:
         '200': { $ref: '#/components/responses/Report' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/lfi-reports:
+    get:
+      tags: [reports]
+      summary: Cadence health of the 16 login-only Nebras LFI reports (BACKOFFICE-67)
+      description: >
+        The 16 Nebras LFI Reports (availability, performance, billing, consent,
+        payments, CoP et al. per API Hub Docs v8) are login-only with no API equivalent
+        (PRD §3 known scheme limitation). This returns, per report type, the latest
+        verified manual ingest and whether it is overdue against its defined cadence
+        (daily availability/performance, weekly consent, monthly billing). A missed
+        cadence raises an ITSM ticket + Risk signal via a headless monitor.
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+      responses:
+        '200':
+          description: Per-report cadence status
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/LfiReportCadenceStatus' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [reports]
+      summary: Manual verified ingest of a login-only Nebras LFI report (BACKOFFICE-67)
+      description: >
+        The 16 Nebras LFI Reports are downloaded from the Nebras portal (no API) and
+        uploaded here. The upload computes an integrity hash, writes a compliance_report
+        record, and emits BCBS 239 lineage — the same verified-ingest pattern as the
+        Nebras billing-record upload (BACKOFFICE-73). High-class audited with the acting
+        principal.
+      x-rate-limit-per-min: 20
+      x-required-scope: compliance:reports:generate
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, report_type, report_period]
+              properties:
+                file: { type: string, format: binary }
+                report_type:
+                  type: string
+                  description: One of the 16 login-only LFI report types, e.g. availability, performance, consent, billing
+                report_period:
+                  type: string
+                  description: Reporting period the file covers (ISO date for daily, ISO week for weekly, YYYY-MM for monthly)
+                source_note: { type: string, description: e.g. portal download timestamp / operator note }
+      responses:
+        '201':
+          description: Report ingested — compliance_report written with integrity hash; BCBS 239 lineage emitted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ComplianceReport' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/inquiries/psu:
     post:
       tags: [reports]
@@ -2016,6 +2089,23 @@ components:
         integrity_hash: { type: string, nullable: true, description: SHA-256, set once approved }
         generated_at: { type: string, format: date-time, nullable: true }
         submitted_at: { type: string, format: date-time, nullable: true }
+    LfiReportCadence:
+      type: string
+      enum: [daily, weekly, monthly]
+      description: >
+        Ingest cadence for a login-only Nebras LFI report (BACKOFFICE-67) — daily for
+        availability/performance, weekly for consent, monthly for billing (PRD §7).
+    LfiReportCadenceStatus:
+      type: object
+      description: Cadence health for one of the 16 login-only Nebras LFI report types (BACKOFFICE-67).
+      properties:
+        report_type: { type: string, example: availability }
+        cadence: { $ref: '#/components/schemas/LfiReportCadence' }
+        last_ingested_at: { type: string, format: date-time, nullable: true }
+        last_period: { type: string, nullable: true, description: Reporting period of the most recent ingest }
+        last_report_id: { type: string, format: uuid, nullable: true, description: compliance_report record of the most recent ingest }
+        next_due_at: { type: string, format: date-time, description: When the next ingest is due per cadence }
+        overdue: { type: boolean, description: True when now > next_due_at; drives the missed-cadence ITSM ticket + Risk signal }
     ApprovalRequest:
       type: object
       properties:
