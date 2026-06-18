@@ -594,6 +594,137 @@ paths:
         '202': { $ref: '#/components/responses/ApprovalPending' }
         default: { $ref: '#/components/responses/Error' }
 
+  # ---------- 7.2a Respondent-side Nebras dispute scheme clocks (BACKOFFICE-75) ----------
+  # Distinct from the Customer-Care /disputes surface (bank/PSU as initiator) and from
+  # the break escalate-nebras flow (bank initiating a Nebras case). Here Nebras raises a
+  # dispute and the BANK IS THE RESPONDENT, bound to scheme clocks (Interaction Guide v4
+  # defaults, BD-16: response 3 bd, formal resolution 15 bd, appeal 3 bd of verdict,
+  # implementation 3 bd of final verdict). Owned by Finance (finance:disputes:write); the
+  # amber/red breach risk is surfaced to Compliance via the Compliance View (BACKOFFICE-29).
+  /back-office/disputes/respondent:
+    post:
+      tags: [disputes]
+      summary: Register a Nebras-raised dispute where the bank is the respondent (BACKOFFICE-75)
+      description: >
+        Ingests a dispute Nebras has raised against the bank. The response (3 bd) and
+        formal-resolution (15 bd) clocks start from raised_at on registration; appeal and
+        implementation clocks start when the respective verdicts are recorded via :advance.
+      x-rate-limit-per-min: 60
+      x-required-scope: finance:disputes:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RespondentDisputeCreate' }
+      responses:
+        '201':
+          description: Respondent dispute registered; response + resolution clocks started
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RespondentDispute' }
+        default: { $ref: '#/components/responses/Error' }
+    get:
+      tags: [disputes]
+      summary: List respondent disputes (filter by state / breach status)
+      x-rate-limit-per-min: 200
+      x-required-scope: finance:disputes:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/RespondentDisputeState' }
+        - name: breach_status
+          in: query
+          schema: { $ref: '#/components/schemas/SchemeClockStatus' }
+          description: Filter to clocks at risk (amber) or breached (red)
+      responses:
+        '200':
+          description: Paginated respondent-dispute list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/RespondentDispute' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/disputes/respondent/{respondent_dispute_id}:
+    get:
+      tags: [disputes]
+      summary: Respondent dispute detail — scheme clocks + per-clock breach status
+      x-rate-limit-per-min: 200
+      x-required-scope: finance:disputes:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/respondentDisputeId'
+      responses:
+        '200':
+          description: Respondent dispute detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RespondentDispute' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/disputes/respondent/{respondent_dispute_id}:advance:
+    post:
+      tags: [disputes]
+      summary: Record a respondent-side lifecycle action that stops / starts a scheme clock
+      description: >
+        respond → stops the response clock (state responded). record_verdict → resolution met,
+        starts the appeal clock (3 bd). appeal → records the bank's appeal. record_final_verdict
+        → starts the implementation clock (3 bd). implement → stops implementation (state implemented).
+        Each action requires a note (≥20 chars) and writes an immutable High-class audit record.
+      x-rate-limit-per-min: 60
+      x-required-scope: finance:disputes:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - $ref: '#/components/parameters/respondentDisputeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, note]
+              properties:
+                action: { type: string, enum: [respond, record_verdict, appeal, record_final_verdict, implement] }
+                note: { type: string, minLength: 20, description: Mandatory action note (immutable audit) }
+                verdict_outcome: { type: string, nullable: true, enum: [upheld, partially_upheld, rejected], description: Required for record_verdict / record_final_verdict }
+      responses:
+        '200':
+          description: Action recorded; affected clock updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RespondentDispute' }
+        default: { $ref: '#/components/responses/Error' }
+
   # ---------- 7.3 Analytics ----------
   /back-office/analytics/executive-dashboard:
     get:
@@ -1736,6 +1867,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    respondentDisputeId:
+      name: respondent_dispute_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     reportId:
       name: report_id
       in: path
@@ -2075,6 +2211,44 @@ components:
             nebras_case_id: { type: string, nullable: true }
             care_case_id: { type: string, nullable: true }
             assigned_to: { type: string, nullable: true }
+            created_at: { type: string, format: date-time }
+    RespondentDisputeCreate:
+      type: object
+      required: [nebras_dispute_ref, category, raised_at]
+      properties:
+        nebras_dispute_ref: { type: string, description: Nebras Case & Dispute Management reference for the dispute raised against the bank }
+        category: { type: string, enum: [billing, consent, data_sharing, liability, conduct, other] }
+        subject_summary: { type: string, nullable: true, description: Short synthetic summary — no PSU PII }
+        raised_at: { type: string, format: date-time, description: When Nebras raised the dispute; the response + resolution clocks start here }
+        originating_break_id: { type: string, format: uuid, nullable: true, description: Linked reconciliation break where one exists }
+    RespondentDisputeState:
+      type: string
+      enum: [received, responded, under_resolution, resolved, appealed, awaiting_implementation, implemented, closed]
+    SchemeClockStatus:
+      type: string
+      enum: [on_track, amber, red]
+      description: on_track; amber within the warning window before due; red past due (breach)
+    RespondentDispute:
+      allOf:
+        - $ref: '#/components/schemas/RespondentDisputeCreate'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            state: { $ref: '#/components/schemas/RespondentDisputeState' }
+            response_due_at: { type: string, format: date-time, description: raised_at + 3 business days }
+            responded_at: { type: string, format: date-time, nullable: true }
+            resolution_due_at: { type: string, format: date-time, description: raised_at + 15 business days }
+            resolved_at: { type: string, format: date-time, nullable: true }
+            appeal_due_at: { type: string, format: date-time, nullable: true, description: verdict + 3 business days }
+            appealed_at: { type: string, format: date-time, nullable: true }
+            implementation_due_at: { type: string, format: date-time, nullable: true, description: final verdict + 3 business days }
+            implemented_at: { type: string, format: date-time, nullable: true }
+            response_clock_status: { $ref: '#/components/schemas/SchemeClockStatus' }
+            resolution_clock_status: { $ref: '#/components/schemas/SchemeClockStatus' }
+            appeal_clock_status: { $ref: '#/components/schemas/SchemeClockStatus' }
+            implementation_clock_status: { $ref: '#/components/schemas/SchemeClockStatus' }
+            overall_breach_status: { $ref: '#/components/schemas/SchemeClockStatus' }
+            verdict_outcome: { type: string, nullable: true, enum: [upheld, partially_upheld, rejected] }
             created_at: { type: string, format: date-time }
     ComplianceReport:
       type: object
