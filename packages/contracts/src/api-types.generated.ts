@@ -2115,6 +2115,164 @@ export interface paths {
         };
         trace?: never;
     };
+    "/back-office/scheme-notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List outbound downtime/change notifications with notice-clock + ack state (BACKOFFICE-78)
+         * @description Planned bank maintenance / version releases must notify Nebras ≥10 days in advance (breaking changes ≥30 days + dual-running checklist). This lists each notification with its notice-compliance, acknowledgment, and downstream-TPP propagation state. The headless monitor flags approaching/breached notice clocks.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    status?: "draft" | "notified" | "acknowledged" | "completed";
+                    notification_type?: components["schemas"]["SchemeNotificationType"];
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated notification list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["SchemeNotification"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /**
+         * Raise an outbound downtime/change notification to Nebras (BACKOFFICE-78)
+         * @description Starts the notice clock — 10 days for planned maintenance / version releases, 30 days for breaking changes (which additionally require a dual-running checklist). LFI downtime notices propagate to downstream TPP-aaS customers. High-class audited; BCBS 239 lineage emitted.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        notification_type: components["schemas"]["SchemeNotificationType"];
+                        title: string;
+                        description?: string;
+                        /**
+                         * Format: date-time
+                         * @description When the maintenance/change takes effect
+                         */
+                        scheduled_start: string;
+                        /** Format: date-time */
+                        scheduled_end: string;
+                        /**
+                         * @description Propagate the downtime notice to downstream TPP-aaS customers
+                         * @default true
+                         */
+                        propagate_to_tpp?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Notification raised; notice clock started */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["SchemeNotification"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/scheme-notifications/{notification_id}:acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Nebras acknowledgment of an outbound notification (BACKOFFICE-78) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    notification_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Nebras acknowledgment reference */
+                        nebras_ack_reference: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Acknowledgment recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["SchemeNotification"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/lineage/{table_name}": {
         parameters: {
             query?: never;
@@ -2872,6 +3030,48 @@ export interface components {
             signal_data?: Record<string, never>;
             /** @description Liability-matrix key issue × liable party (LFI/TPP) × AED amount */
             nebras_liability_event_ref?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        /**
+         * @description Outbound notification class (BACKOFFICE-78). breaking_change enforces the 30-day notice + dual-running checklist; the others require 10-day notice.
+         * @enum {string}
+         */
+        SchemeNotificationType: "planned_maintenance" | "version_release" | "breaking_change";
+        /** @description An outbound downtime/change notification to Nebras (BACKOFFICE-78) with its notice-clock compliance, acknowledgment, and downstream-TPP propagation state. */
+        SchemeNotification: {
+            /** Format: uuid */
+            id?: string;
+            notification_type?: components["schemas"]["SchemeNotificationType"];
+            title?: string;
+            description?: string | null;
+            /** Format: date-time */
+            scheduled_start?: string;
+            /** Format: date-time */
+            scheduled_end?: string;
+            /** @description 10 for maintenance/release */
+            notice_required_days?: number;
+            /** Format: date-time */
+            notified_at?: string | null;
+            /**
+             * Format: date-time
+             * @description scheduled_start − notice_required_days; latest compliant notice time
+             */
+            notice_deadline?: string;
+            /** @description notified_at ≤ notice_deadline */
+            notice_compliant?: boolean;
+            /** @description True for breaking_change */
+            dual_running_required?: boolean;
+            dual_running_complete?: boolean;
+            acknowledged?: boolean;
+            /** Format: date-time */
+            acknowledged_at?: string | null;
+            nebras_ack_reference?: string | null;
+            /** @description Downtime notice propagated to downstream TPP-aaS customers */
+            propagate_to_tpp?: boolean;
+            /** @enum {string} */
+            status?: "draft" | "notified" | "acknowledged" | "completed";
+            created_by?: string;
             /** Format: date-time */
             created_at?: string;
         };

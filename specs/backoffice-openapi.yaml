@@ -1107,6 +1107,111 @@ paths:
                       data: { $ref: '#/components/schemas/RiskSignal' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/scheme-notifications:
+    get:
+      tags: [analytics]
+      summary: List outbound downtime/change notifications with notice-clock + ack state (BACKOFFICE-78)
+      description: >
+        Planned bank maintenance / version releases must notify Nebras ≥10 days in
+        advance (breaking changes ≥30 days + dual-running checklist). This lists each
+        notification with its notice-compliance, acknowledgment, and downstream-TPP
+        propagation state. The headless monitor flags approaching/breached notice clocks.
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:operations:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: status, in: query, schema: { type: string, enum: [draft, notified, acknowledged, completed] } }
+        - { name: notification_type, in: query, schema: { $ref: '#/components/schemas/SchemeNotificationType' } }
+      responses:
+        '200':
+          description: Paginated notification list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SchemeNotification' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [analytics]
+      summary: Raise an outbound downtime/change notification to Nebras (BACKOFFICE-78)
+      description: >
+        Starts the notice clock — 10 days for planned maintenance / version releases,
+        30 days for breaking changes (which additionally require a dual-running
+        checklist). LFI downtime notices propagate to downstream TPP-aaS customers.
+        High-class audited; BCBS 239 lineage emitted.
+      x-rate-limit-per-min: 20
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notification_type, title, scheduled_start, scheduled_end]
+              properties:
+                notification_type: { $ref: '#/components/schemas/SchemeNotificationType' }
+                title: { type: string }
+                description: { type: string }
+                scheduled_start: { type: string, format: date-time, description: When the maintenance/change takes effect }
+                scheduled_end: { type: string, format: date-time }
+                propagate_to_tpp: { type: boolean, default: true, description: Propagate the downtime notice to downstream TPP-aaS customers }
+      responses:
+        '201':
+          description: Notification raised; notice clock started
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SchemeNotification' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/scheme-notifications/{notification_id}:acknowledge:
+    post:
+      tags: [analytics]
+      summary: Record Nebras acknowledgment of an outbound notification (BACKOFFICE-78)
+      x-rate-limit-per-min: 30
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - { name: notification_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nebras_ack_reference]
+              properties:
+                nebras_ack_reference: { type: string, description: Nebras acknowledgment reference }
+      responses:
+        '200':
+          description: Acknowledgment recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SchemeNotification' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/lineage/{table_name}:
     get:
       tags: [audit]
@@ -1831,6 +1936,37 @@ components:
           type: string
           nullable: true
           description: Liability-matrix key issue × liable party (LFI/TPP) × AED amount
+        created_at: { type: string, format: date-time }
+    SchemeNotificationType:
+      type: string
+      enum: [planned_maintenance, version_release, breaking_change]
+      description: >
+        Outbound notification class (BACKOFFICE-78). breaking_change enforces the 30-day
+        notice + dual-running checklist; the others require 10-day notice.
+    SchemeNotification:
+      type: object
+      description: >
+        An outbound downtime/change notification to Nebras (BACKOFFICE-78) with its
+        notice-clock compliance, acknowledgment, and downstream-TPP propagation state.
+      properties:
+        id: { type: string, format: uuid }
+        notification_type: { $ref: '#/components/schemas/SchemeNotificationType' }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        scheduled_start: { type: string, format: date-time }
+        scheduled_end: { type: string, format: date-time }
+        notice_required_days: { type: integer, description: 10 for maintenance/release, 30 for breaking_change }
+        notified_at: { type: string, format: date-time, nullable: true }
+        notice_deadline: { type: string, format: date-time, description: scheduled_start − notice_required_days; latest compliant notice time }
+        notice_compliant: { type: boolean, description: notified_at ≤ notice_deadline }
+        dual_running_required: { type: boolean, description: True for breaking_change }
+        dual_running_complete: { type: boolean }
+        acknowledged: { type: boolean }
+        acknowledged_at: { type: string, format: date-time, nullable: true }
+        nebras_ack_reference: { type: string, nullable: true }
+        propagate_to_tpp: { type: boolean, description: Downtime notice propagated to downstream TPP-aaS customers }
+        status: { type: string, enum: [draft, notified, acknowledged, completed] }
+        created_by: { type: string }
         created_at: { type: string, format: date-time }
     AuditEvent:
       type: object
