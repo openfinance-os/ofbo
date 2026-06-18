@@ -38,6 +38,8 @@ import {
 } from './consents/bulk-revoke.js'
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
+import { RespondentDisputeService, InMemoryRespondentDisputeStore, type RespondentDisputeStore } from './respondent-disputes/service.js'
+import { respondentDisputeRoutes } from './respondent-disputes/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
 import {
   InquiryBundleService,
@@ -120,6 +122,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /disputes',
   'patch /disputes/{dispute_id}',
   'post /disputes/{dispute_id}:initiate-refund',
+  'post /back-office/disputes/respondent',
+  'get /back-office/disputes/respondent',
+  'get /back-office/disputes/respondent/{respondent_dispute_id}',
+  'post /back-office/disputes/respondent/{respondent_dispute_id}:advance',
   'post /back-office/inquiries/psu',
   'get /back-office/reconciliation/runs',
   'get /back-office/reconciliation/runs/{run_id}',
@@ -195,6 +201,9 @@ export interface AppDeps {
   invoiceRunStore?: InvoiceRunStore
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
+  /** BACKOFFICE-75 — respondent-side Nebras dispute store (defaults in-memory; the
+   *  worker wires the durable PgRespondentDisputeStore). */
+  respondentDisputeStore?: RespondentDisputeStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -286,6 +295,11 @@ export function createApp(deps: AppDeps = {}) {
     egress: nebrasEgress,
     audit: highClassAudit,
     approvals
+  })
+  // BACKOFFICE-75 — respondent-side Nebras dispute scheme clocks (Finance-owned).
+  const respondentDisputeService = new RespondentDisputeService({
+    store: deps.respondentDisputeStore ?? new InMemoryRespondentDisputeStore(),
+    audit: highClassAudit
   })
   const complianceReportStore = deps.complianceReportStore ?? new InMemoryComplianceReportStore()
   const inquiryService = new InquiryBundleService({
@@ -433,6 +447,7 @@ export function createApp(deps: AppDeps = {}) {
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
+    ...respondentDisputeRoutes(respondentDisputeService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
