@@ -68,7 +68,7 @@ milestones:
       - { id: BACKOFFICE-71, title: Consuming-TPP registry with Trust Framework Directory sync, status: done }
       - { id: BACKOFFICE-72, title: TPP financial-system onboarding workflow + unbilled-traffic alert, status: done, depends_on: [BACKOFFICE-71] }
       - { id: BACKOFFICE-73, title: Monthly TPP invoicing - reconcile before invoice (four-eyes, 409 if unreconciled), status: done, depends_on: [BACKOFFICE-72] }
-      - { id: BACKOFFICE-75, title: Respondent-side Nebras dispute scheme clocks, status: blocked, reason: "awaiting spec PR #49 (baseline contract has no respondent-side dispute surface; new finance:disputes:write paths + RespondentDispute schema queued for human approval)" }
+      - { id: BACKOFFICE-75, title: Respondent-side Nebras dispute scheme clocks, status: pending, note: "spec PR #49 merged 2026-06-18 (finance:disputes:write respondent-dispute paths + RespondentDispute schema now in contract). Ready to implement: handlers + scheme-clock state." }
 
   - name: M4
     items:
@@ -87,28 +87,28 @@ milestones:
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: done }
       - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: done }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: done, depends_on: [BACKOFFICE-37] }
-      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: blocked, reason: "awaiting spec PR #64 (baseline contract references BACKOFFICE-67 but has no LFI-report ingest path; new POST/GET /back-office/lfi-reports + LfiReportCadenceStatus schema queued for human approval)" }
+      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending, note: "spec PR #64 merged 2026-06-18 (POST/GET /back-office/lfi-reports + LfiReportCadenceStatus schema now in contract). Ready to implement: handlers + cadence tracking." }
 
   - name: M4a
     items:
-      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: blocked, reason: "awaiting spec PR #65 (baseline contract has no fraud-incident / operational-pause / scheme-hold surface; new /back-office/fraud-incidents paths + NebrasSeverity + FraudIncident schema queued for human approval)" }
-      - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: blocked, reason: "awaiting spec PR #66 (baseline contract has no outbound-notification surface; new /back-office/scheme-notifications paths + SchemeNotification schema queued for human approval)" }
+      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: pending, note: "spec PR #65 merged 2026-06-18 (/back-office/fraud-incidents paths + NebrasSeverity + FraudIncident schema now in contract). Ready to implement: handlers + ITSM (P3) severity mapping + operational pause." }
+      - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: pending, note: "spec PR #66 merged 2026-06-18 (/back-office/scheme-notifications paths + SchemeNotification schema now in contract). Ready to implement: handlers + 10/30-day notice clocks + TPP propagation." }
 
   - name: M5
     items:
-      - { id: BACKOFFICE-09, title: Reconciliation SLO dashboard, status: blocked, reason: "awaiting spec PR #67 (no reconciliation-slo read surface; new GET /back-office/analytics/reconciliation-slo queued for human approval)" }
+      - { id: BACKOFFICE-09, title: Reconciliation SLO dashboard, status: pending, note: "spec PR #67 merged 2026-06-18 (GET /back-office/analytics/reconciliation-slo now in contract). Ready to implement: read surface over run/break SLO metrics." }
       - { id: BACKOFFICE-10, title: Reconciliation replay (idempotent), status: done }
       - { id: BACKOFFICE-12, title: Configurable break thresholds per fee class, status: done }
       - { id: BACKOFFICE-15, title: Reconciliation console WCAG 2.1 AA, status: blocked, depends_on: [UI-03-RECON-CONSOLE], reason: "a11y over the break list + detail views requires the reconciliation console UI (UI-03), which is in the deferred UI track gated on the UI-00 Tailwind ADR (human-approved). Nothing to make accessible until those screens exist." }
       - { id: BACKOFFICE-24, title: Complaint case management lifecycle, status: done }
       - { id: BACKOFFICE-26, title: Console design-system + Al Tareq brand conformance, status: blocked, depends_on: [UI-00-DESIGN-SYSTEM], reason: "console design-system + brand conformance is the UI-00 design-system foundation (Tailwind token preset) applied across the console screens — gated on the UI-00 Tailwind ADR (human-approved) and the deferred UI track. No console UI exists beyond the M1 shell to apply brand conformance to." }
-      - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: blocked, reason: "awaiting spec PR #71 (multi_auth schema lacks the M-of-N pending threshold the PRD requires; threshold/received/pending fields queued for human approval). Also needs synthetic-data multi-auth consents + the :admin detail endpoint once merged." }
+      - { id: BACKOFFICE-61, title: Multi-authorisation payment-consent visibility, status: pending, note: "spec PR #71 merged 2026-06-18 (multi_auth M-of-N threshold/received/pending fields now in contract). Ready to implement: synthetic-data multi-auth consents + the :admin detail endpoint." }
       - { id: BACKOFFICE-64, title: Call/transcript linkage on dispute cases, status: blocked, reason: "needs a contract + P1-port decision: originating_call_id is already captured + surfaced on disputes (BACKOFFICE-20, nullable for non-voice, disputes:admin RBAC), but resolving it to a contact-centre recording requires a new CareSurfacePort method (P1) + a recording-link surface (endpoint/field). New port primitive + contract choice — human-gated (ADR/spec)." }
       - { id: BACKOFFICE-38, title: TPP behavioural profiling (3-sigma baselines), status: done }
       - { id: BACKOFFICE-41, title: Analytics exports (PDF/XLSX/CSV), status: done }
       - { id: BACKOFFICE-58, title: SLO observability in the Operations Console, status: done }
       - { id: BACKOFFICE-66, title: Scheme certificate expiry monitoring (60/30/7-day), status: done }
-      - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: blocked, reason: "awaiting spec PR #76 (DAO is a new reconciliation line_type; dao_api_call added to the LineType enum, queued for human approval). After merge: fee-schedule + DEFAULT_THRESHOLDS + reconciliation_break CHECK migration + engine/sources." }
+      - { id: BACKOFFICE-68, title: Dynamic Account Opening reconciliation coverage, status: pending, note: "spec PR #76 merged 2026-06-18 (dao_api_call added to the reconciliation LineType enum). Ready to implement: fee-schedule + DEFAULT_THRESHOLDS + reconciliation_break CHECK migration + engine/sources." }
       - { id: BACKOFFICE-69, title: CAAP registration/deregistration audit, status: done }
       - { id: BACKOFFICE-74, title: Trust Framework participant administration, status: blocked, reason: "contract gap — new resource (bank's own Trust Framework directory roles: Org Admin/PBC/PTC/STC holders, T&C/DocuSign status, turnover workflow, onboarding-stage SLA); no spec surface. Spec PR to be authored (deferred during the GitHub Actions billing outage to keep build-ahead focused on code-buildable items)." }
       - { id: BACKOFFICE-76, title: Cross-scheme dispute guard (Aani / Al Tareq), status: blocked, reason: "contract gap — DisputeCase/DisputeCreate lack cross-scheme fields (aani_case_id, recall-window, sanadak escalation) + a double-compensation guard. Spec PR to be authored (deferred during the CI billing outage)." }
