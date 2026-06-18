@@ -2615,8 +2615,11 @@ export interface components {
          * @enum {string}
          */
         Channel: "internal_retail" | "internal_sme" | "internal_corporate" | "external_direct" | "external_tpp_aas";
-        /** @enum {string} */
-        LineType: "nebras_fees" | "payment_settlement" | "consent_record" | "tpp_aas_pass_through" | "lfi_access_log";
+        /**
+         * @description Reconciliation line classes. dao_api_call (BACKOFFICE-68) covers Dynamic Account Opening API calls in the three-way match; it defaults to the data-sharing fee + break threshold until DAO-specific volumes/pricing are observed.
+         * @enum {string}
+         */
+        LineType: "nebras_fees" | "payment_settlement" | "consent_record" | "tpp_aas_pass_through" | "lfi_access_log" | "dao_api_call";
         /** @enum {string} */
         BreakStatus: "flagged" | "assigned" | "resolved_matched" | "resolved_internal_correction" | "escalated_nebras_dispute" | "escalated_fintech_billing";
         /** @enum {string} */
