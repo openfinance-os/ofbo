@@ -221,6 +221,13 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/analytics/reconciliation-slo",
+    "tag": "analytics",
+    "scope": "reconciliation:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/analytics/onboarding-funnel",
     "tag": "analytics",
     "scope": "pipeline:read",

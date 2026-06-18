@@ -1208,6 +1208,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/analytics/reconciliation-slo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reconciliation Console SLO dashboard (BACKOFFICE-09)
+         * @description Aggregated reconciliation health for the console: open breaks by age bucket, p50/p90 break-resolution time (30-day rolling), dispute pipeline, last/next run, and pass rate. Server-side aggregation to meet the <1.5s p95 target. Returns the standard AnalyticsView envelope (free-form `data` + freshness).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["AnalyticsView"];
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/analytics/onboarding-funnel": {
         parameters: {
             query?: never;
