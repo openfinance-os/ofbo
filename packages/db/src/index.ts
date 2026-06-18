@@ -52,6 +52,14 @@ export {
   type DisputePage
 } from './dispute-store.js'
 export {
+  PgRespondentDisputeStore,
+  type StoredRespondentDispute,
+  type RespondentDisputeCreateInput,
+  type RespondentDisputeUpdate,
+  type RespondentDisputeListQuery,
+  type RespondentDisputePage
+} from './respondent-dispute-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,
