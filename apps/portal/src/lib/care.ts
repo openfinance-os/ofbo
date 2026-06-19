@@ -6,6 +6,8 @@
  * a running BFF. Behaviour/data are the contract's; appearance is the Stitch screen.
  */
 
+import { bffClient } from './bff'
+
 export const IDENTIFIER_TYPES = ['bank_customer_id', 'iban', 'emirates_id'] as const
 export type IdentifierType = (typeof IDENTIFIER_TYPES)[number]
 
@@ -90,8 +92,7 @@ export interface CareApiDeps {
 
 function resolve(deps: CareApiDeps) {
   return {
-    base: (deps.baseUrl ?? process.env.BFF_URL ?? 'http://localhost:8787').replace(/\/$/, ''),
-    f: deps.fetchImpl ?? fetch,
+    ...bffClient(deps),
     trace: deps.traceId ?? crypto.randomUUID()
   }
 }

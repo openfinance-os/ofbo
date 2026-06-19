@@ -7,6 +7,8 @@
  * generically (contract-first); appearance = the Stitch screen.
  */
 
+import { bffClient } from './bff'
+
 /** Mirrors the BFF FreshnessEnvelope (BACKOFFICE-40). */
 export interface FreshnessEnvelope {
   source_published_at?: string
@@ -39,8 +41,7 @@ export interface AnalyticsApiDeps {
 
 function resolve(deps: AnalyticsApiDeps) {
   return {
-    base: (deps.baseUrl ?? process.env.BFF_URL ?? 'http://localhost:8787').replace(/\/$/, ''),
-    f: deps.fetchImpl ?? fetch,
+    ...bffClient(deps),
     trace: deps.traceId ?? crypto.randomUUID()
   }
 }

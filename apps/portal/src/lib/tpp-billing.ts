@@ -7,6 +7,7 @@
  */
 
 import type { ApprovalRequest } from './approvals'
+import { bffClient } from './bff'
 
 export interface Money {
   amount: number
@@ -72,8 +73,7 @@ export interface TppBillingApiDeps {
 
 function resolve(deps: TppBillingApiDeps) {
   return {
-    base: (deps.baseUrl ?? process.env.BFF_URL ?? 'http://localhost:8787').replace(/\/$/, ''),
-    f: deps.fetchImpl ?? fetch,
+    ...bffClient(deps),
     trace: deps.traceId ?? crypto.randomUUID()
   }
 }

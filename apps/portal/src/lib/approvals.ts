@@ -9,6 +9,8 @@
  * by a second, differently-authorised principal (initiator ≠ approver).
  */
 
+import { bffClient } from './bff'
+
 export type ApprovalState = 'pending' | 'approved' | 'rejected' | 'timed_out'
 
 /** Mirrors the OpenAPI ApprovalRequest wire shape (no operation_payload — PII-redacted). */
@@ -45,8 +47,7 @@ export interface ApprovalApiDeps {
 
 function resolve(deps: ApprovalApiDeps) {
   return {
-    base: (deps.baseUrl ?? process.env.BFF_URL ?? 'http://localhost:8787').replace(/\/$/, ''),
-    f: deps.fetchImpl ?? fetch,
+    ...bffClient(deps),
     trace: deps.traceId ?? crypto.randomUUID()
   }
 }

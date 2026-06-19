@@ -6,6 +6,8 @@
  * appearance = the Stitch "Reconciliation Console" screen.
  */
 
+import { bffClient } from './bff'
+
 export interface Money {
   amount: number
   currency: string
@@ -73,8 +75,7 @@ export interface ReconApiDeps {
 
 function resolve(deps: ReconApiDeps) {
   return {
-    base: (deps.baseUrl ?? process.env.BFF_URL ?? 'http://localhost:8787').replace(/\/$/, ''),
-    f: deps.fetchImpl ?? fetch,
+    ...bffClient(deps),
     trace: deps.traceId ?? crypto.randomUUID()
   }
 }
