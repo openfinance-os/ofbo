@@ -75,9 +75,13 @@ check "BFF: demo persona token -> 200 approvals list" 200 \
 # Probe a contract path whose scope the persona holds but whose story is unbuilt
 # (M4 analytics) so the check exercises the 501 path, not a scope denial. Update
 # this if finance-view ever gets implemented.
+# Probe a contract path whose scope the persona holds but that has no story
+# (the BCBS 239 lineage read is an enterprise-catalogue surface, stubbed in demo)
+# so this exercises the 501 path, not a scope denial. finance-view was the prior
+# probe but is now implemented (BACKOFFICE-31).
 check "BFF: unimplemented contract path -> 501 envelope" 501 \
-  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/analytics/finance-view" \
-     -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:finance-analyst")"
+  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/lineage/reconciliation_log" \
+     -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:compliance-officer")"
 
 # --- Nebras simulator: deterministic data + fault injection round-trip ---
 check "sim: TPP report 2026-05 -> 200" 200 \
