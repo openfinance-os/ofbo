@@ -203,3 +203,26 @@ describe('Nebras simulator — admin surface guard (M1-DEMO-DEPLOY: /admin off p
     expect((await app.request('/admin/faults')).status).toBe(200)
   })
 })
+
+describe('Nebras simulator — Case & Dispute Management surface (PRD §3.1/§4)', () => {
+  it('creates a dispute case (201) with a deterministic id; re-POST is idempotent (200, same id)', async () => {
+    const body = JSON.stringify({ dispute_type: 'unauthorised_payment', originating_payment_id: 'PIS-123' })
+    const first = await app.request('/case-management/disputes', { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    expect(first.status).toBe(201)
+    const a = (await first.json()) as { nebras_case_id: string; status: string }
+    expect(a.nebras_case_id).toMatch(/^NBR-CASE-[0-9a-f]{8}$/)
+    expect(a.status).toBe('received')
+
+    const second = await app.request('/case-management/disputes', { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+    expect(second.status).toBe(200)
+    expect(((await second.json()) as { nebras_case_id: string }).nebras_case_id).toBe(a.nebras_case_id)
+
+    const get = await app.request(`/case-management/disputes/${a.nebras_case_id}`)
+    expect(get.status).toBe(200)
+    expect(((await get.json()) as { dispute_type: string }).dispute_type).toBe('unauthorised_payment')
+  })
+
+  it('404s an unknown case id', async () => {
+    expect((await app.request('/case-management/disputes/NBR-CASE-deadbeef')).status).toBe(404)
+  })
+})

@@ -147,7 +147,20 @@ const simNebrasEgress: NebrasEgressPort = {
   async fetchDataset(name, period, trace) {
     return fetchNebras(`/datasets/${encodeURIComponent(name)}/${encodeURIComponent(period)}`, trace, period)
   },
-  async createDisputeCase() {
+  async createDisputeCase(payload, trace) {
+    // All Nebras-bound traffic goes through this P6 adapter. When the simulator is
+    // reachable (NEBRAS_SIM_URL), create the case on its Case & Dispute Management
+    // surface end-to-end; otherwise a deterministic local id.
+    const base = process.env.NEBRAS_SIM_URL
+    if (base) {
+      const res = await fetch(`${base}/case-management/disputes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-fapi-interaction-id': trace.trace_id },
+        body: JSON.stringify(payload)
+      })
+      const body = (await res.json()) as { nebras_case_id: string }
+      return { nebras_case_id: body.nebras_case_id }
+    }
     return { nebras_case_id: nextId('nebras-case') }
   },
   async syncDirectory() {
