@@ -872,3 +872,14 @@ Ran the full regression battery and stabilized the gates that were unreliable.
 - **M6-PORT-SWAPS** — enterprise adapter swaps: per-bank engagement (real systems + credentials).
 
 M0–M5 functionally complete. Remaining work is human decisions (ADRs/governance) and M6 per-bank adoption.
+
+## 2026-06-20 — Codebase-vs-PRD/architecture review + all follow-ups shipped (PRs #110–#113)
+
+Ran a 4-dimension review (functional coverage, architecture/ports, data/regulatory posture, API-contract/stack-ADR) via parallel reviewers. **Verdict: regulated core conformant** — all hard-stops enforced (RLS day-one, INSERT-only audit, retention no-delete, Q4.5 lineage, money minor-units, scope matrix, P6-only egress, four-eyes structurally unbypassable, no profile branching). Gaps were read-side stubs, tracking/doc hygiene, and one missing sim surface. Fixed all of them:
+
+- **#110** — logged **BACKOFFICE-52** (service-to-service mTLS — the one PRD §7 item with no backlog entry; scoped to the bank gateway + P6, demo uses bearer tokens) + **ADR-0003** (Cloudflare Workers/OpenNext hosting) + **ADR-0004** (portal server-first data layer).
+- **#111** — filled the stubbed read/triage surfaces: **GET /risk-signals** + **PATCH /risk-signals/{id}** (list + triage lifecycle) and **GET /lineage/{table_name}** (BCBS 239 lineage now *readable*, not just emitted — BACKOFFICE-49 AC). No migration (risk_signal.status pre-existed). Reviewers PASS/CONFORMANT.
+- **#112** — added the **Case & Dispute Management** surface to the Nebras simulator + wired P6 createDisputeCase to call it via NEBRAS_SIM_URL (dispute-case creation now rides the egress path end-to-end). Hard-stop PASS.
+- **#113** — bound the portal data layer to the generated **@ofbo/contracts** types (ADR-0004): key-conformance drift guards on CareConsent/ApprovalRequest/Reconciliation{Run,Break}/TppCounterparty/InvoiceRun — a spec rename/removal now fails portal typecheck. The guard caught a real benign divergence (ApprovalRequest.execution_result is a portal-side post-approval augmentation; documented + excluded).
+
+All four PRs merged on **green CI** (Q1–Q4.5) + reviewers. Net: every gap from the review is closed or consciously tracked; the read-side stubs that made the backlog overstate completeness now have real handlers + tests; CI is enforcing on every push.
