@@ -526,5 +526,12 @@ export const ROUTES: readonly Route[] = [
     "tag": "tpp-billing",
     "scope": "billing:read",
     "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/disputes/{dispute_id}:record-cross-scheme",
+    "tag": "disputes",
+    "scope": "disputes:admin",
+    "fourEyes": false
   }
 ] as const
