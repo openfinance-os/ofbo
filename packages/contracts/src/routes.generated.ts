@@ -526,5 +526,33 @@ export const ROUTES: readonly Route[] = [
     "tag": "tpp-billing",
     "scope": "billing:read",
     "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/trust-framework/participants",
+    "tag": "analytics",
+    "scope": "platform:operations:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/trust-framework/participants",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/trust-framework/participants/{participant_id}",
+    "tag": "analytics",
+    "scope": "platform:operations:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/trust-framework/participants/{participant_id}:nominate-replacement",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
   }
 ] as const

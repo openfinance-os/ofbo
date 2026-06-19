@@ -1789,6 +1789,124 @@ paths:
                     properties:
                       data: { $ref: '#/components/schemas/InvoiceRun' }
 
+  # ---------- 7.7 Trust Framework participant administration (BACKOFFICE-74) ----------
+  /back-office/trust-framework/participants:
+    get:
+      tags: [analytics]
+      summary: List the bank's Trust Framework directory role-holders (BACKOFFICE-74)
+      description: >
+        Registry of the bank's own Trust Framework directory roles (Org Admin, PBC, PTC,
+        STC) with named holders, individual + organisational T&C/DocuSign status, turnover
+        state, and per-onboarding-stage SLA tracking (Interaction Guide). Operations-owned.
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:operations:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: role, in: query, schema: { $ref: '#/components/schemas/TrustFrameworkRole' } }
+        - { name: status, in: query, schema: { type: string, enum: [active, departing, vacant] } }
+      responses:
+        '200':
+          description: Paginated participant list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/TrustFrameworkParticipant' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [analytics]
+      summary: Register a Trust Framework role-holder (BACKOFFICE-74)
+      x-rate-limit-per-min: 20
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TrustFrameworkParticipantCreate' }
+      responses:
+        '201':
+          description: Role-holder registered
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TrustFrameworkParticipant' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/trust-framework/participants/{participant_id}:
+    get:
+      tags: [analytics]
+      summary: Trust Framework role-holder detail (BACKOFFICE-74)
+      x-rate-limit-per-min: 200
+      x-required-scope: platform:operations:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/participantId'
+      responses:
+        '200':
+          description: Participant detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TrustFrameworkParticipant' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/trust-framework/participants/{participant_id}:nominate-replacement:
+    post:
+      tags: [analytics]
+      summary: Turnover workflow — nominate a replacement for a departing role-holder (BACKOFFICE-74)
+      description: >
+        A role-holder's departure marks the participant departing and records the nominated
+        replacement; the replacement's individual T&C/DocuSign restarts. High-class audited.
+      x-rate-limit-per-min: 20
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - $ref: '#/components/parameters/participantId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replacement_holder_ref, replacement_display_name, note]
+              properties:
+                replacement_holder_ref: { type: string }
+                replacement_display_name: { type: string, description: Internal role-holder name (operational, not PSU PII) }
+                note: { type: string, minLength: 20 }
+      responses:
+        '200':
+          description: Replacement nominated; participant marked departing
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TrustFrameworkParticipant' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -1899,6 +2017,11 @@ components:
       required: true
       # Approval ids are UUID v4 (approvals service: crypto.randomUUID()) — kept
       # consistent with ApprovalRequest.approval_request_id and invoice_run.approval_id.
+      schema: { type: string, format: uuid }
+    participantId:
+      name: participant_id
+      in: path
+      required: true
       schema: { type: string, format: uuid }
 
   responses:
@@ -2442,3 +2565,36 @@ components:
         total: { $ref: '#/components/schemas/Money' }
         invoice_status: { type: string, enum: [instructed, issued, settled, overdue, credit_noted] }
         credit_note_refs: { type: array, items: { type: string }, description: Issued on post-invoice break resolution }
+    TrustFrameworkRole:
+      type: string
+      enum: [org_admin, pbc, ptc, stc]
+      description: >
+        Bank Trust Framework directory roles (BACKOFFICE-74): Org Admin, Primary Business
+        Contact (PBC), Primary Technical Contact (PTC), Senior Technical Contact (STC).
+    TncStatus:
+      type: string
+      enum: [not_started, sent, signed, expired]
+      description: Individual or organisational T&C / DocuSign status.
+    TrustFrameworkParticipantCreate:
+      type: object
+      required: [role, organisation_id, holder_ref, holder_display_name]
+      properties:
+        role: { $ref: '#/components/schemas/TrustFrameworkRole' }
+        organisation_id: { type: string, description: The bank's Trust Framework OrganisationId }
+        holder_ref: { type: string, description: Internal id of the role-holder }
+        holder_display_name: { type: string, description: Internal role-holder name (operational, not PSU PII) }
+        onboarding_stage: { type: string, description: Current Interaction-Guide onboarding stage }
+    TrustFrameworkParticipant:
+      allOf:
+        - $ref: '#/components/schemas/TrustFrameworkParticipantCreate'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            individual_tnc_status: { $ref: '#/components/schemas/TncStatus' }
+            organisational_tnc_status: { $ref: '#/components/schemas/TncStatus' }
+            onboarding_stage_due_at: { type: string, format: date-time, nullable: true, description: SLA due time for the current onboarding stage }
+            onboarding_stage_overdue: { type: boolean }
+            status: { type: string, enum: [active, departing, vacant] }
+            nominated_replacement_ref: { type: string, nullable: true, description: Set by the turnover workflow when the holder is departing }
+            created_at: { type: string, format: date-time }
+            updated_at: { type: string, format: date-time }
