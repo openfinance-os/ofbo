@@ -73,8 +73,15 @@ export interface LiabilityMonitorDeps {
   now?: () => Date
 }
 
+/** BACKOFFICE-65 — optional predictive forecast folded into the liability view. Typed
+ *  structurally to avoid a circular import with liability-forecast.ts. */
+export interface LiabilityForecastProvider {
+  forecastView(): Promise<unknown>
+}
+
 export interface LiabilityViewDeps {
   riskMetrics: RiskLiabilityReader
+  forecast?: LiabilityForecastProvider
   now?: () => Date
 }
 
@@ -134,12 +141,14 @@ export class LiabilityViewService {
       const [issue, party, aed] = (s.nebras_liability_event_ref ?? '').split('|')
       if (issue && party) accrual.push({ issue, liable_party: party, accrued_aed: Number(aed) || 0, severity: s.severity, created_at: s.created_at })
     }
-    const data = {
+    const data: Record<string, unknown> = {
       liability_matrix: { per_incident_aed: LIABILITY_MATRIX, sla_execution_tiers_aed: SLA_TIERS },
       open_count: monitor.open_count,
       by_severity: monitor.by_severity,
       approaching_triggers: accrual
     }
+    // BACKOFFICE-65 — fold in the 24h predictive forecast (regulated AI artefact) when wired.
+    if (this.deps.forecast) data.forecast = await this.deps.forecast.forecastView()
     // BACKOFFICE-40 — live read over risk_signal → trivially fresh.
     return { data, freshness: liveFreshness(this.now()) }
   }

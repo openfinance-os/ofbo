@@ -33,6 +33,7 @@ import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
 import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
 import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
+import { LiabilityForecastMonitor, DemoLiabilityTelemetrySource } from './risk/liability-forecast.js'
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
@@ -185,6 +186,15 @@ export default {
     // (ITSM ticket + lfi_report_cadence_missed Risk signal).
     const lfiReports = new PgComplianceReportStore(url, tenancy, lineage)
     const lfiCadenceMonitor = new LfiCadenceMonitor({ reports: lfiReports, itsm, riskSignals })
+    // BACKOFFICE-65 — predictive liability forecast (regulated AI artefact): raise a
+    // predictive_liability_forecast signal per high-probability class (deduped vs open
+    // liability refs); -36 threshold monitor remains the deterministic fallback.
+    const forecastMonitor = new LiabilityForecastMonitor({ telemetry: new DemoLiabilityTelemetrySource(), signals: riskSignals, itsm })
+    const runForecast = async () => {
+      const open = await riskMetrics.liabilityMonitor()
+      const openRefs = new Set(open.recent.map((s) => s.nebras_liability_event_ref).filter((r): r is string => !!r))
+      await forecastMonitor.run(crypto.randomUUID(), openRefs)
+    }
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
@@ -193,7 +203,8 @@ export default {
         recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
         tppProfiler.profile(crypto.randomUUID()),
         certMonitor.check(crypto.randomUUID()),
-        lfiCadenceMonitor.check(crypto.randomUUID())
+        lfiCadenceMonitor.check(crypto.randomUUID()),
+        runForecast()
       ]).finally(async () => {
         await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
       })
