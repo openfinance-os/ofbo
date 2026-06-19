@@ -6,6 +6,7 @@ import {
   PgConsentEventReader,
   PgDisputeStore,
   PgRespondentDisputeStore,
+  PgFraudIncidentStore,
   PgIdempotencyStore,
   PgLineageEmitter,
   PgReconciliationBreakStore,
@@ -71,6 +72,7 @@ export default {
     const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
     const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
     const respondentDisputeStore = url ? new PgRespondentDisputeStore(url, tenancy, lineage) : undefined
+    const fraudIncidentStore = url ? new PgFraudIncidentStore(url, tenancy, lineage) : undefined
     const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
     const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
     const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
@@ -94,6 +96,7 @@ export default {
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
       ...(disputeStore ? { disputeStore } : {}),
       ...(respondentDisputeStore ? { respondentDisputeStore } : {}),
+      ...(fraudIncidentStore ? { fraudIncidentStore } : {}),
       ...(complianceReportStore ? { complianceReportStore, reportStore: complianceReportStore } : {}),
       ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
       ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
@@ -113,7 +116,7 @@ export default {
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, auditReader]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, auditReader]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

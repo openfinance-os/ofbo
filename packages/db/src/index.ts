@@ -60,6 +60,14 @@ export {
   type RespondentDisputePage
 } from './respondent-dispute-store.js'
 export {
+  PgFraudIncidentStore,
+  type StoredFraudIncident,
+  type FraudIncidentCreateInput,
+  type FraudIncidentUpdate,
+  type FraudIncidentListQuery,
+  type FraudIncidentPage
+} from './fraud-incident-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,
