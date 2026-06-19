@@ -80,6 +80,10 @@ import {
   type RetentionReader
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
+import { RiskSignalService, InMemoryRiskSignalStore, type RiskSignalStore } from './risk-signals/service.js'
+import { riskSignalRoutes } from './risk-signals/routes.js'
+import { LineageService, InMemoryLineageReader, type LineageReader } from './lineage/service.js'
+import { lineageRoutes } from './lineage/routes.js'
 import { ReconciliationSloService, reconciliationSloRoutes } from './analytics/reconciliation-slo.js'
 import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
 import { LiabilityForecastService, DemoLiabilityTelemetrySource } from './risk/liability-forecast.js'
@@ -173,6 +177,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
+  'get /back-office/risk-signals',
+  'patch /back-office/risk-signals/{signal_id}',
+  'get /back-office/lineage/{table_name}',
   'get /back-office/analytics/risk-view',
   'get /back-office/analytics/reconciliation-slo',
   'get /back-office/analytics/nebras-liability-monitor',
@@ -269,6 +276,12 @@ export interface AppDeps {
   /** BACKOFFICE-30 — Risk View source (risk_signal aggregates). Default empty reader;
    *  the worker wires the Pg risk-metrics store. */
   riskMetricsReader?: RiskMetricsReader
+  /** BACKOFFICE-30/-42 — risk-signal list/triage store (defaults in-memory; the worker
+   *  wires PgRiskMetricsStore, which satisfies list/get/updateStatus). */
+  riskSignalStore?: RiskSignalStore
+  /** BACKOFFICE-49 — lineage reader for GET /lineage/{table_name} (defaults in-memory;
+   *  the worker wires PgLineageReader). */
+  lineageReader?: LineageReader
 }
 
 /** Built once per isolate, not per request — the deterministic demo dataset is
@@ -442,6 +455,10 @@ export function createApp(deps: AppDeps = {}) {
     recentActive: async () => []
   }
   const riskViewService = new RiskViewService({ metrics: riskMetricsReader })
+  // BACKOFFICE-30/-42 — risk-signal list + triage surface.
+  const riskSignalService = new RiskSignalService({ store: deps.riskSignalStore ?? new InMemoryRiskSignalStore(), audit: highClassAudit })
+  // BACKOFFICE-49 — column-level lineage read surface (compliance:reports:read).
+  const lineageService = new LineageService({ reader: deps.lineageReader ?? new InMemoryLineageReader(), audit: highClassAudit })
   // BACKOFFICE-36 — proactive Nebras-liability monitor read view (matrix + approaching triggers).
   // BACKOFFICE-65 — fold the 24h predictive liability forecast (regulated AI artefact) into it.
   const liabilityViewService = new LiabilityViewService({
@@ -535,6 +552,8 @@ export function createApp(deps: AppDeps = {}) {
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
     ...riskViewRoutes(riskViewService),
+    ...riskSignalRoutes(riskSignalService, idempotencyStore),
+    ...lineageRoutes(lineageService),
     ...reconciliationSloRoutes(reconciliationSloService),
     ...liabilityMonitorRoutes(liabilityViewService),
     ...executiveDashboardRoutes(executiveDashboardService),

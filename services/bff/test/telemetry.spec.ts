@@ -39,8 +39,8 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
 
   it('marks 2xx/501 spans ok and 4xx auth failures as error with the status code attribute', async () => {
     const { app, spans } = build()
-    await app.request('/back-office/lineage/reconciliation_log', { headers: AUTHED_HEADERS }) // 501 stub — instrumented, not an app error
-    await app.request('/back-office/lineage/reconciliation_log', { headers: FAPI_HEADERS }) // 401
+    await app.request('/back-office/analytics/onboarding-handover-health', { headers: AUTHED_HEADERS }) // 501 stub — instrumented, not an app error
+    await app.request('/back-office/analytics/onboarding-handover-health', { headers: FAPI_HEADERS }) // 401
     expect(spans[0]!.attributes['http.status_code']).toBe(501)
     expect(spans[0]!.status_code).toBe('ok')
     expect(spans[1]!.attributes['http.status_code']).toBe(401)

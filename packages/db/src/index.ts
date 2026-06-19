@@ -15,12 +15,14 @@ export { PgIdempotencyStore, type CachedIdempotentResponse } from './idempotency
 export { redactPii, redactText } from '@ofbo/redaction'
 export {
   PgLineageEmitter,
+  PgLineageReader,
   validateLineageCoverage,
   evaluateLineageGate,
   KNOWN_LINEAGE_GAPS,
   type LineageSink,
   type LineageEvent,
-  type LineageGateResult
+  type LineageGateResult,
+  type TableLineage
 } from './lineage.js'
 export { withDenialLogging, retentionStatus, type RetentionStatusRow, type DenialActor } from './retention.js'
 export { validateClassificationFloors, type ClassificationMismatch } from './classification.js'
@@ -30,7 +32,10 @@ export {
   type RiskSignalSinkEvent,
   type RiskSignalSummary,
   type LiabilityMonitor,
-  type RiskSignalHeader
+  type RiskSignalHeader,
+  type StoredRiskSignal,
+  type RiskSignalListQuery,
+  type RiskSignalPage
 } from './risk-signal.js'
 export {
   PgAnomalyDetectionStore,

@@ -108,6 +108,30 @@ export interface RiskSignalHeader {
   created_at: string
 }
 
+/** BACKOFFICE-30/-42 — full risk_signal row for the list/triage surface. */
+export interface StoredRiskSignal {
+  id: string
+  signal_type: string
+  severity: string
+  status: string
+  client_id: string | null
+  channel: string
+  signal_data: Record<string, unknown>
+  nebras_liability_event_ref: string | null
+  created_at: string
+}
+export interface RiskSignalListQuery {
+  cursor?: string
+  limit?: number
+  signal_type?: string
+  severity?: string
+  status?: string
+}
+export interface RiskSignalPage {
+  rows: StoredRiskSignal[]
+  next_cursor: string | null
+}
+
 const ACTIVE = `status NOT IN ('closed_actioned','closed_no_action','false_positive')`
 const isoR = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v))
 const tallyR = (rows: { k: string; n: string | number }[]): Record<string, number> =>
@@ -185,7 +209,89 @@ export class PgRiskMetricsStore {
     })
   }
 
+  /** BACKOFFICE-30 — paginated signal list with optional type/severity/status filters. */
+  async listSignals(query: RiskSignalListQuery = {}): Promise<RiskSignalPage> {
+    const limit = Math.min(Math.max(query.limit ?? 50, 1), 200)
+    const after = query.cursor ? decodeSignalCursor(query.cursor) : null
+    const rows = await this.asApp(async (c) => {
+      const params: unknown[] = []
+      const where: string[] = []
+      for (const [col, val] of [['signal_type', query.signal_type], ['severity', query.severity], ['status', query.status]] as const) {
+        if (val) {
+          params.push(val)
+          where.push(`${col} = $${params.length}`)
+        }
+      }
+      if (after) {
+        params.push(after.createdAt, after.id)
+        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+      }
+      const res = await c.query(
+        `SELECT id, signal_type, severity, status, client_id, channel, signal_data, nebras_liability_event_ref, created_at
+           FROM risk_signal ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+           ORDER BY date_trunc('milliseconds', created_at) DESC, id DESC
+           LIMIT ${limit + 1}`,
+        params
+      )
+      return res.rows
+    })
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+    const last = page[page.length - 1] as Record<string, unknown> | undefined
+    return {
+      rows: page.map(toSignalRecord),
+      next_cursor: hasMore && last ? encodeSignalCursor(isoR(last.created_at), last.id as string) : null
+    }
+  }
+
+  async getSignal(id: string): Promise<StoredRiskSignal | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT id, signal_type, severity, status, client_id, channel, signal_data, nebras_liability_event_ref, created_at FROM risk_signal WHERE id = $1`,
+        [id]
+      )
+      return res.rows[0] ?? null
+    })
+    return row ? toSignalRecord(row) : null
+  }
+
+  /** BACKOFFICE-42 — signal triage state transition (acknowledge / investigate / close). */
+  async updateSignalStatus(id: string, status: string): Promise<StoredRiskSignal | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE risk_signal SET status = $2 WHERE id = $1
+         RETURNING id, signal_type, severity, status, client_id, channel, signal_data, nebras_liability_event_ref, created_at`,
+        [id, status]
+      )
+      return res.rows[0] ?? null
+    })
+    return row ? toSignalRecord(row) : null
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
+  }
+}
+
+function toSignalRecord(r: Record<string, unknown>): StoredRiskSignal {
+  return {
+    id: r.id as string,
+    signal_type: r.signal_type as string,
+    severity: r.severity as string,
+    status: r.status as string,
+    client_id: (r.client_id as string) ?? null,
+    channel: r.channel as string,
+    signal_data: (r.signal_data as Record<string, unknown>) ?? {},
+    nebras_liability_event_ref: (r.nebras_liability_event_ref as string) ?? null,
+    created_at: isoR(r.created_at)
+  }
+}
+const encodeSignalCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
+function decodeSignalCursor(cursor: string): { createdAt: string; id: string } | null {
+  try {
+    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
+    return createdAt && id ? { createdAt, id } : null
+  } catch {
+    return null
   }
 }

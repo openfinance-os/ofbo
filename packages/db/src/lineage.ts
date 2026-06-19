@@ -49,6 +49,63 @@ export class PgLineageEmitter implements LineageSink {
   }
 }
 
+/** BACKOFFICE-49 — column-level lineage tree for one Back Office table, read from
+ *  lineage_events (the demo's local stand-in for the P7 enterprise data catalogue). */
+export interface TableLineage {
+  table_name: string
+  columns: string[]
+  sources: string[]
+  event_count: number
+  first_seen: string | null
+  last_seen: string | null
+  recent: { columns: string[]; source: string; trace_id: string; created_at: string }[]
+}
+
+export class PgLineageReader {
+  private readonly pool: pg.Pool
+  constructor(databaseUrl: string, private readonly config: { bankId: string }) {
+    this.pool = new pg.Pool({ connectionString: databaseUrl })
+  }
+
+  async readTable(tableName: string): Promise<TableLineage> {
+    const c = await this.pool.connect()
+    try {
+      await c.query('BEGIN')
+      await c.query('SET LOCAL ROLE ofbo_app')
+      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      const res = await c.query(
+        `SELECT columns, source, trace_id, created_at FROM lineage_events
+         WHERE table_name = $1 ORDER BY created_at DESC LIMIT 50`,
+        [tableName]
+      )
+      await c.query('COMMIT')
+      const rows = res.rows
+      const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v))
+      const columns = [...new Set(rows.flatMap((r) => (r.columns as string[]) ?? []))].sort()
+      const sources = [...new Set(rows.map((r) => r.source as string))].sort()
+      const times = rows.map((r) => iso(r.created_at)).sort()
+      return {
+        table_name: tableName,
+        columns,
+        sources,
+        event_count: rows.length,
+        first_seen: times[0] ?? null,
+        last_seen: times[times.length - 1] ?? null,
+        recent: rows.slice(0, 20).map((r) => ({ columns: (r.columns as string[]) ?? [], source: r.source as string, trace_id: r.trace_id as string, created_at: iso(r.created_at) }))
+      }
+    } catch (e) {
+      await c.query('ROLLBACK').catch(() => undefined)
+      throw e
+    } finally {
+      c.release()
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end()
+  }
+}
+
 /** Q4.5 (BCBS 239) validation: every Back Office table with rows must have lineage events. */
 export async function validateLineageCoverage(
   databaseUrl: string
