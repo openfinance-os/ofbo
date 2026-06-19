@@ -766,3 +766,20 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - TDD: consent-admin-view.spec.ts 4 (multi-auth block / null-for-non-payment / 404 / 403). Integration consent-admin-view.int.spec.ts (consent_admin_view audit persistence, RLS). Updated rbac.spec (the previously-stubbed :admin route now reaches its handler → 404, still proving care passes the scope middleware).
 - Gates: gen-drift 0, typecheck, lint, **unit 567/567** (89 files), integration green (no new table → Q4.5 surface unchanged). Reviewers: **hard-stop PASS** (PII axis clean), **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #94 MERGED, branch deleted.
 - Eligible queue remaining (pending): -68. Blocked: -67 (spec PR #90).
+
+## 2026-06-19 — BACKOFFICE-68 DAO reconciliation coverage (PR #95, merge 61c8c80)
+
+- dao_api_call joins the daily three-way reconciliation match as a data-sharing line class: fee-schedule 25 milli-fils/line, DEFAULT_THRESHOLDS 1 fil aed (data-sharing fee-variance default), margin productFamily → AISP, sources MATCHED_TYPES includes it. migration 0021_dao_line_type extends the reconciliation_break line_type CHECK to the contract's six LineType values (additive).
+- TDD: reconciliation-dao.spec.ts (fee/threshold/family + engine three-way match + break detection) + .int.spec.ts (DAO break persistence over real Postgres, RLS). Updated reconciliation-thresholds.spec count 5→6.
+- Gates: gen-drift 0, typecheck, lint, **unit 571/571** (91 files), integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #95 MERGED, branch deleted.
+
+## 2026-06-19 — LOOP SESSION COMPLETE: eligible code queue DRAINED
+
+- This /next-story session shipped 6 stories to main on the local-gate build-ahead pivot (CI Q1–Q3 still billing-blocked): **-75** (#89), **-77** (#91), **-78** (#92), **-09** (#93), **-61** (#94), **-68** (#95). Each: TDD red-first, unit + integration green, Q4.5 lineage PASS, both reviewers clean (hard-stop PASS + conformance CONFORMANT). Unit suite 549→571.
+- **-67** hit a genuine contract gap (missed-cadence Risk signal needs a RiskSignal.signal_type value absent from both the contract enum and the risk_signal DB CHECK) → spec-only **PR #90** opened (human-approved, NOT merged); -67 parked `blocked`.
+- **No eligible (pending, deps-done) items remain.** Everything left is human-gated:
+  - **Spec PR awaiting human merge:** #90 (unblocks -67 implementation).
+  - **Contract-gap spec PRs to be authored:** -74 (Trust Framework participant admin), -76 (cross-scheme dispute guard / Aani), -79 (Nebras service-desk case tracking).
+  - **Human decisions / ADRs:** -25 (care-token exposure — ADR-0001), -33 (BD-13 cross-fintech aggregation governance sign-off), -64 (new P1 CareSurfacePort method + contract for call-recording linkage).
+  - **Deferred UI track (gated on the human-approved UI-00 Tailwind ADR):** -15 (recon console WCAG AA), -26 (console design-system/brand) — though the UI-00..09 screens already merged; these are polish items on that track.
+  - **Per-bank engagement:** M6 enterprise port-swaps.
