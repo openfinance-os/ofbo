@@ -1,5 +1,5 @@
 import type { NebrasEgressPort } from '@ofbo/ports'
-import type { DisputeCreateInput, DisputeListQuery, DisputePage, StoredDisputeRecord } from '@ofbo/db'
+import type { CrossSchemeUpdate, DisputeCreateInput, DisputeListQuery, DisputePage, StoredDisputeRecord } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import { endOfNextBusinessDay, endOfNthBusinessDay } from '../business-hours.js'
@@ -56,6 +56,7 @@ export interface DisputeStore {
   list(query: DisputeListQuery): Promise<DisputePage>
   markRefundInitiated(id: string, refundAmount: Money, refundRequiredBy: string, traceId: string): Promise<StoredDisputeRecord | null>
   updateState(id: string, patch: { state?: string; escalated_to?: string | null; resolution_note?: string | null }, traceId: string): Promise<StoredDisputeRecord | null>
+  recordCrossScheme(id: string, patch: CrossSchemeUpdate, traceId: string): Promise<StoredDisputeRecord | null>
 }
 
 /**
@@ -104,6 +105,10 @@ export class InMemoryDisputeStore implements DisputeStore {
       nebras_case_id: input.nebras_case_id ?? null,
       care_case_id: null,
       assigned_to: null,
+      aani_case_id: input.aani_case_id ?? null,
+      cross_scheme: input.aani_case_id
+        ? { aani_case_id: input.aani_case_id, aani_recall_window_expires_at: null, settled_in_other_scheme: false, compensation_blocked: false, sanadak_reference: null, sanadak_escalated_at: null }
+        : null,
       created_at: now
     }
     this.rows.push(record)
@@ -133,6 +138,20 @@ export class InMemoryDisputeStore implements DisputeStore {
     if (patch.state) r.state = patch.state
     // escalated_to / resolution_note are write-only columns (not on the DisputeCase
     // wire projection) — persisted by the Pg store; the in-memory store tracks state.
+    return r
+  }
+  async recordCrossScheme(id: string, patch: CrossSchemeUpdate): Promise<StoredDisputeRecord | null> {
+    const r = this.rows.find((x) => x.id === id)
+    if (!r) return null
+    const cs = r.cross_scheme ?? { aani_case_id: null, aani_recall_window_expires_at: null, settled_in_other_scheme: false, compensation_blocked: false, sanadak_reference: null, sanadak_escalated_at: null }
+    if (patch.aani_case_id !== undefined && patch.aani_case_id !== null) cs.aani_case_id = patch.aani_case_id
+    if (patch.aani_recall_window_expires_at !== undefined && patch.aani_recall_window_expires_at !== null) cs.aani_recall_window_expires_at = patch.aani_recall_window_expires_at
+    if (patch.settled_in_other_scheme !== undefined) cs.settled_in_other_scheme = patch.settled_in_other_scheme
+    if (patch.compensation_blocked !== undefined) cs.compensation_blocked = patch.compensation_blocked
+    if (patch.sanadak_reference !== undefined && patch.sanadak_reference !== null) cs.sanadak_reference = patch.sanadak_reference
+    if (patch.sanadak_escalated_at !== undefined && patch.sanadak_escalated_at !== null) cs.sanadak_escalated_at = patch.sanadak_escalated_at
+    if (patch.aani_case_id) r.aani_case_id = patch.aani_case_id
+    r.cross_scheme = cs
     return r
   }
 }
@@ -229,6 +248,7 @@ export class DisputeService {
       originating_consent_id?: string | null
       originating_call_id?: string | null
       dispute_reason_code?: string | null
+      aani_case_id?: string | null
     },
     traceId: string
   ): Promise<StoredDisputeRecord> {
@@ -258,7 +278,8 @@ export class DisputeService {
         originating_consent_id: input.originating_consent_id ?? null,
         originating_call_id: input.originating_call_id ?? null,
         dispute_reason_code: input.dispute_reason_code ?? null,
-        nebras_case_id
+        nebras_case_id,
+        aani_case_id: input.aani_case_id ?? null
       },
       traceId
     )
@@ -304,6 +325,15 @@ export class DisputeService {
     assertScope(principal, DISPUTE_SCOPE)
     const dispute = await this.deps.store.get(disputeId)
     if (!dispute) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+    // BACKOFFICE-76 — double-compensation guard: refuse to settle the same direct loss
+    // in both schemes when it has already been settled in the other (Aani / Al Tareq).
+    if (dispute.cross_scheme?.compensation_blocked) {
+      throw new DisputeError(
+        'BACKOFFICE.DOUBLE_COMPENSATION_BLOCKED',
+        'This direct loss has been settled in another scheme; a refund here is blocked to prevent double compensation.',
+        409
+      )
+    }
     return this.deps.approvals.requestApproval(
       principal,
       {
@@ -319,6 +349,48 @@ export class DisputeService {
       },
       traceId
     )
+  }
+
+  /**
+   * BACKOFFICE-76 — record cross-scheme (Aani / Al Tareq) context on a dispute. Setting
+   * settled_in_other_scheme arms the double-compensation guard (compensation_blocked);
+   * an aani_case_id stamps the 2-hour Aani fund-recall window; a sanadak_reference stamps
+   * the consumer-protection-authority escalation time. One High-class audit. 404 if unknown.
+   */
+  async recordCrossScheme(
+    principal: Principal,
+    disputeId: string,
+    input: { aani_case_id?: string; settled_in_other_scheme?: boolean; sanadak_reference?: string },
+    traceId: string
+  ): Promise<StoredDisputeRecord> {
+    assertScope(principal, DISPUTE_SCOPE)
+    const dispute = await this.deps.store.get(disputeId)
+    if (!dispute) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+
+    const now = new Date()
+    const settled = input.settled_in_other_scheme === true
+    const patch = {
+      ...(input.aani_case_id ? { aani_case_id: input.aani_case_id, aani_recall_window_expires_at: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString() } : {}),
+      ...(settled ? { settled_in_other_scheme: true, compensation_blocked: true } : {}),
+      ...(input.sanadak_reference ? { sanadak_reference: input.sanadak_reference, sanadak_escalated_at: now.toISOString() } : {})
+    }
+    const updated = await this.deps.store.recordCrossScheme(disputeId, patch, traceId)
+    if (!updated) throw new DisputeError('BACKOFFICE.DISPUTE_NOT_FOUND', 'No dispute matches that id.', 404)
+
+    await this.deps.audit.emit({
+      event_type: 'dispute_cross_scheme_recorded',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: DISPUTE_SCOPE,
+      target_psu_identifier: dispute.psu_identifier,
+      target_dispute_id: disputeId,
+      target_consent_id: dispute.originating_consent_id,
+      request_trace_id: traceId,
+      request_body: { aani_case_id: input.aani_case_id ?? null, settled_in_other_scheme: settled, compensation_blocked: settled, sanadak_reference: input.sanadak_reference ?? null },
+      response_status: 200,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+    return updated
   }
 
   /**

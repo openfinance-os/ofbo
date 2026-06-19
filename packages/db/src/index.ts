@@ -49,7 +49,9 @@ export {
   type StoredDisputeRecord,
   type DisputeCreateInput,
   type DisputeListQuery,
-  type DisputePage
+  type DisputePage,
+  type CrossSchemeContext,
+  type CrossSchemeUpdate
 } from './dispute-store.js'
 export {
   PgRespondentDisputeStore,
