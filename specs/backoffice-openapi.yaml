@@ -2295,7 +2295,7 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        signal_type: { type: string, enum: [consent_anomaly, tpp_behaviour, cop_mismatch_spike, nebras_liability_approach, agent_anomaly, predictive_liability_forecast] }
+        signal_type: { type: string, enum: [consent_anomaly, tpp_behaviour, cop_mismatch_spike, nebras_liability_approach, agent_anomaly, predictive_liability_forecast, lfi_report_cadence_missed] }
         severity: { type: string, enum: [info, low, medium, high, critical] }
         status: { type: string, enum: [open, acknowledged, investigating, closed_actioned, closed_no_action, false_positive] }
         client_id: { type: string, format: uuid, nullable: true }
