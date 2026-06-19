@@ -42,6 +42,8 @@ import { RespondentDisputeService, InMemoryRespondentDisputeStore, type Responde
 import { respondentDisputeRoutes } from './respondent-disputes/routes.js'
 import { FraudIncidentService, InMemoryFraudIncidentStore, type FraudIncidentStore } from './fraud-incidents/service.js'
 import { fraudIncidentRoutes } from './fraud-incidents/routes.js'
+import { SchemeNotificationService, InMemorySchemeNotificationStore, type SchemeNotificationStore } from './scheme-notifications/service.js'
+import { schemeNotificationRoutes } from './scheme-notifications/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
 import {
   InquiryBundleService,
@@ -131,6 +133,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/fraud-incidents',
   'get /back-office/fraud-incidents',
   'post /back-office/fraud-incidents/{incident_id}:resolve',
+  'post /back-office/scheme-notifications',
+  'get /back-office/scheme-notifications',
+  'post /back-office/scheme-notifications/{notification_id}:acknowledge',
   'post /back-office/inquiries/psu',
   'get /back-office/reconciliation/runs',
   'get /back-office/reconciliation/runs/{run_id}',
@@ -212,6 +217,9 @@ export interface AppDeps {
   /** BACKOFFICE-77 — fraud-incident store (defaults in-memory; the worker wires the
    *  durable PgFraudIncidentStore). */
   fraudIncidentStore?: FraudIncidentStore
+  /** BACKOFFICE-78 — outbound scheme-notification store (defaults in-memory; the
+   *  worker wires the durable PgSchemeNotificationStore). */
+  schemeNotificationStore?: SchemeNotificationStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -313,6 +321,11 @@ export function createApp(deps: AppDeps = {}) {
   const fraudIncidentService = new FraudIncidentService({
     store: deps.fraudIncidentStore ?? new InMemoryFraudIncidentStore(),
     itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
+    audit: highClassAudit
+  })
+  // BACKOFFICE-78 — outbound downtime/change notifications to Nebras (Operations-owned).
+  const schemeNotificationService = new SchemeNotificationService({
+    store: deps.schemeNotificationStore ?? new InMemorySchemeNotificationStore(),
     audit: highClassAudit
   })
   const complianceReportStore = deps.complianceReportStore ?? new InMemoryComplianceReportStore()
@@ -463,6 +476,7 @@ export function createApp(deps: AppDeps = {}) {
     ...disputeRoutes(disputeService, idempotencyStore),
     ...respondentDisputeRoutes(respondentDisputeService, idempotencyStore),
     ...fraudIncidentRoutes(fraudIncidentService, idempotencyStore),
+    ...schemeNotificationRoutes(schemeNotificationService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),

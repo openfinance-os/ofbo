@@ -68,6 +68,14 @@ export {
   type FraudIncidentPage
 } from './fraud-incident-store.js'
 export {
+  PgSchemeNotificationStore,
+  type StoredSchemeNotification,
+  type SchemeNotificationCreateInput,
+  type SchemeNotificationUpdate,
+  type SchemeNotificationListQuery,
+  type SchemeNotificationPage
+} from './scheme-notification-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,
