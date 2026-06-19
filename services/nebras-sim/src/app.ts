@@ -44,6 +44,14 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
   const app = new Hono()
   const faults: Fault[] = []
   const revoked = new Map<string, string>() // consent_id → revoked_at ISO
+  const cases = new Map<string, { status: string; dispute_type: string | null; created_at: string }>() // Case & Dispute Mgmt
+
+  // deterministic case id from the payload → repeatable demos (same dispute → same case)
+  const caseId = (seed: string): string => {
+    let h = 5381
+    for (let i = 0; i < seed.length; i++) h = ((h << 5) + h + seed.charCodeAt(i)) >>> 0
+    return `NBR-CASE-${h.toString(16).padStart(8, '0')}`
+  }
 
   if (options.adminToken) {
     const token = options.adminToken
@@ -91,6 +99,26 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
       drift_injected: driftInjected,
       revoked_at: revoked.get(consentId) ?? null
     })
+  })
+
+  // ── Case & Dispute Management surface ──────────────────────────────────────
+  // The Hub surface the Back Office links disputes to (PRD §3.1/§4). Deterministic
+  // case ids keep demos repeatable; re-POSTing the same dispute returns the same case.
+  app.post('/case-management/disputes', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>
+    const seed = `${body.dispute_type ?? 'dispute'}|${body.originating_payment_id ?? body.psu_identifier ?? 'na'}`
+    const nebras_case_id = caseId(seed)
+    const existing = cases.get(nebras_case_id)
+    const rec = existing ?? { status: 'received', dispute_type: (body.dispute_type as string) ?? null, created_at: new Date().toISOString() }
+    cases.set(nebras_case_id, rec)
+    return c.json({ nebras_case_id, status: rec.status, dispute_type: rec.dispute_type, created_at: rec.created_at }, existing ? 200 : 201)
+  })
+
+  app.get('/case-management/disputes/:case_id', (c) => {
+    const id = c.req.param('case_id')
+    const rec = cases.get(id)
+    if (!rec) return c.json({ error: { code: 'NEBRAS.CASE_NOT_FOUND', message: 'No Nebras dispute case matches that id.' } }, 404)
+    return c.json({ nebras_case_id: id, status: rec.status, dispute_type: rec.dispute_type, created_at: rec.created_at })
   })
 
   // ── Reports surfaces ──────────────────────────────────────────────────────
