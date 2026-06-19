@@ -728,3 +728,16 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - TDD: respondent-disputes.spec.ts 16 tests shown RED first (7 pure-fn pass, 9 endpoints 501) → green after wiring. Integration respondent-disputes.int.spec.ts (persistence + audit + lineage + advance, RLS exercised against real Postgres; generous timeouts for the remote pooler).
 - Gates: gen-drift 0, typecheck, lint, **unit 549/549**, integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot (CI Q1–Q3 still billing-blocked); PR #89 MERGED, branch deleted.
 - Eligible queue remaining (pending, specs merged): -67, -77, -78, -09, -61, -68.
+
+## 2026-06-19 — BACKOFFICE-67 BLOCKED on spec PR #90 (RiskSignal enum gap)
+
+- Picked -67 (first eligible). Canon read surfaced a genuine contract gap: the "missed cadence raises ITSM ticket + **Risk signal**" acceptance criterion has no valid `RiskSignal.signal_type` value — the contract enum is `[consent_anomaly, tpp_behaviour, cop_mismatch_spike, nebras_liability_approach, agent_anomaly, predictive_liability_forecast]` and the `risk_signal` DB CHECK (migrations/0002) enumerates the same set. Forcing it into an existing type would be semantically wrong + pollute the Risk View.
+- Per spec-change skill + CLAUDE.md rule 6 (contract changes are human-approved, never self-merged): opened spec-only **PR #90** adding `lfi_report_cadence_missed` to `RiskSignal.signal_type` (2-line diff: spec + regenerated api-types). NOT merged. Set -67 `blocked` on main (351f44a) with reason. After #90 merges: impl PR adds GET/POST ingest + cadence dashboard + matching risk_signal CHECK migration + the headless cadence monitor.
+
+## 2026-06-19 — BACKOFFICE-77 Nebras fraud-incident reporting + scheme-imposed holds (PR #91, merge 6e82fd4)
+
+- Next eligible after -67. Endpoints: POST report (risk:investigations:write) maps Nebras P1–P4 → ITSM priority (P1 critical/P2 high/P3 medium/P4 low), raises a P3 ticket via the P3 ITSM port, opens the customer operational-pause, flags `scheme_imposed_hold` for systemic P1; GET list (risk:read, filters status+severity) for the Ops + Risk Views; POST :resolve lifts the pause.
+- migration 0018_fraud_incident (RLS day-one + retention 24/60 + classification `restricted`); PgFraudIncidentStore (+ in-memory default) with column-level BCBS 239 lineage; Idempotency-Key on mutations; double scope enforcement (BFF middleware + service); one High-class audit per report/resolve (PII redacted, trace propagated); wired into worker.ts. No risk_signal emission (the ITSM ticket + fraud_incident record are the mechanisms) — so no enum gap (unlike -67).
+- TDD: fraud-incidents.spec.ts 11 shown RED first (8 endpoint 501 + 3 mapping/pure pass) → green after wiring. Integration fraud-incidents.int.spec.ts (P1 hold persistence + audit + lineage + resolve, RLS).
+- Gates: gen-drift 0, typecheck, lint, **unit 554/554**, integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #91 MERGED, branch deleted.
+- Eligible queue remaining (pending): -78, -09, -61, -68. Blocked: -67 (spec PR #90).
