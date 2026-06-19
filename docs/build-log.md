@@ -837,3 +837,15 @@ Ran the full regression battery and stabilized the gates that were unreliable.
 - **Coverage breadth** — the gate covers unit-exercised logic only; `packages/db` (Pg stores) + portal are covered by their own suites but not merged into one coverage number. A merged unit+integration+E2E coverage report would close the measurement gap.
 - **DB hygiene** — a `db:reset`/truncate helper before full local integration runs (a few count-based asserts are run-scoped but the demo DB accumulates rows).
 - **Repo hygiene** — observed concurrent history movement (a `worktree-ui-stitch-backlog` worktree / parallel activity advanced main mid-session); worth confirming no two agents write main at once.
+
+## 2026-06-19 — BACKOFFICE-15 reconciliation console WCAG 2.1 AA (PR #105)
+
+**Merged** PR #105 to main (CI green, both reviewers clean). First story to merge with **GitHub Actions actually running** — the billing block was resolved this session by making the repo public (public repos = unlimited free Actions). Also fixed the deployed portal (BFF service binding) so the console screens this story makes accessible actually load live.
+
+**What merged:** keyboard-only + screen-reader traversal of the break list (UI-03 `recon-console.tsx`) and investigation detail (UI-04 `investigation-detail.tsx`), plus tests-first `recon-a11y.spec.tsx`. WCAG 2.1 AA criteria: 1.3.1 named landmark regions (run-list / break-queue / three-way-comparison via `aria-labelledby`) + `sr-only` "N open breaks" count (badge `aria-hidden`, not colour-only); 4.1.2 per-break Investigate link disambiguated by client (`aria-label`); 4.1.3 error banners `role=alert` / notices `role=status`; 2.1.1 + 2.4.7 `focus-visible` ring on every interactive control. Frontend-only — no contract/port/audit/lineage surface (none apply).
+
+**Verification:** tests-first (8 a11y cases shown red before the fix) · full unit **610/610** · gen-drift 0 · lint + typecheck clean · **CI Q1–Q4.5 all green on PR #105** · reviewers hard-stop **PASS**, conformance **CONFORMANT**.
+
+**Backlog:** BACKOFFICE-15 → done. Next eligible: BACKOFFICE-26 (console design-system + Al Tareq brand conformance).
+
+**Noted (not this story):** uncommitted working-tree leftovers from the PR #104 theme remain (a `db:reset` script + `test:coverage` scripts in package.json + `packages/db/src/reset.ts`) — deliberately kept out of this PR; they belong to the DB-hygiene / coverage-breadth follow-ups already listed above.
