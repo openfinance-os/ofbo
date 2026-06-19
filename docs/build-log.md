@@ -800,3 +800,16 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
   - **#101 — BACKOFFICE-76** Cross-scheme dispute guard (Aani/Al Tareq): POST /back-office/disputes/{id}:record-cross-scheme (disputes:admin); DisputeCreate.aani_case_id + DisputeCase.cross_scheme; double-compensation guard → :initiate-refund 409 once settled in the other scheme. migration 0024 (additive dispute_case columns); PgDisputeStore.recordCrossScheme. unit 4 + int 1; updated dispute-lifecycle fixture.
   - **#102 — BACKOFFICE-79** Nebras service-desk case tracking: GET (+/{id}) read / POST track + /{id}:update write (platform:operations:*). incident/billing_query/onboarding/general; P1–P4; Interaction-Guide SLA (due_at by priority + computed overdue); links to break/dispute/signal; resolve stamps resolved_at. migration 0025 (new table, RLS day-one); PgServiceDeskCaseStore. unit 8 + int 1.
 - **Gates per story:** gen-drift 0, lint ok, full unit green (591→593, 94 files), all integration green (RLS + audit + lineage over real Postgres), Q4.5 lineage PASS, 0 PII. **Reviewers:** hard-stop PASS + conformance CONFORMANT on all four. Migrations 0022–0025 applied to the demo DB. Backlog: -67/-74/-76/-79 → done.
+
+## 2026-06-19 — /next-story: eligible queue empty (no pending items; remaining work human-gated)
+
+- Ran one /next-story iteration. Backlog state: **85 done, 0 pending, 6 blocked, 5 deferred** (96 items total). No `status: pending` item exists, so nothing to implement this iteration. No story started, nothing merged.
+- **Blocked — all require a human decision (ADR / BD sign-off / new port primitive / per-bank engagement), none auto-unblockable:**
+  - **BACKOFFICE-25** Care-surface token minting (act+sub claims) — uncovered auth path (CLAUDE.md rule 6); no contract endpoint; care token is a P1 Platform-Auth client_credentials token → **ADR-0001 + care-token exposure decision**.
+  - **BACKOFFICE-33** Cross-fintech aggregation via bank_internal_view — **BD-13 governance sign-off** required before cross-fintech aggregation (PRD default sequences single-fintech views first).
+  - **BACKOFFICE-64** Call/transcript linkage on dispute cases — `originating_call_id` already captured/surfaced (-20), but resolving it to a contact-centre recording needs a **new P1 CareSurfacePort method + recording-link contract surface** → ADR/spec decision.
+  - **BACKOFFICE-15** Reconciliation console WCAG 2.1 AA — gated on the **UI-00 Tailwind ADR (human-approved)** UI-hardening track.
+  - **BACKOFFICE-26** Console design-system + Al Tareq brand conformance — gated on the same **UI-00 Tailwind ADR (human-approved)**.
+  - **M6-PORT-SWAPS** Enterprise adapter swaps per port — **per-bank engagement** (enterprise systems + credentials required).
+- **Deferred (Could / Phase 2 — promote to build by setting `status: pending`):** -53 (agentic spend-control for admin MCP tools), -59 (Care training environment), -60 (programmatic admin-scope DCR automations), -63 (AML GO portal STR submission), -65 (predictive liability forecasting — regulated AI artefact).
+- **To unblock the loop, the user must:** approve one of the gated ADRs/decisions above, or promote a deferred item to `pending`. Notification attempted (suppressed — terminal focused).
