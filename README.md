@@ -1,58 +1,72 @@
-# Open Finance Back Office (OFBO) — Repo Seed
+# Open Finance Back Office (OFBO)
 
-A bank-neutral, build-ready specification for the internal back office a UAE bank needs to operate Open Finance as a regulated business — covering **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic).
+A bank-neutral back office for the internal operations a UAE bank needs to run Open Finance as a regulated business — covering **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic). Built against the CBUAE / Al Tareq / Nebras scheme.
 
-## Contents
+> **Status:** M0–M5 delivered and demonstrable on the live demo. Milestones M0 (foundation) → M1 (substrate + demo live) → M2 (Customer Care) → M3 (Reconciliation) → M4 (Analytics) → M5 (hardening) are complete, including the full portal UI track. **M6 (per-bank enterprise port-swaps) is the remaining milestone.** 86 of the 92 backlog items are done; the rest are human-gated decisions (ADRs / governance) or per-bank adoption work.
+
+## Live demo
+
+Auto-deploys on every merge to `main` (`.github/workflows/deploy.yml`): BFF → Cloudflare, portal → Cloudflare (OpenNext), simulator → Railway, then the smoke acceptance suite runs against the live URLs — a broken demo fails the pipeline.
+
+| Surface | URL |
+|---|---|
+| Portal (Cloudflare Workers / OpenNext) | https://ofbo-portal.michartmann.workers.dev |
+| BFF (Cloudflare Worker) | https://ofbo-bff.michartmann.workers.dev |
+| Nebras simulator (Railway) | https://nebras-sim-production.up.railway.app |
+
+The demo profile (PRD §3.1) runs on free tiers with **synthetic data only** — persistent DEMO banner, deterministic seeded data, a fault-injection endpoint on the Nebras simulator (trigger a fee-variance break or liability signal live during a demo), and zero real PII. The demo is permanently non-production.
+
+## Canon (ground truth)
 
 | File | Purpose |
 |---|---|
 | `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
-| `specs/backoffice-openapi.yaml` | API contract — 57 paths, 9 tags, admin-scoped. Ground truth for the build |
-| `CLAUDE.md` | Build conventions for AI-assisted delivery (Claude Code): stack defaults, API conventions, per-story workflow, hard stops |
+| `specs/backoffice-openapi.yaml` | API contract — **73 paths, 9 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
+| `CLAUDE.md` | Build conventions: stack defaults, ports model, API conventions, per-story workflow, regulatory hard stops |
+| `docs/architecture-overview.md` | Component architecture — system context, ports P1–P9, BFF feature modules, data layer, shared packages (+ `docs/diagrams/` SVGs) |
+| `docs/backlog.yaml` | Machine-readable work queue (drives the autonomous build loop) |
 
-## Seeding a new repo
+## Architecture at a glance
 
-```bash
-mkdir of-backoffice && cd of-backoffice && git init
-# copy this seed's contents to the repo root, then:
-git add -A && git commit -m "Seed: OFBO PRD v1.0, API contract, build conventions"
-claude   # start Claude Code at the repo root
+pnpm monorepo. The Next.js **portal** calls the **BFF** (Hono) over an OpenAPI-generated client; the BFF reaches every external system through **port interfaces (P1–P9)** — each with a `sim` adapter (demo) and an `enterprise` adapter (M6) selected by config, never by branching in app code. Headless scheduled jobs (reconciliation engine, liability/cert/cadence monitors) run with no public ingress. Data lives in **Postgres with row-level security from day one**, INSERT-only audit, and BCBS 239 lineage emitted at write time. See `docs/architecture-overview.md` for the full map.
+
+```
+apps/portal        Next.js portal (Stitch design system, persona scope-gated)
+services/bff       Hono BFF — feature modules (E1/E2/E3) + headless worker
+services/nebras-sim  Nebras API Hub simulator (+ fault injection)
+packages/ports     P1–P9 port interfaces, registry, sim adapters
+packages/db        Postgres stores, audit, lineage, retention, RLS (migrations 0001–0025)
+packages/contracts OpenAPI-generated types + routes
+packages/{redaction,synthetic-data,release-evidence}
 ```
 
-## Building with Claude Code — gradual steps
+## Run locally
 
-Work milestone by milestone (PRD §9), one story per session, one PR per story. **Deploy early:** the demo environment goes live at M1 and auto-deploys on every merge — the demo is the showcase of the gradual build.
+```bash
+pnpm install
+pnpm gen                 # generate the OpenAPI client/types
+pnpm test                # unit suite
+pnpm test:integration    # integration suite (needs DATABASE_URL → a Postgres with the schema)
+```
 
-1. **Session 1 — canon read-back.** Ask Claude Code to read `CLAUDE.md`, the PRD, and the OpenAPI spec, and summarize scope + conventions. Correct any misreading before code exists.
-2. **M0 — foundation.** Monorepo scaffold; CI with gates Q1–Q3; generate the API client from `specs/backoffice-openapi.yaml`; failing contract stubs for all 57 paths; the 10-table relational schema with RLS and the INSERT-only audit policy; port interfaces + simulator stubs; seeded synthetic demo dataset.
-3. **M1 — substrate + demo live.** IdP (simulator) federation + admin-scope minting, scope middleware, audit write path + PII redaction, four-eyes primitive, Nebras simulator v1, auto-deploy pipeline. Exit: working demo URL with persona logins and a DEMO banner.
-4. **M2 — Customer Care (E2), the first feature.** PSU search → revocations → audit timeline → dispute + four-eyes refund. Demo walkthrough is the acceptance test.
-5. **M3–M4 — Reconciliation (E1), then Analytics (E3).** Fault injection in the Nebras simulator makes breaks and liability signals demonstrable on demand.
-6. **M5 — hardening.** Should-items, accessibility, SLO surfacing.
-7. **M6 — enterprise adoption (per bank).** Swap simulators for enterprise adapters port-by-port; each swap must pass the same contract tests the simulator passed.
+Driving the demo stack locally (BFF on :8787, Nebras sim on :8788) is covered by the `run-ofbo` workflow. Profile selection is config: `DEPLOY_PROFILE=demo|enterprise`.
 
-## Demo deployment (free / low-cost)
+## CI / quality gates
 
-**Live demo (M1-DEMO-DEPLOY, auto-deploys on merge to main):**
+`.github/workflows/ci.yml` runs on every push/PR — a failed gate blocks merge:
 
-| Surface | URL |
+| Gate | Checks |
 |---|---|
-| BFF (Cloudflare Worker) | https://ofbo-bff.michartmann.workers.dev |
-| Nebras simulator (Railway) | https://nebras-sim-production.up.railway.app |
+| Q1 | build + unit + generated-artifact drift |
+| Q2 | static analysis + SAST (lint, typecheck, semgrep) |
+| Q3 | integration + contract tests, portal E2E (Playwright) |
+| Q4 | security review + dependency scan |
+| Q4.5 | BCBS 239 lineage validation (P7) |
+| Q5 | manual prod approval — evidenced at release time via the release-evidence bundle |
 
-Every merge to main triggers `.github/workflows/deploy.yml`: BFF → Cloudflare (wrangler), simulator → Railway, then the smoke acceptance suite (`pnpm test:smoke`) runs against the live URLs — a broken demo fails the pipeline. The portal joins the deploy with M1-PORTAL-SHELL.
+## Build conventions
 
-The demo profile (PRD §3.1) runs everything on free tiers with synthetic data only. Default stack — **three services**:
-
-| Service | Covers | Notes |
-|---|---|---|
-| **Cloudflare** | Portal + BFF (Next.js on Workers via the OpenNext adapter), cron triggers, DNS | Auto-deploy on merge. Cloudflare D1 is SQLite — NOT suitable for our schema (Postgres RLS required); the database lives in Supabase (Hyperdrive optional for pooled connections) |
-| **Supabase** | Postgres with RLS (the schema's native requirement) · Auth as the IdP simulator (P2: MFA enabled, one pre-provisioned login per persona) · storage for the integrity-hashed report/Parquet archive | One service replaces separate DB + IdP + object-storage vendors |
-| **Railway** | Nebras simulator + reconciliation/analytics scheduled jobs (containers) | No Worker CPU-time limits; jobs are resumable/idempotent; Cloudflare cron can trigger them |
-
-Observability: OTel console exporter (alt: Grafana Cloud free tier) — the APM port (P5) stays simulated.
-
-Rules that keep the demo honest: persistent DEMO banner, deterministic seeded data (repeatable walkthroughs), fault-injection endpoint on the Nebras simulator (trigger a fee-variance break or liability signal live during a demo), and zero real PII — the demo is permanently non-production.
+Work milestone by milestone (PRD §9), **one story per branch/PR**, each citing its `BACKOFFICE-NN`. Spec-first: contract + acceptance tests exist and fail before implementation; implement to green (coverage ≥80%). Compose, don't invent — no new platform primitives; genuinely-uncovered gaps raise an ADR (`docs/adrs/`) and stop for a human decision. Full rules in `CLAUDE.md`.
 
 Per-story prompt pattern:
 
@@ -63,6 +77,6 @@ Implement BACKOFFICE-<NN> from docs/PRD_Open_Finance_Back_Office.md §7.
 3. Implement to green. CLAUDE.md rules apply. Branch feature/BACKOFFICE-<NN>-<slug>.
 ```
 
-## Before M1: complete the Bank Profile
+## Adopting bank: the path to production
 
-PRD §3 (ports P1–P9) and §10 (decisions BD-01..16). BD-01 (IdP) blocks M1; most others have safe defaults the build proceeds on.
+M6 swaps each simulator for an enterprise adapter, port-by-port (P1–P9) — each swap must pass exactly the contract tests the simulator passed (the port-swap acceptance gate). Before M6, complete the Bank Profile: PRD §3 (ports) and §10 (decisions BD-01..16). UAE data residency, FAPI 2.0 posture (mTLS/PAR/PKCE via the egress gateway P6), and the retention/audit rules are non-negotiable hard stops.
