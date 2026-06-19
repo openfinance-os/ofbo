@@ -8,6 +8,7 @@
 
 import type { ApprovalRequest } from './approvals'
 import { bffClient } from './bff'
+import type { Schemas, KeysConformToContract, AssertContract } from './contract-types'
 
 export interface Money {
   amount: number
@@ -151,3 +152,7 @@ export function formatMoney(m: Money | null): string {
   if (!m) return '—'
   return `${m.currency} ${(m.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
+
+// ADR-0004 drift guards — fail typecheck if the contract renames/removes a field these read.
+export type TppCounterpartyContractGuard = AssertContract<KeysConformToContract<TppCounterparty, Schemas['TppCounterparty']>>
+export type InvoiceRunContractGuard = AssertContract<KeysConformToContract<InvoiceRun, Schemas['InvoiceRun']>>

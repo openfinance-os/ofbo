@@ -7,6 +7,7 @@
  */
 
 import { bffClient } from './bff'
+import type { Schemas, KeysConformToContract, AssertContract } from './contract-types'
 
 export interface Money {
   amount: number
@@ -198,3 +199,7 @@ export function formatMoney(m: Money | null): string {
   const major = (m.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return `${m.currency} ${major}`
 }
+
+// ADR-0004 drift guards — fail typecheck if the contract renames/removes a field these read.
+export type ReconciliationRunContractGuard = AssertContract<KeysConformToContract<ReconciliationRun, Schemas['ReconciliationRun']>>
+export type ReconciliationBreakContractGuard = AssertContract<KeysConformToContract<ReconciliationBreak, Schemas['ReconciliationBreak']>>
