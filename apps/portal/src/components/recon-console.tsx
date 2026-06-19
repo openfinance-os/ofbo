@@ -76,9 +76,9 @@ export function KpiCards({ run }: { run: ReconciliationRun }) {
 
 export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selectedId?: string }) {
   return (
-    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="run-list">
+    <section aria-labelledby="run-list-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="run-list">
       <div className="px-4 py-3 border-b border-outline-variant">
-        <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Reconciliation Runs</h2>
+        <h2 id="run-list-heading" className="font-bold text-sm text-primary uppercase tracking-widest">Reconciliation Runs</h2>
       </div>
       <ul className="divide-y divide-outline-variant">
         {runs.length === 0 ? (
@@ -88,7 +88,7 @@ export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selec
         ) : (
           runs.map((r) => (
             <li key={r.id} data-testid={`run-${r.run_id}`}>
-              <a href={`/reconciliation?run_id=${encodeURIComponent(r.run_id)}`} aria-current={r.run_id === selectedId ? 'true' : undefined} className={`flex items-center justify-between gap-3 p-4 hover:bg-surface-container-low transition-colors ${r.run_id === selectedId ? 'bg-surface-container-low' : ''}`}>
+              <a href={`/reconciliation?run_id=${encodeURIComponent(r.run_id)}`} aria-current={r.run_id === selectedId ? 'true' : undefined} className={`flex items-center justify-between gap-3 p-4 hover:bg-surface-container-low transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${r.run_id === selectedId ? 'bg-surface-container-low' : ''}`}>
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-primary truncate">{r.run_id}</p>
                   <p className="text-xs text-on-surface-variant">{r.created_at}</p>
@@ -99,7 +99,7 @@ export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selec
           ))
         )}
       </ul>
-    </div>
+    </section>
   )
 }
 
@@ -109,7 +109,7 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
     <form action={resolveAction} data-testid={`resolve-form-${breakId}`} className="mt-3 space-y-2 border-t border-outline-variant pt-3">
       <input type="hidden" name="break_id" value={breakId} />
       <input type="hidden" name="run_id" value={runId} />
-      <select name="resolution_outcome" aria-label="resolution outcome" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1">
+      <select name="resolution_outcome" aria-label="resolution outcome" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
         {RESOLVE_OUTCOMES.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -122,9 +122,9 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
         minLength={MIN_RESOLUTION_NOTE}
         required
         placeholder={`Resolution note (≥ ${MIN_RESOLUTION_NOTE} chars)…`}
-        className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1"
+        className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       />
-      <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
+      <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
         Resolve break
       </button>
     </form>
@@ -155,14 +155,14 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
         {b.sla_clock_started_at ? ` · SLA started ${b.sla_clock_started_at}` : ''}
         {b.reopened_count > 0 ? ` · reopened ×${b.reopened_count}` : ''}
       </p>
-      <a href={`/reconciliation/breaks/${encodeURIComponent(b.id)}`} data-testid={`investigate-${b.id}`} className="mt-2 inline-block text-xs text-secondary hover:underline">
+      <a href={`/reconciliation/breaks/${encodeURIComponent(b.id)}`} data-testid={`investigate-${b.id}`} aria-label={`Investigate break ${b.client_id}`} className="mt-2 inline-block text-xs text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
         Investigate →
       </a>
       {canWrite && CLAIMABLE.has(b.status) && claimAction ? (
         <form action={claimAction} data-testid={`claim-form-${b.id}`} className="mt-3">
           <input type="hidden" name="break_id" value={b.id} />
           <input type="hidden" name="run_id" value={b.run_id} />
-          <button type="submit" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors">
+          <button type="submit" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
             Claim break
           </button>
         </form>
@@ -174,10 +174,11 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
 
 export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { breaks: ReconciliationBreak[]; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction'] }) {
   return (
-    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="break-queue">
+    <section aria-labelledby="break-queue-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="break-queue">
       <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
-        <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Break Queue</h2>
-        <span className="bg-error-container text-on-error-container px-2 py-0.5 rounded-full text-xs font-bold">{breaks.length}</span>
+        <h2 id="break-queue-heading" className="font-bold text-sm text-primary uppercase tracking-widest">Break Queue</h2>
+        <span aria-hidden="true" className="bg-error-container text-on-error-container px-2 py-0.5 rounded-full text-xs font-bold">{breaks.length}</span>
+        <span className="sr-only">{breaks.length} open breaks</span>
       </div>
       <div className="p-3 space-y-3">
         {breaks.length === 0 ? (
@@ -188,7 +189,7 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { b
           breaks.map((b) => <BreakCard key={b.id} b={b} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />)
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -198,12 +199,12 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], error, notic
       <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
 
       {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="recon-notice">
+        <p role="status" className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="recon-notice">
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="recon-error">
+        <p role="alert" className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="recon-error">
           {error}
         </p>
       ) : null}
