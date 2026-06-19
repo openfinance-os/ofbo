@@ -14,6 +14,11 @@ binding = "ASSETS"
 DEPLOY_PROFILE = "demo"
 # Demo bank tenant — matches the seeded dataset and the BFF worker.
 BANK_ID = "11111111-1111-4111-8111-111111111111"
+# Server-side BFF base URL. The portal's lib/* getters read process.env.BFF_URL,
+# falling back to http://localhost:8787 for local dev only — which is unreachable
+# from a deployed Worker, so without this var every on-load BFF fetch fails.
+# Public URL, not a secret. Matches the BFF worker's deployed hostname.
+BFF_URL = "https://ofbo-bff.michartmann.workers.dev"
 
 [observability]
 enabled = true
