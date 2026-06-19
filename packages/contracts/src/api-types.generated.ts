@@ -3399,6 +3399,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/disputes/{dispute_id}:record-cross-scheme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record cross-scheme (Aani / Al Tareq) context on a dispute (BACKOFFICE-76)
+         * @description Records the Aani case id (where one exists) and/or a Sanadak escalation, and the double-compensation guard state. When settled_in_other_scheme is set, the guard marks the case so a subsequent :initiate-refund for the same direct loss is rejected (409) — preventing the same loss being settled in both schemes. High-class audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    dispute_id: components["parameters"]["disputeId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Aani instant-payment scheme case id */
+                        aani_case_id?: string;
+                        /** @description Set when the same direct loss has been settled in the other scheme (arms the double-compensation guard) */
+                        settled_in_other_scheme?: boolean;
+                        /** @description Consumer-protection-authority (Sanadak) escalation reference */
+                        sanadak_reference?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Cross-scheme context recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["DisputeCase"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3596,6 +3658,8 @@ export interface components {
             /** @description Contact-centre call linkage (BACKOFFICE-64 */
             originating_call_id?: string | null;
             dispute_reason_code?: string | null;
+            /** @description Cross-scheme reference (BACKOFFICE-76) — Aani case id where the same dispute exists in the Aani instant-payment scheme */
+            aani_case_id?: string | null;
         };
         DisputeCase: components["schemas"]["DisputeCreate"] & {
             /** Format: uuid */
@@ -3614,8 +3678,26 @@ export interface components {
             nebras_case_id?: string | null;
             care_case_id?: string | null;
             assigned_to?: string | null;
+            cross_scheme?: components["schemas"]["CrossSchemeContext"] | null;
             /** Format: date-time */
             created_at?: string;
+        };
+        /** @description Cross-scheme (Aani / Al Tareq) dispute context + double-compensation guard (BACKOFFICE-76). The guard blocks settling the same direct loss in both schemes. */
+        CrossSchemeContext: {
+            aani_case_id?: string | null;
+            /**
+             * Format: date-time
+             * @description 2-hour Aani fund-recall window (from the payment); surfaced in unauthorized-payment triage
+             */
+            aani_recall_window_expires_at?: string | null;
+            /** @description True when the same direct loss has been settled in the other scheme */
+            settled_in_other_scheme?: boolean;
+            /** @description Double-compensation guard — when true */
+            compensation_blocked?: boolean;
+            /** @description Consumer-protection-authority (Sanadak) escalation reference */
+            sanadak_reference?: string | null;
+            /** Format: date-time */
+            sanadak_escalated_at?: string | null;
         };
         RespondentDisputeCreate: {
             /** @description Nebras Case & Dispute Management reference for the dispute raised against the bank */

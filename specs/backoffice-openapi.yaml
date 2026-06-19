@@ -1907,6 +1907,46 @@ paths:
                       data: { $ref: '#/components/schemas/TrustFrameworkParticipant' }
         default: { $ref: '#/components/responses/Error' }
 
+  # ---------- 7.x Cross-scheme dispute guard (BACKOFFICE-76) ----------
+  /back-office/disputes/{dispute_id}:record-cross-scheme:
+    post:
+      tags: [disputes]
+      summary: Record cross-scheme (Aani / Al Tareq) context on a dispute (BACKOFFICE-76)
+      description: >
+        Records the Aani case id (where one exists) and/or a Sanadak escalation, and the
+        double-compensation guard state. When settled_in_other_scheme is set, the guard
+        marks the case so a subsequent :initiate-refund for the same direct loss is rejected
+        (409) — preventing the same loss being settled in both schemes. High-class audited.
+      x-rate-limit-per-min: 60
+      x-required-scope: disputes:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - $ref: '#/components/parameters/disputeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                aani_case_id: { type: string, description: Aani instant-payment scheme case id }
+                settled_in_other_scheme: { type: boolean, description: Set when the same direct loss has been settled in the other scheme (arms the double-compensation guard) }
+                sanadak_reference: { type: string, description: Consumer-protection-authority (Sanadak) escalation reference }
+      responses:
+        '200':
+          description: Cross-scheme context recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DisputeCase' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -2318,6 +2358,7 @@ components:
         originating_consent_id: { type: string, format: uuid, nullable: true }
         originating_call_id: { type: string, nullable: true, description: Contact-centre call linkage (BACKOFFICE-64, fast-follow) }
         dispute_reason_code: { type: string, nullable: true }
+        aani_case_id: { type: string, nullable: true, description: 'Cross-scheme reference (BACKOFFICE-76) — Aani case id where the same dispute exists in the Aani instant-payment scheme' }
     DisputeCase:
       allOf:
         - $ref: '#/components/schemas/DisputeCreate'
@@ -2334,7 +2375,22 @@ components:
             nebras_case_id: { type: string, nullable: true }
             care_case_id: { type: string, nullable: true }
             assigned_to: { type: string, nullable: true }
+            cross_scheme:
+              nullable: true
+              allOf: [ { $ref: '#/components/schemas/CrossSchemeContext' } ]
             created_at: { type: string, format: date-time }
+    CrossSchemeContext:
+      type: object
+      description: >
+        Cross-scheme (Aani / Al Tareq) dispute context + double-compensation guard
+        (BACKOFFICE-76). The guard blocks settling the same direct loss in both schemes.
+      properties:
+        aani_case_id: { type: string, nullable: true }
+        aani_recall_window_expires_at: { type: string, format: date-time, nullable: true, description: 2-hour Aani fund-recall window (from the payment); surfaced in unauthorized-payment triage }
+        settled_in_other_scheme: { type: boolean, description: True when the same direct loss has been settled in the other scheme }
+        compensation_blocked: { type: boolean, description: Double-compensation guard — when true, an initiate-refund for the same direct loss is rejected (409) }
+        sanadak_reference: { type: string, nullable: true, description: Consumer-protection-authority (Sanadak) escalation reference }
+        sanadak_escalated_at: { type: string, format: date-time, nullable: true }
     RespondentDisputeCreate:
       type: object
       required: [nebras_dispute_ref, category, raised_at]

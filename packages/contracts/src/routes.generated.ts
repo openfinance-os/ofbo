@@ -554,5 +554,12 @@ export const ROUTES: readonly Route[] = [
     "tag": "analytics",
     "scope": "platform:operations:write",
     "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/disputes/{dispute_id}:record-cross-scheme",
+    "tag": "disputes",
+    "scope": "disputes:admin",
+    "fourEyes": false
   }
 ] as const
