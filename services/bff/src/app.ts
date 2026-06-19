@@ -80,6 +80,7 @@ import {
   type RetentionReader
 } from './analytics/compliance-view.js'
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
+import { ReconciliationSloService, reconciliationSloRoutes } from './analytics/reconciliation-slo.js'
 import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
 import { ProgrammeReportService } from './analytics/programme.js'
 import { AuditEventsService, auditEventsRoutes, InMemoryAuditEventReader, type AuditEventReader } from './audit/events.js'
@@ -164,6 +165,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
   'get /back-office/analytics/risk-view',
+  'get /back-office/analytics/reconciliation-slo',
   'get /back-office/analytics/nebras-liability-monitor',
   'get /back-office/analytics/executive-dashboard',
   'get /back-office/analytics/onboarding-funnel',
@@ -464,6 +466,12 @@ export function createApp(deps: AppDeps = {}) {
     }
   }
   const analyticsExportService = new AnalyticsExportService({ views: exportViewData, audit: highClassAudit })
+  // BACKOFFICE-09 — Reconciliation SLO dashboard (read-only) aggregates the existing
+  // reconciliation_log + reconciliation_break stores. reconciliation:read.
+  const reconciliationSloService = new ReconciliationSloService({
+    breaks: reconciliationBreakStore,
+    runs: reconciliationLogStore
+  })
   const idempotencyStore = deps.idempotency ?? new IdempotencyCache()
   // Implemented routes dispatch here; everything else stays a contract-pending 501 stub.
   const handlers = {
@@ -485,6 +493,7 @@ export function createApp(deps: AppDeps = {}) {
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
     ...riskViewRoutes(riskViewService),
+    ...reconciliationSloRoutes(reconciliationSloService),
     ...liabilityMonitorRoutes(liabilityViewService),
     ...executiveDashboardRoutes(executiveDashboardService),
     ...onboardingFunnelRoutes(onboardingFunnelService),
