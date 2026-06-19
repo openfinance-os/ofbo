@@ -1,4 +1,8 @@
-# ADR 0003 — Cloudflare Workers + OpenNext hosting (demo profile)
+# ADR 0005 — Cloudflare Workers + OpenNext hosting (demo profile)
+
+> Renumbered from 0003 → 0005 (2026-06-20): 0003 collided with
+> `0003-call-transcript-linkage.md` (created earlier, PR #109); 0004 was taken by
+> the portal-data-layer ADR. Decision and content are unchanged.
 
 - **Status:** Accepted
 - **Date:** 2026-06-20
