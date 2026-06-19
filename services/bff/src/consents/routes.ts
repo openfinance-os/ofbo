@@ -10,6 +10,21 @@ import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 export function consentRoutes(service: ConsentSearchService): Record<string, Handler> {
+  const fail = (c: Context, e: unknown): Response => {
+    if (e instanceof ConsentSearchError) {
+      return c.json(
+        errorEnvelope(
+          e.code,
+          e.message,
+          'Provide identifier_type (bank_customer_id|iban|emirates_id) and identifier; the call is High-class audited.',
+          DOCS_BASE
+        ),
+        e.status as 400 | 403 | 404
+      )
+    }
+    throw e
+  }
+
   return {
     'get /consents:search-psu': async (c) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
@@ -19,18 +34,18 @@ export function consentRoutes(service: ConsentSearchService): Record<string, Han
         const result = await service.search(c.get('principal'), identifierType, identifier, traceId)
         return c.json(dataEnvelope(result), 200)
       } catch (e) {
-        if (e instanceof ConsentSearchError) {
-          return c.json(
-            errorEnvelope(
-              e.code,
-              e.message,
-              'Provide identifier_type (bank_customer_id|iban|emirates_id) and identifier; the call is High-class audited.',
-              DOCS_BASE
-            ),
-            e.status as 400 | 403 | 404
-          )
-        }
-        throw e
+        return fail(c, e)
+      }
+    },
+
+    // BACKOFFICE-61 — admin detail of one consent (multi-auth M-of-N visibility).
+    'get /consents/{consent_id}:admin': async (c, params) => {
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const view = await service.adminView(c.get('principal'), params.consent_id!, traceId)
+        return c.json(dataEnvelope(view), 200)
+      } catch (e) {
+        return fail(c, e)
       }
     }
   }

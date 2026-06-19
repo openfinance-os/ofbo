@@ -54,6 +54,12 @@ export interface DemoDataset {
       granted_at: string
       expires_at: string | null
       last_access_at: string | null
+      multi_auth: {
+        threshold: number
+        received: number
+        pending: boolean
+        authorisers: { authoriser_ref: string; status: string; authorised_at: string | null }[]
+      } | null
     }[]
     payments: {
       payment_id: string
@@ -96,6 +102,20 @@ function fnv1a(seed: string): number {
     h = Math.imul(h, 0x01000193) >>> 0
   }
   return h >>> 0
+}
+
+/** BACKOFFICE-61 — deterministic M-of-N authoriser block for a payment consent
+ *  (no RNG draw). threshold ∈ {2,3}; an AwaitingAuthorization consent is short one
+ *  authoriser (still pending), otherwise the threshold is met. */
+function buildMultiAuth(consentId: string, status: string, grantedAt: string) {
+  const threshold = 2 + (fnv1a(`ma:${consentId}`) % 2) // 2 or 3
+  const received = status === 'AwaitingAuthorization' ? threshold - 1 : threshold
+  const authorisers = Array.from({ length: threshold }, (_, i) => ({
+    authoriser_ref: `auth-${consentId.slice(0, 8)}-${i + 1}`,
+    status: i < received ? 'authorised' : 'pending',
+    authorised_at: i < received ? grantedAt : null
+  }))
+  return { threshold, received, pending: received < threshold, authorisers }
 }
 
 /** Deterministic UUID-v4-shaped id from a seed string (no RNG draw, so enrichment
@@ -154,7 +174,11 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
         status,
         granted_at,
         expires_at: status === 'AwaitingAuthorization' || status === 'Rejected' ? null : addMonthsIso(granted_at, 12),
-        last_access_at: ACCESSED_STATUSES.has(status) ? addMonthsIso(granted_at, 1) : null
+        last_access_at: ACCESSED_STATUSES.has(status) ? addMonthsIso(granted_at, 1) : null,
+        // BACKOFFICE-61 — multi-authorisation (M-of-N) visibility on payment consents.
+        // Derived deterministically from the consent id (no RNG draws). An
+        // AwaitingAuthorization consent is still pending one authoriser.
+        multi_auth: purpose === 'SIP_PAYMENT' ? buildMultiAuth(consent_id, status, granted_at) : null
       }
     })
     // One payment per consent, derived deterministically from the consent id —

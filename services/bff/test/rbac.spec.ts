@@ -35,12 +35,13 @@ describe('BACKOFFICE-43 — RBAC enforcement, both layers, audited denials', () 
     // scope middleware through to the (unimplemented) handler.
     const compliance = await app.request('/back-office/lineage/reconciliation_log', { headers: asPersona('compliance-officer') })
     expect(compliance.status).toBe(501)
-    // A still-stubbed consents:admin route — proves Customer Care passes the
-    // scope middleware (the implemented search route is covered in consents.spec).
+    // A consents:admin route — proves Customer Care passes the scope middleware
+    // through to the handler (BACKOFFICE-61 implemented :admin; an unknown consent
+    // id reaches the handler and returns 404, not a 403 at the middleware).
     const care = await app.request('/consents/4d2c2e2a-0000-4000-8000-000000000000:admin', {
       headers: asPersona('customer-care-agent')
     })
-    expect(care.status).toBe(501)
+    expect(care.status).toBe(404)
   })
 
   it('keeps the matrix symmetric: Finance cannot touch consent admin', async () => {
