@@ -60,7 +60,11 @@ describe('TPP invoicing — ingest + reconcile + invoice run persistence + linea
     const reconciled = await svc.reconcile(FINANCE, rec.record_set_id, reconTrace)
     expect(reconciled.status).toBe('reconciled_with_breaks') // the sim period carries fee variances
     expect(reconciled.open_break_count).toBeGreaterThan(0)
-    const breakRows = await admin.query(`SELECT count(*)::int AS n FROM reconciliation_break WHERE run_id LIKE $1`, [`bill-${PERIOD}-%`])
+    // Scope the count to THIS run's breaks. run_id is bill-<period>-<record_set_id[0:8]>
+    // (invoicing.ts), unique per ingest — a period-wide LIKE would also count breaks
+    // left by earlier runs against the shared DB and over-count (false failure).
+    const runId = `bill-${PERIOD}-${rec.record_set_id.slice(0, 8)}`
+    const breakRows = await admin.query(`SELECT count(*)::int AS n FROM reconciliation_break WHERE run_id = $1`, [runId])
     expect(breakRows.rows[0].n).toBe(reconciled.open_break_count)
 
     // invoice run create is blocked by unresolved breaks (409) — flip the record set

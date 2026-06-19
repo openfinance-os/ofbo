@@ -30,7 +30,13 @@ export default defineWorkspace([
       exclude: ['**/node_modules/**'],
       // Integration suites share one database — run everything in one worker, sequentially.
       pool: 'threads',
-      poolOptions: { threads: { singleThread: true } }
+      poolOptions: { threads: { singleThread: true } },
+      // Real-store flows over a remote pooled Postgres (Supabase session pooler) routinely
+      // round-trip 6–14s for multi-step write+lineage flows — far above vitest's 5s default,
+      // which silently failed the whole suite locally. CI's local Postgres is sub-ms, but the
+      // gate must be runnable against the remote DB too. Generous, suite-wide.
+      testTimeout: 60_000,
+      hookTimeout: 60_000
     }
   },
   {
