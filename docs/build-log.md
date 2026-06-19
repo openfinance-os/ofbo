@@ -750,3 +750,11 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - Gates: gen-drift 0, typecheck, lint, **unit 560/560**, integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #92 MERGED, branch deleted.
 - Deferred (noted, not built): Trust Framework status-page ingest into the Ops Console — a -28 concern, no -78 contract surface.
 - Eligible queue remaining (pending): -09, -61, -68. Blocked: -67 (spec PR #90).
+
+## 2026-06-19 — BACKOFFICE-09 Reconciliation Console SLO dashboard (PR #93, merge 4637e8d)
+
+- Read-only AnalyticsView GET /back-office/analytics/reconciliation-slo (reconciliation:read): open_breaks by age bucket, resolution_time_30d p50/p90 (rolling), dispute_pipeline (open Nebras/fintech escalations), last_run + next_run_estimated_at (daily cadence), pass_rate_30d; liveFreshness (BACKOFFICE-40). ReconciliationSloService aggregates the existing reconciliation_log + reconciliation_break stores server-side; pure percentile()/ageBucket() helpers; double scope enforcement.
+- migration 0020_break_resolved_at: additive resolved_at on reconciliation_break (set on resolve, cleared on reopen) so resolution-duration metrics are computable — purely additive, existing RLS/retention/classification cover it, no change to BACKOFFICE-04 semantics. Touched the shared break store (Pg + in-memory) + service; full recon suite stayed green.
+- TDD: reconciliation-slo.spec.ts 7 (pure helpers + aggregation + empty-set + scope). Integration reconciliation-slo.int.spec.ts (resolved_at persistence + 30-day sample over real Postgres, RLS). Caught a CHECK-constraint mismatch in the int fixture (line_type) and fixed to a valid value.
+- Gates: gen-drift 0, typecheck, lint, **unit 565/565** (88 files), integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #93 MERGED, branch deleted.
+- Eligible queue remaining (pending): -61, -68. Blocked: -67 (spec PR #90).
