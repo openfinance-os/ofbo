@@ -15,7 +15,7 @@
 
 import type { Money } from '@ofbo/ports'
 
-export type ReconLineType = 'nebras_fees' | 'payment_settlement' | 'consent_record' | 'tpp_aas_pass_through' | 'lfi_access_log'
+export type ReconLineType = 'nebras_fees' | 'payment_settlement' | 'consent_record' | 'tpp_aas_pass_through' | 'lfi_access_log' | 'dao_api_call'
 
 interface FeeRate {
   /** Rate in milli-fils (thousandths of a fil) per chargeable unit. */
@@ -28,7 +28,10 @@ export const FEE_SCHEDULE_V1: Record<Exclude<ReconLineType, 'nebras_fees'>, FeeR
   payment_settlement: { milli_fils: 2500 }, // 2.5 fils per payment initiation
   consent_record: { milli_fils: 500 }, // 0.5 fils per balance / CoP-with-payment
   lfi_access_log: { milli_fils: 25 }, // data sharing: 2.5 fils / 100 lines
-  tpp_aas_pass_through: { milli_fils: 25 } // data sharing pass-through to the consuming TPP
+  tpp_aas_pass_through: { milli_fils: 25 }, // data sharing pass-through to the consuming TPP
+  // BACKOFFICE-68 — Dynamic Account Opening API calls priced at the data-sharing rate
+  // as default until DAO volumes are observed (PRD §7).
+  dao_api_call: { milli_fils: 25 }
 }
 
 export const AED = 'AED'

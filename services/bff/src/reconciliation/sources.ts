@@ -47,7 +47,9 @@ function deterministicUuid(seed: string): string {
 }
 
 const CHANNELS = ['internal_retail', 'internal_corporate'] as const
-const MATCHED_TYPES: ReconLineType[] = ['payment_settlement', 'consent_record', 'lfi_access_log', 'tpp_aas_pass_through', 'nebras_fees']
+// BACKOFFICE-68 — DAO API calls (dao_api_call) join the three-way match like any
+// other data-sharing line; the engine + fee schedule + thresholds treat them uniformly.
+const MATCHED_TYPES: ReconLineType[] = ['payment_settlement', 'consent_record', 'lfi_access_log', 'tpp_aas_pass_through', 'nebras_fees', 'dao_api_call']
 
 export interface SimReconConfig {
   matchedLines?: number

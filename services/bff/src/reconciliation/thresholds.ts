@@ -24,6 +24,8 @@ export const DEFAULT_THRESHOLDS: BreakThreshold[] = [
   { fee_class: 'payment_settlement', threshold_value: 1, unit: 'aed' },
   { fee_class: 'tpp_aas_pass_through', threshold_value: 1, unit: 'aed' },
   { fee_class: 'lfi_access_log', threshold_value: 1, unit: 'aed' },
+  // BACKOFFICE-68 — DAO uses the data-sharing fee-variance default until volumes observed.
+  { fee_class: 'dao_api_call', threshold_value: 1, unit: 'aed' },
   { fee_class: 'consent_record', threshold_value: 0, unit: 'count' }
 ]
 

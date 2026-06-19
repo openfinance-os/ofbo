@@ -19,6 +19,7 @@ export function productFamily(lineType: ReconLineType): ProductFamily {
       return 'SIP'
     case 'lfi_access_log':
     case 'tpp_aas_pass_through':
+    case 'dao_api_call': // BACKOFFICE-68 — DAO is a data-sharing (AISP-family) product
       return 'AISP'
     case 'consent_record':
       return 'CoP'

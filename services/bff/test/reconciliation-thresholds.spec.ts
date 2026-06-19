@@ -42,10 +42,12 @@ describe('reconciliation thresholds (BACKOFFICE-12)', () => {
     const res = await app.request('/back-office/reconciliation/thresholds', { headers: finance() })
     expect(res.status).toBe(200)
     const body = (await res.json()) as { data: { fee_class: string; threshold_value: number; unit: string }[] }
-    expect(body.data.length).toBe(5)
+    expect(body.data.length).toBe(6) // BACKOFFICE-68 added the dao_api_call default
     const nebras = body.data.find((t) => t.fee_class === 'nebras_fees')!
     expect(nebras.unit).toBe('aed')
     expect(nebras.threshold_value).toBe(1)
+    const dao = body.data.find((t) => t.fee_class === 'dao_api_call')!
+    expect(dao).toMatchObject({ threshold_value: 1, unit: 'aed' })
   })
 
   it('PUT updates a threshold, audits old/new, and notifies Finance + Compliance', async () => {
