@@ -104,6 +104,8 @@ import {
   type BillingRecordStore,
   type InvoiceRunStore
 } from './tpp-billing/invoicing.js'
+import { LfiReportService } from './lfi-reports/service.js'
+import { lfiReportRoutes } from './lfi-reports/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -171,6 +173,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/analytics/executive-dashboard',
   'get /back-office/analytics/onboarding-funnel',
   'post /back-office/analytics/exports',
+  'get /back-office/lfi-reports',
+  'post /back-office/lfi-reports',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -447,6 +451,9 @@ export function createApp(deps: AppDeps = {}) {
   // BACKOFFICE-35 — self-service periodic report generation (templates + four-eyes
   // for CBUAE-bound reports via the approvals primitive, registered above).
   const reportGenerationService = new ReportGenerationService({ store: reportStore, approvals, audit: highClassAudit })
+  // BACKOFFICE-67 — manual cadence ingest of the 16 login-only Nebras LFI reports
+  // (compliance:reports:read dashboard + compliance:reports:generate verified upload).
+  const lfiReportService = new LfiReportService({ reports: reportStore, audit: highClassAudit })
   // BACKOFFICE-42 — audit-trail drill-down (audit:read); the drill-down access is logged.
   const auditEventsService = new AuditEventsService({ reader: deps.auditEventReader ?? new InMemoryAuditEventReader(), audit: highClassAudit })
   // BACKOFFICE-41 — analytics exports: delegate to the view services (each re-asserts
@@ -500,6 +507,7 @@ export function createApp(deps: AppDeps = {}) {
     ...onboardingFunnelRoutes(onboardingFunnelService),
     ...analyticsExportRoutes(analyticsExportService, idempotencyStore),
     ...reportRoutes(reportGenerationService, idempotencyStore),
+    ...lfiReportRoutes(lfiReportService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService)
   }
   const app = new Hono()
