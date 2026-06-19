@@ -22,6 +22,30 @@ The OpenAPI contract has no path for it, and per CLAUDE.md rule 6 a new **auth p
 is a humans-decide decision, not something the build loop should invent. Hence this
 ADR (the loop has parked BACKOFFICE-25 `blocked` on it).
 
+## Requirements & regulatory basis
+
+BACKOFFICE-25 is **Priority: Must** because attributable, time-boxed *delegated
+authority* is foundational to operating any consent-touching admin action under CBUAE /
+Al Tareq:
+
+- **Consent is never bypassed (CBUAE core principle).** A console action that reaches into
+  a PSU's consent must carry a traceable PSU-authority chain, not a faceless admin
+  credential. The `act` (agent) + `sub` (PSU) claims encode that delegation — the
+  FAPI-aligned OAuth token-exchange "actor" claim (RFC 8693): *agent X acting for PSU Y*.
+- **Audit defensibility / non-repudiation.** CBUAE + Nebras require complete, attributable
+  audit. Without `act`/`sub`, a revocation or data view logs only as "an admin token did
+  X" — not which human, for which customer — which fails audit and any later
+  complaint/dispute investigation.
+- **Least privilege + blast radius.** `≤15 min, request-scoped` keeps the agent's authority
+  over a *specific* PSU narrow and short-lived rather than a standing broad credential —
+  the FAPI 2.0 posture and the scope-hygiene hard stop; it bounds the damage from a leaked
+  or misused token.
+- **Liability evidence.** The UAE OF liability framework attaches compensation to
+  consent-revocation failure (AED 350), SCA/auth errors (AED 500), data breach (AED 750)
+  and consumer-protection violations (AED 1,000). Adjudicating "did the bank's agent act
+  with proper authority?" depends on the `act`/`sub` trail — it is the evidentiary basis
+  for accepting or contesting liability.
+
 ## Options
 
 1. **Add a Back Office contract endpoint** (e.g. `POST /care-surface:mint-token`,
@@ -57,8 +81,11 @@ implement; if Option 2/3, record the auth-path decision here and unblock BACKOFF
 
 ## Consequences
 
-- BACKOFFICE-25 is `blocked` on this ADR; the build loop continues with the next
-  eligible item (BACKOFFICE-20).
+- BACKOFFICE-25 is `blocked` on this ADR. **As of 2026-06-20 the eligible build queue
+  is drained (M0–M5 complete), and BACKOFFICE-25 is the only unbuilt _Must_-priority
+  requirement** — so this decision is now the highest-value unblock. The remaining
+  blocked items are BACKOFFICE-33 (BD-13 governance), BACKOFFICE-64 (ADR 0003), and
+  M6 port-swaps (per-bank).
 - Whichever surface is chosen, the mint path MUST: enforce the caller's scope, emit a
   High-class audit event (agent `act` + PSU `sub`, PII redacted), and cap token life at
   ≤15 min, request-scoped — all composing existing primitives (P1 port + audit), never
