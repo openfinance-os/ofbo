@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
-import type { ApmPort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
+import type { ApmPort, CareSurfacePort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
@@ -24,6 +24,8 @@ import {
   type ConsentEventSource
 } from './consents/audit-trail.js'
 import { ConsentRevokeService, consentRevokeRoutes } from './consents/revoke.js'
+import { CareSurfaceService } from './care-surface/service.js'
+import { careSurfaceRoutes } from './care-surface/routes.js'
 import {
   ConsentFraudRevokeService,
   consentFraudRevokeRoutes,
@@ -127,6 +129,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /approvals/{approval_id}',
   'post /approvals/{approval_id}:approve',
   'post /approvals/{approval_id}:reject',
+  'post /care-surface:mint-token',
   'get /consents:search-psu',
   'get /consents/{consent_id}:admin',
   'post /consents/{consent_id}:revoke-admin',
@@ -219,6 +222,7 @@ export interface AppDeps {
   approvals?: ApprovalsDeps
   superadmin?: Partial<SuperAdminDeps>
   apm?: Pick<ApmPort, 'exportSpans'>
+  careSurface?: Pick<CareSurfacePort, 'mintCareToken'>
   idempotency?: IdempotencyStore
   /** High-class audit for story services (BACKOFFICE-16+). Defaults to `audit`
    *  when it exposes emit (PgAuditEmitter does), else an in-memory sink. */
@@ -316,6 +320,8 @@ export function createApp(deps: AppDeps = {}) {
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
   const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
   const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit })
+  const careSurface = deps.careSurface ?? getAdapter('p1-care-surface', profileFromConfig(process.env))
+  const careSurfaceService = new CareSurfaceService({ careSurface, directory: consentDirectory, audit: highClassAudit })
 
   // Stores that four-eyes operations close over are built before the approvals
   // service so the operations can be registered: the refund op needs the dispute
@@ -537,6 +543,7 @@ export function createApp(deps: AppDeps = {}) {
     ...approvalRoutes(approvals, deps.idempotency),
     ...consentRoutes(consentSearch),
     ...consentRevokeRoutes(revokeService, idempotencyStore),
+    ...careSurfaceRoutes(careSurfaceService, idempotencyStore),
     ...consentBulkRevokeRoutes(bulkRevokeService, idempotencyStore),
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
