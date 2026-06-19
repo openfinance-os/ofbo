@@ -82,6 +82,7 @@ import {
 import { RiskViewService, riskViewRoutes, type RiskMetricsReader } from './analytics/risk-view.js'
 import { ReconciliationSloService, reconciliationSloRoutes } from './analytics/reconciliation-slo.js'
 import { LiabilityViewService, liabilityMonitorRoutes } from './risk/liability.js'
+import { LiabilityForecastService, DemoLiabilityTelemetrySource } from './risk/liability-forecast.js'
 import { ProgrammeReportService } from './analytics/programme.js'
 import { AuditEventsService, auditEventsRoutes, InMemoryAuditEventReader, type AuditEventReader } from './audit/events.js'
 import { ExecutiveDashboardService, executiveDashboardRoutes } from './analytics/executive-dashboard.js'
@@ -442,7 +443,11 @@ export function createApp(deps: AppDeps = {}) {
   }
   const riskViewService = new RiskViewService({ metrics: riskMetricsReader })
   // BACKOFFICE-36 — proactive Nebras-liability monitor read view (matrix + approaching triggers).
-  const liabilityViewService = new LiabilityViewService({ riskMetrics: riskMetricsReader })
+  // BACKOFFICE-65 — fold the 24h predictive liability forecast (regulated AI artefact) into it.
+  const liabilityViewService = new LiabilityViewService({
+    riskMetrics: riskMetricsReader,
+    forecast: new LiabilityForecastService({ telemetry: new DemoLiabilityTelemetrySource() })
+  })
   // BACKOFFICE-27 — Executive Dashboard: one canonical dashboard, persona-aware angles.
   // Commercial (commercial:read) = revenue/margin/pipeline; Programme (programme:read) =
   // adoption/certification. Margin is the non-asserting compute (the dashboard's own
