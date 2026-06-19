@@ -911,6 +911,7 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
       resolution_note: null,
       nebras_dispute_case_id: null,
       reopened_count: 0,
+      resolved_at: null,
       created_at: now
     }))
     this.rows.unshift(...created)
@@ -936,6 +937,7 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     row.status = outcome
     row.resolution_outcome = outcome
     row.resolution_note = note
+    row.resolved_at = new Date().toISOString()
     return row
   }
   async reopen(id: string): Promise<StoredReconciliationBreak | null> {
@@ -947,6 +949,7 @@ export class InMemoryReconciliationBreakStore implements ReconciliationBreakStor
     row.resolution_outcome = null
     row.resolution_note = null
     row.sla_clock_started_at = null
+    row.resolved_at = null
     row.reopened_count += 1
     return row
   }

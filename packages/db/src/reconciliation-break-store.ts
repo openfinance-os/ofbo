@@ -31,6 +31,7 @@ export interface StoredReconciliationBreak {
   resolution_note: string | null
   nebras_dispute_case_id: string | null
   reopened_count: number
+  resolved_at: string | null
   created_at: string
 }
 
@@ -62,7 +63,7 @@ export interface ReconciliationBreakPage {
 const SELECT_COLUMNS = `id, run_id, client_id, channel, line_type, status,
   variance_amount, variance_currency, variance_count, source_a_ref, source_b_ref, source_c_ref,
   assigned_to, sla_clock_started_at, resolution_outcome, resolution_note,
-  nebras_dispute_case_id, reopened_count, created_at`
+  nebras_dispute_case_id, reopened_count, resolved_at, created_at`
 
 const LINEAGE_COLUMNS = [
   'bank_id', 'channel', 'run_id', 'client_id', 'line_type', 'status',
@@ -96,6 +97,7 @@ function toBreak(r: Record<string, unknown>): StoredReconciliationBreak {
     resolution_note: (r.resolution_note as string) ?? null,
     nebras_dispute_case_id: (r.nebras_dispute_case_id as string) ?? null,
     reopened_count: Number(r.reopened_count ?? 0),
+    resolved_at: r.resolved_at ? iso(r.resolved_at) : null,
     created_at: iso(r.created_at)
   }
 }
@@ -224,7 +226,7 @@ export class PgReconciliationBreakStore {
     const row = await this.asApp(async (c) => {
       const res = await c.query(
         `UPDATE reconciliation_break
-            SET status = $2, resolution_outcome = $2, resolution_note = $3
+            SET status = $2, resolution_outcome = $2, resolution_note = $3, resolved_at = now()
           WHERE id = $1 AND status IN ('flagged','assigned')
           RETURNING ${SELECT_COLUMNS}`,
         [id, outcome, note]
@@ -245,7 +247,7 @@ export class PgReconciliationBreakStore {
       const res = await c.query(
         `UPDATE reconciliation_break
             SET status = 'flagged', assigned_to = NULL, resolution_outcome = NULL,
-                resolution_note = NULL, sla_clock_started_at = NULL,
+                resolution_note = NULL, sla_clock_started_at = NULL, resolved_at = NULL,
                 reopened_count = reopened_count + 1
           WHERE id = $1
             AND status IN ('resolved_matched','resolved_internal_correction','escalated_nebras_dispute','escalated_fintech_billing')
