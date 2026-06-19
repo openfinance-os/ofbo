@@ -38,8 +38,8 @@ function SourceCard({ label, hint, value }: { label: string; hint: string; value
 
 export function ThreeSourceDiff({ break_ }: { break_: ReconciliationBreak }) {
   return (
-    <section data-testid="three-source-diff">
-      <h2 className="font-bold text-sm text-primary uppercase tracking-widest mb-3">Three-Way Comparison</h2>
+    <section data-testid="three-source-diff" aria-labelledby="three-way-heading">
+      <h2 id="three-way-heading" className="font-bold text-sm text-primary uppercase tracking-widest mb-3">Three-Way Comparison</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {SOURCES.map((s) => (
           <SourceCard key={s.key} label={s.label} hint={s.hint} value={break_[s.key]} />
@@ -55,7 +55,7 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
     <div className="space-y-6" data-testid="investigation-detail">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <a href="/reconciliation" className="text-xs text-secondary hover:underline" data-testid="back-link">
+          <a href="/reconciliation" className="text-xs text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="back-link">
             ← Back to Reconciliation Console
           </a>
           <h1 className="text-2xl font-semibold mt-1">Investigation · {break_.client_id}</h1>
@@ -64,12 +64,12 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
       </div>
 
       {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="investigation-notice">
+        <p role="status" className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="investigation-notice">
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="investigation-error">
+        <p role="alert" className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="investigation-error">
           {error}
         </p>
       ) : null}
@@ -109,7 +109,7 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
         {canDispute && escalatable && !break_.nebras_dispute_case_id && escalateAction ? (
           <form action={escalateAction} className="mt-3" data-testid="escalate-form">
             <input type="hidden" name="break_id" value={break_.id} />
-            <button type="submit" className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors">
+            <button type="submit" className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
               Escalate to Nebras
             </button>
           </form>
