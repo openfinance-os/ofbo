@@ -3211,6 +3211,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/trust-framework/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the bank's Trust Framework directory role-holders (BACKOFFICE-74)
+         * @description Registry of the bank's own Trust Framework directory roles (Org Admin, PBC, PTC, STC) with named holders, individual + organisational T&C/DocuSign status, turnover state, and per-onboarding-stage SLA tracking (Interaction Guide). Operations-owned.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    role?: components["schemas"]["TrustFrameworkRole"];
+                    status?: "active" | "departing" | "vacant";
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated participant list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TrustFrameworkParticipant"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /** Register a Trust Framework role-holder (BACKOFFICE-74) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrustFrameworkParticipantCreate"];
+                };
+            };
+            responses: {
+                /** @description Role-holder registered */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TrustFrameworkParticipant"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/trust-framework/participants/{participant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trust Framework role-holder detail (BACKOFFICE-74) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    participant_id: components["parameters"]["participantId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Participant detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TrustFrameworkParticipant"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/trust-framework/participants/{participant_id}:nominate-replacement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turnover workflow — nominate a replacement for a departing role-holder (BACKOFFICE-74)
+         * @description A role-holder's departure marks the participant departing and records the nominated replacement; the replacement's individual T&C/DocuSign restarts. High-class audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    participant_id: components["parameters"]["participantId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        replacement_holder_ref: string;
+                        /** @description Internal role-holder name (operational */
+                        replacement_display_name: string;
+                        note: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Replacement nominated; participant marked departing */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TrustFrameworkParticipant"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3753,6 +3941,47 @@ export interface components {
             /** @description Issued on post-invoice break resolution */
             credit_note_refs?: string[];
         };
+        /**
+         * @description Bank Trust Framework directory roles (BACKOFFICE-74): Org Admin, Primary Business Contact (PBC), Primary Technical Contact (PTC), Senior Technical Contact (STC).
+         * @enum {string}
+         */
+        TrustFrameworkRole: "org_admin" | "pbc" | "ptc" | "stc";
+        /**
+         * @description Individual or organisational T&C / DocuSign status.
+         * @enum {string}
+         */
+        TncStatus: "not_started" | "sent" | "signed" | "expired";
+        TrustFrameworkParticipantCreate: {
+            role: components["schemas"]["TrustFrameworkRole"];
+            /** @description The bank's Trust Framework OrganisationId */
+            organisation_id: string;
+            /** @description Internal id of the role-holder */
+            holder_ref: string;
+            /** @description Internal role-holder name (operational */
+            holder_display_name: string;
+            /** @description Current Interaction-Guide onboarding stage */
+            onboarding_stage?: string;
+        };
+        TrustFrameworkParticipant: components["schemas"]["TrustFrameworkParticipantCreate"] & {
+            /** Format: uuid */
+            id?: string;
+            individual_tnc_status?: components["schemas"]["TncStatus"];
+            organisational_tnc_status?: components["schemas"]["TncStatus"];
+            /**
+             * Format: date-time
+             * @description SLA due time for the current onboarding stage
+             */
+            onboarding_stage_due_at?: string | null;
+            onboarding_stage_overdue?: boolean;
+            /** @enum {string} */
+            status?: "active" | "departing" | "vacant";
+            /** @description Set by the turnover workflow when the holder is departing */
+            nominated_replacement_ref?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
     };
     responses: {
         /** @description Standard error envelope (per CLAUDE.md) */
@@ -3904,6 +4133,7 @@ export interface components {
         recordSetId: string;
         invoiceRunId: string;
         approvalId: string;
+        participantId: string;
     };
     requestBodies: never;
     headers: never;
