@@ -87,7 +87,7 @@ milestones:
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: done }
       - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: done }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: done, depends_on: [BACKOFFICE-37] }
-      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending, note: "spec PR #90 merged 2026-06-19 (lfi_report_cadence_missed added to RiskSignal.signal_type). Ready to implement: GET/POST /back-office/lfi-reports (cadence dashboard + verified multipart ingest -> compliance_report + integrity hash + lineage) + headless missed-cadence monitor (ITSM + Risk signal) + risk_signal DB CHECK migration for the new signal_type." }
+      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: done, note: "GET /back-office/lfi-reports (compliance:reports:read) cadence dashboard (16 types: daily availability/performance, weekly consent, monthly billing; latest ingest + overdue). POST (compliance:reports:generate) verified multipart upload → sha256 integrity hash + compliance_report (report_type lfi_report:<type>, status archived) + lineage + one High-class audit; Idempotency-Key. Headless LfiCadenceMonitor → P3 ITSM + lfi_report_cadence_missed Risk signal per overdue type (worker.ts scheduled). migration 0022_lfi_cadence_signal (risk_signal CHECK + new signal_type); reuses ReportStore + integrity-hash pattern. Tests: lfi-reports.spec 6 + .int.spec 1 (persistence+audit+lineage, RLS). Reviewers: hard-stop PASS, conformance CONFORMANT. Merged on local gates (CI billing-blocked)." }
 
   - name: M4a
     items:
