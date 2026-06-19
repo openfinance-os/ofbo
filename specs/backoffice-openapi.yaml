@@ -610,6 +610,35 @@ paths:
         '200': { $ref: '#/components/responses/Dispute' }
         default: { $ref: '#/components/responses/Error' }
 
+  /disputes/{dispute_id}/call-recording:
+    get:
+      tags: [disputes]
+      summary: Resolve the originating call recording for a dispute (BACKOFFICE-64)
+      description: >
+        Resolves the dispute's originating_call_id to a short-lived link to the
+        contact-centre recording via the P1 CareSurfacePort (the bank's existing
+        integration). The Back Office links, never copies — recording content stays in
+        the bank's system. Every access writes a High-class call_recording_accessed
+        audit. Returns 404 when the dispute has no call linkage (non-voice channels) or
+        the recording is unavailable. Same RBAC posture as the dispute (disputes:admin).
+      x-rate-limit-per-min: 100
+      x-required-scope: disputes:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/disputeId'
+      responses:
+        '200':
+          description: A short-lived link to the originating call recording.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CallRecording' }
+        default: { $ref: '#/components/responses/Error' }
+
   /disputes/{dispute_id}:initiate-refund:
     post:
       tags: [disputes]
@@ -2536,6 +2565,17 @@ components:
         originating_call_id: { type: string, nullable: true, description: Contact-centre call linkage (BACKOFFICE-64, fast-follow) }
         dispute_reason_code: { type: string, nullable: true }
         aani_case_id: { type: string, nullable: true, description: 'Cross-scheme reference (BACKOFFICE-76) — Aani case id where the same dispute exists in the Aani instant-payment scheme' }
+    CallRecording:
+      type: object
+      description: >
+        A short-lived link to the contact-centre recording that originated a dispute
+        (BACKOFFICE-64). The Back Office links, never copies — recording_url is a
+        time-boxed locator in the bank's system; cap expires_at short.
+      required: [recording_ref, expires_at]
+      properties:
+        recording_ref: { type: string, description: Opaque recording reference in the bank's contact-centre system. }
+        recording_url: { type: string, nullable: true, description: Short-lived locator URL (null when only a reference is returned). }
+        expires_at: { type: string, format: date-time }
     DisputeCase:
       allOf:
         - $ref: '#/components/schemas/DisputeCreate'
