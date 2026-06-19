@@ -117,6 +117,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /approvals/{approval_id}:approve',
   'post /approvals/{approval_id}:reject',
   'get /consents:search-psu',
+  'get /consents/{consent_id}:admin',
   'post /consents/{consent_id}:revoke-admin',
   'post /consents:revoke-bulk',
   'post /consents/{consent_id}:revoke-fraud',

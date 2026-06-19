@@ -1,7 +1,7 @@
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
-import { DemoConsentDirectory, type ConsentDirectory, type IdentifierType, type PsuConsentSearchResult } from './directory.js'
+import { DemoConsentDirectory, type ConsentAdminView, type ConsentDirectory, type IdentifierType, type PsuConsentSearchResult } from './directory.js'
 
 /**
  * BACKOFFICE-16 — PSU-centric consent search. Every call writes exactly one
@@ -82,5 +82,43 @@ export class ConsentSearchService {
       throw new ConsentSearchError('BACKOFFICE.PSU_NOT_FOUND', 'No PSU matches that identifier.', 404)
     }
     return result
+  }
+
+  /**
+   * BACKOFFICE-61 — admin detail of a single consent (consents:admin, re-checked
+   * here), including the multi-authorisation M-of-N authoriser block on payment
+   * consents. Writes exactly one High-class audit (consent_admin_view) keyed by the
+   * consent id; the multi-auth revocation path is unchanged (single propagation,
+   * BACKOFFICE-17). 404 when the consent is unknown.
+   */
+  async adminView(principal: Principal, consentId: string, traceId: string): Promise<ConsentAdminView> {
+    try {
+      assertScope(principal, SEARCH_SCOPE)
+    } catch (e) {
+      if (e instanceof ScopeDeniedError) throw new ConsentSearchError('BACKOFFICE.SCOPE_DENIED', e.message, 403)
+      throw e
+    }
+    if (!consentId) {
+      throw new ConsentSearchError('BACKOFFICE.MISSING_CONSENT_ID', 'consent_id is required.', 400)
+    }
+
+    const view = this.directory.getByConsentId(consentId)
+
+    await this.audit.emit({
+      event_type: 'consent_admin_view',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: SEARCH_SCOPE,
+      target_consent_id: consentId,
+      request_trace_id: traceId,
+      request_body: { consent_id: consentId, multi_auth: !!view?.multi_auth },
+      response_status: view ? 200 : 404,
+      superadmin_marker: principal.scopes.includes('platform:superadmin')
+    })
+
+    if (!view) {
+      throw new ConsentSearchError('BACKOFFICE.CONSENT_NOT_FOUND', 'No consent matches that id.', 404)
+    }
+    return view
   }
 }

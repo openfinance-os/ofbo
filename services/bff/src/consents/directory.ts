@@ -10,6 +10,13 @@ import { generateDemoDataset } from '@ofbo/synthetic-data'
 
 export type IdentifierType = 'bank_customer_id' | 'iban' | 'emirates_id'
 
+export interface MultiAuthView {
+  threshold: number
+  received: number
+  pending: boolean
+  authorisers: { authoriser_ref: string; status: string; authorised_at: string | null }[]
+}
+
 export interface ConsentAdminView {
   consent_id: string
   tpp: { client_id: string; display_name: string }
@@ -19,6 +26,8 @@ export interface ConsentAdminView {
   granted_at: string
   expires_at: string | null
   last_access_at: string | null
+  /** BACKOFFICE-61 — present only for multi-authorisation payment consents. */
+  multi_auth?: MultiAuthView | null
 }
 
 export interface PsuConsentSearchResult {
@@ -29,12 +38,15 @@ export interface PsuConsentSearchResult {
 export interface ConsentDirectory {
   /** Resolve a PSU by identifier and return its consents, or null if unknown. */
   search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null
+  /** BACKOFFICE-61 — resolve a single consent by id (admin detail), or null. */
+  getByConsentId(consentId: string): ConsentAdminView | null
 }
 
 export class DemoConsentDirectory implements ConsentDirectory {
   private readonly byBankCustomerId = new Map<string, PsuConsentSearchResult>()
   private readonly byEmiratesId = new Map<string, string>()
   private readonly byIban = new Map<string, string>()
+  private readonly byConsentId = new Map<string, ConsentAdminView>()
 
   constructor(seed?: number) {
     const ds = seed === undefined ? generateDemoDataset() : generateDemoDataset(seed)
@@ -49,13 +61,19 @@ export class DemoConsentDirectory implements ConsentDirectory {
           status: c.status,
           granted_at: c.granted_at,
           expires_at: c.expires_at,
-          last_access_at: c.last_access_at
+          last_access_at: c.last_access_at,
+          multi_auth: c.multi_auth
         }))
       }
       this.byBankCustomerId.set(psu.bank_customer_id, result)
       this.byEmiratesId.set(psu.emirates_id, psu.bank_customer_id)
       for (const acct of psu.accounts) this.byIban.set(acct.iban, psu.bank_customer_id)
+      for (const consent of result.consents) this.byConsentId.set(consent.consent_id, consent)
     }
+  }
+
+  getByConsentId(consentId: string): ConsentAdminView | null {
+    return this.byConsentId.get(consentId) ?? null
   }
 
   search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null {
