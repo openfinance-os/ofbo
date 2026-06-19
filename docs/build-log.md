@@ -758,3 +758,11 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - TDD: reconciliation-slo.spec.ts 7 (pure helpers + aggregation + empty-set + scope). Integration reconciliation-slo.int.spec.ts (resolved_at persistence + 30-day sample over real Postgres, RLS). Caught a CHECK-constraint mismatch in the int fixture (line_type) and fixed to a valid value.
 - Gates: gen-drift 0, typecheck, lint, **unit 565/565** (88 files), integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #93 MERGED, branch deleted.
 - Eligible queue remaining (pending): -61, -68. Blocked: -67 (spec PR #90).
+
+## 2026-06-19 — BACKOFFICE-61 multi-authorisation payment-consent visibility (PR #94, merge 367eae6)
+
+- GET /consents/{consent_id}:admin (consents:admin) → ConsentAdminView incl. the multi_auth M-of-N block (threshold/received/pending + full per-authoriser list) on payment consents; null otherwise. One High-class consent_admin_view audit per call.
+- synthetic-data: deterministic multi_auth on SIP_PAYMENT consents (derived from the consent id, no RNG draws — dataset stays byte-repeatable; AwaitingAuthorization is short one authoriser → pending). DemoConsentDirectory.getByConsentId added to the ConsentDirectory port (M6 adapter implements same iface). PII-free: authoriser_ref is synthetic, audit body logs consent_id + a multi_auth boolean only. Revocation unchanged (single propagation, BACKOFFICE-17) — visibility-only.
+- TDD: consent-admin-view.spec.ts 4 (multi-auth block / null-for-non-payment / 404 / 403). Integration consent-admin-view.int.spec.ts (consent_admin_view audit persistence, RLS). Updated rbac.spec (the previously-stubbed :admin route now reaches its handler → 404, still proving care passes the scope middleware).
+- Gates: gen-drift 0, typecheck, lint, **unit 567/567** (89 files), integration green (no new table → Q4.5 surface unchanged). Reviewers: **hard-stop PASS** (PII axis clean), **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #94 MERGED, branch deleted.
+- Eligible queue remaining (pending): -68. Blocked: -67 (spec PR #90).
