@@ -43,6 +43,32 @@ Non-negotiable constraints (hard stops) regardless of option:
   propagated). This is the main reason to prefer per-access resolution over eager inline.
 - **`null` for non-voice channels.**
 
+## Requirements & regulatory basis
+
+BACKOFFICE-64 is **Priority: Should** — it enriches dispute handling rather than enabling
+a core flow (disputes already function end-to-end), so it waits behind the *Must* items.
+It exists because UAE OF dispute resolution is evidence- and liability-driven:
+
+- **Dispute-resolution evidence.** Disputes run through the Nebras Case & Dispute
+  Management process; for an unauthorised-payment dispute the central question — *did the
+  customer actually authorise this?* — is usually answered by the originating call, so the
+  recording is primary evidence.
+- **Liability determination.** Who compensates (LFI / TPP / Nebras) turns on the facts of
+  consent and instruction, of which the call is often the factual record. Linking it to
+  the case is how the bank substantiates accepting or contesting a liability position
+  under the framework.
+- **Consumer protection / complaint handling.** CBUAE consumer-protection obligations (and
+  the AED 1,000 consumer-protection-violation compensation) require auditable,
+  evidence-backed complaint handling; a dispute case with its originating call linked is a
+  complete, defensible record.
+- **Audit-trail completeness.** The 24-month regulated record should capture the whole arc
+  — PSU phoned in → dispute raised → resolved with evidence — which the call linkage
+  closes.
+
+The data-protection constraints in this ADR (link, never copy; audit each access;
+short-lived locator; `disputes:admin` only) follow directly from call recordings being
+PSU PII held in the bank's own system.
+
 ## Options
 
 1. **Dedicated, on-demand endpoint + new P1 method (recommended).**
