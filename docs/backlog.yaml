@@ -91,7 +91,7 @@ milestones:
 
   - name: M4a
     items:
-      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: pending, note: "spec PR #65 merged 2026-06-18 (/back-office/fraud-incidents paths + NebrasSeverity + FraudIncident schema now in contract). Ready to implement: handlers + ITSM (P3) severity mapping + operational pause." }
+      - { id: BACKOFFICE-77, title: Nebras fraud-incident reporting + scheme-imposed holds, status: done, note: "GET /back-office/fraud-incidents (risk:read, filters status+nebras_severity), POST report + POST /{id}:resolve (risk:investigations:write). Maps Nebras P1-P4 -> ITSM priority (P1 critical/P2 high/P3 medium/P4 low), raises a P3 ticket via the P3 ITSM port, opens operational pause, flags scheme_imposed_hold for systemic P1; resolve lifts the pause. migration 0018_fraud_incident (RLS day-one + retention 24/60 + classification restricted); PgFraudIncidentStore with column-level lineage; Idempotency-Key on mutations; one High-class audit per report/resolve (PII redacted, trace propagated); double scope enforcement; wired into worker.ts. Tests: fraud-incidents.spec 11 (red-first) + .int.spec 1 (persistence+audit+lineage+resolve, RLS). Reviewers: hard-stop PASS, conformance CONFORMANT. Merged on local gates (CI billing-blocked)." }
       - { id: BACKOFFICE-78, title: Outbound downtime/change notifications (10-day + 30-day breaking-change clocks), status: pending, note: "spec PR #66 merged 2026-06-18 (/back-office/scheme-notifications paths + SchemeNotification schema now in contract). Ready to implement: handlers + 10/30-day notice clocks + TPP propagation." }
 
   - name: M5
