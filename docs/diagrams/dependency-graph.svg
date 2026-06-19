@@ -1,0 +1,52 @@
+<svg viewBox="0 0 880 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t">OFBO workspace dependency graph</title>
+<desc id="d">Directed graph of internal pnpm workspace dependencies. Portal depends on bff, db and ports; bff depends on contracts, db, ports, redaction and synthetic-data; nebras-sim depends on synthetic-data; db depends on synthetic-data and redaction; release-evidence depends on db. Contracts, ports, redaction and synthetic-data are leaf packages with no internal dependencies.</desc>
+<defs>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 0 L10 5 L0 10 z" fill="#9a988f"/>
+  </marker>
+</defs>
+<style>
+  .ink{fill:#2c2c2a;} .ink2{fill:#5f5e5a;}
+  .pkg{fill:#faf9f5;stroke:#d3d1c7;}
+  .app{fill:rgba(127,119,221,0.09);stroke:#7F77DD;}
+  .e{stroke:#b4b2a9;fill:none;stroke-width:1.4;opacity:.85;}
+  .nm{font-weight:700;} .mono{font-family:ui-monospace,monospace;}
+</style>
+
+<text x="28" y="30" class="ink nm" font-size="16">Internal dependency graph</text>
+<text x="28" y="48" class="ink2" font-size="11">arrow = "imports" · leaf packages have no internal deps</text>
+<rect x="640" y="20" width="14" height="11" rx="2" class="app"/><text x="660" y="30" class="ink2" font-size="10">app / service</text>
+<rect x="760" y="20" width="14" height="11" rx="2" class="pkg"/><text x="780" y="30" class="ink2" font-size="10">package</text>
+
+<path class="e" marker-end="url(#ar)" d="M190 88 L250 88"/>
+<path class="e" marker-end="url(#ar)" d="M115 116 C115 180 430 175 490 234"/>
+<path class="e" marker-end="url(#ar)" d="M95 116 C70 250 80 330 110 404"/>
+<path class="e" marker-end="url(#ar)" d="M300 116 C220 250 170 330 130 404"/>
+<path class="e" marker-end="url(#ar)" d="M360 116 C420 170 470 190 510 234"/>
+<path class="e" marker-end="url(#ar)" d="M320 116 C310 250 320 330 325 404"/>
+<path class="e" marker-end="url(#ar)" d="M345 116 C420 240 480 330 525 404"/>
+<path class="e" marker-end="url(#ar)" d="M380 110 C560 160 690 300 745 404"/>
+<path class="e" marker-end="url(#ar)" d="M755 116 L755 404"/>
+<path class="e" marker-end="url(#ar)" d="M535 296 L535 404"/>
+<path class="e" marker-end="url(#ar)" d="M560 296 C620 340 700 360 740 404"/>
+<path class="e" marker-end="url(#ar)" d="M540 116 L540 234"/>
+
+<g class="mono" font-size="11">
+  <g><rect x="40"  y="60" width="150" height="56" rx="8" class="app"/><text x="115" y="84" text-anchor="middle" class="ink nm">portal</text><text x="115" y="101" text-anchor="middle" class="ink2" font-size="8.5">apps/</text></g>
+  <g><rect x="250" y="60" width="150" height="56" rx="8" class="app"/><text x="325" y="84" text-anchor="middle" class="ink nm">bff</text><text x="325" y="101" text-anchor="middle" class="ink2" font-size="8.5">services/</text></g>
+  <g><rect x="465" y="60" width="150" height="56" rx="8" class="pkg"/><text x="540" y="84" text-anchor="middle" class="ink nm">release-evidence</text><text x="540" y="101" text-anchor="middle" class="ink2" font-size="8.5">packages/</text></g>
+  <g><rect x="680" y="60" width="150" height="56" rx="8" class="app"/><text x="755" y="84" text-anchor="middle" class="ink nm">nebras-sim</text><text x="755" y="101" text-anchor="middle" class="ink2" font-size="8.5">services/</text></g>
+</g>
+<g class="mono" font-size="11">
+  <g><rect x="465" y="240" width="150" height="56" rx="8" class="pkg"/><text x="540" y="264" text-anchor="middle" class="ink nm">db</text><text x="540" y="281" text-anchor="middle" class="ink2" font-size="8.5">Postgres RLS · audit</text></g>
+</g>
+<g class="mono" font-size="11">
+  <g><rect x="40"  y="408" width="150" height="56" rx="8" class="pkg"/><text x="115" y="432" text-anchor="middle" class="ink nm">contracts</text><text x="115" y="449" text-anchor="middle" class="ink2" font-size="8.5">OpenAPI client</text></g>
+  <g><rect x="250" y="408" width="150" height="56" rx="8" class="pkg"/><text x="325" y="432" text-anchor="middle" class="ink nm">ports</text><text x="325" y="449" text-anchor="middle" class="ink2" font-size="8.5">P1–P9 interfaces</text></g>
+  <g><rect x="460" y="408" width="150" height="56" rx="8" class="pkg"/><text x="535" y="432" text-anchor="middle" class="ink nm">redaction</text><text x="535" y="449" text-anchor="middle" class="ink2" font-size="8.5">PII redaction</text></g>
+  <g><rect x="680" y="408" width="150" height="56" rx="8" class="pkg"/><text x="755" y="432" text-anchor="middle" class="ink nm">synthetic-data</text><text x="755" y="449" text-anchor="middle" class="ink2" font-size="8.5">seed dataset</text></g>
+</g>
+
+<text x="28" y="500" class="ink2" font-size="9.5">synthetic-data is the most-depended-on leaf (bff · db · nebras-sim) · ports &amp; contracts carry no internal deps by design (vendor-neutral seams)</text>
+</svg>

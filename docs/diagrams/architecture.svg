@@ -1,0 +1,120 @@
+<svg viewBox="0 0 900 770" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t">OFBO monorepo architecture</title>
+<desc id="d">A layered view of the Open Finance Back Office pnpm monorepo: the Next.js portal calls the BFF Worker which exposes 17 domain modules over a port interface (P1 to P9) backed by simulator or enterprise adapters; shared packages and external services (Nebras simulator, Supabase, Cloudflare) sit underneath.</desc>
+<style>
+  .ink   { fill: #2c2c2a; }
+  .ink2  { fill: #5f5e5a; }
+  .band  { fill: #faf9f5; stroke: #d3d1c7; }
+  .acct  { fill: rgba(127,119,221,0.08); stroke: #7F77DD; }
+  .chip  { fill: #ffffff; stroke: #e6e4dc; }
+  .achip { fill: #ffffff; stroke: #7F77DD; }
+  .lbl   { font-weight: 700; }
+  .mono  { font-family: ui-monospace, monospace; }
+  .edge  { stroke: #b4b2a9; }
+</style>
+
+<text x="28" y="30" class="ink lbl" font-size="17">OFBO — pnpm monorepo</text>
+<text x="28" y="48" class="ink2" font-size="11">Bank-neutral Open Finance Back Office · LFI + TPP-of-record</text>
+
+<rect x="690" y="20" width="14" height="11" rx="2" class="band"/>
+<text x="710" y="30" class="ink2" font-size="10">your code</text>
+<rect x="772" y="20" width="14" height="11" rx="2" class="acct"/>
+<text x="792" y="30" class="ink2" font-size="10">runtime / external</text>
+
+<rect x="24" y="60" width="852" height="76" rx="8" class="band"/>
+<text x="40" y="82" class="ink lbl mono" font-size="12">apps/portal</text>
+<text x="132" y="82" class="ink2" font-size="10">Next.js portal · token-only UI · persona scope-gated · DEMO banner</text>
+<g class="mono" font-size="8.5" text-anchor="middle">
+  <g><rect x="40"  y="98" width="84" height="22" rx="4" class="chip"/><text x="82"  y="113" class="ink">dashboard</text></g>
+  <g><rect x="132" y="98" width="84" height="22" rx="4" class="chip"/><text x="174" y="113" class="ink">care</text></g>
+  <g><rect x="224" y="98" width="100" height="22" rx="4" class="chip"/><text x="274" y="113" class="ink">reconciliation</text></g>
+  <g><rect x="332" y="98" width="62" height="22" rx="4" class="chip"/><text x="363" y="113" class="ink">risk</text></g>
+  <g><rect x="402" y="98" width="92" height="22" rx="4" class="chip"/><text x="448" y="113" class="ink">compliance</text></g>
+  <g><rect x="502" y="98" width="80" height="22" rx="4" class="chip"/><text x="542" y="113" class="ink">analytics</text></g>
+  <g><rect x="590" y="98" width="84" height="22" rx="4" class="chip"/><text x="632" y="113" class="ink">approvals</text></g>
+  <g><rect x="682" y="98" width="92" height="22" rx="4" class="chip"/><text x="728" y="113" class="ink">operations</text></g>
+  <g><rect x="782" y="98" width="86" height="22" rx="4" class="chip"/><text x="825" y="113" class="ink">tpp-billing</text></g>
+</g>
+
+<g class="edge"><line x1="450" y1="136" x2="450" y2="152" stroke-width="1.5"/><path d="M445 150 l5 6 l5 -6 z" fill="#b4b2a9" stroke="none"/></g>
+<text x="458" y="149" class="ink2" font-size="9">@ofbo/bff · db · ports</text>
+
+<rect x="24" y="156" width="852" height="150" rx="8" class="band"/>
+<text x="40" y="178" class="ink lbl mono" font-size="12">services/bff</text>
+<text x="132" y="178" class="ink2" font-size="10">Cloudflare Worker · admin-scoped · 4-eyes via 202 + approval_request · 17 domain modules</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="40"  y="188" width="128" height="28" rx="5" class="chip"/><text x="104" y="206" class="ink">analytics</text></g>
+  <g><rect x="176" y="188" width="128" height="28" rx="5" class="chip"/><text x="240" y="206" class="ink">approvals</text></g>
+  <g><rect x="312" y="188" width="128" height="28" rx="5" class="chip"/><text x="376" y="206" class="ink">audit</text></g>
+  <g><rect x="448" y="188" width="128" height="28" rx="5" class="chip"/><text x="512" y="206" class="ink">consents</text></g>
+  <g><rect x="584" y="188" width="128" height="28" rx="5" class="chip"/><text x="648" y="206" class="ink">disputes</text></g>
+  <g><rect x="720" y="188" width="140" height="28" rx="5" class="chip"/><text x="790" y="206" class="ink">fraud-incidents</text></g>
+  <g><rect x="40"  y="224" width="128" height="28" rx="5" class="chip"/><text x="104" y="242" class="ink">inquiries</text></g>
+  <g><rect x="176" y="224" width="128" height="28" rx="5" class="chip"/><text x="240" y="242" class="ink">lfi-reports</text></g>
+  <g><rect x="312" y="224" width="128" height="28" rx="5" class="chip"/><text x="376" y="242" class="ink">ops</text></g>
+  <g><rect x="448" y="224" width="128" height="28" rx="5" class="chip"/><text x="512" y="242" class="ink">reconciliation</text></g>
+  <g><rect x="584" y="224" width="128" height="28" rx="5" class="chip"/><text x="648" y="242" class="ink">reports</text></g>
+  <g><rect x="720" y="224" width="140" height="28" rx="5" class="chip"/><text x="790" y="242" class="ink">respondent-disputes</text></g>
+  <g><rect x="40"  y="260" width="128" height="28" rx="5" class="chip"/><text x="104" y="278" class="ink">risk</text></g>
+  <g><rect x="176" y="260" width="160" height="28" rx="5" class="chip"/><text x="256" y="278" class="ink">scheme-notifications</text></g>
+  <g><rect x="344" y="260" width="128" height="28" rx="5" class="chip"/><text x="408" y="278" class="ink">service-desk</text></g>
+  <g><rect x="480" y="260" width="128" height="28" rx="5" class="chip"/><text x="544" y="278" class="ink">tpp-billing</text></g>
+  <g><rect x="616" y="260" width="140" height="28" rx="5" class="chip"/><text x="686" y="278" class="ink">trust-framework</text></g>
+</g>
+
+<g class="edge"><line x1="450" y1="306" x2="450" y2="322" stroke-width="1.5"/><path d="M445 320 l5 6 l5 -6 z" fill="#b4b2a9" stroke="none"/></g>
+<text x="458" y="319" class="ink2" font-size="9">port interface (no vendor in core)</text>
+
+<rect x="24" y="326" width="852" height="94" rx="8" class="acct"/>
+<text x="40" y="348" class="ink lbl mono" font-size="12">packages/ports</text>
+<text x="148" y="348" class="ink2" font-size="10">P1–P9 · each has sim/ + enterprise/ adapters behind one interface (DEPLOY_PROFILE)</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="40"  y="360" width="84" height="40" rx="5" class="achip"/><text x="82"  y="378" class="ink">P1</text><text x="82" y="391" class="ink2">care</text></g>
+  <g><rect x="132" y="360" width="84" height="40" rx="5" class="achip"/><text x="174" y="378" class="ink">P2</text><text x="174" y="391" class="ink2">IdP</text></g>
+  <g><rect x="224" y="360" width="84" height="40" rx="5" class="achip"/><text x="266" y="378" class="ink">P3</text><text x="266" y="391" class="ink2">ITSM</text></g>
+  <g><rect x="316" y="360" width="84" height="40" rx="5" class="achip"/><text x="358" y="378" class="ink">P4</text><text x="358" y="391" class="ink2">core bank</text></g>
+  <g><rect x="408" y="360" width="84" height="40" rx="5" class="achip"/><text x="450" y="378" class="ink">P5</text><text x="450" y="391" class="ink2">APM</text></g>
+  <g><rect x="500" y="360" width="84" height="40" rx="5" class="achip"/><text x="542" y="378" class="ink">P6</text><text x="542" y="391" class="ink2">egress</text></g>
+  <g><rect x="592" y="360" width="84" height="40" rx="5" class="achip"/><text x="634" y="378" class="ink">P7</text><text x="634" y="391" class="ink2">catalogue</text></g>
+  <g><rect x="684" y="360" width="84" height="40" rx="5" class="achip"/><text x="726" y="378" class="ink">P8</text><text x="726" y="391" class="ink2">onboard</text></g>
+  <g><rect x="776" y="360" width="84" height="40" rx="5" class="achip"/><text x="818" y="378" class="ink">P9</text><text x="818" y="391" class="ink2">FMS</text></g>
+</g>
+
+<g class="edge"><line x1="450" y1="420" x2="450" y2="436" stroke-width="1.5"/><path d="M445 434 l5 6 l5 -6 z" fill="#b4b2a9" stroke="none"/></g>
+
+<rect x="24" y="440" width="852" height="80" rx="8" class="band"/>
+<text x="40" y="462" class="ink lbl mono" font-size="12">packages/*</text>
+<text x="130" y="462" class="ink2" font-size="10">shared libraries</text>
+<g class="mono" font-size="8.5" text-anchor="middle">
+  <g><rect x="32"  y="474" width="156" height="32" rx="5" class="chip"/><text x="110" y="494" class="ink">contracts</text></g>
+  <g><rect x="200" y="474" width="156" height="32" rx="5" class="chip"/><text x="278" y="494" class="ink">db (RLS · audit)</text></g>
+  <g><rect x="368" y="474" width="156" height="32" rx="5" class="chip"/><text x="446" y="494" class="ink">redaction</text></g>
+  <g><rect x="536" y="474" width="156" height="32" rx="5" class="chip"/><text x="614" y="494" class="ink">synthetic-data</text></g>
+  <g><rect x="704" y="474" width="156" height="32" rx="5" class="chip"/><text x="782" y="494" class="ink">release-evidence</text></g>
+</g>
+
+<text x="28" y="548" class="ink2 lbl" font-size="11">EXTERNAL SERVICES &amp; DEPLOY TARGETS</text>
+<g>
+  <rect x="24" y="558" width="274" height="96" rx="8" class="acct"/>
+  <text x="40" y="582" class="ink lbl mono" font-size="11">services/nebras-sim</text>
+  <text x="40" y="601" class="ink2" font-size="9.5">Al Tareq / API Hub simulator</text>
+  <text x="40" y="617" class="ink2" font-size="9.5">deterministic v2.1 payloads</text>
+  <text x="40" y="633" class="ink2" font-size="9.5">injectable faults · Railway</text>
+</g>
+<g>
+  <rect x="313" y="558" width="274" height="96" rx="8" class="acct"/>
+  <text x="329" y="582" class="ink lbl mono" font-size="11">Supabase</text>
+  <text x="329" y="601" class="ink2" font-size="9.5">Postgres + row-level security</text>
+  <text x="329" y="617" class="ink2" font-size="9.5">Auth = IdP simulator (P2)</text>
+  <text x="329" y="633" class="ink2" font-size="9.5">storage = hashed archive</text>
+</g>
+<g>
+  <rect x="602" y="558" width="274" height="96" rx="8" class="acct"/>
+  <text x="618" y="582" class="ink lbl mono" font-size="11">Cloudflare</text>
+  <text x="618" y="601" class="ink2" font-size="9.5">Portal + BFF on Workers</text>
+  <text x="618" y="617" class="ink2" font-size="9.5">cron triggers · DNS</text>
+  <text x="618" y="633" class="ink2" font-size="9.5">auto-deploy on merge</text>
+</g>
+
+<text x="28" y="680" class="ink2" font-size="9.5">Spec canon: docs/PRD_Open_Finance_Back_Office.md + specs/backoffice-openapi.yaml (57 paths)  ·  All Nebras-bound traffic routes through P6 egress only</text>
+</svg>
