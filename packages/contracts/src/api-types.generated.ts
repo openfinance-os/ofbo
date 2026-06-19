@@ -531,6 +531,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/care-surface:mint-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a short-lived care-surface token (BACKOFFICE-25)
+         * @description Console-originated API calls act on a PSU's behalf carrying agent identity (act) and PSU subject (sub). This mints a short-lived (<= 15 min), request-scoped care token via the Platform Auth Service (P1 CareSurfacePort). The agent (act) is taken from the authenticated caller — never the body — so it cannot be spoofed; sub is the resolved PSU. Every mint writes a High-class audit record (act + sub, PII redacted). Mutating: Idempotency-Key required — a replay within the 24h window returns the original token (no duplicate issue or audit); normal use sends a fresh key per request, yielding a fresh <= 15 min token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        identifier_type: "bank_customer_id" | "iban" | "emirates_id";
+                        /** @description PSU identifier; sent only to the BFF, redacted at audit emission. */
+                        psu_identifier: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description A short-lived care-surface token with act/sub claims. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["CareToken"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/consents:search-psu": {
         parameters: {
             query?: never;
@@ -3762,6 +3818,17 @@ export interface components {
             threshold_value: number;
             /** @enum {string} */
             unit?: "aed" | "count";
+        };
+        /** @description A short-lived care-surface token (BACKOFFICE-25). act = the acting agent, sub = the PSU subject (both internal refs, no PII). Cap expires_at at <= 15 min. */
+        CareToken: {
+            /** @description Opaque bearer credential for care-surface calls. */
+            token: string;
+            /** @description Acting agent identity (internal ref */
+            act: string;
+            /** @description Resolved PSU subject (internal ref */
+            sub: string;
+            /** Format: date-time */
+            expires_at: string;
         };
         PsuConsentSearchResult: {
             psu?: {
