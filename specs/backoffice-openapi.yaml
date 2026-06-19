@@ -310,6 +310,51 @@ paths:
         default: { $ref: '#/components/responses/Error' }
 
   # ---------- 7.2 Consent & dispute (Customer Care) ----------
+  /care-surface:mint-token:
+    post:
+      tags: [consents-admin]
+      summary: Mint a short-lived care-surface token (BACKOFFICE-25)
+      description: >
+        Console-originated API calls act on a PSU's behalf carrying agent identity
+        (act) and PSU subject (sub). This mints a short-lived (<= 15 min),
+        request-scoped care token via the Platform Auth Service (P1 CareSurfacePort).
+        The agent (act) is taken from the authenticated caller — never the body — so it
+        cannot be spoofed; sub is the resolved PSU. Every mint writes a High-class audit
+        record (act + sub, PII redacted). Mutating: Idempotency-Key required — a replay
+        within the 24h window returns the original token (no duplicate issue or audit);
+        normal use sends a fresh key per request, yielding a fresh <= 15 min token.
+      x-rate-limit-per-min: 120
+      x-required-scope: consents:admin
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier_type, psu_identifier]
+              properties:
+                identifier_type:
+                  type: string
+                  enum: [bank_customer_id, iban, emirates_id]
+                psu_identifier:
+                  type: string
+                  description: PSU identifier; sent only to the BFF, redacted at audit emission.
+      responses:
+        '200':
+          description: A short-lived care-surface token with act/sub claims.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CareToken' }
+        default: { $ref: '#/components/responses/Error' }
+
   /consents:search-psu:
     get:
       tags: [consents-admin]
@@ -2407,6 +2452,17 @@ components:
         fee_class: { type: string, example: nebras_fees }
         threshold_value: { type: integer, description: 'Integer minor units (fils) when unit=aed — default 1 (= 1 fils) for fees; plain count when unit=count — default 0 for consent drift' }
         unit: { type: string, enum: [aed, count] }
+    CareToken:
+      type: object
+      description: >
+        A short-lived care-surface token (BACKOFFICE-25). act = the acting agent,
+        sub = the PSU subject (both internal refs, no PII). Cap expires_at at <= 15 min.
+      required: [token, act, sub, expires_at]
+      properties:
+        token: { type: string, description: Opaque bearer credential for care-surface calls. }
+        act: { type: string, description: Acting agent identity (internal ref, no PII). }
+        sub: { type: string, description: Resolved PSU subject (internal ref, no PII). }
+        expires_at: { type: string, format: date-time }
     PsuConsentSearchResult:
       type: object
       properties:

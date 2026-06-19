@@ -101,6 +101,13 @@ export const ROUTES: readonly Route[] = [
     "fourEyes": false
   },
   {
+    "method": "post",
+    "path": "/care-surface:mint-token",
+    "tag": "consents-admin",
+    "scope": "consents:admin",
+    "fourEyes": false
+  },
+  {
     "method": "get",
     "path": "/consents:search-psu",
     "tag": "consents-admin",

@@ -1,6 +1,6 @@
 # ADR 0001 — Care-surface token minting exposure surface (BACKOFFICE-25)
 
-- Status: **Proposed** — awaiting human decision (auth-path; CLAUDE.md rule 6)
+- Status: **Accepted** — Option 1 chosen by the user (2026-06-20)
 - Date: 2026-06-15
 - Story: BACKOFFICE-25 — Care-surface token minting with `act` + `sub` claims
 
@@ -76,8 +76,13 @@ console integration lands (with the care-surface consumer) is the fallback.
 
 ## Decision
 
-_Pending._ Once chosen: if Option 1, open the spec-change PR (human-approved), then
-implement; if Option 2/3, record the auth-path decision here and unblock BACKOFFICE-25.
+**Option 1 (2026-06-20).** A contract endpoint behind the existing Hono BFF —
+`POST /care-surface:mint-token` (scope `consents:admin`, body `{ identifier_type,
+psu_identifier }`, returns `CareToken { token, act, sub, expires_at }`). Issuance stays
+on the single audited/RBAC-enforced path, matching "the contract is ground truth". The
+agent (`act`) is taken from the authenticated caller, never the body; `Idempotency-Key`
+is required (replay returns the original token). The spec-change adding this endpoint is
+human-approved before implementation (BACKOFFICE-25 then implements to it).
 
 ## Consequences
 
