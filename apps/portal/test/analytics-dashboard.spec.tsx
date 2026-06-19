@@ -65,3 +65,36 @@ describe('AnalyticsDashboard', () => {
     expect(screen.getByTestId('analytics-error')).toHaveTextContent('temporarily unavailable')
   })
 })
+
+describe('generic renderer — tables, status badges, no {…} placeholders (P0 polish)', () => {
+  const opsData = {
+    slos: [
+      { name: 'revoke_ack', status: 'healthy', breach_count: 0 },
+      { name: 'recon_run', status: 'breach', breach_count: 2 }
+    ],
+    scheme_certificates: { worst_status: 'critical', chain: [{ cn: 'root', status: 'up' }] },
+    nebras_connectivity: { status: 'unknown' }
+  }
+
+  it('renders a uniform array of objects as a table (not {…})', () => {
+    render(<MetricGrid data={opsData} />)
+    const slos = screen.getByTestId('metric-slos')
+    expect(slos.querySelector('table')).toBeInTheDocument()
+    expect(slos).toHaveTextContent('Name')
+    expect(slos).toHaveTextContent('Breach Count')
+    expect(slos).not.toHaveTextContent('{…}')
+  })
+
+  it('badges operational status strings via the status triad', () => {
+    render(<MetricGrid data={opsData} />)
+    // worst_status: critical → breach-toned badge (text is lower-case; uppercase is CSS-only)
+    expect(screen.getByTestId('status-critical')).toHaveTextContent('critical')
+    // status: unknown → neutral badge
+    expect(screen.getByTestId('status-unknown')).toBeInTheDocument()
+  })
+
+  it('never prints the {…} placeholder anywhere in the grid', () => {
+    render(<MetricGrid data={opsData} />)
+    expect(screen.getByTestId('metric-grid')).not.toHaveTextContent('{…}')
+  })
+})

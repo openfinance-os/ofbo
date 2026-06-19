@@ -25,27 +25,96 @@ export function FreshnessBadge({ freshness }: { freshness: FreshnessEnvelope }) 
   )
 }
 
-/** Render a single contract value: money, scalar, array, or nested object (capped depth). */
+/**
+ * Operational status vocabulary → the Stitch status triad (breach=red, break=amber,
+ * reconciled=green) + neutral. Only recognised tokens are badged; arbitrary strings stay
+ * plain so ids/labels are never mislabelled. Keys normalised (lower-case, spaces→_).
+ */
+const STATUS_TONE: Record<string, string> = {
+  breach: 'bg-breach/10 text-breach', breached: 'bg-breach/10 text-breach', critical: 'bg-breach/10 text-breach', high: 'bg-breach/10 text-breach',
+  rejected: 'bg-breach/10 text-breach', failed: 'bg-breach/10 text-breach', error: 'bg-breach/10 text-breach', down: 'bg-breach/10 text-breach',
+  suspended: 'bg-breach/10 text-breach', overdue: 'bg-breach/10 text-breach', rjct: 'bg-breach/10 text-breach',
+  break: 'bg-break/10 text-break', warn: 'bg-break/10 text-break', warning: 'bg-break/10 text-break', at_risk: 'bg-break/10 text-break',
+  degraded: 'bg-break/10 text-break', awaiting: 'bg-break/10 text-break', pending: 'bg-break/10 text-break', medium: 'bg-break/10 text-break',
+  dual_running_required: 'bg-break/10 text-break', pdng: 'bg-break/10 text-break',
+  reconciled: 'bg-reconciled/10 text-reconciled', matched: 'bg-reconciled/10 text-reconciled', healthy: 'bg-reconciled/10 text-reconciled',
+  up: 'bg-reconciled/10 text-reconciled', ok: 'bg-reconciled/10 text-reconciled', active: 'bg-reconciled/10 text-reconciled',
+  resolved: 'bg-reconciled/10 text-reconciled', approved: 'bg-reconciled/10 text-reconciled', passed: 'bg-reconciled/10 text-reconciled',
+  registered: 'bg-reconciled/10 text-reconciled', authorized: 'bg-reconciled/10 text-reconciled', acsp: 'bg-reconciled/10 text-reconciled', accc: 'bg-reconciled/10 text-reconciled',
+  unknown: 'bg-surface-container text-on-surface-variant', none: 'bg-surface-container text-on-surface-variant',
+  info: 'bg-surface-container text-on-surface-variant', low: 'bg-surface-container text-on-surface-variant',
+  draft: 'bg-surface-container text-on-surface-variant', directory_only: 'bg-surface-container text-on-surface-variant', dormant: 'bg-surface-container text-on-surface-variant'
+}
+const statusTone = (s: string): string | null => STATUS_TONE[s.trim().toLowerCase().replace(/\s+/g, '_')] ?? null
+
+function StatusBadge({ value }: { value: string }) {
+  const tone = statusTone(value)
+  if (!tone) return <span className="font-mono break-all">{value}</span>
+  return (
+    <span data-testid={`status-${value.toLowerCase().replace(/\s+/g, '-')}`} className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
+      {value.replace(/_/g, ' ')}
+    </span>
+  )
+}
+
+/** A uniform array of objects → a compact, high-density table (the Stitch data-table). */
+function ObjectTable({ rows, depth }: { rows: Record<string, unknown>[]; depth: number }) {
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].slice(0, 6)
+  return (
+    <div className="overflow-x-auto" data-testid="object-table">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="border-b border-outline-variant">
+            {cols.map((c) => (
+              <th key={c} className="text-left font-bold text-on-surface-variant uppercase tracking-wider py-1 pr-3 whitespace-nowrap">{humanize(c)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 8).map((r, i) => (
+            <tr key={i} className="border-b border-outline-variant/40 hover:bg-surface-container">
+              {cols.map((c) => (
+                <td key={c} className="py-1 pr-3 align-top text-primary">
+                  {c in r ? <Value value={r[c]} depth={depth + 1} /> : <span className="text-on-surface-variant">—</span>}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > 8 ? <p className="text-xs text-on-surface-variant mt-1">+{rows.length - 8} more</p> : null}
+    </div>
+  )
+}
+
+/** Render a single contract value: money, scalar, status badge, table, or nested group. */
 function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (isMoney(value)) return <span className="font-mono">{formatMoney(value)}</span>
   if (value === null || value === undefined) return <span className="text-on-surface-variant">—</span>
   if (typeof value === 'number') return <span className="font-mono">{value.toLocaleString('en-US')}</span>
-  if (typeof value === 'boolean' || typeof value === 'string') return <span className="font-mono break-all">{String(value)}</span>
+  if (typeof value === 'boolean') return <span className="font-mono">{String(value)}</span>
+  if (typeof value === 'string') return <StatusBadge value={value} />
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-on-surface-variant">none</span>
+    // a uniform array of (non-Money) objects renders as a table; otherwise a scalar list
+    if (value.every((v) => typeof v === 'object' && v !== null && !isMoney(v))) {
+      return <ObjectTable rows={value as Record<string, unknown>[]} depth={depth} />
+    }
     return (
       <ul className="space-y-1">
         {value.slice(0, 8).map((item, i) => (
           <li key={i} className="text-xs">
-            {typeof item === 'object' && item !== null && !isMoney(item) ? <Value value={item} depth={depth + 1} /> : <Value value={item} depth={depth + 1} />}
+            <Value value={item} depth={depth + 1} />
           </li>
         ))}
         {value.length > 8 ? <li className="text-xs text-on-surface-variant">+{value.length - 8} more</li> : null}
       </ul>
     )
   }
-  // object
-  if (depth >= 2) return <span className="font-mono text-xs text-on-surface-variant">{'{…}'}</span>
+  // nested object → sub-group; only collapse to a key summary at extreme depth (never "{…}")
+  if (depth >= 3) {
+    return <span className="text-xs text-on-surface-variant break-all">{Object.keys(value as Record<string, unknown>).map(humanize).join(', ')}</span>
+  }
   const entries = Object.entries(value as Record<string, unknown>)
   return (
     <dl className="space-y-1">
