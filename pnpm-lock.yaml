@@ -53,6 +53,9 @@ importers:
       '@ofbo/bff':
         specifier: workspace:*
         version: link:../../services/bff
+      '@ofbo/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@ofbo/db':
         specifier: workspace:*
         version: link:../../packages/db

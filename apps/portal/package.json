@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@ofbo/bff": "workspace:*",
+    "@ofbo/contracts": "workspace:*",
     "@ofbo/db": "workspace:*",
     "@ofbo/ports": "workspace:*",
     "next": "^15.1.6",

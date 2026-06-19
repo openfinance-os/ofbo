@@ -7,6 +7,7 @@
  */
 
 import { bffClient } from './bff'
+import type { Schemas, KeysConformToContract, AssertContract } from './contract-types'
 
 export const IDENTIFIER_TYPES = ['bank_customer_id', 'iban', 'emirates_id'] as const
 export type IdentifierType = (typeof IDENTIFIER_TYPES)[number]
@@ -26,6 +27,9 @@ export interface ConsentSearchResult {
   psu: { bank_customer_id: string; account_count: number }
   consents: CareConsent[]
 }
+
+// ADR-0004 drift guard — fails typecheck if the contract renames/removes a CareConsent field.
+export type CareConsentContractGuard = AssertContract<KeysConformToContract<CareConsent, Schemas['ConsentAdminView']>>
 
 /** Mirrors the OpenAPI ConsentTimelineEvent (BACKOFFICE-19, audit-store projection). */
 export interface CareTimelineEvent {

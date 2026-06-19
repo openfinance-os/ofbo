@@ -10,6 +10,7 @@
  */
 
 import { bffClient } from './bff'
+import type { Schemas, KeysConformToContract, AssertContract } from './contract-types'
 
 export type ApprovalState = 'pending' | 'approved' | 'rejected' | 'timed_out'
 
@@ -111,3 +112,8 @@ export function canActOn(approval: ApprovalRequest, subject: string, scopes: rea
   if (approval.initiator === subject) return false
   return superadmin || scopes.includes(approval.approver_required_scope)
 }
+
+// ADR-0004 drift guard — fails typecheck if the contract renames/removes an ApprovalRequest
+// field. `execution_result` is a portal-side augmentation (the executed operation's result
+// surfaced post-approval), intentionally absent from the contract schema, so it's excluded.
+export type ApprovalRequestContractGuard = AssertContract<KeysConformToContract<Omit<ApprovalRequest, 'execution_result'>, Schemas['ApprovalRequest']>>
