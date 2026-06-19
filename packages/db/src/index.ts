@@ -86,6 +86,14 @@ export {
   type TrustFrameworkParticipantPage
 } from './trust-framework-participant-store.js'
 export {
+  PgServiceDeskCaseStore,
+  type StoredServiceDeskCase,
+  type ServiceDeskCaseCreateInput,
+  type ServiceDeskCaseUpdate,
+  type ServiceDeskCaseListQuery,
+  type ServiceDeskCasePage
+} from './service-desk-case-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,

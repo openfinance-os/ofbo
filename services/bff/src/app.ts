@@ -108,6 +108,8 @@ import { LfiReportService } from './lfi-reports/service.js'
 import { lfiReportRoutes } from './lfi-reports/routes.js'
 import { TrustFrameworkService, InMemoryTrustFrameworkParticipantStore, type TrustFrameworkParticipantStore } from './trust-framework/service.js'
 import { trustFrameworkRoutes } from './trust-framework/routes.js'
+import { ServiceDeskService, InMemoryServiceDeskCaseStore, type ServiceDeskCaseStore } from './service-desk/service.js'
+import { serviceDeskRoutes } from './service-desk/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -182,6 +184,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/trust-framework/participants',
   'get /back-office/trust-framework/participants/{participant_id}',
   'post /back-office/trust-framework/participants/{participant_id}:nominate-replacement',
+  'get /back-office/service-desk-cases',
+  'post /back-office/service-desk-cases',
+  'get /back-office/service-desk-cases/{case_id}',
+  'post /back-office/service-desk-cases/{case_id}:update',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -237,6 +243,9 @@ export interface AppDeps {
   /** BACKOFFICE-74 — Trust Framework participant store (defaults in-memory; the worker
    *  wires the durable PgTrustFrameworkParticipantStore). */
   trustFrameworkStore?: TrustFrameworkParticipantStore
+  /** BACKOFFICE-79 — Nebras service-desk case store (defaults in-memory; the worker
+   *  wires the durable PgServiceDeskCaseStore). */
+  serviceDeskStore?: ServiceDeskCaseStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -469,6 +478,11 @@ export function createApp(deps: AppDeps = {}) {
     store: deps.trustFrameworkStore ?? new InMemoryTrustFrameworkParticipantStore(),
     audit: highClassAudit
   })
+  // BACKOFFICE-79 — Nebras service-desk case tracking (Operations-owned).
+  const serviceDeskService = new ServiceDeskService({
+    store: deps.serviceDeskStore ?? new InMemoryServiceDeskCaseStore(),
+    audit: highClassAudit
+  })
   // BACKOFFICE-42 — audit-trail drill-down (audit:read); the drill-down access is logged.
   const auditEventsService = new AuditEventsService({ reader: deps.auditEventReader ?? new InMemoryAuditEventReader(), audit: highClassAudit })
   // BACKOFFICE-41 — analytics exports: delegate to the view services (each re-asserts
@@ -524,6 +538,7 @@ export function createApp(deps: AppDeps = {}) {
     ...reportRoutes(reportGenerationService, idempotencyStore),
     ...lfiReportRoutes(lfiReportService, idempotencyStore),
     ...trustFrameworkRoutes(trustFrameworkService, idempotencyStore),
+    ...serviceDeskRoutes(serviceDeskService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService)
   }
   const app = new Hono()
