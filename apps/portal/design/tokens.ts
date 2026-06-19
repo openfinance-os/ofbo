@@ -88,12 +88,19 @@ export const ext = {
   demo: '#b54708'
 } as const
 
-/** Verbatim from the Stitch config. */
+/**
+ * Verbatim from the Stitch design system `rounded` scale. Re-reconciled 2026-06-19
+ * against the live project's designMd (the 2026-06-17 codification had the scale shifted
+ * one step too small and `full` set to 0.75rem instead of a pill — status badges using
+ * `rounded-full` rendered as 12px rects rather than the spec's "fully pill-shaped").
+ */
 export const borderRadius = {
-  DEFAULT: '0.125rem',
-  lg: '0.25rem',
-  xl: '0.5rem',
-  full: '0.75rem'
+  sm: '0.125rem',
+  DEFAULT: '0.25rem', // soft 0.25rem — inputs/buttons (Stitch "Shapes")
+  md: '0.375rem',
+  lg: '0.5rem', // data containers / cards
+  xl: '0.75rem',
+  full: '9999px' // status badges — fully pill-shaped
 } as const
 
 /** Verbatim from the Stitch config — 4px base unit + named layout tokens. The numeric

@@ -5,10 +5,11 @@ Source of truth for **appearance** is the Stitch project **`8050269076066130289`
 Tailwind preset consumes (UI-00b); this file is the human-readable mirror.
 **Behaviour + data** remain governed by `specs/backoffice-openapi.yaml`.
 
-> ✅ **Reconciled 2026-06-17** against the live Stitch screens' `tailwind-config`
-> (Customer Care Console + Reconciliation Console — identical Material 3 base). The
-> design system is **Material 3 (light theme)**. Re-pull + reconcile if Stitch changes;
-> push repo-side edits back via `upload_design_md`.
+> ✅ **Reconciled 2026-06-17**, **radii re-reconciled 2026-06-19** against the live
+> Stitch project's `designMd` (the project was edited 2026-06-18, after the first pass —
+> the `rounded` scale had drifted: it was shifted one step too small and `full` was
+> 0.75rem instead of the pill). The design system is **Material 3 (light theme)**. Re-pull
+> + reconcile if Stitch changes; push repo-side edits back via `upload_design_md`.
 
 ## Typography
 - **Inter** — all UI text. **JetBrains Mono** — ids, money amounts, trace ids.
@@ -31,7 +32,7 @@ The M3 config ships only `error`, so these are OFBO additions in `tokens.ts → 
 ## Spacing & shape (verbatim from Stitch)
 - **4px base unit**; `gutter` 16px, `container-padding` 24px.
 - **Density:** `row-height-standard` 48px (comfortable), `row-height-dense` 32px (compact).
-- Radii: `DEFAULT` .125 / `lg` .25 / `xl` .5 / `full` .75 rem.
+- Radii (Stitch `rounded` scale, re-reconciled 2026-06-19): `sm` .125 / `DEFAULT` .25 / `md` .375 / `lg` .5 / `xl` .75 rem / `full` **9999px (pill)**. Inputs+buttons use `DEFAULT` (.25rem soft); data containers `lg` (.5rem); status badges `full` (fully pill-shaped).
 - Numeric spacing + type scales come from Tailwind defaults (also 4px-based).
 
 ## Screen inventory (Stitch, for UI-02..09 + extras)
