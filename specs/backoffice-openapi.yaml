@@ -1789,6 +1789,122 @@ paths:
                     properties:
                       data: { $ref: '#/components/schemas/InvoiceRun' }
 
+  # ---------- 7.x Nebras service-desk case tracking (BACKOFFICE-79) ----------
+  /back-office/service-desk-cases:
+    get:
+      tags: [analytics]
+      summary: List Nebras service-desk cases for the Ops Console (BACKOFFICE-79)
+      description: >
+        Any case raised with the Nebras service desk (incident, billing query, onboarding,
+        general) tracked by Nebras case reference with type, priority, and the Interaction
+        Guide SLA applied; linked to the originating break, dispute, or signal where one exists.
+      x-rate-limit-per-min: 100
+      x-required-scope: platform:operations:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: case_type, in: query, schema: { $ref: '#/components/schemas/ServiceDeskCaseType' } }
+        - { name: priority, in: query, schema: { $ref: '#/components/schemas/ServiceDeskCasePriority' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ServiceDeskCaseStatus' } }
+      responses:
+        '200':
+          description: Paginated service-desk case list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ServiceDeskCase' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [analytics]
+      summary: Track a Nebras service-desk case (BACKOFFICE-79)
+      x-rate-limit-per-min: 30
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceDeskCaseCreate' }
+      responses:
+        '201':
+          description: Service-desk case tracked; SLA clock started
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServiceDeskCase' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/service-desk-cases/{case_id}:
+    get:
+      tags: [analytics]
+      summary: Nebras service-desk case detail (BACKOFFICE-79)
+      x-rate-limit-per-min: 200
+      x-required-scope: platform:operations:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/serviceDeskCaseId'
+      responses:
+        '200':
+          description: Service-desk case detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServiceDeskCase' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/service-desk-cases/{case_id}:update:
+    post:
+      tags: [analytics]
+      summary: Update a Nebras service-desk case status / priority (BACKOFFICE-79)
+      x-rate-limit-per-min: 60
+      x-required-scope: platform:operations:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - $ref: '#/components/parameters/serviceDeskCaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                status: { $ref: '#/components/schemas/ServiceDeskCaseStatus' }
+                priority: { $ref: '#/components/schemas/ServiceDeskCasePriority' }
+                note: { type: string, minLength: 20 }
+      responses:
+        '200':
+          description: Case updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ServiceDeskCase' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -1899,6 +2015,11 @@ components:
       required: true
       # Approval ids are UUID v4 (approvals service: crypto.randomUUID()) — kept
       # consistent with ApprovalRequest.approval_request_id and invoice_run.approval_id.
+      schema: { type: string, format: uuid }
+    serviceDeskCaseId:
+      name: case_id
+      in: path
+      required: true
       schema: { type: string, format: uuid }
 
   responses:
@@ -2442,3 +2563,38 @@ components:
         total: { $ref: '#/components/schemas/Money' }
         invoice_status: { type: string, enum: [instructed, issued, settled, overdue, credit_noted] }
         credit_note_refs: { type: array, items: { type: string }, description: Issued on post-invoice break resolution }
+    ServiceDeskCaseType:
+      type: string
+      enum: [incident, billing_query, onboarding, general]
+      description: Nebras service-desk case class (BACKOFFICE-79).
+    ServiceDeskCasePriority:
+      type: string
+      enum: [P1, P2, P3, P4]
+      description: Interaction-Guide priority; drives the applied SLA.
+    ServiceDeskCaseStatus:
+      type: string
+      enum: [open, in_progress, awaiting_nebras, resolved, closed]
+    ServiceDeskCaseCreate:
+      type: object
+      required: [nebras_case_reference, case_type, priority, summary]
+      properties:
+        nebras_case_reference: { type: string, description: Nebras service-desk case reference }
+        case_type: { $ref: '#/components/schemas/ServiceDeskCaseType' }
+        priority: { $ref: '#/components/schemas/ServiceDeskCasePriority' }
+        summary: { type: string, description: Case summary (no PSU PII) }
+        linked_break_id: { type: string, format: uuid, nullable: true, description: Originating reconciliation break, where one exists }
+        linked_dispute_id: { type: string, format: uuid, nullable: true, description: Originating dispute, where one exists }
+        linked_signal_id: { type: string, format: uuid, nullable: true, description: Originating risk signal, where one exists }
+    ServiceDeskCase:
+      allOf:
+        - $ref: '#/components/schemas/ServiceDeskCaseCreate'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            status: { $ref: '#/components/schemas/ServiceDeskCaseStatus' }
+            sla_due_at: { type: string, format: date-time, description: Interaction-Guide SLA due time derived from priority }
+            sla_overdue: { type: boolean }
+            opened_by: { type: string }
+            opened_at: { type: string, format: date-time }
+            resolved_at: { type: string, format: date-time, nullable: true }
+            created_at: { type: string, format: date-time }
