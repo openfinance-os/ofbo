@@ -44,9 +44,13 @@ describe('OFBO design tokens (reconciled to Stitch)', () => {
     expect(spacing['row-height-dense']).toBe('32px') // compact density
   })
 
-  it('mirrors the Stitch radii (rem)', () => {
-    expect(borderRadius.DEFAULT).toBe('0.125rem')
-    expect(borderRadius.full).toBe('0.75rem')
+  it('mirrors the Stitch `rounded` scale (re-reconciled 2026-06-19)', () => {
+    expect(borderRadius.sm).toBe('0.125rem')
+    expect(borderRadius.DEFAULT).toBe('0.25rem') // soft 0.25rem — inputs/buttons
+    expect(borderRadius.md).toBe('0.375rem')
+    expect(borderRadius.lg).toBe('0.5rem') // data containers
+    expect(borderRadius.xl).toBe('0.75rem')
+    expect(borderRadius.full).toBe('9999px') // status badges — fully pill-shaped
   })
 
   it('fonts are Inter (sans) + JetBrains Mono (mono) + Material Symbols (icons)', () => {
