@@ -3561,7 +3561,7 @@ export interface components {
             /** Format: uuid */
             id?: string;
             /** @enum {string} */
-            signal_type?: "consent_anomaly" | "tpp_behaviour" | "cop_mismatch_spike" | "nebras_liability_approach" | "agent_anomaly" | "predictive_liability_forecast";
+            signal_type?: "consent_anomaly" | "tpp_behaviour" | "cop_mismatch_spike" | "nebras_liability_approach" | "agent_anomaly" | "predictive_liability_forecast" | "lfi_report_cadence_missed";
             /** @enum {string} */
             severity?: "info" | "low" | "medium" | "high" | "critical";
             /** @enum {string} */
