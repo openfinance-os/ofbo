@@ -87,7 +87,7 @@ milestones:
       - { id: BACKOFFICE-40, title: Data-freshness indicator on every aggregated view, status: done }
       - { id: BACKOFFICE-42, title: Audit-trail drill-down from Compliance and Risk Views, status: done }
       - { id: BACKOFFICE-46, title: ITSM ticket-raising for anomalous audit patterns, status: done, depends_on: [BACKOFFICE-37] }
-      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: pending, note: "spec PR #64 merged 2026-06-18 (POST/GET /back-office/lfi-reports + LfiReportCadenceStatus schema now in contract). Ready to implement: handlers + cadence tracking." }
+      - { id: BACKOFFICE-67, title: Manual cadence ingest of the 16 login-only Nebras LFI reports, status: blocked, reason: "awaiting spec PR #90 (2026-06-19) — the 'missed cadence raises Risk signal' criterion has no RiskSignal.signal_type value (and the risk_signal DB CHECK enumerates the same set); spec PR adds lfi_report_cadence_missed, human-approval-gated. GET/POST ingest + cadence dashboard + DB CHECK migration land in the impl PR after merge." }
 
   - name: M4a
     items:
