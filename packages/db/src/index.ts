@@ -76,6 +76,14 @@ export {
   type SchemeNotificationPage
 } from './scheme-notification-store.js'
 export {
+  PgTrustFrameworkParticipantStore,
+  type StoredTrustFrameworkParticipant,
+  type TrustFrameworkParticipantCreateInput,
+  type TrustFrameworkParticipantUpdate,
+  type TrustFrameworkParticipantListQuery,
+  type TrustFrameworkParticipantPage
+} from './trust-framework-participant-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,
