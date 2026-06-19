@@ -783,3 +783,11 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
   - **Human decisions / ADRs:** -25 (care-token exposure — ADR-0001), -33 (BD-13 cross-fintech aggregation governance sign-off), -64 (new P1 CareSurfacePort method + contract for call-recording linkage).
   - **Deferred UI track (gated on the human-approved UI-00 Tailwind ADR):** -15 (recon console WCAG AA), -26 (console design-system/brand) — though the UI-00..09 screens already merged; these are polish items on that track.
   - **Per-bank engagement:** M6 enterprise port-swaps.
+
+## 2026-06-19 — Authored the 3 deferred contract-gap spec PRs (#96/#97/#98, human-approval-gated)
+
+- On request, authored spec-only PRs for the three contract-gap stories (one per story, never self-merged per CLAUDE.md rule 6). Each: spec edit + regenerated api-types/routes; canon path-count test reconciles at implementation time (matches the prior spec-PR pattern). Backlog reasons updated blocked→"awaiting spec PR #N".
+  - **#96 — BACKOFFICE-74** Trust Framework participant administration: /back-office/trust-framework/participants (GET/POST), /{id} detail, /{id}:nominate-replacement (turnover); TrustFrameworkParticipant/TrustFrameworkRole(org_admin/pbc/ptc/stc)/TncStatus; named holders are internal role-holders (not PSU PII); onboarding-stage SLA. platform:operations r/w.
+  - **#97 — BACKOFFICE-76** Cross-scheme dispute guard (Aani/Al Tareq): DisputeCreate.aani_case_id + DisputeCase.cross_scheme (CrossSchemeContext: 2h Aani recall window, settled_in_other_scheme + compensation_blocked double-compensation guard, Sanadak escalation) + POST /disputes/{id}:record-cross-scheme (disputes:admin). Guard → :initiate-refund 409 for the same direct loss.
+  - **#98 — BACKOFFICE-79** Nebras service-desk case tracking: /back-office/service-desk-cases (GET/POST), /{case_id} detail, /{case_id}:update; ServiceDeskCase (type incident/billing_query/onboarding/general, priority P1–P4, Interaction-Guide SLA, links to break/dispute/signal). platform:operations r/w.
+- **Open human-gated spec PRs now: #90 (-67), #96 (-74), #97 (-76), #98 (-79).** Merge any → its story becomes implementable by the next /next-story run. No code authored in these PRs.
