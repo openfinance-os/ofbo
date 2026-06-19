@@ -741,3 +741,12 @@ Ten console screens, all translated from the Stitch "Open Finance Back Office" p
 - TDD: fraud-incidents.spec.ts 11 shown RED first (8 endpoint 501 + 3 mapping/pure pass) → green after wiring. Integration fraud-incidents.int.spec.ts (P1 hold persistence + audit + lineage + resolve, RLS).
 - Gates: gen-drift 0, typecheck, lint, **unit 554/554**, integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #91 MERGED, branch deleted.
 - Eligible queue remaining (pending): -78, -09, -61, -68. Blocked: -67 (spec PR #90).
+
+## 2026-06-19 — BACKOFFICE-78 outbound downtime/change notifications (PR #92, merge 6c9aa42)
+
+- Endpoints: POST raise (platform:operations:write) starts the notice clock — 10d planned_maintenance/version_release, 30d + dual_running_required for breaking_change; notice_deadline = scheduled_start − notice_days; notice_compliant = notified_at ≤ deadline; propagate_to_tpp flag. GET list (platform:operations:read, filters status+type) for the Ops Console. POST :acknowledge records the Nebras ack.
+- migration 0019_scheme_notification (RLS day-one + retention 24/60 + classification internal-confidential); PgSchemeNotificationStore (+ in-memory) with column-level lineage; Idempotency-Key on mutations; one High-class audit per raise/acknowledge; double scope enforcement; wired into worker.ts. No risk_signal / ITSM / egress — no enum gap.
+- TDD: scheme-notifications.spec.ts 12 RED first (8 endpoint 501 + 4 pure/passing) → green. Integration scheme-notifications.int.spec.ts (30d breaking-change clock persistence + audit + lineage + acknowledge, RLS).
+- Gates: gen-drift 0, typecheck, lint, **unit 560/560**, integration green, **Q4.5 lineage gate PASSED**. Reviewers: **hard-stop PASS**, **contract-conformance CONFORMANT** (both first-pass clean). Merged on the local-gate build-ahead pivot; PR #92 MERGED, branch deleted.
+- Deferred (noted, not built): Trust Framework status-page ingest into the Ops Console — a -28 concern, no -78 contract surface.
+- Eligible queue remaining (pending): -09, -61, -68. Blocked: -67 (spec PR #90).
