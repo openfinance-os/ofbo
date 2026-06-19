@@ -132,6 +132,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /disputes',
   'patch /disputes/{dispute_id}',
   'post /disputes/{dispute_id}:initiate-refund',
+  'post /back-office/disputes/{dispute_id}:record-cross-scheme',
   'post /back-office/disputes/respondent',
   'get /back-office/disputes/respondent',
   'get /back-office/disputes/respondent/{respondent_dispute_id}',

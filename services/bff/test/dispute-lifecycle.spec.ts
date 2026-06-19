@@ -108,14 +108,16 @@ describe('PATCH /disputes/{dispute_id} — complaint lifecycle (BACKOFFICE-24)',
       id: 'dsp-stale', psu_identifier: 'BCID-X', dispute_type: 'consent_complaint', state: 'in_progress',
       originating_payment_id: null, originating_consent_id: null, originating_call_id: null, dispute_reason_code: null,
       sla_clock_started_at: '2026-05-01T00:00:00.000Z', refund_required_by: null, refund_initiated_at: null,
-      refund_amount: null, nebras_case_id: null, care_case_id: null, assigned_to: null, created_at: '2026-05-01T00:00:00.000Z'
+      refund_amount: null, nebras_case_id: null, care_case_id: null, assigned_to: null,
+      aani_case_id: null, cross_scheme: null, created_at: '2026-05-01T00:00:00.000Z'
     }
     const store: DisputeStore = {
       async create() { return stale },
       async get() { return stale },
       async list(): Promise<DisputePage> { return { rows: [stale], next_cursor: null } },
       async markRefundInitiated(): Promise<StoredDisputeRecord | null> { return stale },
-      async updateState() { return { ...stale, state: 'escalated' } }
+      async updateState() { return { ...stale, state: 'escalated' } },
+      async recordCrossScheme(): Promise<StoredDisputeRecord | null> { return stale }
     }
     const svc = new DisputeService({
       store,

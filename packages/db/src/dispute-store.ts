@@ -29,7 +29,19 @@ export interface StoredDisputeRecord {
   nebras_case_id: string | null
   care_case_id: string | null
   assigned_to: string | null
+  aani_case_id: string | null
+  cross_scheme: CrossSchemeContext | null
   created_at: string
+}
+
+/** BACKOFFICE-76 — cross-scheme (Aani / Al Tareq) context + double-compensation guard. */
+export interface CrossSchemeContext {
+  aani_case_id: string | null
+  aani_recall_window_expires_at: string | null
+  settled_in_other_scheme: boolean
+  compensation_blocked: boolean
+  sanadak_reference: string | null
+  sanadak_escalated_at: string | null
 }
 
 export interface DisputeCreateInput {
@@ -40,6 +52,17 @@ export interface DisputeCreateInput {
   originating_call_id?: string | null
   dispute_reason_code?: string | null
   nebras_case_id?: string | null
+  aani_case_id?: string | null
+}
+
+/** BACKOFFICE-76 — fields recorded by :record-cross-scheme. */
+export interface CrossSchemeUpdate {
+  aani_case_id?: string | null
+  aani_recall_window_expires_at?: string | null
+  settled_in_other_scheme?: boolean
+  compensation_blocked?: boolean
+  sanadak_reference?: string | null
+  sanadak_escalated_at?: string | null
 }
 
 export interface DisputeListQuery {
@@ -57,7 +80,8 @@ export interface DisputePage {
 const SELECT_COLUMNS = `id, psu_identifier, dispute_type, state, originating_payment_id,
   originating_consent_id, originating_call_id, dispute_reason_code, sla_clock_started_at,
   refund_required_by, refund_initiated_at, refund_amount, refund_currency, nebras_case_id,
-  care_case_id, assigned_to, created_at`
+  care_case_id, assigned_to, aani_case_id, aani_recall_window_expires_at, settled_in_other_scheme,
+  compensation_blocked, sanadak_reference, sanadak_escalated_at, created_at`
 
 const LINEAGE_COLUMNS = [
   'bank_id', 'channel', 'psu_identifier', 'dispute_type', 'state',
@@ -89,7 +113,27 @@ function toRecord(r: Record<string, unknown>): StoredDisputeRecord {
     nebras_case_id: (r.nebras_case_id as string) ?? null,
     care_case_id: (r.care_case_id as string) ?? null,
     assigned_to: (r.assigned_to as string) ?? null,
+    aani_case_id: (r.aani_case_id as string) ?? null,
+    cross_scheme: toCrossScheme(r),
     created_at: iso(r.created_at)
+  }
+}
+
+/** Assemble the nested cross_scheme object, or null when no cross-scheme context exists. */
+function toCrossScheme(r: Record<string, unknown>): CrossSchemeContext | null {
+  const settled = Boolean(r.settled_in_other_scheme)
+  const blocked = Boolean(r.compensation_blocked)
+  const aani = (r.aani_case_id as string) ?? null
+  const sanadak = (r.sanadak_reference as string) ?? null
+  const recall = r.aani_recall_window_expires_at ? iso(r.aani_recall_window_expires_at) : null
+  if (!aani && !settled && !blocked && !sanadak && !recall) return null
+  return {
+    aani_case_id: aani,
+    aani_recall_window_expires_at: recall,
+    settled_in_other_scheme: settled,
+    compensation_blocked: blocked,
+    sanadak_reference: sanadak,
+    sanadak_escalated_at: r.sanadak_escalated_at ? iso(r.sanadak_escalated_at) : null
   }
 }
 
@@ -149,8 +193,8 @@ export class PgDisputeStore {
       const res = await c.query(
         `INSERT INTO dispute_case
            (bank_id, channel, psu_identifier, dispute_type, originating_payment_id,
-            originating_consent_id, originating_call_id, dispute_reason_code, nebras_case_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            originating_consent_id, originating_call_id, dispute_reason_code, nebras_case_id, aani_case_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING ${SELECT_COLUMNS}`,
         [
           this.config.bankId,
@@ -161,13 +205,44 @@ export class PgDisputeStore {
           input.originating_consent_id ?? null,
           input.originating_call_id ?? null,
           input.dispute_reason_code ?? null,
-          input.nebras_case_id ?? null
+          input.nebras_case_id ?? null,
+          input.aani_case_id ?? null
         ]
       )
       return res.rows[0]
     })
     await this.emitLineage(traceId)
     return toRecord(row)
+  }
+
+  /** BACKOFFICE-76 — record cross-scheme (Aani / Al Tareq) context + double-compensation
+   *  guard state. dispute_case is a mutable workflow table (RLS UPDATE). */
+  async recordCrossScheme(id: string, patch: CrossSchemeUpdate, traceId: string): Promise<StoredDisputeRecord | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE dispute_case
+            SET aani_case_id                  = COALESCE($2, aani_case_id),
+                aani_recall_window_expires_at = COALESCE($3, aani_recall_window_expires_at),
+                settled_in_other_scheme       = COALESCE($4, settled_in_other_scheme),
+                compensation_blocked          = COALESCE($5, compensation_blocked),
+                sanadak_reference             = COALESCE($6, sanadak_reference),
+                sanadak_escalated_at          = COALESCE($7, sanadak_escalated_at)
+          WHERE id = $1
+          RETURNING ${SELECT_COLUMNS}`,
+        [
+          id,
+          patch.aani_case_id ?? null,
+          patch.aani_recall_window_expires_at ?? null,
+          patch.settled_in_other_scheme ?? null,
+          patch.compensation_blocked ?? null,
+          patch.sanadak_reference ?? null,
+          patch.sanadak_escalated_at ?? null
+        ]
+      )
+      return res.rows[0] ?? null
+    })
+    if (row) await this.emitLineage(traceId)
+    return row ? toRecord(row) : null
   }
 
   async get(id: string): Promise<StoredDisputeRecord | null> {

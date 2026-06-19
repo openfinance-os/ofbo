@@ -110,6 +110,21 @@ export function disputeRoutes(service: DisputeService, idempotency: IdempotencyS
 
     'post /disputes/{dispute_id}:initiate-refund': withIdempotency('disputes:refund', refundHandler),
 
+    'post /back-office/disputes/{dispute_id}:record-cross-scheme': withIdempotency('disputes:cross-scheme', async (c, params) => {
+      let body: { aani_case_id?: string; settled_in_other_scheme?: boolean; sanadak_reference?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { aani_case_id?, settled_in_other_scheme?, sanadak_reference? }.', DOCS_BASE), 400)
+      }
+      try {
+        const record = await service.recordCrossScheme(c.get('principal'), params.dispute_id!, body, trace(c))
+        return c.json(dataEnvelope(record), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    }),
+
     'patch /disputes/{dispute_id}': withIdempotency('disputes:update-state', async (c, params) => {
       let body: { state?: string; escalated_to?: string; resolution_note?: string }
       try {
