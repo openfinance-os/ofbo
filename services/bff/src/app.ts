@@ -106,6 +106,8 @@ import {
 } from './tpp-billing/invoicing.js'
 import { LfiReportService } from './lfi-reports/service.js'
 import { lfiReportRoutes } from './lfi-reports/routes.js'
+import { TrustFrameworkService, InMemoryTrustFrameworkParticipantStore, type TrustFrameworkParticipantStore } from './trust-framework/service.js'
+import { trustFrameworkRoutes } from './trust-framework/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
 import { createTelemetryMiddleware } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
@@ -175,6 +177,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/analytics/exports',
   'get /back-office/lfi-reports',
   'post /back-office/lfi-reports',
+  'get /back-office/trust-framework/participants',
+  'post /back-office/trust-framework/participants',
+  'get /back-office/trust-framework/participants/{participant_id}',
+  'post /back-office/trust-framework/participants/{participant_id}:nominate-replacement',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -227,6 +233,9 @@ export interface AppDeps {
   /** BACKOFFICE-78 — outbound scheme-notification store (defaults in-memory; the
    *  worker wires the durable PgSchemeNotificationStore). */
   schemeNotificationStore?: SchemeNotificationStore
+  /** BACKOFFICE-74 — Trust Framework participant store (defaults in-memory; the worker
+   *  wires the durable PgTrustFrameworkParticipantStore). */
+  trustFrameworkStore?: TrustFrameworkParticipantStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -454,6 +463,11 @@ export function createApp(deps: AppDeps = {}) {
   // BACKOFFICE-67 — manual cadence ingest of the 16 login-only Nebras LFI reports
   // (compliance:reports:read dashboard + compliance:reports:generate verified upload).
   const lfiReportService = new LfiReportService({ reports: reportStore, audit: highClassAudit })
+  // BACKOFFICE-74 — Trust Framework participant administration (Operations-owned).
+  const trustFrameworkService = new TrustFrameworkService({
+    store: deps.trustFrameworkStore ?? new InMemoryTrustFrameworkParticipantStore(),
+    audit: highClassAudit
+  })
   // BACKOFFICE-42 — audit-trail drill-down (audit:read); the drill-down access is logged.
   const auditEventsService = new AuditEventsService({ reader: deps.auditEventReader ?? new InMemoryAuditEventReader(), audit: highClassAudit })
   // BACKOFFICE-41 — analytics exports: delegate to the view services (each re-asserts
@@ -508,6 +522,7 @@ export function createApp(deps: AppDeps = {}) {
     ...analyticsExportRoutes(analyticsExportService, idempotencyStore),
     ...reportRoutes(reportGenerationService, idempotencyStore),
     ...lfiReportRoutes(lfiReportService, idempotencyStore),
+    ...trustFrameworkRoutes(trustFrameworkService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService)
   }
   const app = new Hono()
