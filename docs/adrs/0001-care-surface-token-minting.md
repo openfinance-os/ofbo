@@ -57,8 +57,11 @@ implement; if Option 2/3, record the auth-path decision here and unblock BACKOFF
 
 ## Consequences
 
-- BACKOFFICE-25 is `blocked` on this ADR; the build loop continues with the next
-  eligible item (BACKOFFICE-20).
+- BACKOFFICE-25 is `blocked` on this ADR. **As of 2026-06-20 the eligible build queue
+  is drained (M0–M5 complete), and BACKOFFICE-25 is the only unbuilt _Must_-priority
+  requirement** — so this decision is now the highest-value unblock. The remaining
+  blocked items are BACKOFFICE-33 (BD-13 governance), BACKOFFICE-64 (ADR 0003), and
+  M6 port-swaps (per-bank).
 - Whichever surface is chosen, the mint path MUST: enforce the caller's scope, emit a
   High-class audit event (agent `act` + PSU `sub`, PII redacted), and cap token life at
   ≤15 min, request-scoped — all composing existing primitives (P1 port + audit), never
