@@ -34,6 +34,7 @@ import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liabil
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
+import { LfiCadenceMonitor } from './lfi-reports/service.js'
 import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
 
 /**
@@ -174,6 +175,10 @@ export default {
     // BACKOFFICE-69 — record CAAP register/deregister events (High-class audit); the
     // anomaly detector above scans caap_registered for the >10/device/hour spike.
     const recordCaap = async () => new CaapRegistrationRecorder({ audit }).record(await new DemoCaapEventSource().getEvents(), crypto.randomUUID())
+    // BACKOFFICE-67 — flag any login-only Nebras LFI report overdue against its cadence
+    // (ITSM ticket + lfi_report_cadence_missed Risk signal).
+    const lfiReports = new PgComplianceReportStore(url, tenancy, lineage)
+    const lfiCadenceMonitor = new LfiCadenceMonitor({ reports: lfiReports, itsm, riskSignals })
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
@@ -181,9 +186,10 @@ export default {
         runLiability(),
         recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
         tppProfiler.profile(crypto.randomUUID()),
-        certMonitor.check(crypto.randomUUID())
+        certMonitor.check(crypto.randomUUID()),
+        lfiCadenceMonitor.check(crypto.randomUUID())
       ]).finally(async () => {
-        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), audit.close(), lineage.close()])
+        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
       })
     )
   }
