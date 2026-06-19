@@ -3461,6 +3461,191 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/service-desk-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Nebras service-desk cases for the Ops Console (BACKOFFICE-79)
+         * @description Any case raised with the Nebras service desk (incident, billing query, onboarding, general) tracked by Nebras case reference with type, priority, and the Interaction Guide SLA applied; linked to the originating break, dispute, or signal where one exists.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    case_type?: components["schemas"]["ServiceDeskCaseType"];
+                    priority?: components["schemas"]["ServiceDeskCasePriority"];
+                    status?: components["schemas"]["ServiceDeskCaseStatus"];
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated service-desk case list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ServiceDeskCase"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /** Track a Nebras service-desk case (BACKOFFICE-79) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ServiceDeskCaseCreate"];
+                };
+            };
+            responses: {
+                /** @description Service-desk case tracked; SLA clock started */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ServiceDeskCase"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/service-desk-cases/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nebras service-desk case detail (BACKOFFICE-79) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    case_id: components["parameters"]["serviceDeskCaseId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Service-desk case detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ServiceDeskCase"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/service-desk-cases/{case_id}:update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a Nebras service-desk case status / priority (BACKOFFICE-79) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    case_id: components["parameters"]["serviceDeskCaseId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        status?: components["schemas"]["ServiceDeskCaseStatus"];
+                        priority?: components["schemas"]["ServiceDeskCasePriority"];
+                        note: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Case updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ServiceDeskCase"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4064,6 +4249,59 @@ export interface components {
             /** Format: date-time */
             updated_at?: string;
         };
+        /**
+         * @description Nebras service-desk case class (BACKOFFICE-79).
+         * @enum {string}
+         */
+        ServiceDeskCaseType: "incident" | "billing_query" | "onboarding" | "general";
+        /**
+         * @description Interaction-Guide priority; drives the applied SLA.
+         * @enum {string}
+         */
+        ServiceDeskCasePriority: "P1" | "P2" | "P3" | "P4";
+        /** @enum {string} */
+        ServiceDeskCaseStatus: "open" | "in_progress" | "awaiting_nebras" | "resolved" | "closed";
+        ServiceDeskCaseCreate: {
+            /** @description Nebras service-desk case reference */
+            nebras_case_reference: string;
+            case_type: components["schemas"]["ServiceDeskCaseType"];
+            priority: components["schemas"]["ServiceDeskCasePriority"];
+            /** @description Case summary (no PSU PII) */
+            summary: string;
+            /**
+             * Format: uuid
+             * @description Originating reconciliation break
+             */
+            linked_break_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Originating dispute
+             */
+            linked_dispute_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Originating risk signal
+             */
+            linked_signal_id?: string | null;
+        };
+        ServiceDeskCase: components["schemas"]["ServiceDeskCaseCreate"] & {
+            /** Format: uuid */
+            id?: string;
+            status?: components["schemas"]["ServiceDeskCaseStatus"];
+            /**
+             * Format: date-time
+             * @description Interaction-Guide SLA due time derived from priority
+             */
+            sla_due_at?: string;
+            sla_overdue?: boolean;
+            opened_by?: string;
+            /** Format: date-time */
+            opened_at?: string;
+            /** Format: date-time */
+            resolved_at?: string | null;
+            /** Format: date-time */
+            created_at?: string;
+        };
     };
     responses: {
         /** @description Standard error envelope (per CLAUDE.md) */
@@ -4216,6 +4454,7 @@ export interface components {
         invoiceRunId: string;
         approvalId: string;
         participantId: string;
+        serviceDeskCaseId: string;
     };
     requestBodies: never;
     headers: never;

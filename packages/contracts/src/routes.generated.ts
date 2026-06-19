@@ -561,5 +561,33 @@ export const ROUTES: readonly Route[] = [
     "tag": "disputes",
     "scope": "disputes:admin",
     "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/service-desk-cases",
+    "tag": "analytics",
+    "scope": "platform:operations:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/service-desk-cases",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/service-desk-cases/{case_id}",
+    "tag": "analytics",
+    "scope": "platform:operations:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/service-desk-cases/{case_id}:update",
+    "tag": "analytics",
+    "scope": "platform:operations:write",
+    "fourEyes": false
   }
 ] as const
