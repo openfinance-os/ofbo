@@ -883,3 +883,13 @@ Ran a 4-dimension review (functional coverage, architecture/ports, data/regulato
 - **#113** — bound the portal data layer to the generated **@ofbo/contracts** types (ADR-0004): key-conformance drift guards on CareConsent/ApprovalRequest/Reconciliation{Run,Break}/TppCounterparty/InvoiceRun — a spec rename/removal now fails portal typecheck. The guard caught a real benign divergence (ApprovalRequest.execution_result is a portal-side post-approval augmentation; documented + excluded).
 
 All four PRs merged on **green CI** (Q1–Q4.5) + reviewers. Net: every gap from the review is closed or consciously tracked; the read-side stubs that made the backlog overstate completeness now have real handlers + tests; CI is enforcing on every push.
+
+## 2026-06-20 — BACKOFFICE-25 care-surface token minting (spec PR #115 + feat PR #117)
+
+**Merged** the only unbuilt *Must*-priority requirement. ADR 0001 Option 1 (user-approved): `POST /care-surface:mint-token` behind the BFF. Spec PR #115 (human-approved) added the endpoint + `CareToken` schema (path count 73→74, Idempotency-Key per convention); feat PR #117 implemented it.
+
+**Implementation:** `CareSurfaceService.mintToken` — consents:admin at both layers (assertScope + BFF middleware), resolves PSU→internal id (sub=resolved, never the raw identifier), mints via P1 `CareSurfacePort.mintCareToken` (act=authenticated caller, never the body), one High-class `care_token_minted` audit (no raw psu_identifier). Idempotency-Key required (replay returns the original token). No new table/migration; audit on the existing lineage-covered path. Tests: care-surface.spec 5 + .int.spec 1 (audit under RLS, no raw PII). CI Q1–Q4.5 green; reviewers hard-stop **PASS**, conformance **CONFORMANT**.
+
+**Recovery note:** a concurrent session reset the original feature branch's shared checkout mid-work, so the implementation commit (77945f5) landed on the wrong branch and the files vanished from the working tree. The commit was intact in the object store and was cherry-picked cleanly onto current main (parent already merged via PR #116), re-pushed, and re-reviewed before merge. **Repo hygiene: concurrent agents sharing one working directory caused a near-loss — isolate sessions (separate worktrees) or run one at a time.**
+
+**Backlog:** BACKOFFICE-25 → done. Remaining blocked (human-gated): BACKOFFICE-33 (BD-13 governance), BACKOFFICE-64 (ADR 0003 decision), M6 port-swaps (per-bank). M0–M5 now complete incl. all Must-priority items.
