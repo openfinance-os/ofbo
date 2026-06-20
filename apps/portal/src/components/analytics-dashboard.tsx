@@ -49,7 +49,7 @@ const statusTone = (s: string): string | null => STATUS_TONE[s.trim().toLowerCas
 
 function StatusBadge({ value }: { value: string }) {
   const tone = statusTone(value)
-  if (!tone) return <span className="font-mono break-all">{value}</span>
+  if (!tone) return <span className="font-mono break-words">{value}</span>
   return (
     <span data-testid={`status-${value.toLowerCase().replace(/\s+/g, '-')}`} className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
       {value.replace(/_/g, ' ')}
@@ -74,7 +74,7 @@ function ObjectTable({ rows, depth }: { rows: Record<string, unknown>[]; depth: 
           {rows.slice(0, 8).map((r, i) => (
             <tr key={i} className="border-b border-outline-variant/40 hover:bg-surface-container">
               {cols.map((c) => (
-                <td key={c} className="py-1 pr-3 align-top text-primary">
+                <td key={c} className="py-1 pr-3 align-top text-primary whitespace-nowrap">
                   {c in r ? <Value value={r[c]} depth={depth + 1} /> : <span className="text-on-surface-variant">—</span>}
                 </td>
               ))}
@@ -94,6 +94,9 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (typeof value === 'number') return <span className="font-mono">{value.toLocaleString('en-US')}</span>
   if (typeof value === 'boolean') return <span className="font-mono">{String(value)}</span>
   if (typeof value === 'string') {
+    // an ISO date/timestamp → compact, single-line (never char-wrap in a narrow cell)
+    const iso = value.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))/)
+    if (iso) return <span className="font-mono text-xs text-on-surface-variant whitespace-nowrap" title={value}>{iso[1]}{iso[2] ? ` ${iso[2]}` : ''}</span>
     // an API/route path reads as a reference, not body text (e.g. a console deeplink)
     if (/^\/[a-z][a-z0-9/_-]*$/i.test(value)) return <code className="font-mono text-xs text-on-surface-variant break-all">{value}</code>
     return <StatusBadge value={value} />

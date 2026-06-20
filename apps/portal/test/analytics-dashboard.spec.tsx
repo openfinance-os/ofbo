@@ -122,3 +122,13 @@ describe('generic renderer — KPI hierarchy + path references (P1 polish)', () 
     expect(cell).toHaveTextContent('/back-office/reconciliation/runs')
   })
 })
+
+describe('generic renderer — ISO timestamps render compact (no char-wrap)', () => {
+  it('renders an ISO datetime as a single-line date + HH:MM, full value in title', () => {
+    render(<MetricGrid data={{ slos: [{ name: 'revoke_ack', last_checked_at: '2026-06-20T11:42:07.123Z' }] }} />)
+    const cell = screen.getByTestId('metric-slos')
+    expect(cell).toHaveTextContent('2026-06-20 11:42')
+    expect(cell).not.toHaveTextContent('11:42:07.123') // seconds trimmed
+    expect(cell.querySelector('[title="2026-06-20T11:42:07.123Z"]')).toBeInTheDocument()
+  })
+})
