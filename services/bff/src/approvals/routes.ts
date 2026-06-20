@@ -1,8 +1,8 @@
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ApprovalError, ApprovalsService, toWire } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import { IdempotencyCache, type IdempotencyStore } from '../idempotency.js'
+import { IdempotencyCache, replayable, type IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * Handlers for the 5 approvals contract paths. Scopes here are dynamic in the
@@ -28,25 +28,8 @@ export function approvalRoutes(service: ApprovalsService, idempotency: Idempoten
 
   /** Binding convention: mutating endpoints require Idempotency-Key; successful
    *  outcomes replay verbatim inside the 24h window (no duplicate side effects). */
-  const withIdempotency = (routeKey: string, handler: Handler): Handler => {
-    return async (c, params) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-          400
-        )
-      }
-      const cacheKey = `${routeKey}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-      const res = await handler(c, params)
-      if (res.status >= 200 && res.status < 300) {
-        await idempotency.set(cacheKey, res.status, await res.clone().json())
-      }
-      return res
-    }
-  }
+  const withIdempotency = (routeKey: string, handler: Handler): Handler =>
+    replayable(idempotency, (_params, subject, key) => `${routeKey}|${subject}|${key}`, handler)
 
   return {
     'post /approvals': withIdempotency('post /approvals', async (c) => {
@@ -72,10 +55,9 @@ export function approvalRoutes(service: ApprovalsService, idempotency: Idempoten
     }),
 
     'get /approvals/pending': async (c) => {
-      const limitRaw = c.req.query('limit')
       const page = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(limitRaw ? { limit: Number(limitRaw) } : {})
+        ...limitParam(c.req.query('limit'))
       }
       const { rows, next_cursor } = await service.listPendingFor(c.get('principal'), trace(c), page)
       return c.json(dataEnvelope(rows.map(toWire), { next_cursor }), 200)

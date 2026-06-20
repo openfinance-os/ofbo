@@ -5,6 +5,7 @@ import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-42 — audit-trail drill-down from the Compliance and Risk Views. A signal
@@ -102,7 +103,7 @@ export function auditEventsRoutes(service: AuditEventsService): Record<string, H
     'get /audit/events': async (c) => {
       const q: AuditEventQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('acting_principal') ? { acting_principal: c.req.query('acting_principal') } : {}),
         ...(c.req.query('target_psu_identifier') ? { target_psu_identifier: c.req.query('target_psu_identifier') } : {}),
         ...(c.req.query('event_type') ? { event_type: c.req.query('event_type') } : {}),

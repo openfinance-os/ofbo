@@ -4,6 +4,7 @@ import { RiskSignalError, RiskSignalService } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-30 / -42 — GET /back-office/risk-signals (risk:read, cursor paginated) +
@@ -26,7 +27,7 @@ export function riskSignalRoutes(service: RiskSignalService, idempotency: Idempo
       try {
         const { rows, next_cursor } = await service.list(c.get('principal'), {
           ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-          ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+          ...limitParam(c.req.query('limit')),
           ...(c.req.query('signal_type') ? { signal_type: c.req.query('signal_type') } : {}),
           ...(c.req.query('severity') ? { severity: c.req.query('severity') } : {}),
           ...(c.req.query('status') ? { status: c.req.query('status') } : {})

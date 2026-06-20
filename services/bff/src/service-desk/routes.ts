@@ -3,7 +3,8 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ServiceDeskError, ServiceDeskService } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-79 — Nebras service-desk case tracking. POST track + POST :update are
@@ -24,28 +25,8 @@ function fail(c: Context, e: unknown): Response {
 }
 
 export function serviceDeskRoutes(service: ServiceDeskService, idempotency: IdempotencyStore): Record<string, Handler> {
-  const withIdempotency =
-    (routeKey: string, handler: Handler): Handler =>
-    async (c, params) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope(
-            'BACKOFFICE.MISSING_IDEMPOTENCY_KEY',
-            'The Idempotency-Key header is required on every mutating endpoint.',
-            'Send a unique Idempotency-Key; replays within 24h return the original result.',
-            DOCS_BASE
-          ),
-          400
-        )
-      }
-      const cacheKey = `${routeKey}|${params.case_id ?? ''}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-      const res = await handler(c, params)
-      if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
-      return res
-    }
+  const withIdempotency = (routeKey: string, handler: Handler): Handler =>
+    replayable(idempotency, (params, subject, key) => `${routeKey}|${params.case_id ?? ''}|${subject}|${key}`, handler)
 
   const trackHandler: Handler = async (c) => {
     let body: Record<string, unknown>
@@ -84,7 +65,7 @@ export function serviceDeskRoutes(service: ServiceDeskService, idempotency: Idem
       try {
         const { rows, next_cursor } = await service.list(c.get('principal'), {
           ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-          ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+          ...limitParam(c.req.query('limit')),
           ...(c.req.query('case_type') ? { case_type: c.req.query('case_type') } : {}),
           ...(c.req.query('priority') ? { priority: c.req.query('priority') } : {}),
           ...(c.req.query('status') ? { status: c.req.query('status') } : {})

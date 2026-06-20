@@ -5,7 +5,8 @@ import { DisputeError, DisputeService } from './service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-20 — payment investigation view + dispute create/list/get. POST is
@@ -32,28 +33,8 @@ function fail(c: Context, e: unknown): Response {
 
 export function disputeRoutes(service: DisputeService, idempotency: IdempotencyStore): Record<string, Handler> {
   /** Mutating-route wrapper: Idempotency-Key required, successful 2xx replays verbatim (24h). */
-  const withIdempotency =
-    (routeKey: string, handler: Handler): Handler =>
-    async (c, params) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope(
-            'BACKOFFICE.MISSING_IDEMPOTENCY_KEY',
-            'The Idempotency-Key header is required on every mutating endpoint.',
-            'Send a unique Idempotency-Key; replays within 24h return the original result.',
-            DOCS_BASE
-          ),
-          400
-        )
-      }
-      const cacheKey = `${routeKey}|${params.dispute_id ?? ''}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-      const res = await handler(c, params)
-      if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
-      return res
-    }
+  const withIdempotency = (routeKey: string, handler: Handler): Handler =>
+    replayable(idempotency, (params, subject, key) => `${routeKey}|${params.dispute_id ?? ''}|${subject}|${key}`, handler)
 
   const createHandler: Handler = async (c) => {
     let body: Record<string, unknown>
@@ -148,7 +129,7 @@ export function disputeRoutes(service: DisputeService, idempotency: IdempotencyS
     'get /disputes': async (c) => {
       const q: DisputeListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('state') ? { state: c.req.query('state') } : {}),
         ...(c.req.query('psu_identifier') ? { psu_identifier: c.req.query('psu_identifier') } : {})
       }

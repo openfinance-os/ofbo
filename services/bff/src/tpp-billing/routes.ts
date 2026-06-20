@@ -5,6 +5,7 @@ import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { ApprovalError, toWire as approvalToWire } from '../approvals/service.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 import { TppRegistryError, type TppRegistryService } from './service.js'
 import { InvoicingError, type InvoicingService } from './invoicing.js'
 
@@ -48,7 +49,7 @@ export function tppBillingRoutes(service: TppRegistryService, idempotency: Idemp
     'get /back-office/tpp-counterparties': async (c) => {
       const q: TppCounterpartyListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('production_status') ? { production_status: c.req.query('production_status') } : {}),
         ...(c.req.query('registration_state') ? { registration_state: c.req.query('registration_state') } : {}),
         ...(c.req.query('unbilled_traffic') ? { unbilled_traffic: c.req.query('unbilled_traffic') === 'true' } : {})
@@ -129,7 +130,7 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
     'get /back-office/billing-records': async (c) => {
       const q: BillingRecordListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('billing_period') ? { billing_period: c.req.query('billing_period') } : {})
       }
       try {
@@ -191,7 +192,7 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
     'get /back-office/invoice-runs': async (c) => {
       const q: InvoiceRunListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {})
+        ...limitParam(c.req.query('limit'))
       }
       try {
         const { rows, next_cursor } = await service.listInvoiceRuns(c.get('principal'), q)

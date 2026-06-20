@@ -6,6 +6,7 @@ import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
 import { BreakWorkflowError, type ReconciliationService } from './service.js'
 import { ApprovalError, toWire as approvalToWire } from '../approvals/service.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-01 — reconciliation run read surface. Both routes are
@@ -92,7 +93,7 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
     'get /back-office/reconciliation/runs': async (c) => {
       const q: ReconciliationRunListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('run_type') ? { run_type: c.req.query('run_type') } : {}),
         ...(c.req.query('status') ? { status: c.req.query('status') } : {})
       }
@@ -194,7 +195,7 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
     'get /back-office/reconciliation/breaks': async (c) => {
       const q: ReconciliationBreakListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('run_id') ? { run_id: c.req.query('run_id') } : {}),
         ...(c.req.query('status') ? { status: c.req.query('status') } : {}),
         ...(c.req.query('line_type') ? { line_type: c.req.query('line_type') } : {}),

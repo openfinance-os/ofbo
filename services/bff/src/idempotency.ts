@@ -6,6 +6,10 @@
  * this in-memory cache remains the no-database default for tests/local dev.
  */
 
+import type { Context } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import { errorEnvelope, DOCS_BASE } from './envelope.js'
+
 interface CachedResponse {
   status: number
   body: unknown
@@ -36,5 +40,40 @@ export class IdempotencyCache implements IdempotencyStore {
 
   set(key: string, status: number, body: unknown): void {
     this.entries.set(key, { status, body, created_at_ms: this.now() })
+  }
+}
+
+type IdempotentHandler = (c: Context, params: Record<string, string>) => Promise<Response>
+
+/** The binding 400 for a mutating request that omits the Idempotency-Key header.
+ *  Built per-call so request_id/timestamp in `meta` stay fresh on every response. */
+const missingIdempotencyKey = () =>
+  errorEnvelope(
+    'BACKOFFICE.MISSING_IDEMPOTENCY_KEY',
+    'The Idempotency-Key header is required on every mutating endpoint.',
+    'Send a unique Idempotency-Key; replays within 24h return the original result.',
+    DOCS_BASE
+  )
+
+/**
+ * Wrap a mutating handler with the binding Idempotency-Key contract: require the
+ * header (else 400), replay a cached 2xx verbatim inside the 24h window, and cache
+ * fresh 2xx outcomes. `buildKey` lets each route keep its exact dedup-key shape
+ * (route prefix + scoping params + subject + key) — the replay plumbing is shared.
+ */
+export function replayable(
+  store: IdempotencyStore,
+  buildKey: (params: Record<string, string>, subject: string, key: string) => string,
+  handler: IdempotentHandler
+): IdempotentHandler {
+  return async (c, params) => {
+    const key = c.req.header('idempotency-key')
+    if (!key) return c.json(missingIdempotencyKey(), 400)
+    const cacheKey = buildKey(params, c.get('principal').subject, key)
+    const cached = await store.get(cacheKey)
+    if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    const res = await handler(c, params)
+    if (res.status >= 200 && res.status < 300) await store.set(cacheKey, res.status, await res.clone().json())
+    return res
   }
 }
