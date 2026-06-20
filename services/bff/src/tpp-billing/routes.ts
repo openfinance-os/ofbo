@@ -4,7 +4,7 @@ import type { StoredTppCounterparty, TppCounterpartyListQuery, BillingRecordList
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied, domainError } from '../errors.js'
 import { ApprovalError, toWire as approvalToWire } from '../approvals/service.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayable, replayCached, missingIdempotencyKey, type IdempotencyStore } from '../idempotency.js'
 import { limitParam } from '../pagination.js'
 import { TppRegistryError, type TppRegistryService } from './service.js'
 import { InvoicingError, type InvoicingService } from './invoicing.js'
@@ -71,58 +71,30 @@ export function tppBillingRoutes(service: TppRegistryService, idempotency: Idemp
       }
     },
 
-    'post /back-office/tpp-counterparties:sync-directory': async (c) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-          400
-        )
-      }
-      const cacheKey = `tpp:sync-directory|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    'post /back-office/tpp-counterparties:sync-directory': replayable(idempotency, (_params, subject, key) => `tpp:sync-directory|${subject}|${key}`, async (c) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
         const result = await service.syncDirectory(c.get('principal'), traceId)
-        const res = c.json(dataEnvelope(result), 202)
-        await idempotency.set(cacheKey, 202, await res.clone().json())
-        return res
+        return c.json(dataEnvelope(result), 202)
       } catch (e) {
         return fail(c, e)
       }
-    },
+    }),
 
-    'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system': async (c, params) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-          400
-        )
-      }
-      const cacheKey = `tpp:register-fs|${params.organisation_id}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    'post /back-office/tpp-counterparties/{organisation_id}:register-financial-system': replayable(idempotency, (params, subject, key) => `tpp:register-fs|${params.organisation_id}|${subject}|${key}`, async (c, params) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
         const row = await service.registerFinancialSystem(c.get('principal'), params.organisation_id!, traceId)
-        const res = c.json(dataEnvelope(toWire(row)), 202)
-        await idempotency.set(cacheKey, 202, await res.clone().json())
-        return res
+        return c.json(dataEnvelope(toWire(row)), 202)
       } catch (e) {
         return fail(c, e)
       }
-    }
+    })
   }
 }
 
 /** BACKOFFICE-73 — monthly TPP invoicing routes (ingest → reconcile → four-eyes invoice). */
 export function tppInvoicingRoutes(service: InvoicingService, idempotency: IdempotencyStore): Record<string, Handler> {
-  const requireKey = (c: Context): string | null => c.req.header('idempotency-key') ?? null
-  const missingKey = (c: Context): Response =>
-    c.json(errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE), 400)
-
   return {
     'get /back-office/billing-records': async (c) => {
       const q: BillingRecordListQuery = {
@@ -138,12 +110,7 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
       }
     },
 
-    'post /back-office/billing-records': async (c) => {
-      const key = requireKey(c)
-      if (!key) return missingKey(c)
-      const cacheKey = `billing:ingest|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    'post /back-office/billing-records': replayable(idempotency, (_params, subject, key) => `billing:ingest|${subject}|${key}`, async (c) => {
       let billing_period: string | undefined
       let sourceNote: string | undefined
       let bytes: Uint8Array
@@ -161,30 +128,21 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
         const rec = await service.ingest(c.get('principal'), { billing_period, ...(sourceNote ? { source_note: sourceNote } : {}), fileBytes: bytes }, traceId)
-        const res = c.json(dataEnvelope(rec), 201)
-        await idempotency.set(cacheKey, 201, await res.clone().json())
-        return res
+        return c.json(dataEnvelope(rec), 201)
       } catch (e) {
         return fail(c, e)
       }
-    },
+    }),
 
-    'post /back-office/billing-records/{record_set_id}:reconcile': async (c, params) => {
-      const key = requireKey(c)
-      if (!key) return missingKey(c)
-      const cacheKey = `billing:reconcile|${params.record_set_id}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
+    'post /back-office/billing-records/{record_set_id}:reconcile': replayable(idempotency, (params, subject, key) => `billing:reconcile|${params.record_set_id}|${subject}|${key}`, async (c, params) => {
       const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
       try {
         const rec = await service.reconcile(c.get('principal'), params.record_set_id!, traceId)
-        const res = c.json(dataEnvelope(rec), 202)
-        await idempotency.set(cacheKey, 202, await res.clone().json())
-        return res
+        return c.json(dataEnvelope(rec), 202)
       } catch (e) {
         return fail(c, e)
       }
-    },
+    }),
 
     'get /back-office/invoice-runs': async (c) => {
       const q: InvoiceRunListQuery = {
@@ -200,8 +158,8 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
     },
 
     'post /back-office/invoice-runs': async (c) => {
-      const key = requireKey(c)
-      if (!key) return missingKey(c)
+      const key = c.req.header('idempotency-key')
+      if (!key) return c.json(missingIdempotencyKey(), 400)
       let body: { billing_period?: string; record_set_id?: string }
       try {
         body = await c.req.json()
@@ -209,17 +167,15 @@ export function tppInvoicingRoutes(service: InvoicingService, idempotency: Idemp
         return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { billing_period, record_set_id }.', DOCS_BASE), 400)
       }
       const cacheKey = `billing:invoice-run|${body.record_set_id ?? ''}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
-      try {
-        const approval = await service.createInvoiceRun(c.get('principal'), { billing_period: body.billing_period ?? '', record_set_id: body.record_set_id ?? '' }, traceId)
-        const res = c.json(dataEnvelope(approvalToWire(approval)), 202)
-        await idempotency.set(cacheKey, 202, await res.clone().json())
-        return res
-      } catch (e) {
-        return fail(c, e)
-      }
+      return replayCached(c, idempotency, cacheKey, async () => {
+        const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+        try {
+          const approval = await service.createInvoiceRun(c.get('principal'), { billing_period: body.billing_period ?? '', record_set_id: body.record_set_id ?? '' }, traceId)
+          return c.json(dataEnvelope(approvalToWire(approval)), 202)
+        } catch (e) {
+          return fail(c, e)
+        }
+      })
     },
 
     'get /back-office/invoice-runs/{invoice_run_id}': async (c, params) => {

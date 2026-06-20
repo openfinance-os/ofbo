@@ -6,7 +6,7 @@ import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayCached, missingIdempotencyKey, type IdempotencyStore } from '../idempotency.js'
 
 /**
  * BACKOFFICE-41 — analytics exports (PDF / XLSX / CSV). Exports an aggregate
@@ -157,12 +157,7 @@ export function analyticsExportRoutes(service: AnalyticsExportService, idempoten
   return {
     'post /back-office/analytics/exports': async (c) => {
       const key = c.req.header('idempotency-key')
-      if (!key) {
-        return c.json(
-          errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-          400
-        )
-      }
+      if (!key) return c.json(missingIdempotencyKey(), 400)
       let body: { view?: string; format?: string }
       try {
         body = await c.req.json()
@@ -170,20 +165,18 @@ export function analyticsExportRoutes(service: AnalyticsExportService, idempoten
         return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { view, format }.', DOCS_BASE), 400)
       }
       const cacheKey = `analytics:export|${body.view ?? ''}|${body.format ?? ''}|${c.get('principal').subject}|${key}`
-      const cached = await idempotency.get(cacheKey)
-      if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
-      try {
-        const receipt = await service.export(c.get('principal'), body, traceId)
-        const res = c.json(dataEnvelope(receipt), 202)
-        await idempotency.set(cacheKey, 202, await res.clone().json())
-        return res
-      } catch (e) {
-        const denied = scopeDenied(c, e)
-        if (denied) return denied
-        if (e instanceof ExportError) return c.json(errorEnvelope(e.code, e.message, 'See the analytics exports contract (BACKOFFICE-41).', DOCS_BASE), e.status as ContentfulStatusCode)
-        throw e
-      }
+      return replayCached(c, idempotency, cacheKey, async () => {
+        const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+        try {
+          const receipt = await service.export(c.get('principal'), body, traceId)
+          return c.json(dataEnvelope(receipt), 202)
+        } catch (e) {
+          const denied = scopeDenied(c, e)
+          if (denied) return denied
+          if (e instanceof ExportError) return c.json(errorEnvelope(e.code, e.message, 'See the analytics exports contract (BACKOFFICE-41).', DOCS_BASE), e.status as ContentfulStatusCode)
+          throw e
+        }
+      })
     }
   }
 }
