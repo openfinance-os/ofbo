@@ -1,6 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "worktree": {
+    "bgIsolation": "worktree"
+  },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/worktree-policy.sh",
+            "timeout": 10,
+            "statusMessage": "Worktree-isolation policy"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
