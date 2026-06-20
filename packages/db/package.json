@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/seed.ts",
     "lineage:gate": "tsx src/lineage-gate.ts",
-    "reset": "tsx src/reset.ts"
+    "reset": "tsx src/reset.ts",
+    "seed:demo": "tsx src/seed-demo.ts"
   },
   "dependencies": {
     "pg": "^8.13.1",
