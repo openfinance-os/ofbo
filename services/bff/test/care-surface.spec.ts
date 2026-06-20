@@ -29,6 +29,9 @@ const careSurface = {
   async mintCareToken({ agent_id, psu_id }: { agent_id: string; psu_id: string }) {
     minted += 1
     return { token: `care-token-${minted}`, act: agent_id, sub: psu_id, expires_at: '2026-06-20T12:15:00.000Z' }
+  },
+  async resolveCallRecording() {
+    return null // unused by the -25 mint-token tests; present to satisfy the widened port dep
   }
 }
 
