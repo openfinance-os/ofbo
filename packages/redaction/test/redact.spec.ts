@@ -65,4 +65,37 @@ describe('BACKOFFICE-51 — shared PII redaction library', () => {
     expect(out).toContain('[REDACTED:emirates_id]')
     expect(out).toContain('[REDACTED:iban]')
   })
+
+  it('masks underscore-separated Emirates-ID shapes (adapter-specific separators)', () => {
+    const id = EMIRATES_ID.replace(/-/g, '_')
+    expect(redactText(`id ${id} end`)).toBe('id [REDACTED:emirates_id] end')
+  })
+
+  it('masks email addresses in free text (a value not under a known PII key)', () => {
+    const email = ['zayn', 'example.invalid'].join('@')
+    expect(redactText(`contact ${email} please`)).toBe('contact [REDACTED:email] please')
+    // a free-text note carrying an email is scrubbed in place, not left to leak
+    expect(redactPii({ note: `reach ${email}` }).note).toBe('reach [REDACTED:email]')
+    // an email-only value collapses to the marker
+    expect(redactPii(email)).toBe('[REDACTED:email]')
+  })
+
+  it('redacts common PII key-name variants entirely', () => {
+    const out = redactPii({
+      phone_number: 'x',
+      mobile: 'x',
+      email_address: 'x',
+      contact_email: 'x',
+      middle_name: 'x',
+      date_of_birth: '1990-01-01',
+      dob: '1990-01-01',
+      national_id: 'x',
+      passport_number: 'x',
+      reference: 'survives'
+    })
+    for (const k of ['phone_number', 'mobile', 'email_address', 'contact_email', 'middle_name', 'date_of_birth', 'dob', 'national_id', 'passport_number']) {
+      expect(out[k], k).toBe('[REDACTED:key]')
+    }
+    expect(out.reference).toBe('survives')
+  })
 })
