@@ -925,3 +925,13 @@ Each token-only, no contract/spec change, browser-verified, hard-stop-reviewed, 
 Net: the data-dense screens went from broken-looking (placeholders, flat text, empty states) to
 on-Stitch-intent — high-density tables, status badges, prominent KPIs, FRESH indicators, styled
 path refs. Tests: analytics-dashboard.spec 4→10; full unit 641→654. Stitch ref: project 8050269076066130289.
+
+## 2026-06-20 — BACKOFFICE-64 call/transcript linkage (spec PR #120 + feat PR #122)
+
+**Merged.** ADR 0003 Option 1 (user-approved): a dedicated, audited, on-demand `GET /disputes/{dispute_id}/call-recording`. Spec PR #120 (human-approved) added the endpoint + `CallRecording` schema (path count 74→75); feat PR #122 implemented it.
+
+**Implementation:** new **P1 `CareSurfacePort.resolveCallRecording`** (sim adapter returns a short-lived locator into the simulated contact-centre system; enterprise adapter = M6). `CallRecordingService` — disputes:admin both layers, reads the dispute's `originating_call_id`, resolves via the P1 port → `CallRecording { recording_ref, recording_url?, expires_at }`, one High-class `call_recording_accessed` audit per access (`target_dispute_id`). **Link-never-copy** (recording content stays in the bank's system); 404 for unknown dispute / non-voice (null call id) / unavailable; read-only GET (no Idempotency-Key). No new table/migration; audit on the existing lineage-covered path. CI Q1–Q4.5 green; reviewers hard-stop **PASS**, conformance **CONFORMANT**.
+
+**Process note:** authored in an **isolated git worktree** (`.claude/worktrees/backoffice-64`) after BACKOFFICE-25 was nearly lost to a concurrent session resetting the shared checkout. The worktree fully isolated this story — zero clobbering. Two test gates earned their keep: typecheck caught the -25 stub after widening the `careSurface` port dep; the int test caught that `target_dispute_id` is a UUID column (fixture fixed to a real UUID).
+
+**Backlog:** BACKOFFICE-64 → done. Remaining: BACKOFFICE-33 (BD-13 governance sign-off) and M6 enterprise port-swaps (per-bank) — both genuinely human/bank-gated, not code.
