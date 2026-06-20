@@ -55,6 +55,12 @@ import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit
 
 interface WorkerEnv {
   DATABASE_URL?: string
+  /** Cloudflare Hyperdrive binding — pools warm connections to Postgres at the edge so the
+   *  Worker stops paying the cold connect + TLS handshake to Supabase on every request (the
+   *  dominant cost of the ~12s/screen hosted latency). Preferred over DATABASE_URL when bound.
+   *  Activate: `wrangler hyperdrive create ofbo-db --connection-string="$DATABASE_URL"` then
+   *  paste the id into wrangler.toml's [[hyperdrive]] binding. */
+  HYPERDRIVE?: { connectionString: string }
   BANK_ID?: string
   DEPLOY_PROFILE?: string
 }
@@ -69,7 +75,7 @@ export default {
       bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111',
       channel: 'internal_retail'
     }
-    const url = env.DATABASE_URL
+    const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     const lineage = url ? new PgLineageEmitter(url, tenancy) : undefined
     const audit = url ? new PgAuditEmitter(url, tenancy, lineage) : undefined
     const approvalStore = url ? new PgApprovalStore(url, tenancy, lineage) : undefined
@@ -142,7 +148,7 @@ export default {
    * a retried/overlapping trigger is idempotent (the store ON CONFLICT no-ops).
    */
   async scheduled(_event: unknown, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
-    const url = env.DATABASE_URL
+    const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     if (!url) return
     const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
     const lineage = new PgLineageEmitter(url, tenancy)
