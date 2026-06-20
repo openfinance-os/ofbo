@@ -14,3 +14,17 @@ NEBRAS_SIM_URL = "https://nebras-sim-production.up.railway.app"
 
 [observability]
 enabled = true
+
+# ── Hyperdrive (fixes the ~12s/screen hosted latency) ────────────────────────────────
+# The Worker runs at the edge but Supabase is in ap-northeast-2; a fresh Postgres connect +
+# TLS handshake per request dominates each response. Hyperdrive pools warm connections near
+# the origin so the Worker reuses them. worker.ts already prefers env.HYPERDRIVE.connectionString
+# over DATABASE_URL — so this is dormant until activated (deploys keep working meanwhile).
+#
+# Activate (one time, needs Cloudflare auth):
+#   cd services/bff
+#   pnpm exec wrangler hyperdrive create ofbo-db --connection-string="$DATABASE_URL"
+#   # paste the returned id below + uncomment, then redeploy:
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<paste-the-hyperdrive-config-id-here>"
