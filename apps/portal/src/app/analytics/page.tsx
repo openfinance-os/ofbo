@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { AnalyticsDashboard } from '../../components/analytics-dashboard'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getExecutiveDashboard, getFinanceView, type AnalyticsView } from '../../lib/analytics'
 
@@ -15,8 +16,8 @@ import { getExecutiveDashboard, getFinanceView, type AnalyticsView } from '../..
  */
 export const dynamic = 'force-dynamic'
 
-const EXEC_SCOPE = 'platform:analytics:read'
-const FINANCE_SCOPE = 'reconciliation:read'
+const EXEC_SCOPE = SCOPES.analyticsRead
+const FINANCE_SCOPE = SCOPES.reconciliationRead
 
 export default async function AnalyticsPage() {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value

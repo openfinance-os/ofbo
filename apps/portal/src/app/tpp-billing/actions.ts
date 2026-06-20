@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { createInvoiceRun, registerFinancialSystem, syncDirectory } from '../../lib/tpp-billing'
 
@@ -28,7 +29,7 @@ async function principalOrBounce(required: string) {
 }
 
 export async function syncDirectoryAction() {
-  const token = await principalOrBounce('platform:operations:write')
+  const token = await principalOrBounce(SCOPES.operationsWrite)
   let status = 'synced'
   try {
     await syncDirectory(token, crypto.randomUUID())
@@ -39,7 +40,7 @@ export async function syncDirectoryAction() {
 }
 
 export async function registerFinancialSystemAction(formData: FormData) {
-  const token = await principalOrBounce('billing:write')
+  const token = await principalOrBounce(SCOPES.billingWrite)
   const organisationId = String(formData.get('organisation_id') ?? '')
   let status = 'registered'
   try {
@@ -51,7 +52,7 @@ export async function registerFinancialSystemAction(formData: FormData) {
 }
 
 export async function createInvoiceRunAction(formData: FormData) {
-  const token = await principalOrBounce('billing:write')
+  const token = await principalOrBounce(SCOPES.billingWrite)
   const billingPeriod = String(formData.get('billing_period') ?? '')
   const recordSetId = String(formData.get('record_set_id') ?? '')
   let status = 'invoice_submitted'

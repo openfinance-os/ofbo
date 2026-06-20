@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { claimBreak, resolveBreak, RESOLVE_OUTCOMES, type ResolveOutcome } from '../../lib/reconciliation'
 
@@ -13,7 +14,7 @@ import { claimBreak, resolveBreak, RESOLVE_OUTCOMES, type ResolveOutcome } from 
  * depth — the BFF re-enforces). Mutating calls carry a fresh Idempotency-Key.
  */
 
-const WRITE_SCOPE = 'finance:reconciliation:write'
+const WRITE_SCOPE = SCOPES.reconciliationWrite
 
 async function tokenOrBounce() {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { CareConsole } from '../../components/care-console'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getPsuAuditTrail, searchConsents, CareApiError, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../../lib/care'
 import { createDisputeAction, revokeConsentAction } from './actions'
@@ -35,7 +36,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('consents:admin')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.consentsAdmin)) redirect('/dashboard')
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -50,7 +51,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   if (identifier.trim()) {
     try {
       result = await searchConsents(token, identifierType, identifier.trim())
-      const canReadAudit = principal.superadmin || principal.scopes.includes('audit:read')
+      const canReadAudit = principal.superadmin || principal.scopes.includes(SCOPES.auditRead)
       if (canReadAudit) {
         try {
           timeline = await getPsuAuditTrail(token, result.psu.bank_customer_id)

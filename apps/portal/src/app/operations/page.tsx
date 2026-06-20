@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { OperationsConsole } from '../../components/operations-console'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getOperationsConsole } from '../../lib/operations'
 import type { AnalyticsView } from '../../lib/analytics'
@@ -25,7 +26,7 @@ export default async function OperationsPage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('platform:operations:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.operationsRead)) redirect('/dashboard')
 
   let view: AnalyticsView | null = null
   let error: string | null = null

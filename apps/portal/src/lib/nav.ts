@@ -6,6 +6,8 @@
  * Compliance / Risk / Operations). Icons are Material Symbols (per the Stitch design).
  */
 
+import { SCOPES } from './scopes'
+
 export interface NavModule {
   key: string
   label: string
@@ -21,15 +23,15 @@ export const NAV_MODULES: NavModule[] = [
   // Four-eyes approvals are cross-cutting (any persona may hold an approver scope); the
   // queue self-filters by approver_required_scope, so the entry is always visible (UI-05).
   { key: 'approvals', label: 'Approvals', href: '/approvals', icon: 'how_to_reg', scope: null },
-  { key: 'customer-care', label: 'Customer Care', href: '/care', icon: 'support_agent', scope: 'consents:admin' },
-  { key: 'finance', label: 'Finance', href: '/reconciliation', icon: 'account_balance', scope: 'reconciliation:read' },
+  { key: 'customer-care', label: 'Customer Care', href: '/care', icon: 'support_agent', scope: SCOPES.consentsAdmin },
+  { key: 'finance', label: 'Finance', href: '/reconciliation', icon: 'account_balance', scope: SCOPES.reconciliationRead },
   // Analytics & Insights binds the Executive Dashboard (platform:analytics:read) + the
   // Finance View (reconciliation:read); visible to either audience (UI-06, any-of).
-  { key: 'analytics', label: 'Analytics', href: '/analytics', icon: 'insights', scope: ['platform:analytics:read', 'reconciliation:read'] },
-  { key: 'billing', label: 'TPP Billing', href: '/tpp-billing', icon: 'receipt_long', scope: 'billing:read' },
-  { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: 'compliance:reports:read' },
-  { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: 'risk:read' },
-  { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: 'platform:operations:read' }
+  { key: 'analytics', label: 'Analytics', href: '/analytics', icon: 'insights', scope: [SCOPES.analyticsRead, SCOPES.reconciliationRead] },
+  { key: 'billing', label: 'TPP Billing', href: '/tpp-billing', icon: 'receipt_long', scope: SCOPES.billingRead },
+  { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: SCOPES.complianceRead },
+  { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: SCOPES.riskRead },
+  { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: SCOPES.operationsRead }
 ]
 
 /**

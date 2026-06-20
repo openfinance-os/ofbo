@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { TppBilling } from '../../components/tpp-billing'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { listCounterparties, listInvoiceRuns, TppBillingApiError, type InvoiceRun, type TppCounterparty } from '../../lib/tpp-billing'
 import { createInvoiceRunAction, registerFinancialSystemAction, syncDirectoryAction } from './actions'
@@ -37,13 +38,13 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('billing:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect('/dashboard')
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
-  const canBilling = principal.superadmin || principal.scopes.includes('billing:write')
-  const canOps = principal.superadmin || principal.scopes.includes('platform:operations:write')
+  const canBilling = principal.superadmin || principal.scopes.includes(SCOPES.billingWrite)
+  const canOps = principal.superadmin || principal.scopes.includes(SCOPES.operationsWrite)
 
   let counterparties: TppCounterparty[] = []
   let invoiceRuns: InvoiceRun[] = []
