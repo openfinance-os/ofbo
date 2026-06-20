@@ -163,6 +163,16 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
       )
     }
 
+    // The seed writes audit_high_sensitivity rows directly (above); emit their BCBS 239
+    // lineage so a freshly-seeded DB is Q4.5-green standalone (normally the running BFF /
+    // integration suite emits this via PgAuditEmitter; on a bare seed it would be missing).
+    await pool.query(
+      `INSERT INTO lineage_events (bank_id, channel, table_name, columns, source, trace_id)
+       SELECT $1, 'internal_retail', 'audit_high_sensitivity', $2::text[], 'seed-audit', 'seed-audit-high-sensitivity'
+        WHERE NOT EXISTS (SELECT 1 FROM lineage_events WHERE table_name = 'audit_high_sensitivity' AND trace_id = 'seed-audit-high-sensitivity')`,
+      [DEMO_BANK_ID, ['bank_id', 'channel', 'event_type', 'acting_principal', 'request_trace_id']]
+    )
+
     await pool.query(`REFRESH MATERIALIZED VIEW consent_admin_event`)
   } finally {
     await pool.end()

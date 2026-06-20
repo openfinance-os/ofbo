@@ -17,7 +17,8 @@
     "db:seed": "pnpm --filter @ofbo/db seed",
     "db:reset": "pnpm --filter @ofbo/db reset",
     "test:coverage": "vitest run --project unit --coverage",
-    "test:coverage:full": "vitest run --project unit --project integration --coverage --coverage.include='services/bff/src/**' --coverage.include='packages/db/src/**' --coverage.include='packages/contracts/src/**' --coverage.include='packages/synthetic-data/src/**' --coverage.include='packages/redaction/src/**' --coverage.include='packages/release-evidence/src/**' --coverage.thresholds.lines=0 --coverage.thresholds.statements=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0"
+    "test:coverage:full": "vitest run --project unit --project integration --coverage --coverage.include='services/bff/src/**' --coverage.include='packages/db/src/**' --coverage.include='packages/contracts/src/**' --coverage.include='packages/synthetic-data/src/**' --coverage.include='packages/redaction/src/**' --coverage.include='packages/release-evidence/src/**' --coverage.thresholds.lines=0 --coverage.thresholds.statements=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0",
+    "db:seed:demo": "pnpm --filter @ofbo/db seed:demo"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
