@@ -44,6 +44,7 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
 }
 
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
+// eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted
 export function redactingLog(write: (line: string) => void = (l) => console.log(l)) {
   return (message: string, fields: Record<string, string | number | boolean> = {}): void => {
     // key-based masking first (names/emails/phones), then shape-based over the whole line
