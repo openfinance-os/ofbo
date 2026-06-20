@@ -1,6 +1,6 @@
 # ADR 0003 — Call/transcript linkage on dispute cases (BACKOFFICE-64)
 
-- Status: **Proposed** — awaiting human decision (new P1 port primitive + contract surface)
+- Status: **Accepted** — Option 1 chosen by the user (2026-06-20)
 - Date: 2026-06-20
 - Story: BACKOFFICE-64 — Call/transcript linkage on dispute cases (Priority: Should)
 - Related: ADR 0001 (care-surface token minting — the P1 port that also fronts the
@@ -110,9 +110,14 @@ the existing `disputes:admin` RBAC, and honours the ports model. It requires (1)
 
 ## Decision
 
-_Pending._ Once chosen: if Option 1, open the spec-change PR (human-approved), then
-implement BACKOFFICE-64 to it; if Option 2, record the surface decision here and adjust
-the spec-change accordingly.
+**Option 1 (2026-06-20).** A dedicated, audited, on-demand endpoint behind the BFF:
+`GET /disputes/{dispute_id}/call-recording` (scope `disputes:admin`) → `CallRecording
+{ recording_ref, recording_url?, expires_at }`, backed by a new P1
+`CareSurfacePort.resolveCallRecording`. Recording content stays in the bank's system
+(link, never copy); a short-lived locator is minted per access; one High-class
+`call_recording_accessed` audit per view; `404` for non-voice / no linkage. The
+spec-change adding this endpoint is human-approved before implementation; BACKOFFICE-64
+then implements the port method + handler to it.
 
 ## Consequences
 

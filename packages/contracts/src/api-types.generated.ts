@@ -1057,6 +1057,53 @@ export interface paths {
         };
         trace?: never;
     };
+    "/disputes/{dispute_id}/call-recording": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve the originating call recording for a dispute (BACKOFFICE-64)
+         * @description Resolves the dispute's originating_call_id to a short-lived link to the contact-centre recording via the P1 CareSurfacePort (the bank's existing integration). The Back Office links, never copies — recording content stays in the bank's system. Every access writes a High-class call_recording_accessed audit. Returns 404 when the dispute has no call linkage (non-voice channels) or the recording is unavailable. Same RBAC posture as the dispute (disputes:admin).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    dispute_id: components["parameters"]["disputeId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A short-lived link to the originating call recording. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["CallRecording"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disputes/{dispute_id}:initiate-refund": {
         parameters: {
             query?: never;
@@ -3912,6 +3959,15 @@ export interface components {
             dispute_reason_code?: string | null;
             /** @description Cross-scheme reference (BACKOFFICE-76) — Aani case id where the same dispute exists in the Aani instant-payment scheme */
             aani_case_id?: string | null;
+        };
+        /** @description A short-lived link to the contact-centre recording that originated a dispute (BACKOFFICE-64). The Back Office links, never copies — recording_url is a time-boxed locator in the bank's system; cap expires_at short. */
+        CallRecording: {
+            /** @description Opaque recording reference in the bank's contact-centre system. */
+            recording_ref: string;
+            /** @description Short-lived locator URL (null when only a reference is returned). */
+            recording_url?: string | null;
+            /** Format: date-time */
+            expires_at: string;
         };
         DisputeCase: components["schemas"]["DisputeCreate"] & {
             /** Format: uuid */

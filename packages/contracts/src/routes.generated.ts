@@ -185,6 +185,13 @@ export const ROUTES: readonly Route[] = [
     "fourEyes": false
   },
   {
+    "method": "get",
+    "path": "/disputes/{dispute_id}/call-recording",
+    "tag": "disputes",
+    "scope": "disputes:admin",
+    "fourEyes": false
+  },
+  {
     "method": "post",
     "path": "/disputes/{dispute_id}:initiate-refund",
     "tag": "disputes",
