@@ -4,7 +4,8 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ComplianceReportCreateInput, StoredComplianceReport } from '@ofbo/db'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import type { IdempotencyStore } from '../idempotency.js'
@@ -195,7 +196,8 @@ export function inquiryRoutes(service: InquiryBundleService, idempotency: Idempo
       const report = await service.generate(c.get('principal'), body, traceId)
       return c.json(dataEnvelope(report), 202)
     } catch (e) {
-      if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+      const denied = scopeDenied(c, e)
+      if (denied) return denied
       if (e instanceof InquiryError) {
         return c.json(errorEnvelope(e.code, e.message, 'See the CBUAE inquiry bundle contract (BACKOFFICE-23).', DOCS_BASE), e.status as ContentfulStatusCode)
       }

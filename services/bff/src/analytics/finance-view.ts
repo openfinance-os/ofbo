@@ -3,7 +3,8 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { FeeAccrual } from '@ofbo/db'
 import type { MarginSummary } from '../reconciliation/margin.js'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
 
@@ -101,7 +102,8 @@ export function financeViewRoutes(service: FinanceViewService): Record<string, H
         const { data, freshness } = await service.view(c.get('principal'))
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
-        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+        const denied = scopeDenied(c, e)
+        if (denied) return denied
         if (e instanceof FinanceViewError) {
           return c.json(errorEnvelope(e.code, e.message, 'The Finance View is month-to-date; no parameters are required.', DOCS_BASE), e.status as ContentfulStatusCode)
         }

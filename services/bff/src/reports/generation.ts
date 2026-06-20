@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ComplianceReportCreateInput, StoredComplianceReport, ComplianceReportListQuery, ComplianceReportPage } from '@ofbo/db'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { ApprovalsService, ApprovalError } from '../approvals/service.js'
 import type { GatedOperation } from '../approvals/service.js'
@@ -295,9 +295,10 @@ export class InMemoryReportStore implements ReportStore {
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof ReportError) return c.json(errorEnvelope(e.code, e.message, 'See the report-generation contract (BACKOFFICE-35).', DOCS_BASE), e.status as ContentfulStatusCode)
-  if (e instanceof ApprovalError) return c.json(errorEnvelope(e.code, e.message, 'CBUAE-bound report approval is four-eyes (a different programme:read principal approves).', DOCS_BASE), e.status as ContentfulStatusCode)
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof ReportError) return domainError(c, e, 'See the report-generation contract (BACKOFFICE-35).')
+  if (e instanceof ApprovalError) return domainError(c, e, 'CBUAE-bound report approval is four-eyes (a different programme:read principal approves).')
   throw e
 }
 

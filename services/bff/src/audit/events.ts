@@ -1,10 +1,10 @@
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { StoredAuditEvent, AuditEventQuery } from '@ofbo/db'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
-import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
+import { dataEnvelope } from '../envelope.js'
 import { limitParam } from '../pagination.js'
 
 /**
@@ -93,8 +93,9 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 const trace = (c: Context) => c.req.header('x-fapi-interaction-id') ?? 'unknown'
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof AuditEventError) return c.json(errorEnvelope(e.code, e.message, 'List events at GET /audit/events.', DOCS_BASE), e.status as ContentfulStatusCode)
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof AuditEventError) return domainError(c, e, 'List events at GET /audit/events.')
   throw e
 }
 

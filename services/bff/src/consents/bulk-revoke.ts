@@ -3,7 +3,8 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { NebrasEgressPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
@@ -206,7 +207,8 @@ export function consentBulkRevokeRoutes(service: ConsentBulkRevokeService, idemp
       await idempotency.set(cacheKey, 202, await res.clone().json())
       return res
     } catch (e) {
-      if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+      const denied = scopeDenied(c, e)
+      if (denied) return denied
       if (e instanceof BulkRevokeError) {
         return c.json(errorEnvelope(e.code, e.message, 'See the emergency bulk revocation contract (BACKOFFICE-18); fraud uses :revoke-fraud.', DOCS_BASE), e.status as ContentfulStatusCode)
       }

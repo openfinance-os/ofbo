@@ -2,7 +2,7 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { StoredTppCounterparty, TppCounterpartyListQuery, BillingRecordListQuery, InvoiceRunListQuery } from '@ofbo/db'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import { ApprovalError, toWire as approvalToWire } from '../approvals/service.js'
 import type { IdempotencyStore } from '../idempotency.js'
 import { limitParam } from '../pagination.js'
@@ -34,13 +34,10 @@ export function toWire(r: StoredTppCounterparty) {
 }
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof TppRegistryError || e instanceof InvoicingError) {
-    return c.json(errorEnvelope(e.code, e.message, 'See the TPP billing contract (BACKOFFICE-71/-72/-73).', DOCS_BASE), e.status as ContentfulStatusCode)
-  }
-  if (e instanceof ApprovalError) {
-    return c.json(errorEnvelope(e.code, e.message, 'An invoice run is four-eyes-gated; a second authorised principal approves before P9 dispatch.', DOCS_BASE), e.status as ContentfulStatusCode)
-  }
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof TppRegistryError || e instanceof InvoicingError) return domainError(c, e, 'See the TPP billing contract (BACKOFFICE-71/-72/-73).')
+  if (e instanceof ApprovalError) return domainError(c, e, 'An invoice run is four-eyes-gated; a second authorised principal approves before P9 dispatch.')
   throw e
 }
 

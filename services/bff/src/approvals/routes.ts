@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import { ApprovalError, ApprovalsService, toWire } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
+import { domainError } from '../errors.js'
 import { IdempotencyCache, replayable, type IdempotencyStore } from '../idempotency.js'
 import { limitParam } from '../pagination.js'
 
@@ -14,12 +15,7 @@ import { limitParam } from '../pagination.js'
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ApprovalError) {
-    return c.json(
-      errorEnvelope(e.code, e.message, 'See the approvals flow in the contract — four-eyes operations execute only after a second authorised principal approves.', DOCS_BASE),
-      e.status
-    )
-  }
+  if (e instanceof ApprovalError) return domainError(c, e, 'See the approvals flow in the contract — four-eyes operations execute only after a second authorised principal approves.')
   throw e
 }
 

@@ -1,10 +1,9 @@
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { DisputeListQuery } from '@ofbo/db'
 import { DisputeError, DisputeService } from './service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import { replayable, type IdempotencyStore } from '../idempotency.js'
 import { limitParam } from '../pagination.js'
 
@@ -18,16 +17,10 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 const trace = (c: Context) => c.req.header('x-fapi-interaction-id') ?? 'unknown'
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof DisputeError) {
-    return c.json(errorEnvelope(e.code, e.message, 'See the disputes contract (BACKOFFICE-20).', DOCS_BASE), e.status as ContentfulStatusCode)
-  }
-  if (e instanceof ApprovalError) {
-    return c.json(
-      errorEnvelope(e.code, e.message, 'A refund is four-eyes-gated; a second authorised principal approves before it executes.', DOCS_BASE),
-      e.status as ContentfulStatusCode
-    )
-  }
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof DisputeError) return domainError(c, e, 'See the disputes contract (BACKOFFICE-20).')
+  if (e instanceof ApprovalError) return domainError(c, e, 'A refund is four-eyes-gated; a second authorised principal approves before it executes.')
   throw e
 }
 
