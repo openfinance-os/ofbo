@@ -91,14 +91,22 @@ describe('demo BFF (Cloudflare Worker)', () => {
 
       const pool = new pg.Pool({ connectionString: DATABASE_URL })
       try {
+        // Poll to a wall-clock deadline with capped backoff + jitter — more robust on a
+        // slow/cold CI runner than a fixed attempt-count × fixed 1s sleep (and it stops
+        // promptly once the row lands rather than always padding to a worst case).
+        const deadline = Date.now() + 45_000
         let rows: Array<{ event_type: string }> = []
-        for (let attempt = 0; attempt < 20 && rows.length === 0; attempt++) {
-          if (attempt > 0) await new Promise((r) => setTimeout(r, 1000))
+        let delay = 250
+        while (rows.length === 0 && Date.now() < deadline) {
           const result = await pool.query(
             `SELECT event_type FROM audit_high_sensitivity WHERE request_trace_id = $1`,
             [traceId]
           )
           rows = result.rows
+          if (rows.length === 0) {
+            await new Promise((r) => setTimeout(r, delay + Math.floor(Math.random() * 100)))
+            delay = Math.min(delay * 2, 2000)
+          }
         }
         expect(rows.length).toBeGreaterThan(0)
       } finally {
