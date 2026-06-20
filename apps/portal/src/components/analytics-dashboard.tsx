@@ -93,7 +93,11 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (value === null || value === undefined) return <span className="text-on-surface-variant">—</span>
   if (typeof value === 'number') return <span className="font-mono">{value.toLocaleString('en-US')}</span>
   if (typeof value === 'boolean') return <span className="font-mono">{String(value)}</span>
-  if (typeof value === 'string') return <StatusBadge value={value} />
+  if (typeof value === 'string') {
+    // an API/route path reads as a reference, not body text (e.g. a console deeplink)
+    if (/^\/[a-z][a-z0-9/_-]*$/i.test(value)) return <code className="font-mono text-xs text-on-surface-variant break-all">{value}</code>
+    return <StatusBadge value={value} />
+  }
   if (Array.isArray(value)) {
     if (value.length === 0) return <span className="text-on-surface-variant">none</span>
     // a uniform array of (non-Money) objects renders as a table; otherwise a scalar list
@@ -130,6 +134,10 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   )
 }
 
+/** A top-level scalar number or Money is a headline figure — render it as a prominent KPI
+ *  (large, JetBrains-Mono tabular-nums per the Stitch typography principle). */
+const isKpi = (v: unknown): v is number | { amount: number; currency: string } => typeof v === 'number' || isMoney(v)
+
 export function MetricGrid({ data }: { data: Record<string, unknown> }) {
   const entries = Object.entries(data)
   return (
@@ -137,9 +145,15 @@ export function MetricGrid({ data }: { data: Record<string, unknown> }) {
       {entries.map(([k, v]) => (
         <div key={k} className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4" data-testid={`metric-${k}`}>
           <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">{humanize(k)}</p>
-          <div className="text-sm text-primary">
-            <Value value={v} />
-          </div>
+          {isKpi(v) ? (
+            <p className="font-mono font-semibold text-primary text-3xl tabular-nums tracking-tight" data-testid={`kpi-${k}`}>
+              {isMoney(v) ? formatMoney(v) : v.toLocaleString('en-US')}
+            </p>
+          ) : (
+            <div className="text-sm text-primary">
+              <Value value={v} />
+            </div>
+          )}
         </div>
       ))}
     </div>
