@@ -43,6 +43,7 @@ M0 foundation → M1 substrate + demo deployment live (auto-deploy on merge) →
 
 ## Workflow (every story)
 
+0. **Worktree isolation (enforced).** This repo runs concurrent autonomous build loops against one shared checkout; a prior session reset the working dir mid-commit and nearly lost work. Build/feature/source changes MUST be made in an isolated git worktree — call `EnterWorktree` before editing source. `worktree.bgIsolation="worktree"` (`.claude/settings.json`) hard-blocks Edit/Write in the main checkout for background sessions until you do. Only docs-only updates to main (build-log, backlog status, ADR status) are exempt.
 1. One story per session/branch: `feature/BACKOFFICE-NN-short-name`. Follow the milestone order in PRD §9 (M0 → M5); E4 substrate before features.
 2. Spec first: contract tests from the OpenAPI paths + the requirement's acceptance criteria MUST exist and fail before implementation.
 3. Implement to green. Coverage ≥80%. Integration tests hit real stores (local/containerised).
