@@ -72,16 +72,14 @@ check "BFF: no bearer token -> 401" 401 \
 check "BFF: demo persona token -> 200 approvals list" 200 \
   "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/approvals/pending" \
      -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:customer-care-agent")"
-# Probe a contract path whose scope the persona holds but whose story is unbuilt
-# (M4 analytics) so the check exercises the 501 path, not a scope denial. Update
-# this if finance-view ever gets implemented.
-# Probe a contract path whose scope the persona holds but that has no story
-# (the BCBS 239 lineage read is an enterprise-catalogue surface, stubbed in demo)
-# so this exercises the 501 path, not a scope denial. finance-view was the prior
-# probe but is now implemented (BACKOFFICE-31).
+# Probe a contract path whose scope the persona holds (platform:operations:read) but
+# that has no story yet — the onboarding-handover-health view is a stable 501 stub — so
+# this exercises the 501 path, not a scope denial. Prior probes (finance-view, then the
+# BCBS 239 lineage read) have since been implemented (BACKOFFICE-31, -49); update this if
+# onboarding-handover-health ever gets built.
 check "BFF: unimplemented contract path -> 501 envelope" 501 \
-  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/lineage/reconciliation_log" \
-     -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:compliance-officer")"
+  "$(curl -s -o /dev/null -w '%{http_code}' "$BFF/back-office/analytics/onboarding-handover-health" \
+     -H "x-fapi-interaction-id: $FAPI" -H "Authorization: Bearer demo-token:operations-analyst")"
 
 # --- Nebras simulator: deterministic data + fault injection round-trip ---
 check "sim: TPP report 2026-05 -> 200" 200 \
