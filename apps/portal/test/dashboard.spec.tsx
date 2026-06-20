@@ -63,3 +63,53 @@ describe('DashboardOverview', () => {
     expect(screen.queryByTestId('dashboard-overview')).not.toBeInTheDocument()
   })
 })
+
+import { getDashboardCharts } from '../src/lib/dashboard.js'
+import { DashboardCharts } from '../src/components/dashboard-charts.js'
+
+describe('getDashboardCharts', () => {
+  it('builds the recon pass-rate trend (oldest→newest) + severity buckets', async () => {
+    const f = mockFetch({
+      runs: [
+        { reconciliation_window_start: '2026-06-18', line_count_total: 1000, line_count_matched: 990, line_count_unmatched: 10, line_count_disputed: 0, status: 'completed', created_at: '2026-06-18' },
+        { reconciliation_window_start: '2026-06-17', line_count_total: 1000, line_count_matched: 1000, line_count_unmatched: 0, line_count_disputed: 0, status: 'completed', created_at: '2026-06-17' },
+        { reconciliation_window_start: '2026-06-16', line_count_total: 0, line_count_matched: 0, line_count_unmatched: 0, line_count_disputed: 0, status: 'running', created_at: '2026-06-16' }
+      ],
+      breaks: [],
+      pending: [],
+      risk: [{ severity: 'critical' }, { severity: 'high' }, { severity: 'medium' }, { severity: 'low' }]
+    })
+    const c = await getDashboardCharts('tok', deps(f))
+    expect(c.reconTrend.map((p) => p.date)).toEqual(['2026-06-17', '2026-06-18']) // sorted asc, empty/running excluded
+    expect(c.reconTrend[0]!.pct).toBe(100)
+    expect(c.reconTrend[1]!.pct).toBe(99)
+    const sev = Object.fromEntries(c.riskSeverity.map((b) => [b.label, b]))
+    expect(sev['Critical']!.count).toBe(1)
+    expect(sev['Critical']!.tone).toBe('breach')
+    expect(sev['Medium']!.tone).toBe('break')
+    expect(sev['Info']!.count).toBe(0)
+  })
+
+  it('yields empty series when a source 403s', async () => {
+    const f = mockFetch({ runs: [], breaks: [], pending: [], risk: null })
+    const c = await getDashboardCharts('tok', deps(f))
+    expect(c.riskSeverity).toEqual([])
+  })
+})
+
+describe('DashboardCharts', () => {
+  it('renders the trend + severity charts; nothing when both empty', () => {
+    const { rerender } = render(
+      <DashboardCharts
+        reconTrend={[{ date: '2026-06-17', pct: 100 }, { date: '2026-06-18', pct: 99 }]}
+        riskSeverity={[{ label: 'Critical', count: 2, tone: 'breach' }, { label: 'Low', count: 0, tone: 'neutral' }]}
+      />
+    )
+    expect(screen.getByTestId('recon-trend-chart')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-severity-chart')).toBeInTheDocument()
+    expect(screen.getByTestId('sev-critical')).toHaveTextContent('2')
+
+    rerender(<DashboardCharts reconTrend={[]} riskSeverity={[{ label: 'Critical', count: 0, tone: 'breach' }]} />)
+    expect(screen.queryByTestId('dashboard-charts')).not.toBeInTheDocument()
+  })
+})

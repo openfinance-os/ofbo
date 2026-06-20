@@ -100,3 +100,56 @@ export async function getDashboardKpis(token: string, _principal: Principal, dep
   const settled = await Promise.allSettled([approvalsKpi(token, deps), reconKpis(token, deps), riskKpi(token, deps)])
   return settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
 }
+
+// ── Chart data (scope-aware; each source omitted on a 403, like the KPIs) ──────────────
+export interface TrendPoint {
+  date: string // YYYY-MM-DD
+  pct: number // reconciliation pass rate, 0–100
+}
+export interface SeverityBar {
+  label: string
+  count: number
+  tone: KpiTone
+}
+export interface DashboardCharts {
+  reconTrend: TrendPoint[]
+  riskSeverity: SeverityBar[]
+}
+
+/** Up to 30 days of reconciliation pass-rate, oldest→newest (reconciliation:read). */
+async function reconTrend(token: string, deps: DashboardDeps): Promise<TrendPoint[]> {
+  const { runs } = await listRuns(token, { limit: 60 }, deps)
+  return runs
+    .filter((r) => r.line_count_total > 0 && r.status === 'completed')
+    .map((r) => ({ date: (r.reconciliation_window_start || r.created_at).slice(0, 10), pct: Math.round((r.line_count_matched / r.line_count_total) * 1000) / 10 }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30)
+}
+
+const SEVERITY_ORDER: { key: string; label: string; tone: KpiTone }[] = [
+  { key: 'critical', label: 'Critical', tone: 'breach' },
+  { key: 'high', label: 'High', tone: 'breach' },
+  { key: 'medium', label: 'Medium', tone: 'break' },
+  { key: 'low', label: 'Low', tone: 'neutral' },
+  { key: 'info', label: 'Info', tone: 'neutral' }
+]
+
+/** Open risk signals bucketed by severity (risk:read). */
+async function riskSeverity(token: string, deps: DashboardDeps): Promise<SeverityBar[]> {
+  const { base, f } = bffClient(deps)
+  const res = await f(`${base}/back-office/risk-signals?status=open&limit=200`, { headers: authHeaders(token) })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const body = (await res.json()) as { data?: { severity: string }[] }
+  const counts = new Map<string, number>()
+  for (const s of body.data ?? []) counts.set(s.severity, (counts.get(s.severity) ?? 0) + 1)
+  return SEVERITY_ORDER.map(({ key, label, tone }) => ({ label, tone, count: counts.get(key) ?? 0 }))
+}
+
+/** Chart series for the dashboard; an out-of-scope source yields an empty series (card hidden). */
+export async function getDashboardCharts(token: string, deps: DashboardDeps = {}): Promise<DashboardCharts> {
+  const [trend, severity] = await Promise.allSettled([reconTrend(token, deps), riskSeverity(token, deps)])
+  return {
+    reconTrend: trend.status === 'fulfilled' ? trend.value : [],
+    riskSeverity: severity.status === 'fulfilled' ? severity.value : []
+  }
+}
