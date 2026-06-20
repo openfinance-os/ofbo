@@ -167,6 +167,53 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
+    // ── 6. A COHERENT LINKED INCIDENT — one thread a presenter can trace across every console.
+    //   INC-2026-0042: an unauthorised payment by PSU cust-0001 via Fictional Fintech 01 →
+    //   a dispute (Care) → a reconciliation break on the same payment (Finance) → a risk signal
+    //   (Risk) → a pending four-eyes refund (Approvals). The shared token INC-2026-0042 appears on
+    //   each surface so the audience sees it is ONE incident across the system, not separate rows.
+    const INCIDENT = 'INC-2026-0042'
+    const INCIDENT_PSU = 'cust-0001'
+    const INCIDENT_TPP = 'Fictional Fintech 01'
+    // (a) the dispute (Customer Care → cust-0001)
+    await pool.query(
+      `INSERT INTO dispute_case
+         (bank_id, channel, psu_identifier, dispute_type, state, originating_payment_id, dispute_reason_code,
+          sla_clock_started_at, nebras_case_id, care_case_id, settled_in_other_scheme, compensation_blocked, created_at)
+       SELECT $1, $2, $3, 'unauthorised_payment', 'in_progress', NULL, 'UNAUTH_TXN',
+              now() - interval '5 hours', $4, $5, false, false, now() - interval '5 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM dispute_case WHERE care_case_id = $5)`,
+      [DEMO_BANK_ID, CH, INCIDENT_PSU, `NBR-CASE-${INCIDENT}`, `dispute-${INCIDENT}`]
+    )
+    // (b) the reconciliation break on the same payment (Finance) — token in the source refs
+    await pool.query(
+      `INSERT INTO reconciliation_break
+         (bank_id, channel, run_id, line_type, status, variance_amount, variance_currency, variance_count,
+          source_a_ref, source_b_ref, source_c_ref, sla_clock_started_at, created_at)
+       SELECT $1, $2, $3, 'payment_settlement', 'flagged', 75000, 'AED', 1,
+              $4, $5, $6, now() - interval '5 hours', now() - interval '5 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM reconciliation_break WHERE source_a_ref = $4)`,
+      [DEMO_BANK_ID, CH, TODAY_RUN, `NBR-${INCIDENT}`, `LFI-MTR-${INCIDENT}`, `FT-BIL-${INCIDENT}`]
+    )
+    // (c) the risk signal (Risk) — incident/psu/tpp in signal_data so it reads as the same case
+    await pool.query(
+      `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, signal_data, created_at)
+       SELECT $1, $2, 'tpp_behaviour', 'high', 'investigating',
+              jsonb_build_object('source','demo-scenario','demo_id','inc-0042','incident',$3::text,'psu',$4::text,'tpp',$5::text,
+                                 'summary', 'Unauthorised-payment pattern flagged for ' || $5::text || ' (' || $3::text || ')'),
+              now() - interval '5 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM risk_signal WHERE signal_data->>'demo_id' = 'inc-0042')`,
+      [DEMO_BANK_ID, CH, INCIDENT, INCIDENT_PSU, INCIDENT_TPP]
+    )
+    // (d) the pending four-eyes refund (Approvals) — payload references the incident + dispute
+    await pool.query(
+      `INSERT INTO approval_request
+         (bank_id, channel, approval_request_id, operation_type, operation_payload, state, initiator, approver_required_scope, expires_at)
+       SELECT $1, $2, 'demo-appr-incident-refund', 'disputes.refund', $3::jsonb, 'pending', 'demo:care-agent-2', 'disputes:admin', now() + interval '2 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM approval_request WHERE approval_request_id = 'demo-appr-incident-refund')`,
+      [DEMO_BANK_ID, CH, JSON.stringify({ incident: INCIDENT, dispute_id: `dispute-${INCIDENT}`, psu: INCIDENT_PSU, tpp: INCIDENT_TPP, refund_amount: { amount: 75000, currency: 'AED' } })]
+    )
+
     // ── BCBS 239 lineage for every table this scenario touches (Q4.5 stays green; idempotent).
     const lineage: [string, string[]][] = [
       ['reconciliation_log', ['bank_id', 'channel', 'run_id', 'status', 'line_count_total']],
