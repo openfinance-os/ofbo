@@ -57,6 +57,46 @@ function StatusBadge({ value }: { value: string }) {
   )
 }
 
+/** Map a distribution key to a bar fill via the same status vocabulary as the badges. */
+function barFill(key: string): string {
+  const t = statusTone(key)
+  if (!t) return 'fill-secondary'
+  if (t.includes('breach')) return 'fill-breach'
+  if (t.includes('break')) return 'fill-break'
+  if (t.includes('reconciled')) return 'fill-reconciled'
+  return 'fill-outline'
+}
+
+/** A plain object whose values are ALL finite numbers (a distribution like by_severity /
+ *  by_line_type / outcome counts) — 2–8 entries, not all zero. Charted as horizontal bars. */
+function numericDistribution(value: unknown): [string, number][] | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || isMoney(value)) return null
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length < 2 || entries.length > 8) return null
+  if (!entries.every(([, v]) => typeof v === 'number' && Number.isFinite(v))) return null
+  if (!entries.some(([, v]) => (v as number) > 0)) return null
+  return entries as [string, number][]
+}
+
+/** Horizontal token-coloured bars for a numeric distribution (SVG — no inline styles/px). */
+function MiniBars({ entries }: { entries: [string, number][] }) {
+  const max = Math.max(...entries.map(([, v]) => v))
+  return (
+    <div className="space-y-1.5" data-testid="mini-bars">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex items-center gap-2 text-xs">
+          <span className="w-28 shrink-0 text-on-surface-variant truncate" title={humanize(k)}>{humanize(k)}</span>
+          <svg viewBox="0 0 100 8" preserveAspectRatio="none" className="flex-1 h-2.5" role="img" aria-label={`${humanize(k)}: ${v}`}>
+            <rect x="0" y="0" width="100" height="8" className="fill-surface-container" rx="1" />
+            <rect x="0" y="0" width={max > 0 ? (v / max) * 100 : 0} height="8" className={barFill(k)} rx="1" />
+          </svg>
+          <span className="w-10 shrink-0 font-mono tabular-nums text-primary text-right">{v.toLocaleString('en-US')}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** A uniform array of objects → a compact, high-density table (the Stitch data-table). */
 function ObjectTable({ rows, depth }: { rows: Record<string, unknown>[]; depth: number }) {
   const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].slice(0, 6)
@@ -118,6 +158,9 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
       </ul>
     )
   }
+  // a numeric distribution (by_severity / by_line_type / outcome counts) → horizontal bars
+  const dist = depth <= 1 ? numericDistribution(value) : null
+  if (dist) return <MiniBars entries={dist} />
   // nested object → sub-group; only collapse to a key summary at extreme depth (never "{…}")
   if (depth >= 3) {
     return <span className="text-xs text-on-surface-variant break-all">{Object.keys(value as Record<string, unknown>).map(humanize).join(', ')}</span>

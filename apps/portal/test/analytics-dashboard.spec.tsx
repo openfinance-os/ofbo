@@ -132,3 +132,19 @@ describe('generic renderer — ISO timestamps render compact (no char-wrap)', ()
     expect(cell.querySelector('[title="2026-06-20T11:42:07.123Z"]')).toBeInTheDocument()
   })
 })
+
+describe('generic renderer — numeric distributions render as bars', () => {
+  it('charts a by_severity-style object as MiniBars (not a key:value list)', () => {
+    render(<MetricGrid data={{ by_severity: { critical: 2, high: 4, medium: 6, low: 1 } }} />)
+    const cell = screen.getByTestId('metric-by_severity')
+    expect(cell.querySelector('[data-testid="mini-bars"]')).toBeInTheDocument()
+    expect(cell).toHaveTextContent('Critical')
+    expect(cell).toHaveTextContent('6') // medium count
+  })
+  it('leaves a mixed (non-numeric) object as a key:value list', () => {
+    render(<MetricGrid data={{ meta: { period: '2026-06', count: 3 } }} />)
+    const cell = screen.getByTestId('metric-meta')
+    expect(cell.querySelector('[data-testid="mini-bars"]')).not.toBeInTheDocument()
+    expect(cell).toHaveTextContent('Period')
+  })
+})
