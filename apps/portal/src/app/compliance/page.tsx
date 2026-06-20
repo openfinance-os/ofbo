@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { ComplianceView } from '../../components/compliance-view'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getComplianceView } from '../../lib/compliance'
 import type { AnalyticsView } from '../../lib/analytics'
@@ -25,7 +26,7 @@ export default async function CompliancePage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('compliance:reports:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.complianceRead)) redirect('/dashboard')
 
   let view: AnalyticsView | null = null
   let error: string | null = null

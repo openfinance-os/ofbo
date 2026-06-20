@@ -2,8 +2,9 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { RiskSignalError, RiskSignalService } from './service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import { ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-30 / -42 — GET /back-office/risk-signals (risk:read, cursor paginated) +
@@ -13,10 +14,9 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 const trace = (c: Context) => c.req.header('x-fapi-interaction-id') ?? 'unknown'
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof RiskSignalError) {
-    return c.json(errorEnvelope(e.code, e.message, 'See the risk-signals contract (BACKOFFICE-30/-42).', DOCS_BASE), e.status as ContentfulStatusCode)
-  }
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof RiskSignalError) return domainError(c, e, 'See the risk-signals contract (BACKOFFICE-30/-42).')
   throw e
 }
 
@@ -26,7 +26,7 @@ export function riskSignalRoutes(service: RiskSignalService, idempotency: Idempo
       try {
         const { rows, next_cursor } = await service.list(c.get('principal'), {
           ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-          ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+          ...limitParam(c.req.query('limit')),
           ...(c.req.query('signal_type') ? { signal_type: c.req.query('signal_type') } : {}),
           ...(c.req.query('severity') ? { severity: c.req.query('severity') } : {}),
           ...(c.req.query('status') ? { status: c.req.query('status') } : {})

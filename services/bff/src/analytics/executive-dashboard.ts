@@ -5,7 +5,8 @@ import type { MarginSummary } from '../reconciliation/margin.js'
 import type { ProgrammeAngleBuilder } from './programme.js'
 import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 import type { Principal } from '../auth.js'
-import { assertScope, hasScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope, hasScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import { dataEnvelope } from '../envelope.js'
 
 /**
@@ -137,7 +138,8 @@ export function executiveDashboardRoutes(service: ExecutiveDashboardService): Re
         const { data, freshness } = await service.view(c.get('principal'))
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
-        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+        const denied = scopeDenied(c, e)
+        if (denied) return denied
         throw e
       }
     }

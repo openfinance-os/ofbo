@@ -3,12 +3,13 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { NebrasEgressPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayCached, missingIdempotencyKey, type IdempotencyStore } from '../idempotency.js'
 import type { ConsentDirectory, IdentifierType } from './directory.js'
 
 /**
@@ -183,12 +184,7 @@ function replayKey(subject: string, body: BulkRevokeBody, key: string): string {
 export function consentBulkRevokeRoutes(service: ConsentBulkRevokeService, idempotency: IdempotencyStore): Record<string, Handler> {
   const handler: Handler = async (c) => {
     const key = c.req.header('idempotency-key')
-    if (!key) {
-      return c.json(
-        errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE),
-        400
-      )
-    }
+    if (!key) return c.json(missingIdempotencyKey(), 400)
     let body: BulkRevokeBody
     try {
       body = await c.req.json()
@@ -196,25 +192,23 @@ export function consentBulkRevokeRoutes(service: ConsentBulkRevokeService, idemp
       return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { psu_identifier_type, psu_identifier, reason_code }.', DOCS_BASE), 400)
     }
     const cacheKey = replayKey(c.get('principal').subject, body, key)
-    const cached = await idempotency.get(cacheKey)
-    if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-
-    const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
-    try {
-      const record = await service.initiate(c.get('principal'), body, traceId)
-      const res = c.json(dataEnvelope(toWire(record)), 202)
-      await idempotency.set(cacheKey, 202, await res.clone().json())
-      return res
-    } catch (e) {
-      if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-      if (e instanceof BulkRevokeError) {
-        return c.json(errorEnvelope(e.code, e.message, 'See the emergency bulk revocation contract (BACKOFFICE-18); fraud uses :revoke-fraud.', DOCS_BASE), e.status as ContentfulStatusCode)
+    return replayCached(c, idempotency, cacheKey, async () => {
+      const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+      try {
+        const record = await service.initiate(c.get('principal'), body, traceId)
+        return c.json(dataEnvelope(toWire(record)), 202)
+      } catch (e) {
+        const denied = scopeDenied(c, e)
+        if (denied) return denied
+        if (e instanceof BulkRevokeError) {
+          return c.json(errorEnvelope(e.code, e.message, 'See the emergency bulk revocation contract (BACKOFFICE-18); fraud uses :revoke-fraud.', DOCS_BASE), e.status as ContentfulStatusCode)
+        }
+        if (e instanceof ApprovalError) {
+          return c.json(errorEnvelope(e.code, e.message, 'Bulk revocation is four-eyes-gated (consents:admin).', DOCS_BASE), e.status as ContentfulStatusCode)
+        }
+        throw e
       }
-      if (e instanceof ApprovalError) {
-        return c.json(errorEnvelope(e.code, e.message, 'Bulk revocation is four-eyes-gated (consents:admin).', DOCS_BASE), e.status as ContentfulStatusCode)
-      }
-      throw e
-    }
+    })
   }
 
   return { 'post /consents:revoke-bulk': handler }

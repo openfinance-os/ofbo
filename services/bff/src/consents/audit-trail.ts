@@ -3,6 +3,7 @@ import type { ConsentEventPage, ConsentEventQuery } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope, ScopeDeniedError } from '../rbac.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-19 — 24-month consent audit-trail timeline (per consent and
@@ -47,10 +48,9 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 function pageQuery(c: Context): ConsentEventQuery {
   const cursor = c.req.query('cursor')
-  const limitRaw = c.req.query('limit')
   return {
     ...(cursor ? { cursor } : {}),
-    ...(limitRaw ? { limit: Number(limitRaw) } : {})
+    ...limitParam(c.req.query('limit'))
   }
 }
 

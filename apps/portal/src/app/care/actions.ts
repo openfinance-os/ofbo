@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { createDispute, revokeConsent, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode } from '../../lib/care'
 
@@ -33,7 +34,7 @@ function careHref(identifierType: string, identifier: string, status: string) {
 }
 
 export async function revokeConsentAction(formData: FormData) {
-  const { token } = await principalOrBounce('consents:admin')
+  const { token } = await principalOrBounce(SCOPES.consentsAdmin)
   const consentId = String(formData.get('consent_id') ?? '')
   const reasonCode = String(formData.get('reason_code') ?? '') as RevokeReasonCode
   const identifierType = String(formData.get('identifier_type') ?? 'bank_customer_id')
@@ -49,7 +50,7 @@ export async function revokeConsentAction(formData: FormData) {
 }
 
 export async function createDisputeAction(formData: FormData) {
-  const { token } = await principalOrBounce('disputes:admin')
+  const { token } = await principalOrBounce(SCOPES.disputesAdmin)
   const identifierType = String(formData.get('identifier_type') ?? 'bank_customer_id')
   const identifier = String(formData.get('identifier') ?? '')
   const rawType = String(formData.get('dispute_type') ?? '')

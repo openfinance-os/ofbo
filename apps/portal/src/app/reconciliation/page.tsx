@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { ReconConsole } from '../../components/recon-console'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { listBreaks, listRuns, ReconApiError, type ReconciliationBreak, type ReconciliationRun } from '../../lib/reconciliation'
 import { claimBreakAction, resolveBreakAction } from './actions'
@@ -35,13 +36,13 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('reconciliation:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect('/dashboard')
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const runId = one(sp.run_id) ?? ''
   const status = one(sp.status) ?? ''
-  const canWrite = principal.superadmin || principal.scopes.includes('finance:reconciliation:write')
+  const canWrite = principal.superadmin || principal.scopes.includes(SCOPES.reconciliationWrite)
 
   let runs: ReconciliationRun[] = []
   let breaks: ReconciliationBreak[] = []

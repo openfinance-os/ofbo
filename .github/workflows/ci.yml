@@ -9,6 +9,13 @@ on:
     branches: [main]
   pull_request:
 
+# Supersede in-progress runs for the same branch/PR: a new push cancels the stale
+# run rather than letting both consume runners (deploy.yml/release-evidence.yml
+# already do this). Distinct groups per ref so branches never cancel each other.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   q1-build-unit:
     name: Q1 — build + unit
@@ -24,6 +31,7 @@ jobs:
       - run: pnpm gen
       - name: Generated artifacts are committed and current
         run: git diff --exit-code packages/contracts/src/*.generated.ts
+      - run: pnpm build
       - run: pnpm test
 
   q2-static-sast:
@@ -76,6 +84,7 @@ jobs:
   q3-e2e:
     name: Q3 — portal E2E (Playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -112,13 +121,37 @@ jobs:
         run: |
           (cd services/nebras-sim && PORT=8788 ADMIN_TOKEN="$SIM_ADMIN_TOKEN" pnpm exec tsx scripts/serve.ts > /tmp/sim.log 2>&1 &)
           (cd services/bff && PORT=8787 pnpm exec tsx scripts/serve.ts > /tmp/bff.log 2>&1 &)
-          until curl -sf http://localhost:8788/tpp-reports/2026-05 >/dev/null; do sleep 1; done
-          until curl -s -o /dev/null http://localhost:8787; do sleep 1; done
+          # Bounded readiness wait: fail (with the service log) after 90s instead of
+          # hanging until the job timeout if a service never comes up.
+          wait_for() {
+            local name="$1" log="$2"; shift 2
+            local deadline=$((SECONDS + 90))
+            until "$@" >/dev/null 2>&1; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$name did not become ready within 90s"
+                tail -n 50 "$log" || true
+                exit 1
+              fi
+              sleep 1
+            done
+            echo "$name ready"
+          }
+          wait_for "Nebras sim" /tmp/sim.log curl -sf http://localhost:8788/tpp-reports/2026-05
+          wait_for "BFF" /tmp/bff.log curl -s -o /dev/null http://localhost:8787/
       - name: build + start portal
         run: |
           pnpm --filter @ofbo/portal build
           (cd apps/portal && PORT=3000 pnpm start > /tmp/portal.log 2>&1 &)
-          until curl -sf http://localhost:3000 >/dev/null; do sleep 1; done
+          deadline=$((SECONDS + 90))
+          until curl -sf http://localhost:3000 >/dev/null 2>&1; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::portal did not become ready within 90s"
+              tail -n 50 /tmp/portal.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "portal ready"
       - run: pnpm --filter @ofbo/portal e2e
       - uses: actions/upload-artifact@v7
         if: always()

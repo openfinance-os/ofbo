@@ -1,14 +1,15 @@
 import { createHash } from 'node:crypto'
 import type { Context } from 'hono'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ComplianceReportCreateInput, StoredComplianceReport, ComplianceReportListQuery, ComplianceReportPage } from '@ofbo/db'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied, domainError } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { ApprovalsService, ApprovalError } from '../approvals/service.js'
 import type { GatedOperation } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
-import type { IdempotencyStore } from '../idempotency.js'
+import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { limitParam } from '../pagination.js'
 
 /**
  * BACKOFFICE-35 — self-service CBUAE periodic report generation. Compliance
@@ -294,25 +295,15 @@ export class InMemoryReportStore implements ReportStore {
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
 function fail(c: Context, e: unknown): Response {
-  if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
-  if (e instanceof ReportError) return c.json(errorEnvelope(e.code, e.message, 'See the report-generation contract (BACKOFFICE-35).', DOCS_BASE), e.status as ContentfulStatusCode)
-  if (e instanceof ApprovalError) return c.json(errorEnvelope(e.code, e.message, 'CBUAE-bound report approval is four-eyes (a different programme:read principal approves).', DOCS_BASE), e.status as ContentfulStatusCode)
+  const denied = scopeDenied(c, e)
+  if (denied) return denied
+  if (e instanceof ReportError) return domainError(c, e, 'See the report-generation contract (BACKOFFICE-35).')
+  if (e instanceof ApprovalError) return domainError(c, e, 'CBUAE-bound report approval is four-eyes (a different programme:read principal approves).')
   throw e
 }
 
 function withIdempotency(idempotency: IdempotencyStore, routeKey: string, run: (c: Context, params: Record<string, string>) => Promise<Response>): Handler {
-  return async (c, params) => {
-    const key = c.req.header('idempotency-key')
-    if (!key) {
-      return c.json(errorEnvelope('BACKOFFICE.MISSING_IDEMPOTENCY_KEY', 'The Idempotency-Key header is required on every mutating endpoint.', 'Send a unique Idempotency-Key; replays within 24h return the original result.', DOCS_BASE), 400)
-    }
-    const cacheKey = `${routeKey}|${params.report_id ?? ''}|${c.get('principal').subject}|${key}`
-    const cached = await idempotency.get(cacheKey)
-    if (cached) return c.json(cached.body, cached.status as ContentfulStatusCode)
-    const res = await run(c, params)
-    if (res.status >= 200 && res.status < 300) await idempotency.set(cacheKey, res.status, await res.clone().json())
-    return res
-  }
+  return replayable(idempotency, (params, subject, key) => `${routeKey}|${params.report_id ?? ''}|${subject}|${key}`, run)
 }
 
 export function reportRoutes(service: ReportGenerationService, idempotency: IdempotencyStore): Record<string, Handler> {
@@ -335,7 +326,7 @@ export function reportRoutes(service: ReportGenerationService, idempotency: Idem
     'get /back-office/reports': async (c) => {
       const q: ComplianceReportListQuery = {
         ...(c.req.query('cursor') ? { cursor: c.req.query('cursor') } : {}),
-        ...(c.req.query('limit') ? { limit: Number(c.req.query('limit')) } : {}),
+        ...limitParam(c.req.query('limit')),
         ...(c.req.query('report_type') ? { report_type: c.req.query('report_type') } : {}),
         ...(c.req.query('status') ? { status: c.req.query('status') } : {})
       }

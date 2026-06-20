@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { RiskDashboard } from '../../components/risk-dashboard'
 import { TOKEN_COOKIE } from '../../lib/cookies'
+import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getLiabilityMonitor, getRiskView } from '../../lib/risk'
 import type { AnalyticsView } from '../../lib/analytics'
@@ -25,7 +26,7 @@ export default async function RiskPage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('risk:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.riskRead)) redirect('/dashboard')
 
   let riskView: AnalyticsView | null = null
   let liabilityMonitor: AnalyticsView | null = null

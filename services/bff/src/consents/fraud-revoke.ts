@@ -2,7 +2,8 @@ import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { NebrasEgressPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
@@ -120,7 +121,8 @@ export function consentFraudRevokeRoutes(service: ConsentFraudRevokeService, ide
       const record = await service.initiate(c.get('principal'), params.consent_id!, body.case_context, traceId)
       return c.json(dataEnvelope(toWire(record)), 202)
     } catch (e) {
-      if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+      const denied = scopeDenied(c, e)
+      if (denied) return denied
       if (e instanceof ApprovalError) {
         return c.json(errorEnvelope(e.code, e.message, 'Fraud revoke is four-eyes-gated (Risk narrow scope).', DOCS_BASE), e.status as ContentfulStatusCode)
       }

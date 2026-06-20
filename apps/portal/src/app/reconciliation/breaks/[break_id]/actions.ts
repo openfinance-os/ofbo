@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../../../lib/cookies'
+import { SCOPES } from '../../../../lib/scopes'
 import { verifyAndMint } from '../../../../lib/portal'
 import { escalateToNebras } from '../../../../lib/reconciliation'
 
@@ -13,7 +14,7 @@ import { escalateToNebras } from '../../../../lib/reconciliation'
  * The escalation is mutating → a fresh Idempotency-Key per call.
  */
 
-const DISPUTE_SCOPE = 'finance:disputes:write'
+const DISPUTE_SCOPE = SCOPES.disputesWrite
 
 export async function escalateNebrasAction(formData: FormData) {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value

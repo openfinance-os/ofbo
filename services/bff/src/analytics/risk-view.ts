@@ -1,7 +1,8 @@
 import type { Context } from 'hono'
 import type { RiskSignalSummary, LiabilityMonitor, RiskSignalHeader } from '@ofbo/db'
 import type { Principal } from '../auth.js'
-import { assertScope, ScopeDeniedError, scopeDenialEnvelope } from '../rbac.js'
+import { assertScope } from '../rbac.js'
+import { scopeDenied } from '../errors.js'
 import { dataEnvelope } from '../envelope.js'
 import { liveFreshness, type FreshnessEnvelope } from './freshness.js'
 
@@ -68,7 +69,8 @@ export function riskViewRoutes(service: RiskViewService): Record<string, Handler
         const { data, freshness } = await service.view(c.get('principal'))
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
-        if (e instanceof ScopeDeniedError) return c.json(scopeDenialEnvelope(e.required), 403)
+        const denied = scopeDenied(c, e)
+        if (denied) return denied
         throw e
       }
     }

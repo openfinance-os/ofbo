@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AppShell } from '../../../../components/app-shell'
 import { InvestigationDetail } from '../../../../components/investigation-detail'
 import { TOKEN_COOKIE } from '../../../../lib/cookies'
+import { SCOPES } from '../../../../lib/scopes'
 import { verifyAndMint } from '../../../../lib/portal'
 import { getBreak, ReconApiError, type ReconciliationBreak } from '../../../../lib/reconciliation'
 import { escalateNebrasAction } from './actions'
@@ -33,13 +34,13 @@ export default async function InvestigationPage({ params, searchParams }: { para
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes('reconciliation:read')) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect('/dashboard')
 
   const { break_id } = await params
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
-  const canDispute = principal.superadmin || principal.scopes.includes('finance:disputes:write')
+  const canDispute = principal.superadmin || principal.scopes.includes(SCOPES.disputesWrite)
 
   let break_: ReconciliationBreak | null = null
   let error: string | null = FAILURE[status] ?? null
