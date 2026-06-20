@@ -98,3 +98,27 @@ describe('generic renderer — tables, status badges, no {…} placeholders (P0 
     expect(screen.getByTestId('metric-grid')).not.toHaveTextContent('{…}')
   })
 })
+
+describe('generic renderer — KPI hierarchy + path references (P1 polish)', () => {
+  it('renders a top-level scalar number and Money as a prominent KPI figure', () => {
+    render(<MetricGrid data={{ open_nebras_dispute_count: 3, mtd_nebras_fee_accrual: { amount: 481250, currency: 'AED' } }} />)
+    const count = screen.getByTestId('kpi-open_nebras_dispute_count')
+    expect(count).toHaveTextContent('3')
+    expect(count.className).toMatch(/text-3xl/)
+    expect(count.className).toMatch(/tabular-nums/)
+    expect(screen.getByTestId('kpi-mtd_nebras_fee_accrual')).toHaveTextContent('AED 4,812.50')
+  })
+
+  it('does NOT KPI-render objects/arrays (structured render instead)', () => {
+    render(<MetricGrid data={{ by_state: { active: 2, dormant: 1 } }} />)
+    expect(screen.queryByTestId('kpi-by_state')).not.toBeInTheDocument()
+    expect(screen.getByTestId('metric-by_state')).toHaveTextContent('Active')
+  })
+
+  it('renders an API/route path string as a muted code reference, not a badge', () => {
+    render(<MetricGrid data={{ reconciliation_console_deeplink: '/back-office/reconciliation/runs' }} />)
+    const cell = screen.getByTestId('metric-reconciliation_console_deeplink')
+    expect(cell.querySelector('code')).toBeInTheDocument()
+    expect(cell).toHaveTextContent('/back-office/reconciliation/runs')
+  })
+})
