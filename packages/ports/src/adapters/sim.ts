@@ -41,6 +41,17 @@ const simCareSurface: CareSurfacePort = {
       sub: psu_id,
       expires_at: new Date(Date.now() + 15 * 60_000).toISOString()
     }
+  },
+  async resolveCallRecording({ call_id }) {
+    // Demo: a deterministic short-lived locator into the (simulated) contact-centre
+    // system. null for an empty call id (the enterprise adapter, M6, calls the real
+    // recording system and may also return null when nothing is on file).
+    if (!call_id) return null
+    return {
+      recording_ref: `rec-${call_id}`,
+      recording_url: `https://contact-centre.demo/recordings/${encodeURIComponent(call_id)}`,
+      expires_at: new Date(Date.now() + 15 * 60_000).toISOString()
+    }
   }
 }
 

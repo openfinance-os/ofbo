@@ -40,6 +40,7 @@ import {
 } from './consents/bulk-revoke.js'
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
+import { CallRecordingService, callRecordingRoutes } from './disputes/call-recording.js'
 import { RespondentDisputeService, InMemoryRespondentDisputeStore, type RespondentDisputeStore } from './respondent-disputes/service.js'
 import { respondentDisputeRoutes } from './respondent-disputes/routes.js'
 import { FraudIncidentService, InMemoryFraudIncidentStore, type FraudIncidentStore } from './fraud-incidents/service.js'
@@ -141,6 +142,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /disputes',
   'get /disputes',
   'patch /disputes/{dispute_id}',
+  'get /disputes/{dispute_id}/call-recording',
   'post /disputes/{dispute_id}:initiate-refund',
   'post /back-office/disputes/{dispute_id}:record-cross-scheme',
   'post /back-office/disputes/respondent',
@@ -222,7 +224,7 @@ export interface AppDeps {
   approvals?: ApprovalsDeps
   superadmin?: Partial<SuperAdminDeps>
   apm?: Pick<ApmPort, 'exportSpans'>
-  careSurface?: Pick<CareSurfacePort, 'mintCareToken'>
+  careSurface?: Pick<CareSurfacePort, 'mintCareToken' | 'resolveCallRecording'>
   idempotency?: IdempotencyStore
   /** High-class audit for story services (BACKOFFICE-16+). Defaults to `audit`
    *  when it exposes emit (PgAuditEmitter does), else an in-memory sink. */
@@ -327,6 +329,7 @@ export function createApp(deps: AppDeps = {}) {
   // service so the operations can be registered: the refund op needs the dispute
   // store, the reopen op (BACKOFFICE-04) needs the reconciliation break store.
   const disputeStore = deps.disputeStore ?? new InMemoryDisputeStore()
+  const callRecordingService = new CallRecordingService({ store: disputeStore, careSurface, audit: highClassAudit })
   const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
   const invoiceRunStore = deps.invoiceRunStore ?? new InMemoryInvoiceRunStore()
   const reportStore = deps.reportStore ?? new InMemoryReportStore()
@@ -548,6 +551,7 @@ export function createApp(deps: AppDeps = {}) {
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
+    ...callRecordingRoutes(callRecordingService),
     ...respondentDisputeRoutes(respondentDisputeService, idempotencyStore),
     ...fraudIncidentRoutes(fraudIncidentService, idempotencyStore),
     ...schemeNotificationRoutes(schemeNotificationService, idempotencyStore),

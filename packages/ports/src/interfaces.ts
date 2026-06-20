@@ -1,11 +1,18 @@
 import type { Money, TraceContext } from './types.js'
 
-/** P1 — Customer-Care Surface: short-lived tokens carrying act (agent) + sub (PSU). */
+/** P1 — Customer-Care Surface: short-lived tokens carrying act (agent) + sub (PSU),
+ *  and on-demand resolution of a contact-centre recording for a dispute (BACKOFFICE-64).
+ *  The Back Office links, never copies — resolveCallRecording returns a short-lived
+ *  locator/reference into the bank's system, or null when no recording is available. */
 export interface CareSurfacePort {
   mintCareToken(
     input: { agent_id: string; psu_id: string },
     trace: TraceContext
   ): Promise<{ token: string; act: string; sub: string; expires_at: string }>
+  resolveCallRecording(
+    input: { call_id: string },
+    trace: TraceContext
+  ): Promise<{ recording_ref: string; recording_url: string | null; expires_at: string } | null>
 }
 
 /** P2 — Enterprise IdP (OIDC): portal sign-in, MFA mandatory. */
