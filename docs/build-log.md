@@ -893,3 +893,35 @@ All four PRs merged on **green CI** (Q1–Q4.5) + reviewers. Net: every gap from
 **Recovery note:** a concurrent session reset the original feature branch's shared checkout mid-work, so the implementation commit (77945f5) landed on the wrong branch and the files vanished from the working tree. The commit was intact in the object store and was cherry-picked cleanly onto current main (parent already merged via PR #116), re-pushed, and re-reviewed before merge. **Repo hygiene: concurrent agents sharing one working directory caused a near-loss — isolate sessions (separate worktrees) or run one at a time.**
 
 **Backlog:** BACKOFFICE-25 → done. Remaining blocked (human-gated): BACKOFFICE-33 (BD-13 governance), BACKOFFICE-64 (ADR 0003 decision), M6 port-swaps (per-bank). M0–M5 now complete incl. all Must-priority items.
+
+## 2026-06-20 — Stitch-benchmarked interface improvements (PRs #116, #119, #121)
+
+Used the frontend-design skill's rigor within OFBO's binding constraints (Stitch "Regulated
+Institutional Interface" Material 3, mandated Inter/JetBrains Mono, token-only, zero-PII, DEMO
+banner) to benchmark the running portal against the Stitch design intent and close the gaps —
+all concentrated in the data-dense analytics family (Analytics / Risk / Operations / Reconciliation).
+Each token-only, no contract/spec change, browser-verified, hard-stop-reviewed, green on all six CI gates.
+
+- **#116 — generic renderer: tables + status-triad badges (P0).** The shared `AnalyticsSection`
+  renderer printed literal `{…}`/`(…)` placeholders for nested data and rendered every status as
+  flat text. Now: arrays-of-objects → compact high-density tables (the Stitch data-table); nested
+  objects render to depth 3 (the `{…}` placeholder is gone); operational status strings →
+  status-triad badges (breach=red, break=amber, reconciled=green, neutral) via the existing
+  `ext.status` tokens, curated vocabulary so ids/labels are never mislabelled. (NB: the `{…}` bug
+  affected three production consoles, not just the demo.)
+- **#119 — derived-data seed + local BFF store parity (P1, the biggest perceived-quality win).**
+  The consoles rendered EMPTY locally for two reasons: (a) the derived tables (reconciliation_log/
+  break, nebras_report_aggregate, risk_signal) are produced by the headless worker jobs a seed-only
+  DB never runs — now seeded deterministically + idempotently with BCBS 239 lineage per table
+  (Q4.5 green; periods/channel chosen to not collide with the 2026-09/2026-10 integration fixtures);
+  and (b) `services/bff/scripts/serve.ts` wired only 5 of ~25 stores while the deployed `worker.ts`
+  wires the full set — brought serve.ts to **full parity** (a real local-dev / run-ofbo correctness
+  fix, not just demo polish). Reconciliation Console went from empty → KPIs + Break Queue.
+- **#121 — KPI hierarchy + path references (P1/P2).** Top-level scalar/Money metrics now render as
+  prominent KPI figures (text-3xl, JetBrains-Mono `tabular-nums` per the Stitch financial-numerals
+  principle) — e.g. MTD Nebras Fee Accrual reads as a large AED figure; objects/arrays keep the
+  structured render. API/route-path strings render as muted `<code>` references, not body text.
+
+Net: the data-dense screens went from broken-looking (placeholders, flat text, empty states) to
+on-Stitch-intent — high-density tables, status badges, prominent KPIs, FRESH indicators, styled
+path refs. Tests: analytics-dashboard.spec 4→10; full unit 641→654. Stitch ref: project 8050269076066130289.
