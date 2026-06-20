@@ -16,6 +16,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Keep the demo DB migrated + populated with the rich "operating back office" scenario so
+  # the hosted demo shows real depth (recon history, break queue, four-eyes approvals, risk
+  # signals, disputes) — not empty consoles. Both steps are idempotent and synthetic-only;
+  # the demo environment is permanently non-prod (zero real PSU data).
+  seed-demo:
+    name: DB → migrate + rich demo seed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: apply migrations + seed the demo scenario
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: pnpm db:apply && pnpm db:seed:demo
+
   deploy-bff:
     name: BFF → Cloudflare Workers
     runs-on: ubuntu-latest
@@ -74,7 +94,7 @@ jobs:
 
   smoke:
     name: Smoke — demo URL live
-    needs: [deploy-bff, deploy-portal, deploy-sim]
+    needs: [seed-demo, deploy-bff, deploy-portal, deploy-sim]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
