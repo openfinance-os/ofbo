@@ -9,6 +9,13 @@ on:
     branches: [main]
   pull_request:
 
+# Supersede in-progress runs for the same branch/PR: a new push cancels the stale
+# run rather than letting both consume runners (deploy.yml/release-evidence.yml
+# already do this). Distinct groups per ref so branches never cancel each other.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   q1-build-unit:
     name: Q1 — build + unit
