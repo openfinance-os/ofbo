@@ -19,7 +19,8 @@ const directory: ConsentDirectory = {
     if (identifier === 'known-psu') return { psu: { bank_customer_id: 'cust-internal-1', account_count: 2 }, consents: [] }
     return null
   },
-  getByConsentId: () => null // unused by the care-surface service; present to satisfy the port
+  getByConsentId: () => null, // unused by the care-surface service; present to satisfy the port
+  psuByConsentId: () => null
 }
 
 // Each real mint yields a distinct token, so the idempotency test proves caching
