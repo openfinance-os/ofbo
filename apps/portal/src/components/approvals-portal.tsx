@@ -1,4 +1,5 @@
 import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
+import { Notice, ErrorBanner } from './ui'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -112,21 +113,14 @@ export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, e
     <div className="space-y-6" data-testid="approvals-portal">
       <h1 className="text-2xl font-semibold">Four-Eyes Approval Portal</h1>
 
-      {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="approvals-notice">
-          {notice}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="approvals-error">
-          {error}
-        </p>
-      ) : null}
+      {notice ? <Notice testid="approvals-notice">{notice}</Notice> : null}
+      {error ? <ErrorBanner testid="approvals-error">{error}</ErrorBanner> : null}
 
-      <section className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
+      <section aria-labelledby="pending-approvals-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
         <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
-          <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Pending Approvals</h2>
-          <span className="bg-break/10 text-break px-2 py-0.5 rounded-full text-xs font-bold">{approvals.length}</span>
+          <h2 id="pending-approvals-heading" className="font-bold text-sm text-primary uppercase tracking-widest">Pending Approvals</h2>
+          <span aria-hidden="true" className="bg-break/10 text-break px-2 py-0.5 rounded-full text-xs font-bold">{approvals.length}</span>
+          <span className="sr-only">{approvals.length} pending approvals</span>
         </div>
         <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
           {approvals.length === 0 ? (

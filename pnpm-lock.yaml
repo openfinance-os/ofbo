@@ -99,6 +99,9 @@ importers:
       autoprefixer:
         specifier: ^10.5.0
         version: 10.5.0(postcss@8.5.15)
+      axe-core:
+        specifier: ^4.10.0
+        version: 4.12.1
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
@@ -111,6 +114,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest-axe:
+        specifier: ^0.1.0
+        version: 0.1.0(vitest@2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(terser@5.16.9))
       wrangler:
         specifier: ^4.16.0
         version: 4.100.0
@@ -2179,6 +2185,10 @@ packages:
   aws4fetch@1.0.20:
     resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
+  axe-core@4.12.1:
+    resolution: {integrity: sha512-s7iGf5GaVMxEG0ENN9x+xTr7GFZCb1ZP/1uATUpCEK2X78nDB3RwbtFCo9pGAf9ru+VwoQ464DkaLEeRM08wJA==}
+    engines: {node: '>=4'}
+
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
@@ -2968,6 +2978,9 @@ packages:
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
     engines: {node: '>=10'}
+
+  lodash-es@4.18.1:
+    resolution: {integrity: sha512-J8xewKD/Gk22OZbhpOVSwcs60zhd95ESDwezOFuA3/099925PdHJ7OFHNTGtajL3AlZkykD32HykiMo+BIBI8A==}
 
   lodash.merge@4.6.2:
     resolution: {integrity: sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ==}
@@ -3840,6 +3853,11 @@ packages:
         optional: true
       terser:
         optional: true
+
+  vitest-axe@0.1.0:
+    resolution: {integrity: sha512-jvtXxeQPg8R/2ANTY8QicA5pvvdRP4F0FsVUAHANJ46YCDASie/cuhlSzu0DGcLmZvGBSBNsNuK3HqfaeknyvA==}
+    peerDependencies:
+      vitest: '>=0.16.0'
 
   vitest@2.1.9:
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
@@ -6060,6 +6078,8 @@ snapshots:
 
   aws4fetch@1.0.20: {}
 
+  axe-core@4.12.1: {}
+
   balanced-match@1.0.2: {}
 
   balanced-match@4.0.4: {}
@@ -6952,6 +6972,8 @@ snapshots:
     dependencies:
       p-locate: 5.0.0
 
+  lodash-es@4.18.1: {}
+
   lodash.merge@4.6.2: {}
 
   loupe@3.2.1: {}
@@ -7810,6 +7832,16 @@ snapshots:
       '@types/node': 22.19.21
       fsevents: 2.3.3
       terser: 5.16.9
+
+  vitest-axe@0.1.0(vitest@2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(terser@5.16.9)):
+    dependencies:
+      aria-query: 5.3.2
+      axe-core: 4.12.1
+      chalk: 5.6.2
+      dom-accessibility-api: 0.5.16
+      lodash-es: 4.18.1
+      redent: 3.0.0
+      vitest: 2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(terser@5.16.9)
 
   vitest@2.1.9(@types/node@22.19.21)(jsdom@25.0.1)(terser@5.16.9):
     dependencies:

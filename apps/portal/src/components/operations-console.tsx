@@ -1,4 +1,5 @@
 import { AnalyticsSection } from './analytics-dashboard'
+import { ErrorBanner } from './ui'
 import type { AnalyticsView } from '../lib/analytics'
 
 /**
@@ -20,11 +21,7 @@ export function OperationsConsole({ view, error }: OperationsConsoleProps) {
     <div className="space-y-6" data-testid="operations-console">
       <h1 className="text-2xl font-semibold">Operations Console</h1>
 
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="operations-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorBanner testid="operations-error">{error}</ErrorBanner> : null}
 
       {view ? (
         <AnalyticsSection title="Platform Operations" view={view} testid="operations-section" />

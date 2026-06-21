@@ -25,6 +25,7 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
 
   return (
     <div className="flex min-h-screen bg-background text-on-surface" data-testid="app-shell" data-density={compact ? 'compact' : 'comfortable'}>
+      <a href="#shell-content" className="skip-link" data-testid="skip-link">Skip to main content</a>
       {/* Sidebar (Stitch: w-60 = 240px) */}
       <aside
         className={`${collapsed ? 'w-16' : 'w-60'} shrink-0 sticky top-0 h-screen bg-surface border-r border-outline-variant flex flex-col py-container-padding transition-[width]`}
@@ -76,7 +77,7 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
             </button>
             {/* persona badge — absorbs the M1 scope-echo */}
             <div className="flex items-center gap-2" data-testid="persona-badge">
-              <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary text-xs font-medium" data-testid="role-badge">
+              <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary-container text-xs font-medium" data-testid="role-badge">
                 {principal.persona}
               </span>
               {principal.superadmin ? (
@@ -90,7 +91,7 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
             </div>
           </div>
         </header>
-        <main className="flex-1 px-container-padding py-6 min-w-0" data-testid="shell-content">
+        <main id="shell-content" className="flex-1 px-container-padding py-6 min-w-0" data-testid="shell-content">
           {children}
         </main>
       </div>

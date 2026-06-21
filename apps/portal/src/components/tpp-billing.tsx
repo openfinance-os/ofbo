@@ -1,4 +1,5 @@
 import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty } from '../lib/tpp-billing'
+import { Notice, ErrorBanner } from './ui'
 
 /**
  * UI-08 — TPP Billing & Registry, translated from the Stitch "OFBO - TPP Billing &
@@ -137,7 +138,7 @@ function InvoiceRunForm({ invoiceRunAction }: { invoiceRunAction?: TppBillingPro
         <span className="block text-on-surface-variant mb-1">Record set id</span>
         <input name="record_set_id" placeholder="rec-…" className="bg-surface-container text-xs font-mono border border-outline-variant rounded px-2 py-1" />
       </label>
-      <button type="submit" className="bg-primary-container text-on-primary px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
+      <button type="submit" className="bg-primary-container text-on-primary-container px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
         Run monthly invoicing
       </button>
     </form>
@@ -161,16 +162,8 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], error, notic
         </div>
       </div>
 
-      {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="tpp-notice">
-          {notice}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="tpp-error">
-          {error}
-        </p>
-      ) : null}
+      {notice ? <Notice testid="tpp-notice">{notice}</Notice> : null}
+      {error ? <ErrorBanner testid="tpp-error">{error}</ErrorBanner> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} />
