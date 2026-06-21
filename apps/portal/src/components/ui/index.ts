@@ -2,3 +2,4 @@
 export { Notice, ErrorBanner } from './feedback'
 export { StatusBadge, statusTone, statusToneOrNeutral } from './status-badge'
 export { Panel } from './panel'
+export { ConfirmSubmit } from './confirm-submit'

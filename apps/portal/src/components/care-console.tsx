@@ -1,5 +1,5 @@
 import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
-import { Notice, ErrorBanner } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit } from './ui'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -136,16 +136,23 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
             <input type="hidden" name="consent_id" value={consent.consent_id} />
             <input type="hidden" name="identifier_type" value={identifierType} />
             <input type="hidden" name="identifier" value={psu} />
-            <select name="reason_code" aria-label="revoke reason" className="bg-surface-container text-xs border border-outline-variant rounded px-1 py-1">
+            <select name="reason_code" aria-label="revoke reason" defaultValue="" required className="bg-surface-container text-xs border border-outline-variant rounded px-1 py-1">
+              <option value="" disabled>
+                Reason…
+              </option>
               {REVOKE_REASON_CODES.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
             </select>
-            <button type="submit" className="bg-breach text-on-error px-3 py-1 rounded text-xs font-bold hover:bg-error transition-colors">
-              Revoke
-            </button>
+            <ConfirmSubmit
+              label="Revoke"
+              confirmLabel="Confirm revoke"
+              summary={`Revoke ${consent.tpp.display_name}'s consent. This propagates to Nebras (≤5s) and cannot be undone.`}
+              className="bg-breach text-on-error px-3 py-1 rounded text-xs font-bold hover:bg-error transition-colors"
+              testid={`revoke-submit-${consent.consent_id}`}
+            />
           </form>
         ) : null}
       </div>

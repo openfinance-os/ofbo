@@ -1,5 +1,6 @@
 import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak } from '../lib/reconciliation'
 import { StatusBadge } from './recon-console'
+import { ConfirmSubmit } from './ui'
 
 /**
  * UI-04 — Investigation Detail View, translated from the Stitch "OFBO - Investigation
@@ -109,9 +110,13 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
         {canDispute && escalatable && !break_.nebras_dispute_case_id && escalateAction ? (
           <form action={escalateAction} className="mt-3" data-testid="escalate-form">
             <input type="hidden" name="break_id" value={break_.id} />
-            <button type="submit" className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-              Escalate to Nebras
-            </button>
+            <ConfirmSubmit
+              label="Escalate to Nebras"
+              confirmLabel="Confirm escalation"
+              summary={`Raise a Nebras dispute for break ${break_.client_id}${break_.variance_amount ? ` (${formatMoney(break_.variance_amount)})` : ''}. This creates an external case via the egress gateway and cannot be undone.`}
+              className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              testid="escalate-submit"
+            />
           </form>
         ) : null}
       </div>

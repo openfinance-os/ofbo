@@ -950,3 +950,17 @@ First story off the UI/UX review (`docs/ui-ux-review.md`). Closed the CRITICAL a
 Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 203 pass (incl. design-conformance 34, design-tokens 8, no-raw-style 3 — token discipline held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
 
 **Backlog:** UX-01 → done. Remaining UX: UX-02..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
+
+---
+
+## 2026-06-21 — UX-02 confirmation + forced-choice on irreversible actions (UX-hardening)
+
+Operator-safety story from the UI/UX review: the three single-click, externally-visible, irreversible actions now require an explicit confirm, and two audited enum selects can no longer record a silent default.
+
+- **`components/ui/confirm-submit.tsx`** — an accessible two-step `ConfirmSubmit` (client island): the action button is `type=button` until armed; arming reveals a plain-language summary + a real `type=submit` "Confirm" + "Cancel". Real buttons + a labelled group (no native `confirm()`), and because Confirm submits the enclosing form, native validation (the required selects) still runs.
+- **Applied** to: consent **revoke** (care-console), **escalate-to-Nebras** (investigation-detail), **approve-gated-op** (approvals-portal). Each summary names the substance (TPP / break + variance / operation type).
+- **Forced-choice** — revoke `reason_code` + resolve `resolution_outcome` selects gain `required` + a disabled placeholder (`defaultValue=""`), so an audited action can't record an unintended first-enum default.
+
+Frontend-only — no contract/port/audit/lineage/spec change; the four-eyes server flow is unchanged (Confirm submits the same server action; nothing executes inline). Tests: portal unit 208 pass (new confirm-submit.spec 4; design-conformance 35 / tokens 8 / no-raw-style 3 held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
+
+**Backlog:** UX-02 → done. Remaining UX: UX-03..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
