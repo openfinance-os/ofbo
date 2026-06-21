@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
@@ -43,8 +44,22 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
+  const ar = one(sp.ar)
   const canBilling = principal.superadmin || principal.scopes.includes(SCOPES.billingWrite)
   const canOps = principal.superadmin || principal.scopes.includes(SCOPES.operationsWrite)
+
+  // UX-03 — on a four-eyes submit, give the initiator the request id + a deep-link to track it.
+  const notice: ReactNode =
+    status === 'invoice_submitted' ? (
+      <>
+        Invoice run submitted to four-eyes{ar ? <> — request <span className="font-mono">{ar}</span></> : null}. A second authorised principal approves before P9 dispatch.{' '}
+        <a href="/approvals" className="underline font-semibold">
+          Track in the approvals queue →
+        </a>
+      </>
+    ) : (
+      NOTICE[status] ?? null
+    )
 
   let counterparties: TppCounterparty[] = []
   let invoiceRuns: InvoiceRun[] = []
@@ -69,7 +84,7 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
         counterparties={counterparties}
         invoiceRuns={invoiceRuns}
         error={error}
-        notice={NOTICE[status] ?? null}
+        notice={notice}
         canBilling={canBilling}
         canOps={canOps}
         registerAction={registerFinancialSystemAction}

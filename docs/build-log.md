@@ -987,3 +987,16 @@ A run of demo-quality, performance, and infra work (driven interactively, outsid
 
 **Demo DB region relocation (infra, no code):** moved the Supabase demo DB Seoul → Singapore → **Mumbai (`ap-south-1`)** for UAE proximity (nearest Supabase region to the UAE; Cloudflare Dubai edge → Mumbai ≈ 1,900 km). Each move: re-`db:apply`+`db:seed:demo`, repoint the Hyperdrive config + worker secret + GitHub Actions `DATABASE_URL` secret + `.env`, redeploy. Synthetic data only — re-seed *is* the migration (nothing to preserve).
 - **Caveat (unchanged):** this is the synthetic, non-prod demo. Production UAE **data residency** still requires a UAE-region Postgres (AWS `me-central-1` Dubai) provisioned via Terraform — region as an IaC parameter, a separate track. Supabase has no UAE/Middle-East region.
+
+---
+
+## 2026-06-21 — UX-03 four-eyes initiator feedback (UX-hardening; scoped)
+
+From the UI/UX review's four-eyes gap. The user chose to ship the **unblocked frontend parts** only; the operation-payload-on-cards item is blocked (the ApprovalRequest contract is PII-redacted by design) and split to UX-03c (ADR).
+
+- **Initiator gets the request id + a way to track it**: the invoice-run server action (tpp-billing) now captures the returned `approval_request_id` and appends `?ar=`; the page renders a richer notice (text + a deep-link to `/approvals`). `TppBilling.notice` widened `string → ReactNode`.
+- **Expiry urgency**: approval cards show relative expiry ("Expires in 1h 45m") via a pure `formatExpiry(expiresAt, now)` helper (now injected for determinism), with a `text-breach` + "expiring soon" tone in the last 30 minutes (2h default expiry, PRD §10).
+
+Frontend-only — no contract/port/audit/lineage/spec change; four-eyes execution flow unchanged (the surfaced `approval_request_id` is a UUID, not PII). Tests: portal unit 215 pass (new ux03-foureyes-feedback.spec 7; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-03 → done. Split: **UX-03b** (pending-count nav badge — needs per-page count or shared-shell refactor) pending; **UX-03c** (operation context on cards) blocked → ADR. Remaining UX: UX-04..09 pending; UX-10/UX-11 blocked on ADRs.
