@@ -1280,3 +1280,17 @@ The final UX-03c step. The contract (#171) + BFF (#172) now serve a NON-PII `ope
 Reviewers: hard-stop **PASS** (no new PII), contract-conformance **CONFORMANT** (drift-guard verified). Portal unit 287 pass (new operation-summary.spec 4); typecheck + lint clean.
 
 **UX-03c is now COMPLETE** (ADR 0014 → spec #171 → BFF #172 → portal). The second four-eyes approver now sees real, PII-safe operation context. With this, **every UX/UI backlog item is done** (UX-11 won't-do by decision); the only open backlog items are enterprise/BD-gated (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS).
+
+---
+
+## 2026-06-21 — UX-06e: finish read-path remediation wiring (approvals/tpp/analytics/risk)
+
+UX-06 part 1 wired only care + reconciliation; this completes it across the remaining four consoles, so any load-failure banner shows the BFF's `remediation` + `docs_url`, not a bare message:
+
+- **AnalyticsApiError** extended (+`remediation`/+`docsUrl`) and its envelope now parses `error.remediation`/`error.docs_url` (the other 4 lib clients already did; analytics **and** risk share this one envelope via `getAnalyticsView`).
+- **approvals** + **tpp-billing** pages capture the typed error's remediation/docsUrl (clean single-source catches); **analytics** + **risk** capture from the first typed `AnalyticsApiError` across their multi-source fetches.
+- All four consoles forward `errorRemediation`/`errorDocsUrl` to the shared `ErrorBanner` (renders the remediation line + the http(s)-guarded docs link).
+
+Display-only operator guidance — `remediation`/`docs_url` are already REQUIRED on the spec ErrorEnvelope; no PSU PII, no contract change (aligns the analytics client to the existing contract). Tests: portal unit 288 pass (analytics.spec +1 — envelope remediation parse); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Every console's read-path error banner now surfaces remediation.** With this, the implementable UX backlog is fully exhausted — remaining items are enterprise/BD-gated (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS).

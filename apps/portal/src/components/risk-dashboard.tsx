@@ -16,9 +16,11 @@ export interface RiskDashboardProps {
   riskView?: AnalyticsView | null
   liabilityMonitor?: AnalyticsView | null
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
 }
 
-export function RiskDashboard({ riskView, liabilityMonitor, error }: RiskDashboardProps) {
+export function RiskDashboard({ riskView, liabilityMonitor, error, errorRemediation, errorDocsUrl }: RiskDashboardProps) {
   return (
     <div className="space-y-8" data-testid="risk-dashboard">
       <div className="flex items-center justify-between gap-3">
@@ -26,7 +28,7 @@ export function RiskDashboard({ riskView, liabilityMonitor, error }: RiskDashboa
         <span className="px-2 py-0.5 rounded-full bg-breach/10 text-breach text-xs font-bold uppercase tracking-wider">Narrow Risk scope</span>
       </div>
 
-      {error ? <ErrorBanner testid="risk-error">{error}</ErrorBanner> : null}
+      {error ? <ErrorBanner testid="risk-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
 
       {riskView ? <AnalyticsSection title="Risk Signals & Anomalies" view={riskView} testid="risk-view-section" /> : null}
       {liabilityMonitor ? <AnalyticsSection title="Nebras Liability Monitor" view={liabilityMonitor} testid="liability-section" /> : null}

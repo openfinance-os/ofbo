@@ -18,6 +18,8 @@ export interface TppBillingProps {
   counterparties?: TppCounterparty[]
   invoiceRuns?: InvoiceRun[]
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
   notice?: ReactNode
   registryMoreHref?: string | null
   invoiceMoreHref?: string | null
@@ -129,7 +131,7 @@ export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: Invoi
   )
 }
 
-export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
+export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, errorRemediation, errorDocsUrl, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
   return (
     <div className="space-y-6" data-testid="tpp-billing">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -143,7 +145,7 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], registryMore
       </div>
 
       {notice ? <Notice testid="tpp-notice">{notice}</Notice> : null}
-      {error ? <ErrorBanner testid="tpp-error">{error}</ErrorBanner> : null}
+      {error ? <ErrorBanner testid="tpp-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />

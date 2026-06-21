@@ -27,7 +27,9 @@ export class AnalyticsApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly remediation?: string,
+    readonly docsUrl?: string
   ) {
     super(message)
   }
@@ -59,10 +61,10 @@ const FALLBACK_FRESHNESS: FreshnessEnvelope = { view_refreshed_at: '', stale: tr
 async function analyticsView(res: Response): Promise<AnalyticsView> {
   const body = (await res.json().catch(() => ({}))) as {
     data?: Record<string, unknown>
-    error?: { code?: string; message?: string }
+    error?: { code?: string; message?: string; remediation?: string; docs_url?: string }
     freshness?: FreshnessEnvelope
   }
-  if (!res.ok) throw new AnalyticsApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status)
+  if (!res.ok) throw new AnalyticsApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status, body.error?.remediation, body.error?.docs_url)
   return { data: body.data ?? {}, freshness: body.freshness ?? FALLBACK_FRESHNESS }
 }
 
