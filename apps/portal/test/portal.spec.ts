@@ -139,6 +139,17 @@ describe('recentAudit', () => {
     expect(events[0]?.event_type).toBe('signin_success')
   })
 
+  it('forwards excludeEventTypes + limit so the dashboard panel can drop auth/scope noise', async () => {
+    const recent = vi.fn(async () => [])
+    const source: AuditSource = { recent }
+    await recentAudit(principal, { auditSource: source }, { excludeEventTypes: ['signin_success', 'scope_denied'], limit: 15 })
+    expect(recent).toHaveBeenCalledWith({
+      actingPrincipal: 'demo:risk-analyst',
+      limit: 15,
+      excludeEventTypes: ['signin_success', 'scope_denied']
+    })
+  })
+
   it('returns no events when no audit source is configured', async () => {
     await expect(recentAudit(principal, { auditSource: null })).resolves.toEqual([])
   })

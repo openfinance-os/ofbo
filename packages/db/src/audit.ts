@@ -173,13 +173,28 @@ export class PgAuditReader {
   }
 
   /** Recent events, newest first. Optionally scoped to one acting principal. */
-  async recent(opts: { actingPrincipal?: string; limit?: number } = {}): Promise<AuditEventSummary[]> {
+  async recent(opts: { actingPrincipal?: string; limit?: number; excludeEventTypes?: string[] } = {}): Promise<AuditEventSummary[]> {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100)
     const c = await this.pool.connect()
     try {
       await c.query(beginAppTx(this.config.bankId))
-      const where = opts.actingPrincipal ? 'WHERE acting_principal = $1' : ''
-      const params = opts.actingPrincipal ? [opts.actingPrincipal, limit] : [limit]
+      // Build the WHERE incrementally so callers can scope by principal AND/OR drop
+      // low-signal event types (the dashboard panel excludes signin/scope_denied noise
+      // so operational events stay visible in its short window).
+      const conds: string[] = []
+      const params: unknown[] = []
+      if (opts.actingPrincipal) {
+        params.push(opts.actingPrincipal)
+        conds.push(`acting_principal = $${params.length}`)
+      }
+      const exclude = opts.excludeEventTypes ?? []
+      if (exclude.length) {
+        const placeholders = exclude.map((_, i) => `$${params.length + i + 1}`).join(', ')
+        conds.push(`event_type NOT IN (${placeholders})`)
+        params.push(...exclude)
+      }
+      params.push(limit)
+      const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
       const { rows } = await c.query(
         `SELECT id, event_type, acting_principal, acting_persona, scope_used,
                 request_trace_id, response_status, superadmin_marker, created_at
