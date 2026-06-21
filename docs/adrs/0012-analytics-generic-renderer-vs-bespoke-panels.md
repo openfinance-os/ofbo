@@ -1,6 +1,6 @@
 # ADR 0012 — Analytics generic renderer vs bespoke panels
 
-- Status: **Accepted — Option 1** (user decision, 2026-06-21)
+- Status: **Superseded by ADR 0016** (2026-06-21) — was "Accepted — Option 1" (user decision, 2026-06-21); the user reversed to Option 2 (typed panels) the same day.
 - Date: 2026-06-21
 - Related: UI-06/-07/-09 (Analytics, Risk, Operations screens), BACKOFFICE-27/-30/-31/-28 (free-form analytics contracts), `docs/design-conformance-audit.md`, `docs/ui-ux-review.md`
 
