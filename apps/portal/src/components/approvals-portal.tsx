@@ -37,13 +37,29 @@ export function ApprovalStateBadge({ state }: { state: string }) {
   )
 }
 
+/**
+ * UX-03 — relative expiry + urgency. Pure (now injected) so it's deterministic in tests.
+ * A 2-business-hour default expiry (PRD §10) is unreadable as a raw timestamp; this gives
+ * the approver "Expires in 1h 45m" and flags the last 30 minutes.
+ */
+export function formatExpiry(expiresAt: string, now: number): { label: string; urgent: boolean; expired: boolean } {
+  const ms = new Date(expiresAt).getTime() - now
+  if (Number.isNaN(ms)) return { label: `Expires ${expiresAt}`, urgent: false, expired: false }
+  if (ms <= 0) return { label: 'Expired', urgent: true, expired: true }
+  const mins = Math.floor(ms / 60000)
+  const h = Math.floor(mins / 60)
+  const rel = h > 0 ? `${h}h ${mins % 60}m` : `${mins}m`
+  return { label: `Expires in ${rel}`, urgent: mins <= 30, expired: false }
+}
+
 export function ApprovalCard({
   approval,
   subject,
   scopes,
   superadmin,
   approveAction,
-  rejectAction
+  rejectAction,
+  now = Date.now()
 }: {
   approval: ApprovalRequest
   subject: string
@@ -51,7 +67,9 @@ export function ApprovalCard({
   superadmin?: boolean
   approveAction?: ApprovalsPortalProps['approveAction']
   rejectAction?: ApprovalsPortalProps['rejectAction']
+  now?: number
 }) {
+  const expiry = formatExpiry(approval.expires_at, now)
   const actable = canActOn(approval, subject, scopes, superadmin ?? false)
   const isInitiator = approval.initiator === subject
   return (
@@ -73,7 +91,9 @@ export function ApprovalCard({
         </div>
       </div>
 
-      <p className="text-xs text-on-surface-variant mt-2">Expires {approval.expires_at}</p>
+      <p className={`text-xs mt-2 ${expiry.urgent ? 'text-breach font-semibold' : 'text-on-surface-variant'}`} data-testid={`expiry-${approval.approval_request_id}`} title={approval.expires_at}>
+        {expiry.label}{expiry.urgent && !expiry.expired ? ' · expiring soon' : ''}
+      </p>
       {approval.reject_reason ? <p className="text-xs text-breach mt-1">Rejected: {approval.reject_reason}</p> : null}
 
       {actable && approveAction && rejectAction ? (

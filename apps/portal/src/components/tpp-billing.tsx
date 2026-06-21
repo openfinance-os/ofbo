@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty } from '../lib/tpp-billing'
 import { Notice, ErrorBanner } from './ui'
 
@@ -14,7 +15,7 @@ export interface TppBillingProps {
   counterparties?: TppCounterparty[]
   invoiceRuns?: InvoiceRun[]
   error?: string | null
-  notice?: string | null
+  notice?: ReactNode
   /** billing:write — register P9 + create invoice runs. */
   canBilling?: boolean
   /** platform:operations:write — sync the Trust Framework Directory. */

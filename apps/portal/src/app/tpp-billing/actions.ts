@@ -56,10 +56,13 @@ export async function createInvoiceRunAction(formData: FormData) {
   const billingPeriod = String(formData.get('billing_period') ?? '')
   const recordSetId = String(formData.get('record_set_id') ?? '')
   let status = 'invoice_submitted'
+  let approvalId = ''
   try {
-    await createInvoiceRun(token, { billing_period: billingPeriod, record_set_id: recordSetId }, crypto.randomUUID())
+    const approval = await createInvoiceRun(token, { billing_period: billingPeriod, record_set_id: recordSetId }, crypto.randomUUID())
+    approvalId = approval.approval_request_id ?? ''
   } catch {
     status = 'invoice_failed'
   }
-  redirect(`/tpp-billing?status=${status}`)
+  // Surface the approval id so the initiator can track the four-eyes request (UX-03).
+  redirect(`/tpp-billing?status=${status}${approvalId ? `&ar=${encodeURIComponent(approvalId)}` : ''}`)
 }
