@@ -8,6 +8,10 @@
 #   pnpm demo:fault rate-limit <n>                         # 429 the next N report polls (back-off)
 #   pnpm demo:fault list                                   # show active faults
 #   pnpm demo:fault clear                                  # remove all injected faults
+#
+# fee-variance / rate-limit perturb the upstream Nebras surfaces; they only reach the back
+# office once it runs its ingestion pass. Follow with `pnpm demo:ingest <period>` to pull the
+# fault in on demand (Finance View freshness/aggregate) and refresh risk signals.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 [ -f "$ROOT/.env" ] && { set -a; . "$ROOT/.env"; set +a; }
@@ -24,7 +28,7 @@ case "$cmd" in
     period="${2:?usage: demo:fault fee-variance <period> <minor_units>}"; minor="${3:?minor_units required}"
     echo "Injecting fee_variance: +${minor} fils on period ${period} …"
     inject "{\"fault\":\"fee_variance\",\"period\":\"${period}\",\"variance_minor_units\":${minor}}"
-    echo "→ verify the perturbed line:  curl ${SIM}/tpp-reports/${period}" ;;
+    echo "→ pull it into the back office:  pnpm demo:ingest ${period}   (then refresh the Finance View)" ;;
   revoke-delay)
     ms="${2:?usage: demo:fault revoke-delay <ms>}"
     echo "Injecting revoke_delay: ${ms}ms (>5000 breaches the scheme SLA) …"
@@ -32,7 +36,8 @@ case "$cmd" in
   rate-limit)
     n="${2:?usage: demo:fault rate-limit <n>}"
     echo "Injecting report_rate_limit: 429 the next ${n} report poll(s) …"
-    inject "{\"fault\":\"report_rate_limit\",\"fail_times\":${n}}" ;;
+    inject "{\"fault\":\"report_rate_limit\",\"fail_times\":${n}}"
+    echo "→ pull it into the back office:  pnpm demo:ingest   (exhausted retries → amber freshness)" ;;
   list)
     echo "Active faults:"; curl -fsS "$SIM/admin/faults" "${HDR[@]}"; echo ;;
   clear)
