@@ -128,9 +128,13 @@ export async function searchConsents(token: string, identifierType: IdentifierTy
  * GET /psu/{psu_identifier}/audit-trail. The data array is the chronological
  * events; meta.next_cursor pages older events (the console renders the first page).
  */
-export async function getPsuAuditTrail(token: string, psuIdentifier: string, deps: CareApiDeps = {}): Promise<CareTimeline> {
+export async function getPsuAuditTrail(token: string, psuIdentifier: string, query: { cursor?: string; limit?: number } = {}, deps: CareApiDeps = {}): Promise<CareTimeline> {
   const { base, f, trace } = resolve(deps)
-  const url = `${base}/psu/${encodeURIComponent(psuIdentifier)}/audit-trail`
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.limit != null) params.set('limit', String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const url = `${base}/psu/${encodeURIComponent(psuIdentifier)}/audit-trail${suffix}`
   const res = await f(url, { headers: { authorization: `Bearer ${token}`, 'x-fapi-interaction-id': trace } })
   const { data, meta } = await envelope<CareTimelineEvent[]>(res)
   return { events: data ?? [], next_cursor: (meta?.next_cursor as string | null) ?? null }

@@ -62,9 +62,13 @@ async function envelope<T>(res: Response): Promise<{ data: T; meta?: Record<stri
 const authHeaders = (token: string, trace: string) => ({ authorization: `Bearer ${token}`, 'x-fapi-interaction-id': trace })
 
 /** GET /approvals/pending — pending requests the caller holds approver_required_scope for. */
-export async function listPendingApprovals(token: string, deps: ApprovalApiDeps = {}): Promise<{ approvals: ApprovalRequest[]; next_cursor: string | null }> {
+export async function listPendingApprovals(token: string, query: { cursor?: string; limit?: number } = {}, deps: ApprovalApiDeps = {}): Promise<{ approvals: ApprovalRequest[]; next_cursor: string | null }> {
   const { base, f, trace } = resolve(deps)
-  const res = await f(`${base}/approvals/pending`, { headers: authHeaders(token, trace) })
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.limit != null) params.set('limit', String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const res = await f(`${base}/approvals/pending${suffix}`, { headers: authHeaders(token, trace) })
   const { data, meta } = await envelope<ApprovalRequest[]>(res)
   return { approvals: data ?? [], next_cursor: (meta?.next_cursor as string | null) ?? null }
 }

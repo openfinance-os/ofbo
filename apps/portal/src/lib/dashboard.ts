@@ -62,7 +62,7 @@ async function reconKpis(token: string, deps: DashboardDeps): Promise<Kpi[]> {
 
 /** Pending four-eyes the caller can action (dynamic scope → available to every persona). */
 async function approvalsKpi(token: string, deps: DashboardDeps): Promise<Kpi[]> {
-  const { approvals } = await listPendingApprovals(token, deps)
+  const { approvals } = await listPendingApprovals(token, {}, deps)
   return [
     {
       key: 'pending-approvals',

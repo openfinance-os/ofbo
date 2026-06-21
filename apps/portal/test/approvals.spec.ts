@@ -28,7 +28,7 @@ const pending: ApprovalRequest = {
 describe('approvals client', () => {
   it('GETs /approvals/pending and returns rows + next_cursor', async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: [pending], meta: { next_cursor: null } }))
-    const out = await listPendingApprovals(TOKEN, { baseUrl: BASE, fetchImpl, traceId: 't1' })
+    const out = await listPendingApprovals(TOKEN, {}, { baseUrl: BASE, fetchImpl, traceId: 't1' })
     expect(out.approvals).toHaveLength(1)
     const [url, init] = fetchImpl.mock.calls[0]!
     expect(url).toBe(`${BASE}/approvals/pending`)

@@ -43,9 +43,11 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   const identifierType = (one(sp.identifier_type) as IdentifierType) ?? 'bank_customer_id'
   const identifier = one(sp.identifier) ?? ''
   const status = one(sp.status) ?? ''
+  const timelineCursor = one(sp.timeline_cursor)
 
   let result: ConsentSearchResult | null = null
   let timeline: CareTimeline | null = null
+  let timelineMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
 
   if (identifier.trim()) {
@@ -54,7 +56,12 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
       const canReadAudit = principal.superadmin || principal.scopes.includes(SCOPES.auditRead)
       if (canReadAudit) {
         try {
-          timeline = await getPsuAuditTrail(token, result.psu.bank_customer_id)
+          timeline = await getPsuAuditTrail(token, result.psu.bank_customer_id, { cursor: timelineCursor })
+          if (timeline.next_cursor) {
+            // Preserve the active PSU search; page older events via timeline_cursor (UX-04b).
+            const q = new URLSearchParams({ identifier_type: identifierType, identifier, timeline_cursor: timeline.next_cursor })
+            timelineMoreHref = `/care?${q.toString()}`
+          }
         } catch {
           timeline = { events: [], next_cursor: null }
         }
@@ -73,6 +80,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
         query={{ identifier_type: identifierType, identifier }}
         result={result}
         timeline={timeline}
+        timelineMoreHref={timelineMoreHref}
         error={error}
         notice={NOTICE[status] ?? null}
         revokeAction={revokeConsentAction}
