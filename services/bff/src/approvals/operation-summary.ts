@@ -23,7 +23,14 @@ export interface ApprovalOperationSummary {
   descriptor?: string
 }
 
-const safeStr = (v: unknown): string | undefined => (typeof v === 'string' && v.length > 0 ? v : undefined)
+// Format-validate the few payload VALUES we echo into the descriptor. The generic POST /approvals
+// route accepts an arbitrary operation_payload, so a caller could put PSU free-text in these
+// fields; re-validating here (not just type+non-empty) keeps the descriptor PII-safe regardless
+// of how the approval was created — defense in depth at the summary boundary.
+const BULK_REVOKE_REASONS = new Set(['CLIENT_INSTRUCTION']) // the sole valid bulk-revoke reason (consents/bulk-revoke VALID_REASON_CODES)
+const BILLING_PERIOD = /^[0-9]{4}-(0[1-9]|1[0-2])$/ // YYYY-MM only
+const safeEnum = (v: unknown, allowed: Set<string>): string | undefined => (typeof v === 'string' && allowed.has(v) ? v : undefined)
+const safeMatch = (v: unknown, re: RegExp): string | undefined => (typeof v === 'string' && re.test(v) ? v : undefined)
 
 function safeMoney(v: unknown): Money | undefined {
   if (v && typeof v === 'object') {
@@ -40,8 +47,8 @@ function safeMoney(v: unknown): Money | undefined {
 export function summariseOperation(operationType: string, payload: Record<string, unknown>): ApprovalOperationSummary | null {
   switch (operationType) {
     case 'tpp.invoice_run': {
-      // safe: billing_period (a YYYY-MM month). NOT: invoice_run_id, initiated_by, trace_id.
-      const period = safeStr(payload.billing_period)
+      // safe: billing_period — but only if it's a real YYYY-MM (format-validated, never raw text).
+      const period = safeMatch(payload.billing_period, BILLING_PERIOD)
       return { descriptor: period ? `Invoice run · period ${period}` : 'Invoice run' }
     }
     case 'compliance.report_generation':
@@ -53,8 +60,9 @@ export function summariseOperation(operationType: string, payload: Record<string
       return { ...(amount ? { amount } : {}), descriptor: 'Dispute refund' }
     }
     case 'consents.bulk_revoke': {
-      // safe: reason_code (a controlled enum). NEVER: psu_identifier / psu_identifier_type.
-      const reason = safeStr(payload.reason_code)
+      // safe: reason_code — but only if it's in the controlled enum (never raw text).
+      // NEVER: psu_identifier / psu_identifier_type.
+      const reason = safeEnum(payload.reason_code, BULK_REVOKE_REASONS)
       return { descriptor: reason ? `Emergency PSU-wide consent revocation · ${reason}` : 'Emergency PSU-wide consent revocation' }
     }
     case 'consents.fraud_revoke':

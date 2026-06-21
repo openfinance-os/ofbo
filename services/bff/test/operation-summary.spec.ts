@@ -38,7 +38,7 @@ const PAYLOADS: Record<string, Record<string, unknown>> = {
   'tpp.invoice_run': { invoice_run_id: PII.invoiceRunId, billing_period: '2026-05', initiated_by: PII.initiatedBy, trace_id: 't' },
   'compliance.report_generation': { report_id: PII.reportId, trace_id: 't' },
   'disputes.initiate_refund': { dispute_id: PII.disputeId, refund_amount: { amount: 145000, currency: 'AED' }, originating_consent_id: PII.originatingConsentId, initiated_by: PII.initiatedBy },
-  'consents.bulk_revoke': { psu_identifier_type: 'bank_customer_id', psu_identifier: PII.psuId, reason_code: 'REGULATORY', initiated_by: PII.initiatedBy, emirates_id: PII.emiratesId, iban: PII.iban },
+  'consents.bulk_revoke': { psu_identifier_type: 'bank_customer_id', psu_identifier: PII.psuId, reason_code: 'CLIENT_INSTRUCTION', initiated_by: PII.initiatedBy, emirates_id: PII.emiratesId, iban: PII.iban },
   'consents.fraud_revoke': { consent_id: PII.consentId, case_context: PII.caseContext, initiated_by: PII.initiatedBy },
   'reconciliation.break_reopen': { break_id: PII.breakId, justification: PII.justification, initiated_by: PII.initiatedBy }
 }
@@ -66,11 +66,30 @@ describe('summariseOperation — per-type PII redaction (ADR 0014)', () => {
 
   it('surfaces the bulk-revoke reason enum but NEVER the psu_identifier', () => {
     const s = summariseOperation('consents.bulk_revoke', PAYLOADS['consents.bulk_revoke']!)
-    expect(s?.descriptor).toContain('REGULATORY')
+    expect(s?.descriptor).toContain('CLIENT_INSTRUCTION')
     assertNoPii(s)
   })
 
   it('returns null (no summary) for an unknown/unmodelled operation type — fail safe', () => {
     expect(summariseOperation('some.future_operation', { psu_identifier: PII.psuId, secret: PII.iban })).toBeNull()
+  })
+
+  // Hardening (security review): the generic POST /approvals route accepts an arbitrary payload,
+  // so the echoed values (reason_code, billing_period) must be FORMAT-validated at the summary
+  // boundary — not just type-checked — or a caller could smuggle PSU free-text onto the four-eyes surface.
+  it('DROPS a bulk-revoke reason_code that is not the controlled enum (no free-text echo)', () => {
+    const s = summariseOperation('consents.bulk_revoke', { psu_identifier: PII.psuId, reason_code: 'PSU Jane Doe asked, IBAN AE000...' })
+    expect(s?.descriptor).toBe('Emergency PSU-wide consent revocation')
+    expect(s?.descriptor).not.toContain('Jane')
+    assertNoPii(s)
+  })
+
+  it('DROPS a malformed billing_period (only a real YYYY-MM is echoed)', () => {
+    const junk = summariseOperation('tpp.invoice_run', { billing_period: 'PSU 999-1990-7654321-0 special run' })
+    expect(junk?.descriptor).toBe('Invoice run')
+    const valid = summariseOperation('tpp.invoice_run', { billing_period: '2026-05' })
+    expect(valid?.descriptor).toBe('Invoice run · period 2026-05')
+    // also reject an out-of-range month
+    expect(summariseOperation('tpp.invoice_run', { billing_period: '2026-13' })?.descriptor).toBe('Invoice run')
   })
 })
