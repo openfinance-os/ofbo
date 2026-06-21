@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TraceContext } from '@ofbo/ports'
+import { generateDemoDataset } from '@ofbo/synthetic-data'
 import { createApp } from '../src/app.js'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
 import { FAPI_HEADERS } from './helpers.js'
@@ -61,6 +62,25 @@ describe('POST /consents/{consent_id}:revoke-admin', () => {
     expect(audit.events).toHaveLength(1)
     expect(audit.events[0]).toMatchObject({ event_type: 'consent_revoked', target_consent_id: CONSENT, scope_used: 'consents:admin' })
     expect((audit.events[0]!.request_body as { reason_code: string }).reason_code).toBe('CLIENT_INSTRUCTION')
+  })
+
+  it('stamps target_psu_identifier resolved from the consent so the revoke shows in the PSU timeline (DEMO-01)', async () => {
+    // A real consent from the deterministic dataset → createApp's directory resolves its PSU.
+    const psu = generateDemoDataset().psus[0]!
+    const consentId = psu.consents[0]!.consent_id
+    const { app, audit } = appWith()
+    const res = await app.request(`/consents/${consentId}:revoke-admin`, {
+      method: 'POST',
+      headers: care({ 'idempotency-key': 'idem-psu-stamp' }),
+      body: JSON.stringify({ reason_code: 'TPP_REQUEST' })
+    })
+    expect(res.status).toBe(200)
+    expect(audit.events).toHaveLength(1)
+    expect(audit.events[0]).toMatchObject({
+      event_type: 'consent_revoked',
+      target_consent_id: consentId,
+      target_psu_identifier: psu.bank_customer_id
+    })
   })
 
   it('rejects FRAUD_SUSPECTED (reserved for :revoke-fraud) with 400, no egress call', async () => {

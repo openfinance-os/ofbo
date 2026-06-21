@@ -321,7 +321,7 @@ export function createApp(deps: AppDeps = {}) {
   })
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
   const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
-  const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit })
+  const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
   const careSurface = deps.careSurface ?? getAdapter('p1-care-surface', profileFromConfig(process.env))
   const careSurfaceService = new CareSurfaceService({ careSurface, directory: consentDirectory, audit: highClassAudit })
 

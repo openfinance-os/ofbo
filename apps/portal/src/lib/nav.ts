@@ -31,7 +31,9 @@ export const NAV_MODULES: NavModule[] = [
   { key: 'billing', label: 'TPP Billing', href: '/tpp-billing', icon: 'receipt_long', scope: SCOPES.billingRead },
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: SCOPES.complianceRead },
   { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: SCOPES.riskRead },
-  { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: SCOPES.operationsRead }
+  { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: SCOPES.operationsRead },
+  // DEMO-01 — global audit log (cross-operator "who did X"); the Dashboard panel is self-scoped.
+  { key: 'audit', label: 'Audit Log', href: '/audit', icon: 'fact_check', scope: SCOPES.auditRead }
 ]
 
 /**

@@ -20,7 +20,8 @@ const CARE: Principal = { subject: 'demo:customer-care-agent', persona: 'custome
 
 const directory: ConsentDirectory = {
   search: (_t, id) => (id === 'known-psu' ? { psu: { bank_customer_id: 'cust-int-1', account_count: 1 }, consents: [] } : null),
-  getByConsentId: () => null
+  getByConsentId: () => null,
+  psuByConsentId: () => null
 }
 const careSurface = {
   mintCareToken: async ({ agent_id, psu_id }: { agent_id: string; psu_id: string }) => ({
