@@ -138,4 +138,29 @@ describe('AppShell', () => {
     fireEvent.click(screen.getByTestId('toggle-sidebar'))
     expect(sidebar).toHaveAttribute('data-collapsed', 'true')
   })
+
+  it('UX-10: the mobile hamburger opens the off-canvas drawer; backdrop + close + nav-click close it', () => {
+    render(
+      <AppShell principal={finance}>
+        <p>x</p>
+      </AppShell>
+    )
+    const sidebar = screen.getByTestId('sidebar')
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
+    expect(screen.queryByTestId('drawer-backdrop')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('open-drawer'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'true')
+    expect(screen.getByTestId('drawer-backdrop')).toBeInTheDocument()
+
+    // backdrop closes it
+    fireEvent.click(screen.getByTestId('drawer-backdrop'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
+
+    // a nav link closes it (mobile: tap-to-navigate dismisses the drawer)
+    fireEvent.click(screen.getByTestId('open-drawer'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'true')
+    fireEvent.click(screen.getByTestId('nav-finance'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
+  })
 })
