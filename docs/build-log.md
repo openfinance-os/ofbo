@@ -1073,3 +1073,16 @@ Already done elsewhere (verified): the contrast token-pairing fix (`text-on-prim
 Frontend-only — no contract/port/audit/lineage/spec change; option **values** unchanged (enum integrity preserved). Tests: portal unit 240 pass (new not-found.spec + investigation breadcrumb + recon option-label update); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-09 → done; **UX-09b** pending. Remaining UX: UX-06(a/b/c) + splits UX-03b/04b/05b/09b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-05b (already covered) + UX-09b audit affordance + notice-param clearing
+
+- **UX-05b** — already satisfied: a root `app/loading.tsx` (DEMO-01) renders a token-styled animate-pulse skeleton as the Suspense fallback for any route navigation. One file covers all routes; verified, marked done.
+- **UX-09b** —
+  - `AuditNote` ("Actions here are recorded to the immutable audit trail") — display-only (the INSERT-only High-class audit is emitted server-side, unchanged) — placed near the mutating regions in care / recon / approvals / investigation consoles, so operator accountability is visible at the point of action.
+  - `ClearStatusParam` (client, mounted in the root layout) — after hydration, `history.replaceState()`s away the one-shot notice params (`status`, `ar`) so a refresh / re-share no longer re-shows a stale banner; pagination cursors are preserved.
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 245 pass (new ux09b-audit-notice.spec 3); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-05b → done (pre-covered); UX-09b → done. Remaining UX: UX-06(a/b/c), UX-03b, UX-04b, UX-10 pending; UX-03c/UX-11 ADR-gated.

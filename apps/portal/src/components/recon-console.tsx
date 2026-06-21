@@ -1,5 +1,5 @@
 import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
-import { LoadMore, SubmitButton, IdempotencyField } from './ui'
+import { LoadMore, SubmitButton, IdempotencyField, AuditNote } from './ui'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -206,7 +206,10 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreH
 export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
-      <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
+        {canWrite ? <AuditNote /> : null}
+      </div>
 
       {notice ? (
         <p role="status" className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="recon-notice">

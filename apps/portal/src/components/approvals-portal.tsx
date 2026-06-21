@@ -1,5 +1,5 @@
 import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote } from './ui'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -137,7 +137,10 @@ export function ApprovalCard({
 export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, notice, approveAction, rejectAction }: ApprovalsPortalProps) {
   return (
     <div className="space-y-6" data-testid="approvals-portal">
-      <h1 className="text-2xl font-semibold">Four-Eyes Approval Portal</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Four-Eyes Approval Portal</h1>
+        <AuditNote />
+      </div>
 
       {notice ? <Notice testid="approvals-notice">{notice}</Notice> : null}
       {error ? <ErrorBanner testid="approvals-error">{error}</ErrorBanner> : null}

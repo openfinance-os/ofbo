@@ -1,5 +1,5 @@
 import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote } from './ui'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -234,7 +234,10 @@ export function CareConsole({ query, result, timeline, error, notice, revokeActi
   const identifier = result?.psu.bank_customer_id ?? query?.identifier ?? ''
   return (
     <div className="space-y-6" data-testid="care-console">
-      <h1 className="text-2xl font-semibold">Customer Care Console</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Customer Care Console</h1>
+        <AuditNote />
+      </div>
       <SearchForm query={query} />
 
       {notice ? <Notice testid="care-notice">{notice}</Notice> : null}
