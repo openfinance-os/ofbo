@@ -1040,3 +1040,17 @@ From the UI/UX review: out-of-scope deep links / bookmarks bounced silently to /
 Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 232 pass (new access-denied.spec 4; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-07 → done. Remaining UX: UX-06(a/b/c), UX-08, UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-08 wire the global search (scope-aware PSU quick-lookup)
+
+From the UI/UX review: the app-shell rendered a search input on every screen with no form/handler/target — a dead control on the natural cross-console entry point.
+
+- **Decided: wire, not remove.** The header search is now a scope-aware **PSU quick-lookup** — a GET `<form action="/care">` with `name="identifier"` + hidden `identifier_type=bank_customer_id` — shown **only to `consents:admin` (or superadmin) personas** and hidden for everyone else (no inert control for personas without a universal lookup). Submitting runs the existing Care PSU search.
+- **Scope-safe**: the target `/care` page is itself `consents:admin`-gated + BFF-enforced; a non-care persona who forces `/care` still hits the UX-07 access-denied gate. `role="search"` + aria-label + focus-visible.
+- A *true* cross-console search (breaks/TPPs/consents) needs a search backend — out of scope; noted.
+
+Frontend-only (app-shell) — no contract/port/audit/lineage/spec change. Tests: portal unit 237 pass (app-shell.spec +2; design-conformance/tokens/no-raw-style held); typecheck + lint clean; e2e untouched. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-08 → done. Remaining UX: UX-06(a/b/c), UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
