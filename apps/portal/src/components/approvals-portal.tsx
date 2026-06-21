@@ -1,5 +1,5 @@
 import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
-import { Notice, ErrorBanner, ConfirmSubmit } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField } from './ui'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -99,6 +99,7 @@ export function ApprovalCard({
       {actable && approveAction && rejectAction ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant pt-3">
           <form action={approveAction} data-testid={`approve-form-${approval.approval_request_id}`}>
+            <IdempotencyField />
             <input type="hidden" name="approval_id" value={approval.approval_request_id} />
             <ConfirmSubmit
               label="Approve"
@@ -109,6 +110,7 @@ export function ApprovalCard({
             />
           </form>
           <form action={rejectAction} data-testid={`reject-form-${approval.approval_request_id}`} className="space-y-2">
+            <IdempotencyField />
             <input type="hidden" name="approval_id" value={approval.approval_request_id} />
             <textarea
               name="reject_reason"
@@ -118,9 +120,9 @@ export function ApprovalCard({
               placeholder={`Reject reason (≥ ${MIN_REJECT_REASON} chars)…`}
               className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1"
             />
-            <button type="submit" className="w-full bg-breach text-on-error py-1.5 rounded text-xs font-bold hover:bg-error transition-colors">
+            <SubmitButton pendingLabel="Rejecting…" className="w-full bg-breach text-on-error py-1.5 rounded text-xs font-bold hover:bg-error transition-colors">
               Reject
-            </button>
+            </SubmitButton>
           </form>
         </div>
       ) : approval.state === 'pending' ? (

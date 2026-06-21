@@ -6,6 +6,7 @@ import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { createDispute, revokeConsent, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode } from '../../lib/care'
+import { idempotencyKey } from '../../lib/idempotency'
 
 /**
  * UI-02 — Customer Care Console mutations (server actions). They run SERVER-SIDE
@@ -42,7 +43,7 @@ export async function revokeConsentAction(formData: FormData) {
 
   let status = 'revoked'
   try {
-    await revokeConsent(token, consentId, reasonCode, crypto.randomUUID())
+    await revokeConsent(token, consentId, reasonCode, idempotencyKey(formData))
   } catch {
     status = 'revoke_failed'
   }
@@ -62,7 +63,7 @@ export async function createDisputeAction(formData: FormData) {
     await createDispute(
       token,
       { psu_identifier: identifier, dispute_type: disputeType, ...(paymentId ? { originating_payment_id: paymentId } : {}) },
-      crypto.randomUUID()
+      idempotencyKey(formData)
     )
   } catch {
     status = 'dispute_failed'

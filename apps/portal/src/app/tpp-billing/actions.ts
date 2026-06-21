@@ -6,6 +6,7 @@ import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { createInvoiceRun, registerFinancialSystem, syncDirectory } from '../../lib/tpp-billing'
+import { idempotencyKey } from '../../lib/idempotency'
 
 /**
  * UI-08 — TPP Billing & Registry mutations (server actions). SERVER-SIDE only: the
@@ -28,11 +29,11 @@ async function principalOrBounce(required: string) {
   return token
 }
 
-export async function syncDirectoryAction() {
+export async function syncDirectoryAction(formData: FormData) {
   const token = await principalOrBounce(SCOPES.operationsWrite)
   let status = 'synced'
   try {
-    await syncDirectory(token, crypto.randomUUID())
+    await syncDirectory(token, idempotencyKey(formData))
   } catch {
     status = 'sync_failed'
   }
@@ -44,7 +45,7 @@ export async function registerFinancialSystemAction(formData: FormData) {
   const organisationId = String(formData.get('organisation_id') ?? '')
   let status = 'registered'
   try {
-    await registerFinancialSystem(token, organisationId, crypto.randomUUID())
+    await registerFinancialSystem(token, organisationId, idempotencyKey(formData))
   } catch {
     status = 'register_failed'
   }
@@ -58,7 +59,7 @@ export async function createInvoiceRunAction(formData: FormData) {
   let status = 'invoice_submitted'
   let approvalId = ''
   try {
-    const approval = await createInvoiceRun(token, { billing_period: billingPeriod, record_set_id: recordSetId }, crypto.randomUUID())
+    const approval = await createInvoiceRun(token, { billing_period: billingPeriod, record_set_id: recordSetId }, idempotencyKey(formData))
     approvalId = approval.approval_request_id ?? ''
   } catch {
     status = 'invoice_failed'

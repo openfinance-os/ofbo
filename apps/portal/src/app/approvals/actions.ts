@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { verifyAndMint } from '../../lib/portal'
 import { approveRequest, rejectRequest } from '../../lib/approvals'
+import { idempotencyKey } from '../../lib/idempotency'
 
 /**
  * UI-05 — Four-Eyes Approval Portal mutations (server actions). SERVER-SIDE only: the
@@ -29,7 +30,7 @@ export async function approveAction(formData: FormData) {
   const approvalId = String(formData.get('approval_id') ?? '')
   let status = 'approved'
   try {
-    await approveRequest(token, approvalId, crypto.randomUUID())
+    await approveRequest(token, approvalId, idempotencyKey(formData))
   } catch {
     status = 'approve_failed'
   }
@@ -42,7 +43,7 @@ export async function rejectAction(formData: FormData) {
   const reason = String(formData.get('reject_reason') ?? '')
   let status = 'rejected'
   try {
-    await rejectRequest(token, approvalId, reason, crypto.randomUUID())
+    await rejectRequest(token, approvalId, reason, idempotencyKey(formData))
   } catch {
     status = 'reject_failed'
   }
