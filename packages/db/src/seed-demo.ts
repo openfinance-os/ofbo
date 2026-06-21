@@ -214,13 +214,79 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       [DEMO_BANK_ID, CH, JSON.stringify({ incident: INCIDENT, dispute_id: `dispute-${INCIDENT}`, psu: INCIDENT_PSU, tpp: INCIDENT_TPP, refund_amount: { amount: 75000, currency: 'AED' } })]
     )
 
+    // ── 7. Nebras service-desk cases (BACKOFFICE-79) → the service-desk surface has depth.
+    //      One case is the INC-2026-0042 thread continued: it links the same break, dispute, and
+    //      risk-signal rows, so the incident is traceable into Ops too (linked_* FKs resolved by
+    //      natural key from the rows seeded in section 6).
+    type Sdc = [string, string, string, string, string, number, number]
+    const serviceDeskCases: Sdc[] = [
+      // nebras_case_reference, case_type, priority, status, summary, age_hours, sla_hours_from_now
+      ['NBR-SD-0001', 'billing_query', 'P3', 'open', 'Nebras invoice line mismatch for the 2026-05 metering window — awaiting Hub confirmation.', 6, 42],
+      ['NBR-SD-0002', 'incident', 'P2', 'in_progress', 'Intermittent TPP-report polling 429s during the morning peak; back-off holding.', 3, 9],
+      ['NBR-SD-0003', 'onboarding', 'P4', 'awaiting_nebras', 'New TPP counterparty directory sync pending Nebras activation.', 30, 90],
+      ['NBR-SD-0004', 'general', 'P4', 'resolved', 'Clarification on consent-revoke acknowledgment SLA reporting — answered by the Hub.', 50, 0]
+    ]
+    for (const [ref, type, priority, status, summary, ageH, slaH] of serviceDeskCases) {
+      await pool.query(
+        `INSERT INTO service_desk_case
+           (bank_id, channel, nebras_case_reference, case_type, priority, status, summary, sla_due_at, opened_by, opened_at, resolved_at)
+         SELECT $1, $2, $3, $4, $5, $6, $7, now() + ($8 || ' hours')::interval, 'demo:operations-engineer',
+                now() - ($9 || ' hours')::interval,
+                CASE WHEN $6 IN ('resolved', 'closed') THEN now() - interval '1 hour' ELSE NULL END
+          WHERE NOT EXISTS (SELECT 1 FROM service_desk_case WHERE nebras_case_reference = $3)`,
+        [DEMO_BANK_ID, CH, ref, type, priority, status, summary, String(slaH), String(ageH)]
+      )
+    }
+    // The incident-linked case — resolves the break / dispute / signal ids by their natural keys.
+    await pool.query(
+      `INSERT INTO service_desk_case
+         (bank_id, channel, nebras_case_reference, case_type, priority, status, summary, sla_due_at,
+          linked_break_id, linked_dispute_id, linked_signal_id, opened_by, opened_at)
+       SELECT $1, $2, $3, 'incident', 'P2', 'in_progress',
+              'Unauthorised-payment incident ' || $4 || ' raised with the Nebras service desk; links the recon break, the PSU dispute, and the risk signal.',
+              now() + interval '6 hours',
+              (SELECT id FROM reconciliation_break WHERE source_a_ref = $5 LIMIT 1),
+              (SELECT id FROM dispute_case WHERE care_case_id = $6 LIMIT 1),
+              (SELECT id FROM risk_signal WHERE signal_data->>'demo_id' = 'inc-0042' LIMIT 1),
+              'demo:operations-engineer', now() - interval '4 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM service_desk_case WHERE nebras_case_reference = $3)`,
+      [DEMO_BANK_ID, CH, `NBR-SD-${INCIDENT}`, INCIDENT, `NBR-${INCIDENT}`, `dispute-${INCIDENT}`]
+    )
+
+    // ── 8. Fraud incidents (BACKOFFICE-77) → the fraud-reporting surface + scheme holds have depth.
+    //      Severity P1→critical … P4→low (the Nebras→ITSM mapping). One P1 carries a scheme-imposed
+    //      hold; one P2 is the INC-2026-0042 thread reported to the Nebras helpdesk.
+    type Fi = [string, string, string, string, boolean, boolean, string, number]
+    const fraudIncidents: Fi[] = [
+      // nebras_case_reference, nebras_severity, itsm_priority, status, operational_pause, scheme_imposed_hold, summary, age_hours
+      ['NBR-FR-0001', 'P3', 'medium', 'open', true, false, 'Suspected unauthorised AISP access; customer operations paused pending review.', 5],
+      ['NBR-FR-0002', 'P1', 'critical', 'reported', true, true, 'Systemic-fraud event — scheme-imposed hold active across the affected cohort.', 8],
+      ['NBR-FR-0003', 'P4', 'low', 'resolved', false, false, 'Low-severity card-testing signal; resolved with no customer impact.', 40],
+      [`NBR-FR-${INCIDENT}`, 'P2', 'high', 'reported', true, false, `Unauthorised-payment incident ${INCIDENT} reported to the Nebras helpdesk; payments paused pending refund.`, 5]
+    ]
+    for (const [ref, severity, itsm, status, pause, hold, summary, ageH] of fraudIncidents) {
+      await pool.query(
+        `INSERT INTO fraud_incident
+           (bank_id, channel, nebras_severity, itsm_priority, nebras_case_reference, status,
+            operational_pause, scheme_imposed_hold, summary, opened_by, opened_at, reported_at, resolved_at)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, 'demo:risk-analyst',
+                now() - ($10 || ' hours')::interval,
+                CASE WHEN $6 IN ('reported', 'resolved') THEN now() - ($10 || ' hours')::interval + interval '30 minutes' ELSE NULL END,
+                CASE WHEN $6 = 'resolved' THEN now() - interval '1 hour' ELSE NULL END
+          WHERE NOT EXISTS (SELECT 1 FROM fraud_incident WHERE nebras_case_reference = $5)`,
+        [DEMO_BANK_ID, CH, severity, itsm, ref, status, pause, hold, summary, String(ageH)]
+      )
+    }
+
     // ── BCBS 239 lineage for every table this scenario touches (Q4.5 stays green; idempotent).
     const lineage: [string, string[]][] = [
       ['reconciliation_log', ['bank_id', 'channel', 'run_id', 'status', 'line_count_total']],
       ['reconciliation_break', ['bank_id', 'channel', 'run_id', 'line_type', 'status', 'variance_amount']],
       ['risk_signal', ['bank_id', 'channel', 'signal_type', 'severity', 'status']],
       ['approval_request', ['bank_id', 'channel', 'approval_request_id', 'operation_type', 'state']],
-      ['dispute_case', ['bank_id', 'channel', 'psu_identifier', 'dispute_type', 'state', 'compensation_blocked']]
+      ['dispute_case', ['bank_id', 'channel', 'psu_identifier', 'dispute_type', 'state', 'compensation_blocked']],
+      ['service_desk_case', ['bank_id', 'channel', 'nebras_case_reference', 'case_type', 'priority', 'status']],
+      ['fraud_incident', ['bank_id', 'channel', 'nebras_severity', 'itsm_priority', 'status', 'scheme_imposed_hold']]
     ]
     for (const [table, columns] of lineage) {
       await pool.query(
