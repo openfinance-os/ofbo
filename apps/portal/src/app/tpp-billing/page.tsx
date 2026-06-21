@@ -61,16 +61,24 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
       NOTICE[status] ?? null
     )
 
+  const regCursor = one(sp.reg_cursor)
+  const invCursor = one(sp.inv_cursor)
   let counterparties: TppCounterparty[] = []
   let invoiceRuns: InvoiceRun[] = []
+  let registryMoreHref: string | null = null
+  let invoiceMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
   try {
-    counterparties = (await listCounterparties(token, { limit: 50 })).counterparties
+    const page = await listCounterparties(token, { limit: 50, cursor: regCursor })
+    counterparties = page.counterparties
+    registryMoreHref = page.next_cursor ? `/tpp-billing?reg_cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch (e) {
     error = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
   }
   try {
-    invoiceRuns = (await listInvoiceRuns(token, { limit: 20 })).runs
+    const page = await listInvoiceRuns(token, { limit: 20, cursor: invCursor })
+    invoiceRuns = page.runs
+    invoiceMoreHref = page.next_cursor ? `/tpp-billing?inv_cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch {
     error = error ?? 'Failed to load invoice runs.'
   }
@@ -83,6 +91,8 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
       <TppBilling
         counterparties={counterparties}
         invoiceRuns={invoiceRuns}
+        registryMoreHref={registryMoreHref}
+        invoiceMoreHref={invoiceMoreHref}
         error={error}
         notice={notice}
         canBilling={canBilling}

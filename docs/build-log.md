@@ -1000,3 +1000,16 @@ From the UI/UX review's four-eyes gap. The user chose to ship the **unblocked fr
 Frontend-only — no contract/port/audit/lineage/spec change; four-eyes execution flow unchanged (the surfaced `approval_request_id` is a UUID, not PII). Tests: portal unit 215 pass (new ux03-foureyes-feedback.spec 7; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-03 → done. Split: **UX-03b** (pending-count nav badge — needs per-page count or shared-shell refactor) pending; **UX-03c** (operation context on cards) blocked → ADR. Remaining UX: UX-04..09 pending; UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-04 cursor pagination, recon + TPP lists (UX-hardening; scoped)
+
+From the UI/UX review: list getters returned next_cursor but the pages discarded it, so long lists silently truncated — a trust/correctness gap in a regulated console.
+
+- **`components/ui/load-more.tsx`** — a reusable server-rendered control: a "N {noun} shown · more available / all loaded" indicator + a forward **"Next page →"** link (the page builds the href, preserving its other params + setting this list's cursor). Forward cursor navigation (replace) — the honest server-rendered cursor pattern.
+- **Wired the four lists whose getters already accept `cursor`**: recon **runs** (`runs_cursor`) + **break queue** (`breaks_cursor`) — preserving the selected `run_id`; TPP **registry** (`reg_cursor`) + **invoice runs** (`inv_cursor`). Each page reads its per-list cursor param, passes it to the getter, captures `next_cursor`, and renders LoadMore.
+
+Cursor-based only (no offset); cursors are opaque tokens (no PSU data in URLs). Split **UX-04b** for the approvals queue + care 24-month timeline (their getters need a cursor param + lib-test updates). Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 221 pass (new load-more.spec 5; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-04 → done; **UX-04b** (approvals + timeline pagination) pending. Remaining UX: UX-03b, UX-05..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.
