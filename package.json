@@ -20,7 +20,8 @@
     "test:coverage:full": "vitest run --project unit --project integration --coverage --coverage.include='services/bff/src/**' --coverage.include='packages/db/src/**' --coverage.include='packages/contracts/src/**' --coverage.include='packages/synthetic-data/src/**' --coverage.include='packages/redaction/src/**' --coverage.include='packages/release-evidence/src/**' --coverage.thresholds.lines=0 --coverage.thresholds.statements=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0",
     "db:seed:demo": "pnpm --filter @ofbo/db seed:demo",
     "demo:fault": "bash scripts/demo-fault.sh",
-    "demo:break": "pnpm --filter @ofbo/bff demo:break"
+    "demo:break": "pnpm --filter @ofbo/bff demo:break",
+    "demo:ingest": "pnpm --filter @ofbo/bff demo:ingest"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

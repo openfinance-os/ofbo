@@ -167,31 +167,40 @@ the unauthorised-payment pattern flagged for *Fictional Fintech 01*.
 
 ---
 
-## 7. Trigger a break, live  *(the "trigger breaks + signals on demand" requirement)*
+## 7. Trigger a break + signals, live  *(the "trigger breaks + signals on demand" requirement)*
 
-**The reliable lever — `demo:break`.** It runs the real three-way reconciliation engine against
-the demo DB with injected variance, producing a **genuinely new flagged break** in the queue
-every time. Run it, then refresh the Reconciliation Console:
+**Lever 1 — a new break: `demo:break`.** It runs the real three-way reconciliation engine
+against the demo DB with injected variance, producing a **genuinely new flagged break** in the
+queue every time. Run it, then refresh the Reconciliation Console:
 
 ```bash
 pnpm demo:break            # new flagged break appears in the queue on the next refresh
 ```
 
-**Secondary — Nebras simulator fault injection.** The sim emulates the Hub with injectable
-faults. These perturb the upstream Nebras surfaces; they surface in the back office via the
-scheduled ingestion/reconciliation pass rather than instantly, so prefer `demo:break` for an
-on-stage cause→effect moment.
+**Lever 2 — a Nebras fault, made visible: `demo:fault` + `demo:ingest`.** The simulator
+emulates the Hub with injectable faults. They perturb the upstream Nebras surfaces; the back
+office only reflects them once it runs its (headless, no-public-ingress) ingestion + risk pass —
+so `demo:ingest` runs that pass **on demand** (the same work the scheduled job does):
 
 ```bash
-pnpm demo:fault fee-variance 2026-05 999   # +999 fil fee variance into the period's TPP report
-pnpm demo:fault revoke-delay 7000          # push a consent revoke past its 5s SLA (recorded in audit)
-pnpm demo:fault rate-limit 3               # 429 the next 3 report polls → exercises back-off
-pnpm demo:fault clear                      # remove all injected faults
+PERIOD=$(date +%Y-%m)
+pnpm demo:fault fee-variance "$PERIOD" 50000   # +50000 fil into that period's TPP report (the sim)
+pnpm demo:ingest "$PERIOD"                      # pull it in via P6 → refresh the analytics aggregate
+# → the Finance View's fees/freshness for the period now reflect the +50000 variance.
+pnpm demo:fault clear && pnpm demo:ingest "$PERIOD"   # restore
+
+pnpm demo:fault rate-limit 3 && pnpm demo:ingest "$PERIOD"   # 429 the report polls → amber freshness (back-off)
+pnpm demo:fault revoke-delay 7000              # push a consent revoke past its 5s SLA (recorded in audit)
 ```
 
-> `demo:fault` reads `SIM_URL` + `SIM_ADMIN_TOKEN` from the repo `.env`. Without them it targets
-> `localhost:8788` — so to drive the **hosted** sim, set those in your shell first, or it will
-> silently no-op against nothing.
+`demo:ingest` also re-runs the **liability / anomaly / TPP-behaviour / forecast monitors**, so
+risk **signals** refresh on demand (deduped against open signals) — the "signals on demand" half
+of the requirement.
+
+> **Env:** `demo:fault` reads `SIM_URL` + `SIM_ADMIN_TOKEN` from the repo `.env`; without them it
+> targets `localhost:8788`. `demo:ingest` reads the sim through the P6 adapter (`NEBRAS_SIM_URL`)
+> and needs `DATABASE_URL` — point both at the **same** sim/DB you're demoing (local or hosted),
+> or the fault lands somewhere you're not watching.
 
 ---
 

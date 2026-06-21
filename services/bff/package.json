@@ -10,7 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
-    "demo:break": "tsx scripts/demo-break.ts"
+    "demo:break": "tsx scripts/demo-break.ts",
+    "demo:ingest": "tsx scripts/demo-ingest.ts"
   },
   "dependencies": {
     "@ofbo/contracts": "workspace:*",
