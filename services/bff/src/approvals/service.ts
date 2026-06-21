@@ -1,6 +1,7 @@
 import type { AuthAuditSink, Principal } from '../auth.js'
 import { hasScope } from '../rbac.js'
 import { addBusinessHours } from '../business-hours.js'
+import { summariseOperation } from './operation-summary.js'
 
 /**
  * BACKOFFICE-44: the shared four-eyes primitive. Gated operations are
@@ -202,8 +203,13 @@ export class ApprovalsService {
   }
 }
 
-/** Wire shape per the spec's ApprovalRequest schema (operation payload stays internal/redacted). */
+/**
+ * Wire shape per the spec's ApprovalRequest schema. The full operation_payload stays
+ * internal/redacted; UX-03c (ADR 0014) surfaces only a NON-PII operation_summary, composed
+ * by the allowlist in summariseOperation (the redaction control).
+ */
 export function toWire(r: ApprovalRecord) {
+  const operation_summary = summariseOperation(r.operation_type, r.operation_payload)
   return {
     approval_request_id: r.approval_request_id,
     operation_type: r.operation_type,
@@ -213,6 +219,7 @@ export function toWire(r: ApprovalRecord) {
     approver: r.approver,
     expires_at: r.expires_at,
     reject_reason: r.reject_reason,
+    ...(operation_summary ? { operation_summary } : {}),
     ...(r.execution_result !== undefined ? { execution_result: r.execution_result } : {})
   }
 }
