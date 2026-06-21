@@ -2,6 +2,7 @@ import { canActOn, type ApprovalRequest, type ApprovalWriteResult } from '../lib
 import { Notice, ErrorBanner, AuditNote, LoadMore } from './ui'
 import { ApproveForm } from './approvals/approve-form'
 import { RejectForm } from './approvals/reject-form'
+import { OperationSummary } from './operation-summary'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -109,6 +110,10 @@ export function ApprovalCard({
         {expiry.label}{expiry.urgent && !expiry.expired ? ' · expiring soon' : ''}
       </p>
       {approval.reject_reason ? <p className="text-xs text-breach mt-1">Rejected: {approval.reject_reason}</p> : null}
+
+      <div className="mt-3">
+        <OperationSummary summary={approval.operation_summary} testid={`operation-summary-${approval.approval_request_id}`} />
+      </div>
 
       {actable && approveAction && rejectAction ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant pt-3">

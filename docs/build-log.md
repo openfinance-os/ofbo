@@ -1267,3 +1267,16 @@ Spec PR #171 merged (operation_summary + ApprovalOperationSummary on ApprovalReq
 Reviewers: hard-stop **PASS** (redaction control sound), contract-conformance **CONFORMANT** (matches the merged schema; gen-drift clean). Spec→tests→code order honored: the BFF code landed only after #171 merged + a rebase onto main.
 
 **Backlog:** UX-03c → in-progress (BFF done); **UX-03c-portal** pending — render the summary on the approval card + mobile detail (display-only; the BFF already redacted). That's the last UX step.
+
+---
+
+## 2026-06-21 — UX-03c portal: render operation_summary on the four-eyes surface (ADR 0014) — UX-03c COMPLETE
+
+The final UX-03c step. The contract (#171) + BFF (#172) now serve a NON-PII `operation_summary`; the portal renders it:
+
+- Portal `ApprovalRequest` type gains `operation_summary` (+ `ApprovalOperationSummary`); a new `OperationSummary` component renders the descriptor, the formatted `Money` amount, and the masked institutional counterparty — placed on the **ApprovalCard** (queue) and **ApprovalDetail** (mobile). Degrades to nothing when absent (older requests / unmodelled types).
+- Display-only: the BFF already redacted to non-PII facts; the portal adds no payload fetch, no `operation_payload` access, no browser storage. The compile-time `ApprovalRequestContractGuard` binds the new field to the generated contract.
+
+Reviewers: hard-stop **PASS** (no new PII), contract-conformance **CONFORMANT** (drift-guard verified). Portal unit 287 pass (new operation-summary.spec 4); typecheck + lint clean.
+
+**UX-03c is now COMPLETE** (ADR 0014 → spec #171 → BFF #172 → portal). The second four-eyes approver now sees real, PII-safe operation context. With this, **every UX/UI backlog item is done** (UX-11 won't-do by decision); the only open backlog items are enterprise/BD-gated (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS).
