@@ -90,6 +90,20 @@ export class CareApiError extends Error {
   }
 }
 
+/**
+ * UX-06b — the write-path result a care server action returns to useActionState on failure
+ * (no redirect → the form keeps its values + shows the typed error). Lives here (not in the
+ * 'use server' actions file, which may only export async functions) so both the action and the
+ * client form component can import it.
+ */
+export type CareWriteResult = {
+  ok: boolean
+  error?: string
+  remediation?: string | null
+  docsUrl?: string | null
+  values?: Record<string, string>
+}
+
 export interface CareApiDeps {
   baseUrl?: string
   fetchImpl?: typeof fetch

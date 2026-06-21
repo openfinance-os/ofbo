@@ -1,5 +1,7 @@
-import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote, LoadMore } from './ui'
+import { IDENTIFIER_TYPES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType, type CareWriteResult } from '../lib/care'
+import { Notice, ErrorBanner, AuditNote, LoadMore } from './ui'
+import { RevokeForm } from './care/revoke-form'
+import { DisputeForm } from './care/dispute-form'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -21,8 +23,8 @@ export interface CareConsoleProps {
   errorRemediation?: string | null
   errorDocsUrl?: string | null
   notice?: string | null
-  revokeAction?: (formData: FormData) => void | Promise<void>
-  disputeAction?: (formData: FormData) => void | Promise<void>
+  revokeAction?: (prevState: CareWriteResult, formData: FormData) => Promise<CareWriteResult>
+  disputeAction?: (prevState: CareWriteResult, formData: FormData) => Promise<CareWriteResult>
 }
 
 /** Maps the 7 consent states to the OFBO status palette (PRD §7 triad + neutral). */
@@ -135,29 +137,7 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
       <div className="flex items-center gap-3 shrink-0">
         <StatusPill status={consent.status} />
         {REVOCABLE.has(consent.status) && revokeAction ? (
-          <form action={revokeAction} data-testid={`revoke-form-${consent.consent_id}`} className="flex items-center gap-1">
-            <IdempotencyField />
-            <input type="hidden" name="consent_id" value={consent.consent_id} />
-            <input type="hidden" name="identifier_type" value={identifierType} />
-            <input type="hidden" name="identifier" value={psu} />
-            <select name="reason_code" aria-label="revoke reason" defaultValue="" required className="bg-surface-container text-xs border border-outline-variant rounded px-1 py-1">
-              <option value="" disabled>
-                Reason…
-              </option>
-              {REVOKE_REASON_CODES.map((r) => (
-                <option key={r} value={r}>
-                  {r.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-            <ConfirmSubmit
-              label="Revoke"
-              confirmLabel="Confirm revoke"
-              summary={`Revoke ${consent.tpp.display_name}'s consent. This propagates to Nebras (≤5s) and cannot be undone.`}
-              className="bg-breach text-on-error px-3 py-1 rounded text-xs font-bold hover:bg-error transition-colors"
-              testid={`revoke-submit-${consent.consent_id}`}
-            />
-          </form>
+          <RevokeForm consent={consent} psu={psu} identifierType={identifierType} action={revokeAction} />
         ) : null}
       </div>
     </div>
@@ -207,27 +187,7 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
       </div>
       <div className="p-4 space-y-3">
         <p className="text-xs text-on-surface-variant leading-relaxed">Raise an unauthorized-payment dispute for this PSU. Refund initiation is four-eyes-gated downstream (BACKOFFICE-21).</p>
-        {disputeAction ? (
-          <form action={disputeAction} className="space-y-2" data-testid="dispute-form">
-            <IdempotencyField />
-            <input type="hidden" name="identifier_type" value={identifierType} />
-            <input type="hidden" name="identifier" value={psu} />
-            <label className="block">
-              <span className="block text-xs font-bold text-on-surface-variant uppercase">Originating payment id</span>
-              <input name="originating_payment_id" placeholder="PIS-…" className="w-full bg-surface-container text-xs font-mono border border-outline-variant rounded px-2 py-1" />
-            </label>
-            <select name="dispute_type" aria-label="dispute type" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1">
-              {DISPUTE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.replace(/_/g, ' ')}
-                </option>
-              ))}
-            </select>
-            <SubmitButton pendingLabel="Opening…" className="w-full bg-breach text-on-error py-2 rounded font-bold text-xs hover:bg-error transition-colors">
-              Open dispute
-            </SubmitButton>
-          </form>
-        ) : null}
+        {disputeAction ? <DisputeForm psu={psu} identifierType={identifierType} action={disputeAction} /> : null}
       </div>
     </div>
   )
