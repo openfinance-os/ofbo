@@ -98,3 +98,18 @@
     @apply font-mono text-xs;
   }
 }
+
+/*
+ * UX-10 (ADR 0013 Option 1) — wire the app-shell density toggle. `data-density` is set on the
+ * shell root; "compact" tightens the content rhythm + data-table rows (the toggle was
+ * previously inert). Token/utility-only — no raw px.
+ */
+@layer utilities {
+  [data-density='compact'] [data-testid='shell-content'] {
+    @apply py-3 text-sm;
+  }
+  [data-density='compact'] [data-testid='shell-content'] th,
+  [data-density='compact'] [data-testid='shell-content'] td {
+    @apply py-0.5;
+  }
+}

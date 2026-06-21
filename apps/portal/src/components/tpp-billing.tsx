@@ -58,7 +58,7 @@ export function RegistryTable({ counterparties, canBilling, registerAction, more
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Consuming-TPP Registry</h2>
         <span className="bg-secondary-fixed text-on-secondary-fixed px-2 py-0.5 rounded-full text-xs font-bold">{counterparties.length}</span>
       </div>
-      <div className="divide-y divide-outline-variant">
+      <div className="divide-y divide-outline-variant overflow-x-auto">
         {counterparties.length === 0 ? (
           <p className="p-4 text-xs text-on-surface-variant" data-testid="registry-empty">
             No consuming TPPs in the registry.
@@ -101,7 +101,7 @@ export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: Invoi
       <div className="px-4 py-3 border-b border-outline-variant">
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Monthly Invoice Runs</h2>
       </div>
-      <div className="divide-y divide-outline-variant">
+      <div className="divide-y divide-outline-variant overflow-x-auto">
         {invoiceRuns.length === 0 ? (
           <p className="p-4 text-xs text-on-surface-variant" data-testid="invoice-runs-empty">
             No invoice runs yet.

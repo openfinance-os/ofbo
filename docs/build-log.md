@@ -1190,3 +1190,19 @@ The last mutating forms, applying the merged UX-06b/c pattern:
 Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, the 202 flow, headers unchanged). Tests: portal unit 278 pass (new ux06d-write-path.spec 2; 4 spec noops retyped to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-06d → done. **Every implementable UX item is now complete.** Remaining: UX-03c (awaiting compliance sign-off on ADR 0014); UX-10 + UI-MOBILE-APPROVALS (eligible — layout work, not yet built); optional read-path remediation wiring for tpp/analytics/risk.
+
+---
+
+## 2026-06-21 — UX-10: responsive-safe shell (ADR 0013 Option 1)
+
+Made the existing portal shell responsive-safe so nothing breaks on a small screen:
+
+- **Off-canvas drawer below `lg`**: the sidebar is `fixed` + `-translate-x-full` with a scrim backdrop and a mobile hamburger (`open-drawer`/`close-drawer`); on `lg+` it stays the sticky collapsible rail. The desktop collapse is now `lg:`-scoped, so the mobile drawer always shows full labels; a nav-tap / backdrop / close button dismisses it.
+- **Top bar wraps** (`flex-wrap`) instead of overflowing on narrow widths.
+- **Density toggle wired** (was inert): `globals.css [data-density='compact']` now tightens content padding + data-table rows.
+- **One KPI breakpoint ladder**: dashboard standardized to `grid-cols-2 lg:grid-cols-4` (matches recon + investigation).
+- **Table overflow guards**: `overflow-x-auto` on the tpp registry + invoice-runs row containers.
+
+Token/utility-only (no raw hex/px); no contract/lib change. Tests: portal unit 279 pass (app-shell.spec +1 — drawer open/backdrop/close/nav-dismiss); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-10 → done. Eligible next: **UI-MOBILE-APPROVALS** (the mobile approval journey). Remaining human-gated: UX-03c (ADR 0014 compliance sign-off).
