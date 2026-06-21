@@ -19,6 +19,8 @@ export interface ApprovalsPortalProps {
   scopes: string[]
   superadmin?: boolean
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
   notice?: string | null
   moreHref?: string | null
   approveAction?: (prevState: ApprovalWriteResult, formData: FormData) => Promise<ApprovalWriteResult>
@@ -129,7 +131,7 @@ export function ApprovalCard({
   )
 }
 
-export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, notice, moreHref, approveAction, rejectAction }: ApprovalsPortalProps) {
+export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, errorRemediation, errorDocsUrl, notice, moreHref, approveAction, rejectAction }: ApprovalsPortalProps) {
   return (
     <div className="space-y-6" data-testid="approvals-portal">
       <div className="flex items-center justify-between gap-3">
@@ -138,7 +140,7 @@ export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, e
       </div>
 
       {notice ? <Notice testid="approvals-notice">{notice}</Notice> : null}
-      {error ? <ErrorBanner testid="approvals-error">{error}</ErrorBanner> : null}
+      {error ? <ErrorBanner testid="approvals-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
 
       <section aria-labelledby="pending-approvals-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
         <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">

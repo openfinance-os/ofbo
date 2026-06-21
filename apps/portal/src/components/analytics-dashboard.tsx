@@ -13,6 +13,8 @@ export interface AnalyticsDashboardProps {
   executive?: AnalyticsView | null
   finance?: AnalyticsView | null
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
 }
 
 const humanize = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -202,12 +204,12 @@ export function AnalyticsSection({ title, view, testid }: { title: string; view:
   )
 }
 
-export function AnalyticsDashboard({ executive, finance, error }: AnalyticsDashboardProps) {
+export function AnalyticsDashboard({ executive, finance, error, errorRemediation, errorDocsUrl }: AnalyticsDashboardProps) {
   return (
     <div className="space-y-8" data-testid="analytics-dashboard">
       <h1 className="text-2xl font-semibold">Analytics &amp; Insights</h1>
 
-      {error ? <ErrorBanner testid="analytics-error">{error}</ErrorBanner> : null}
+      {error ? <ErrorBanner testid="analytics-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
 
       {executive ? <AnalyticsSection title="Executive Dashboard" view={executive} testid="executive-section" /> : null}
       {finance ? <AnalyticsSection title="Finance View" view={finance} testid="finance-section" /> : null}

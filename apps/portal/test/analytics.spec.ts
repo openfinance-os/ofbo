@@ -34,6 +34,16 @@ describe('analytics client — executive dashboard (BACKOFFICE-27)', () => {
     await expect(getExecutiveDashboard(TOKEN, { baseUrl: BASE, fetchImpl })).rejects.toMatchObject({ code: 'BACKOFFICE.SCOPE_DENIED', status: 403 })
   })
 
+  it('UX-06: parses remediation + docs_url from the error envelope into the typed error', async () => {
+    const fetchImpl = vi.fn(async () =>
+      okJson({ error: { code: 'BACKOFFICE.ANALYTICS_UNAVAILABLE', message: 'Temporarily unavailable.', remediation: 'Retry shortly.', docs_url: 'https://docs.ofbo/analytics' } }, 503)
+    )
+    await expect(getExecutiveDashboard(TOKEN, { baseUrl: BASE, fetchImpl })).rejects.toMatchObject({
+      remediation: 'Retry shortly.',
+      docsUrl: 'https://docs.ofbo/analytics'
+    })
+  })
+
   it('falls back to a stale freshness when the response omits it', async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: {} }))
     const view = await getExecutiveDashboard(TOKEN, { baseUrl: BASE, fetchImpl })

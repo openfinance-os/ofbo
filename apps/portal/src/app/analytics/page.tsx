@@ -6,7 +6,7 @@ import { AnalyticsDashboard } from '../../components/analytics-dashboard'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
-import { getExecutiveDashboard, getFinanceView, type AnalyticsView } from '../../lib/analytics'
+import { getExecutiveDashboard, getFinanceView, AnalyticsApiError, type AnalyticsView } from '../../lib/analytics'
 
 /**
  * UI-06 — Analytics & Insights Dashboard (BACKOFFICE-27 Executive + BACKOFFICE-31 Finance,
@@ -38,19 +38,30 @@ export default async function AnalyticsPage() {
   let executive: AnalyticsView | null = null
   let finance: AnalyticsView | null = null
   let error: string | null = null
+  let errorRemediation: string | null = null
+  let errorDocsUrl: string | null = null
+  // Capture the typed error's remediation/docs_url (first one wins) for the banner (UX-06).
+  const capture = (e: unknown) => {
+    if (e instanceof AnalyticsApiError && !errorRemediation) {
+      errorRemediation = e.remediation ?? null
+      errorDocsUrl = e.docsUrl ?? null
+    }
+  }
   // Fetch each entitled view independently — one failing must not blank the other.
   if (canExec) {
     try {
       executive = await getExecutiveDashboard(token)
-    } catch {
+    } catch (e) {
       error = 'The Executive Dashboard is temporarily unavailable.'
+      capture(e)
     }
   }
   if (canFinance) {
     try {
       finance = await getFinanceView(token)
-    } catch {
+    } catch (e) {
       error = error ? `${error} The Finance View is temporarily unavailable.` : 'The Finance View is temporarily unavailable.'
+      capture(e)
     }
   }
 
@@ -60,7 +71,7 @@ export default async function AnalyticsPage() {
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="analytics"
     >
-      <AnalyticsDashboard executive={executive} finance={finance} error={error} />
+      <AnalyticsDashboard executive={executive} finance={finance} error={error} errorRemediation={errorRemediation} errorDocsUrl={errorDocsUrl} />
     </AppShell>
   )
 }

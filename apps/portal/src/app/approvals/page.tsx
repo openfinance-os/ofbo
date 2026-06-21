@@ -45,12 +45,18 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   let approvals: ApprovalRequest[] = []
   let moreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
+  let errorRemediation: string | null = null
+  let errorDocsUrl: string | null = null
   try {
     const page = await listPendingApprovals(token, { cursor })
     approvals = page.approvals
     moreHref = page.next_cursor ? `/approvals?cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch (e) {
     error = e instanceof ApprovalApiError ? e.message : 'Failed to load pending approvals.'
+    if (e instanceof ApprovalApiError) {
+      errorRemediation = e.remediation ?? null
+      errorDocsUrl = e.docsUrl ?? null
+    }
   }
 
   return (
@@ -65,6 +71,8 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         scopes={principal.scopes}
         superadmin={principal.superadmin}
         error={error}
+        errorRemediation={errorRemediation}
+        errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
         moreHref={moreHref}
         approveAction={approveAction}
