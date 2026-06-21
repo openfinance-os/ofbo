@@ -1222,3 +1222,21 @@ The approval **queue** was already responsive (cards stack) and made mobile-safe
 Frontend-only — no contract/lib/spec change (reuses GET /approvals/{id} + the approve/reject flow). Tests: portal unit 283 pass (new approval-detail.spec 2); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UI-MOBILE-APPROVALS → done. **Every implementable UX item is now complete.** The only open item is UX-03c, blocked on your compliance sign-off of ADR 0014.
+
+---
+
+## 2026-06-21 — DEMO-01..09: demo-ability hardening sprint
+
+A sweep to make the demo robust in front of a bank, following an in-depth demo-ability review. Nine PRs (#151–#169), each gated + hard-stop reviewed, all on isolated worktrees:
+
+- **DEMO-01 (#151):** BFF keep-warm cron (`[triggers]` */5 → cheap `SELECT 1`) so a presenter's first click never hits a cold Supabase/Hyperdrive — also fixed a latent gap where the daily recon cron was never registered. Seed depth: `service_desk_case` + `fraud_incident` woven into the `INC-2026-0042` cross-console thread. Portal `error.tsx`/`global-error.tsx` boundaries. Demo-script rewritten around the incident thread; corrected counts.
+- **DEMO-02 (#159):** Audit visibility — admin consent-revoke now stamps `target_psu_identifier` (so it shows in the per-PSU Care timeline), plus a global, `audit:read`-gated **`/audit`** screen (cross-operator "who did what", event-type filter) over `GET /audit/events`.
+- **DEMO-03 (#161):** Dashboard audit panel drops `signin_success`/`scope_denied`/`audit_trail_accessed` noise (optional `excludeEventTypes` on `PgAuditReader.recent`) so operational events stay visible; full trail unchanged in `/audit`.
+- **DEMO-04 (#162):** Demo-script documents the audit screen + the revoke-in-timeline.
+- **DEMO-05 (#164):** **`pnpm demo:ingest`** — runs the headless ingestion + risk-monitor pass on demand (CLI, no public ingress), so injected Nebras faults (`fee_variance`/`rate_limit`) surface in the Finance View and risk signals refresh. Verified: +50000 fault → aggregate +50000 exactly.
+- **DEMO-06 (#167):** Caught + fixed a regression — DEMO-01's root `loading.tsx` made Next stream a 200 (resolving `redirect()` mid-stream), so unauth `/dashboard` returned 200 not 307, **silently failing the deploy smoke gate on every merge since #151** (~16 deploys, mine + teammates'). Removed `loading.tsx`; cold-start already covered by the warm cron. Pipeline green again.
+- **DEMO-08 (#168):** Wired `consent_drift` — new `getConsentStatus` on the P6 egress port (sim adapter + contract test binding both profiles), sim consent-manager made dataset-consistent (no false positives), and a `ConsentDriftMonitor` emitting a deduped, PII-free `consent_anomaly` signal. New `demo:fault consent-drift <id>` lever. Verified live (0-drift baseline; inject → 1 signal).
+- **DEMO-09 (#169):** Consent-drift monitor added to the daily `scheduled()` pass for continuous detection (parity with the other monitors), not just the demo lever.
+- *(DEMO-07: the decorative global-search footgun turned out already fixed by UX-08 — a scope-gated PSU quick-lookup — so no change shipped.)*
+
+**Outcome:** all four Nebras sim faults now have on-demand demo effects (`demo:ingest` for fee/rate, audit for revoke-delay, Risk signal for consent-drift) plus `demo:break`; hosted demo verified live (smoke 9/9, `/audit` renders, dashboard noise filtered); deploy pipeline green. Synthetic + non-prod throughout; no contract/regulatory posture change. The dropped `originating_payment_id` dispute link stays out (no `payment` table exists).
