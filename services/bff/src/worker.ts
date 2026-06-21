@@ -37,6 +37,7 @@ import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/in
 import { LiabilityMonitorService, DemoLiabilityEventSource } from './risk/liability.js'
 import { LiabilityForecastMonitor, DemoLiabilityTelemetrySource } from './risk/liability-forecast.js'
 import { ConsentAnomalyDetector } from './risk/consent-anomaly.js'
+import { ConsentDriftMonitor, DemoConsentDriftSource } from './risk/consent-drift.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profiling.js'
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 import { LfiCadenceMonitor } from './lfi-reports/service.js'
@@ -212,6 +213,10 @@ export default {
     // BACKOFFICE-38 — TPP behavioural profiling: 3σ deviations (volume / hour-of-day /
     // CoP mismatch) → tpp_behaviour Risk signal, deduped against open signals.
     const tppProfiler = new TppBehaviourProfiler({ source: new DemoTppActivitySource(), signals: riskSignals, dedup: anomalyStore })
+    // DEMO-08 — consent-drift monitor: read each watched consent's Hub status via P6 and compare
+    // to the platform mirror; a mismatch raises a consent_anomaly signal (deduped). Harmless when
+    // no drift exists (0 signals); the simulator's consent_drift fault makes it fire on demand.
+    const driftMonitor = new ConsentDriftMonitor({ egress, signals: riskSignals, source: new DemoConsentDriftSource(), dedup: anomalyStore })
     // BACKOFFICE-66 — scheme certificate expiry monitor: red ≤30d → P3 ITSM ticket,
     // critical ≤7d → ticket + High-class audit (chain handled by P6).
     const certMonitor = new CertExpiryMonitor({ source: new DemoCertChainSource(), itsm, audit })
@@ -238,6 +243,7 @@ export default {
         runLiability(),
         recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
         tppProfiler.profile(crypto.randomUUID()),
+        driftMonitor.detect(crypto.randomUUID()),
         certMonitor.check(crypto.randomUUID()),
         lfiCadenceMonitor.check(crypto.randomUUID()),
         runForecast()
