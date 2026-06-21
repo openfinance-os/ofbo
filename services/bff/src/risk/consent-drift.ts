@@ -3,7 +3,7 @@ import { generateDemoDataset } from '@ofbo/synthetic-data'
 import type { NebrasEgressPort, TraceContext } from '@ofbo/ports'
 
 /**
- * DEMO-01 — consent-drift monitor. Reads each watched consent's CURRENT status from the Nebras
+ * DEMO-08 — consent-drift monitor. Reads each watched consent's CURRENT status from the Nebras
  * Consent Manager (via the P6 egress port) and compares it to the platform's mirror; a mismatch
  * — the Hub reports a state the platform doesn't hold — is a `consent_anomaly` Risk signal. This
  * is what makes the simulator's injectable `consent_drift` fault a live, on-demand lever: with no
