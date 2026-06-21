@@ -964,3 +964,26 @@ Operator-safety story from the UI/UX review: the three single-click, externally-
 Frontend-only — no contract/port/audit/lineage/spec change; the four-eyes server flow is unchanged (Confirm submits the same server action; nothing executes inline). Tests: portal unit 208 pass (new confirm-submit.spec 4; design-conformance 35 / tokens 8 / no-raw-style 3 held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
 
 **Backlog:** UX-02 → done. Remaining UX: UX-03..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
+
+---
+
+## 2026-06-20/21 — Demo-ability sprint + hosted performance + region relocation
+
+A run of demo-quality, performance, and infra work (driven interactively, outside the per-story loop). All merged to main, each browser-verified + hard-stop-reviewed where code; CI green.
+
+**Demo-ability (PRs #131, #132, #135, #139, #140):**
+- #131 — rich "operating back office" scenario seed (`pnpm db:seed:demo`, separate from the CI base seed): 30-day reconciliation history, ~11 open breaks, 16 risk signals, 3 pending four-eyes, 6 disputes incl. the cross-scheme 409 case. Idempotent + BCBS 239 lineage (Q4.5 green); also closed a latent gap — base seed now emits `audit_high_sensitivity` lineage.
+- #132 — presenter golden-path guide (`docs/demo-script.md`) + `pnpm demo:fault` helper wrapping the Nebras sim's injectable faults.
+- #135 — `pnpm demo:break` (live recon run with injected fee variance → fresh flagged break on demand) + the executive landing dashboard (scope-aware KPI row: pending approvals / pass-rate / open breaks / risk signals, tone-coded + deep-linked).
+- #139 — dashboard charts (30-day recon-trend area+line + risk-severity bars), token-only hand-rolled SVG.
+- #140 — charted numeric distributions in the shared generic renderer (`MiniBars`) → Analytics/Risk/Operations/Compliance all get bars at once.
+- Plus a coherent linked incident (INC-2026-0042) traceable across Care→Finance→Risk→Approvals, and #133 (compact ISO timestamps + nowrap table cells — fixed a char-stacking render bug).
+
+**Hosted performance (PRs #143, #144):**
+- #143 — bound Cloudflare **Hyperdrive** (config `ofbo-db`) to the BFF worker; worker.ts prefers `env.HYPERDRIVE.connectionString` over `DATABASE_URL` (clean fallback). Eliminated the per-request cold connect+TLS handshake.
+- #144 — batched the RLS transaction preamble (`BEGIN; SET LOCAL ROLE; set_config`) into one simple-query round-trip via shared `beginAppTx()` (UUID-validated interpolation), across all 22 stores. RLS semantics unchanged (integration 101/101).
+- Net hosted latency (measured from a non-UAE vantage): ~12s → ~5s (Hyperdrive) → ~3s (batched). The Worker→DB distance is the remaining floor.
+- Also: local dev switched to a Dockerised Postgres (`:5433`) — ~12s→sub-10ms per click; `.env` keeps the remote as `DATABASE_URL_SUPABASE`.
+
+**Demo DB region relocation (infra, no code):** moved the Supabase demo DB Seoul → Singapore → **Mumbai (`ap-south-1`)** for UAE proximity (nearest Supabase region to the UAE; Cloudflare Dubai edge → Mumbai ≈ 1,900 km). Each move: re-`db:apply`+`db:seed:demo`, repoint the Hyperdrive config + worker secret + GitHub Actions `DATABASE_URL` secret + `.env`, redeploy. Synthetic data only — re-seed *is* the migration (nothing to preserve).
+- **Caveat (unchanged):** this is the synthetic, non-prod demo. Production UAE **data residency** still requires a UAE-region Postgres (AWS `me-central-1` Dubai) provisioned via Terraform — region as an IaC parameter, a separate track. Supabase has no UAE/Middle-East region.
