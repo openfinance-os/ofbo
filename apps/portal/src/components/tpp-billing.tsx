@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty } from '../lib/tpp-billing'
-import { Notice, ErrorBanner } from './ui'
+import { Notice, ErrorBanner, LoadMore } from './ui'
 
 /**
  * UI-08 — TPP Billing & Registry, translated from the Stitch "OFBO - TPP Billing &
@@ -16,6 +16,8 @@ export interface TppBillingProps {
   invoiceRuns?: InvoiceRun[]
   error?: string | null
   notice?: ReactNode
+  registryMoreHref?: string | null
+  invoiceMoreHref?: string | null
   /** billing:write — register P9 + create invoice runs. */
   canBilling?: boolean
   /** platform:operations:write — sync the Trust Framework Directory. */
@@ -46,7 +48,7 @@ export function StatusPill({ status }: { status: string }) {
   )
 }
 
-export function RegistryTable({ counterparties, canBilling, registerAction }: { counterparties: TppCounterparty[]; canBilling?: boolean; registerAction?: TppBillingProps['registerAction'] }) {
+export function RegistryTable({ counterparties, canBilling, registerAction, moreHref }: { counterparties: TppCounterparty[]; canBilling?: boolean; registerAction?: TppBillingProps['registerAction']; moreHref?: string | null }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="registry">
       <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
@@ -90,11 +92,12 @@ export function RegistryTable({ counterparties, canBilling, registerAction }: { 
           })
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={counterparties.length} noun="TPPs" />
     </div>
   )
 }
 
-export function InvoiceRunsTable({ invoiceRuns }: { invoiceRuns: InvoiceRun[] }) {
+export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: InvoiceRun[]; moreHref?: string | null }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="invoice-runs">
       <div className="px-4 py-3 border-b border-outline-variant">
@@ -123,6 +126,7 @@ export function InvoiceRunsTable({ invoiceRuns }: { invoiceRuns: InvoiceRun[] })
           ))
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={invoiceRuns.length} noun="runs" />
     </div>
   )
 }
@@ -146,7 +150,7 @@ function InvoiceRunForm({ invoiceRunAction }: { invoiceRunAction?: TppBillingPro
   )
 }
 
-export function TppBilling({ counterparties = [], invoiceRuns = [], error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
+export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
   return (
     <div className="space-y-6" data-testid="tpp-billing">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -167,8 +171,8 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], error, notic
       {error ? <ErrorBanner testid="tpp-error">{error}</ErrorBanner> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} />
-        <InvoiceRunsTable invoiceRuns={invoiceRuns} />
+        <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
+        <InvoiceRunsTable invoiceRuns={invoiceRuns} moreHref={invoiceMoreHref} />
       </div>
     </div>
   )

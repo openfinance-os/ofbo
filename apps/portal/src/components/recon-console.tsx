@@ -1,4 +1,5 @@
 import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
+import { LoadMore } from './ui'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -13,6 +14,8 @@ export interface ReconConsoleProps {
   runs?: ReconciliationRun[]
   selectedRun?: ReconciliationRun | null
   breaks?: ReconciliationBreak[]
+  runsMoreHref?: string | null
+  breaksMoreHref?: string | null
   error?: string | null
   notice?: string | null
   canWrite?: boolean
@@ -74,7 +77,7 @@ export function KpiCards({ run }: { run: ReconciliationRun }) {
   )
 }
 
-export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selectedId?: string }) {
+export function RunList({ runs, selectedId, moreHref }: { runs: ReconciliationRun[]; selectedId?: string; moreHref?: string | null }) {
   return (
     <section aria-labelledby="run-list-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="run-list">
       <div className="px-4 py-3 border-b border-outline-variant">
@@ -99,6 +102,7 @@ export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selec
           ))
         )}
       </ul>
+      <LoadMore moreHref={moreHref ?? null} shown={runs.length} noun="runs" />
     </section>
   )
 }
@@ -175,7 +179,7 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
   )
 }
 
-export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { breaks: ReconciliationBreak[]; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction'] }) {
+export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreHref }: { breaks: ReconciliationBreak[]; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction']; moreHref?: string | null }) {
   return (
     <section aria-labelledby="break-queue-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="break-queue">
       <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
@@ -192,11 +196,12 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { b
           breaks.map((b) => <BreakCard key={b.id} b={b} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />)
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={breaks.length} noun="breaks" />
     </section>
   )
 }
 
-export function ReconConsole({ runs = [], selectedRun, breaks = [], error, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
+export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
       <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
@@ -216,9 +221,9 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], error, notic
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RunList runs={runs} selectedId={selectedRun?.run_id} />
+          <RunList runs={runs} selectedId={selectedRun?.run_id} moreHref={runsMoreHref} />
         </div>
-        <BreakQueue breaks={breaks} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />
+        <BreakQueue breaks={breaks} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} moreHref={breaksMoreHref} />
       </div>
     </div>
   )
