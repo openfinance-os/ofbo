@@ -30,6 +30,7 @@ import {
   retentionStatus
 } from '@ofbo/db'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
+import pg from 'pg'
 import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
 import { NebrasIngestionService, InMemoryWarmTierExporter } from './analytics/ingestion.js'
@@ -68,6 +69,19 @@ interface WorkerEnv {
 interface WorkerContext {
   waitUntil(promise: Promise<unknown>): void
 }
+
+/** Cloudflare cron event — only `.cron` (the matched schedule string) is used here. */
+interface ScheduledEvent {
+  cron: string
+}
+
+/**
+ * DEMO-01 — the daily three-way reconciliation runs at 01:00 UTC. Every OTHER cron tick is a
+ * lightweight demo-warmth ping (see scheduled()): it keeps the Supabase free-tier DB from
+ * auto-pausing and the Hyperdrive pool warm, so a presenter's first click never lands on a
+ * cold connect. Must match the [triggers] crons entry in wrangler.toml exactly.
+ */
+const DAILY_RECON_CRON = '0 1 * * *'
 
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: WorkerContext): Promise<Response> {
@@ -147,9 +161,22 @@ export default {
    * job (no public ingress). Cron-triggered; run_id is derived from the date so
    * a retried/overlapping trigger is idempotent (the store ON CONFLICT no-ops).
    */
-  async scheduled(_event: unknown, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     if (!url) return
+    // DEMO-01 — demo-warmth ping. Any cron OTHER than the daily reconciliation is the frequent
+    // keep-warm tick: a single cheap round-trip through the same Hyperdrive/Pg path the request
+    // handler uses, so the Supabase free-tier DB never auto-pauses and the pool stays warm. This
+    // is what stops a presenter's first click from hitting a multi-second cold connect.
+    if (event.cron !== DAILY_RECON_CRON) {
+      const pool = new pg.Pool({ connectionString: url, max: 1 })
+      try {
+        await pool.query('SELECT 1')
+      } finally {
+        await pool.end()
+      }
+      return
+    }
     const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
     const lineage = new PgLineageEmitter(url, tenancy)
     const audit = new PgAuditEmitter(url, tenancy, lineage)
