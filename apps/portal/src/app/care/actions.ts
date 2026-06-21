@@ -5,8 +5,22 @@ import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
-import { createDispute, revokeConsent, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode } from '../../lib/care'
+import { createDispute, revokeConsent, CareApiError, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode, type CareWriteResult } from '../../lib/care'
 import { idempotencyKey } from '../../lib/idempotency'
+
+/**
+ * UX-06b — on failure a care write action RETURNS a CareWriteResult (no redirect) so the form
+ * re-renders in place with the real typed BFF error (message + remediation + docs_url, UX-06)
+ * AND keeps the operator's entered values. Success still redirect()s so the notice shows.
+ * `values` stays client-side (the user typed it) — never put in the URL, so no PSU free-text
+ * leaks into the address bar / logs.
+ */
+function careFailure(e: unknown, fallback: string, values: Record<string, string>): CareWriteResult {
+  if (e instanceof CareApiError) {
+    return { ok: false, error: e.message, remediation: e.remediation ?? null, docsUrl: e.docsUrl ?? null, values }
+  }
+  return { ok: false, error: fallback, values }
+}
 
 /**
  * UI-02 — Customer Care Console mutations (server actions). They run SERVER-SIDE
@@ -34,23 +48,23 @@ function careHref(identifierType: string, identifier: string, status: string) {
   return `/care?${q.toString()}`
 }
 
-export async function revokeConsentAction(formData: FormData) {
+export async function revokeConsentAction(_prevState: CareWriteResult, formData: FormData): Promise<CareWriteResult> {
   const { token } = await principalOrBounce(SCOPES.consentsAdmin)
   const consentId = String(formData.get('consent_id') ?? '')
   const reasonCode = String(formData.get('reason_code') ?? '') as RevokeReasonCode
   const identifierType = String(formData.get('identifier_type') ?? 'bank_customer_id')
   const identifier = String(formData.get('identifier') ?? '')
 
-  let status = 'revoked'
   try {
     await revokeConsent(token, consentId, reasonCode, idempotencyKey(formData))
-  } catch {
-    status = 'revoke_failed'
+  } catch (e) {
+    // Preserve the chosen reason so the operator doesn't re-pick it on retry.
+    return careFailure(e, 'Could not revoke the consent. Please retry.', { reason_code: reasonCode })
   }
-  redirect(careHref(identifierType, identifier, status))
+  redirect(careHref(identifierType, identifier, 'revoked'))
 }
 
-export async function createDisputeAction(formData: FormData) {
+export async function createDisputeAction(_prevState: CareWriteResult, formData: FormData): Promise<CareWriteResult> {
   const { token } = await principalOrBounce(SCOPES.disputesAdmin)
   const identifierType = String(formData.get('identifier_type') ?? 'bank_customer_id')
   const identifier = String(formData.get('identifier') ?? '')
@@ -58,15 +72,15 @@ export async function createDisputeAction(formData: FormData) {
   const disputeType: DisputeType = (DISPUTE_TYPES as readonly string[]).includes(rawType) ? (rawType as DisputeType) : 'unauthorised_payment'
   const paymentId = String(formData.get('originating_payment_id') ?? '')
 
-  let status = 'dispute_opened'
   try {
     await createDispute(
       token,
       { psu_identifier: identifier, dispute_type: disputeType, ...(paymentId ? { originating_payment_id: paymentId } : {}) },
       idempotencyKey(formData)
     )
-  } catch {
-    status = 'dispute_failed'
+  } catch (e) {
+    // Preserve the entered payment id + chosen dispute type for the retry.
+    return careFailure(e, 'Could not open the dispute. Please retry.', { originating_payment_id: paymentId, dispute_type: disputeType })
   }
-  redirect(careHref(identifierType, identifier, status))
+  redirect(careHref(identifierType, identifier, 'dispute_opened'))
 }

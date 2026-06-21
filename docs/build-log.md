@@ -1124,3 +1124,21 @@ The spec's `ErrorEnvelope` has always *required* `remediation` + `docs_url`, but
 Frontend-only — no contract/port/audit/lineage/spec change (aligns the client to existing contract fields). Tests: portal unit 253 pass (new ux06-error-envelope.spec 4); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-06 → done (part 1); **UX-06b** pending (write-path useActionState). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06b: write-path useActionState (Care slice)
+
+Established the typed-error + input-preservation pattern on the **Care write path** (revoke + dispute). The two care server actions changed from `(formData) → redirect('?status=*_failed')` (which swallowed the typed error into a binary string and dropped inputs on the redirect) to React `useActionState` `(prevState, formData) → Promise<CareWriteResult>`:
+
+- On a typed `CareApiError` the action **returns** `{ ok:false, error, remediation, docsUrl, values }` (no redirect) → the form shows the **real BFF error + remediation in place** (UX-06's ErrorBanner) and **keeps the operator's inputs**; success still `redirect()`s for the notice.
+- The revoke + dispute forms became `'use client'` islands (`RevokeForm`/`DisputeForm`) using `useActionState`; inputs are re-seeded from the returned `values` via `key`+`defaultValue` (deterministic in both the browser and jsdom — React 19 resets the form on submit).
+- `CareWriteResult` lives in `lib/care` (a `'use server'` file may only export async functions).
+
+PII posture **improves**: the failure path no longer redirects with identifiers in the URL — `values` (reason/dispute-type enums + payment id) stay client-side. Idempotency-Key, `principalOrBounce` scope re-check, and the httpOnly token boundary are all unchanged.
+
+**Split UX-06c** for the remaining consoles (recon/approvals/investigation/tpp) — a mechanical application of this proven pattern, kept separate so each PR stays reviewable.
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads unchanged). Tests: portal unit 257 pass (new ux06b-write-path.spec 2; care-console.spec noop typed to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06b → done (Care slice); **UX-06c** pending. Remaining UX: UX-10/UX-11 ADR-gated (ADRs 0012/0013 Proposed — human decision); UX-03c PII-blocked.
