@@ -39,11 +39,15 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
+  const cursor = one(sp.cursor)
 
   let approvals: ApprovalRequest[] = []
+  let moreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
   try {
-    approvals = (await listPendingApprovals(token)).approvals
+    const page = await listPendingApprovals(token, { cursor })
+    approvals = page.approvals
+    moreHref = page.next_cursor ? `/approvals?cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch (e) {
     error = e instanceof ApprovalApiError ? e.message : 'Failed to load pending approvals.'
   }
@@ -60,6 +64,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         superadmin={principal.superadmin}
         error={error}
         notice={NOTICE[status] ?? null}
+        moreHref={moreHref}
         approveAction={approveAction}
         rejectAction={rejectAction}
       />

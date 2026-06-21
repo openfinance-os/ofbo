@@ -1,5 +1,5 @@
 import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote, LoadMore } from './ui'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -16,6 +16,7 @@ export interface CareConsoleProps {
   query?: { identifier_type?: string; identifier?: string }
   result?: ConsentSearchResult | null
   timeline?: CareTimeline | null
+  timelineMoreHref?: string | null
   error?: string | null
   notice?: string | null
   revokeAction?: (formData: FormData) => void | Promise<void>
@@ -161,7 +162,7 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
   )
 }
 
-function TimelinePanel({ timeline }: { timeline: CareTimeline }) {
+function TimelinePanel({ timeline, moreHref }: { timeline: CareTimeline; moreHref?: string | null }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="event-history">
       <div className="px-4 py-3 border-b border-outline-variant">
@@ -188,6 +189,7 @@ function TimelinePanel({ timeline }: { timeline: CareTimeline }) {
           ))
         )}
       </ol>
+      <LoadMore moreHref={moreHref ?? null} shown={timeline.events.length} noun="events" />
     </div>
   )
 }
@@ -229,7 +231,7 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
   )
 }
 
-export function CareConsole({ query, result, timeline, error, notice, revokeAction, disputeAction }: CareConsoleProps) {
+export function CareConsole({ query, result, timeline, timelineMoreHref, error, notice, revokeAction, disputeAction }: CareConsoleProps) {
   const identifierType = query?.identifier_type ?? 'bank_customer_id'
   const identifier = result?.psu.bank_customer_id ?? query?.identifier ?? ''
   return (
@@ -266,7 +268,7 @@ export function CareConsole({ query, result, timeline, error, notice, revokeActi
                 )}
               </div>
             </div>
-            {timeline ? <TimelinePanel timeline={timeline} /> : null}
+            {timeline ? <TimelinePanel timeline={timeline} moreHref={timelineMoreHref} /> : null}
           </div>
         </div>
       ) : null}

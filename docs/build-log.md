@@ -1086,3 +1086,13 @@ Frontend-only — no contract/port/audit/lineage/spec change; option **values** 
 Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 245 pass (new ux09b-audit-notice.spec 3); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-05b → done (pre-covered); UX-09b → done. Remaining UX: UX-06(a/b/c), UX-03b, UX-04b, UX-10 pending; UX-03c/UX-11 ADR-gated.
+
+---
+
+## 2026-06-21 — UX-04b: cursor pagination for the approvals queue + care 24-month timeline
+
+The last two truncating lists now page. The lib getters `listPendingApprovals` and `getPsuAuditTrail` gained an optional `query: { cursor?, limit? }` (inserted before the existing `deps` arg; internal callers in `dashboard.ts` + the lib specs updated) that emits the spec's existing `cursor` query param. The approvals page reads `?cursor`, the care page reads `?timeline_cursor` (remapped to `cursor`, preserving the active PSU identifier in the next-page href); both capture `meta.next_cursor` and render the shared `LoadMore` (approvals queue + care `TimelinePanel`). Cursor-based only (no offset).
+
+Frontend-only — no contract/port/audit/lineage/spec change; both endpoints already returned `next_cursor`. Tests: portal unit 247 pass (new ux04b-pagination.spec 2; lib spec call sites updated for the new arg position); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-04b → done. Remaining UX: UX-06(a/b/c), UX-03b pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.

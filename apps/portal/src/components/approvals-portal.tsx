@@ -1,5 +1,5 @@
 import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote, LoadMore } from './ui'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -17,6 +17,7 @@ export interface ApprovalsPortalProps {
   superadmin?: boolean
   error?: string | null
   notice?: string | null
+  moreHref?: string | null
   approveAction?: (formData: FormData) => void | Promise<void>
   rejectAction?: (formData: FormData) => void | Promise<void>
 }
@@ -134,7 +135,7 @@ export function ApprovalCard({
   )
 }
 
-export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, notice, approveAction, rejectAction }: ApprovalsPortalProps) {
+export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, error, notice, moreHref, approveAction, rejectAction }: ApprovalsPortalProps) {
   return (
     <div className="space-y-6" data-testid="approvals-portal">
       <div className="flex items-center justify-between gap-3">
@@ -162,6 +163,7 @@ export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, e
             ))
           )}
         </div>
+        <LoadMore moreHref={moreHref ?? null} shown={approvals.length} noun="approvals" />
       </section>
     </div>
   )
