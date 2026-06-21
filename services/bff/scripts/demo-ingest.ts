@@ -12,6 +12,7 @@ import { NebrasIngestionService, InMemoryWarmTierExporter } from '../src/analyti
 import { LiabilityMonitorService, DemoLiabilityEventSource } from '../src/risk/liability.js'
 import { LiabilityForecastMonitor, DemoLiabilityTelemetrySource } from '../src/risk/liability-forecast.js'
 import { ConsentAnomalyDetector } from '../src/risk/consent-anomaly.js'
+import { ConsentDriftMonitor, DemoConsentDriftSource } from '../src/risk/consent-drift.js'
 import { TppBehaviourProfiler, DemoTppActivitySource } from '../src/risk/tpp-profiling.js'
 
 /**
@@ -59,6 +60,7 @@ const ingestion = new NebrasIngestionService({ egress, snapshots, aggregates, au
 const liabilityMonitor = new LiabilityMonitorService({ signals: riskSignals, itsm })
 const anomalyDetector = new ConsentAnomalyDetector({ detection: anomalyStore, signals: riskSignals, itsm })
 const tppProfiler = new TppBehaviourProfiler({ source: new DemoTppActivitySource(), signals: riskSignals, dedup: anomalyStore })
+const driftMonitor = new ConsentDriftMonitor({ egress, signals: riskSignals, source: new DemoConsentDriftSource(), dedup: anomalyStore })
 const forecastMonitor = new LiabilityForecastMonitor({ telemetry: new DemoLiabilityTelemetrySource(), signals: riskSignals, itsm })
 
 const openLiabilityRefs = async () => {
@@ -74,11 +76,13 @@ try {
   await anomalyDetector.detect(trace)
   await tppProfiler.profile(trace)
   await forecastMonitor.run(trace, await openLiabilityRefs())
+  const drift = await driftMonitor.detect(trace)
 
   console.log(
     `On-demand ingestion for ${period}: ${result.sources.length} source(s), ` +
       `${result.aggregates_refreshed} aggregate(s) refreshed, ${result.stale_sources} stale; risk monitors run.`
   )
+  console.log(`Consent-drift check: ${drift.checked} watched, ${drift.drifted} drifted, ${drift.emitted} new signal(s).`)
   console.log('→ refresh the Finance View (freshness/aggregates) and the Risk view (signals). Inject a fault first with `pnpm demo:fault` to see it land.')
 } finally {
   await Promise.all([

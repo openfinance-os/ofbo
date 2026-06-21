@@ -6,6 +6,7 @@
 #   pnpm demo:fault fee-variance <period> <minor_units>   # e.g. fee-variance 2026-05 999
 #   pnpm demo:fault revoke-delay <ms>                      # push a consent revoke past its 5s SLA
 #   pnpm demo:fault rate-limit <n>                         # 429 the next N report polls (back-off)
+#   pnpm demo:fault consent-drift <consent_id>             # Hub disagrees with the platform mirror
 #   pnpm demo:fault list                                   # show active faults
 #   pnpm demo:fault clear                                  # remove all injected faults
 #
@@ -38,11 +39,16 @@ case "$cmd" in
     echo "Injecting report_rate_limit: 429 the next ${n} report poll(s) …"
     inject "{\"fault\":\"report_rate_limit\",\"fail_times\":${n}}"
     echo "→ pull it into the back office:  pnpm demo:ingest   (exhausted retries → amber freshness)" ;;
+  consent-drift)
+    cid="${2:?usage: demo:fault consent-drift <consent_id> (use a Revoked consent from the Care lookup)}"
+    echo "Injecting consent_drift on ${cid} (the Hub will report it Authorized despite the platform mirror) …"
+    inject "{\"fault\":\"consent_drift\",\"consent_id\":\"${cid}\"}"
+    echo "→ pull it into the back office:  pnpm demo:ingest   (drift → a consent_anomaly Risk signal)" ;;
   list)
     echo "Active faults:"; curl -fsS "$SIM/admin/faults" "${HDR[@]}"; echo ;;
   clear)
     echo "Clearing all injected faults …"; curl -fsS -X DELETE "$SIM/admin/faults" "${HDR[@]}"; echo ;;
   *)
-    echo "usage: pnpm demo:fault {fee-variance <period> <minor>|revoke-delay <ms>|rate-limit <n>|list|clear}" >&2
+    echo "usage: pnpm demo:fault {fee-variance <period> <minor>|revoke-delay <ms>|rate-limit <n>|consent-drift <consent_id>|list|clear}" >&2
     exit 2 ;;
 esac
