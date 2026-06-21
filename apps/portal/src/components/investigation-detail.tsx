@@ -1,5 +1,6 @@
-import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak } from '../lib/reconciliation'
+import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak, type ReconWriteResult } from '../lib/reconciliation'
 import { StatusBadge } from './recon-console'
+import { EscalateForm } from './reconciliation/escalate-form'
 
 /**
  * UI-04 — Investigation Detail View, translated from the Stitch "OFBO - Investigation
@@ -16,7 +17,7 @@ export interface InvestigationDetailProps {
   error?: string | null
   notice?: string | null
   canDispute?: boolean
-  escalateAction?: (formData: FormData) => void | Promise<void>
+  escalateAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
 }
 
 const SOURCES: { key: 'source_a_ref' | 'source_b_ref' | 'source_c_ref'; label: string; hint: string }[] = [
@@ -55,9 +56,13 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
     <div className="space-y-6" data-testid="investigation-detail">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <a href="/reconciliation" className="text-xs text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="back-link">
-            ← Back to Reconciliation Console
-          </a>
+          <nav aria-label="breadcrumb" className="text-xs text-on-surface-variant flex items-center gap-1" data-testid="breadcrumb">
+            <a href="/reconciliation" className="text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="back-link">
+              Reconciliation
+            </a>
+            <span aria-hidden="true">/</span>
+            <span className="text-on-surface" aria-current="page">Break {break_.client_id}</span>
+          </nav>
           <h1 className="text-2xl font-semibold mt-1">Investigation · {break_.client_id}</h1>
         </div>
         <StatusBadge status={break_.status} kind="break" />
@@ -107,12 +112,7 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
           <p className="text-xs text-on-surface-variant mt-2">Raise a one-click dispute to the Nebras Case &amp; Dispute Management surface (via the egress gateway).</p>
         )}
         {canDispute && escalatable && !break_.nebras_dispute_case_id && escalateAction ? (
-          <form action={escalateAction} className="mt-3" data-testid="escalate-form">
-            <input type="hidden" name="break_id" value={break_.id} />
-            <button type="submit" className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-              Escalate to Nebras
-            </button>
-          </form>
+          <EscalateForm break_={break_} action={escalateAction} />
         ) : null}
       </div>
     </div>

@@ -4,6 +4,7 @@ import type { NebrasEgressPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import type { ConsentDirectory } from './directory.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import type { IdempotencyStore } from '../idempotency.js'
 
@@ -39,6 +40,10 @@ export class ConsentRevokeError extends Error {
 export interface ConsentRevokeDeps {
   egress: Pick<NebrasEgressPort, 'revokeConsent'>
   audit: HighClassAuditSink
+  /** DEMO-01 — resolves the consent's owning PSU so the audit row carries
+   *  target_psu_identifier (without it the revoke never shows in the per-PSU timeline).
+   *  Optional: absent in degraded wiring → the field is simply left null. */
+  directory?: Pick<ConsentDirectory, 'psuByConsentId'>
 }
 
 export class ConsentRevokeService {
@@ -76,6 +81,7 @@ export class ConsentRevokeService {
       acting_principal: principal.subject,
       acting_persona: principal.persona,
       scope_used: REVOKE_SCOPE,
+      target_psu_identifier: this.deps.directory?.psuByConsentId(consentId) ?? null,
       target_consent_id: consentId,
       request_trace_id: traceId,
       request_body: {

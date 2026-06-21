@@ -38,7 +38,8 @@ export function DashboardOverview({ kpis }: { kpis: Kpi[] }) {
   if (kpis.length === 0) return null
   return (
     <section className="mb-8" data-testid="dashboard-overview" aria-label="back office overview">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/* UX-10 — one consistent 4-up KPI breakpoint ladder (matches recon + investigation). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((k) => (
           <KpiCard key={k.key} kpi={k} />
         ))}

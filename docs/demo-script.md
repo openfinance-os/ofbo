@@ -1,56 +1,98 @@
 # OFBO — Demo Script (presenter golden path)
 
-A ~10-minute cross-persona walkthrough that shows the **depth** of the Open Finance Back
-Office without any real integration — everything below runs on synthetic data against the
-local stack. The story arc: **regulated, four-eyes-gated, separation-of-duties, fully
-audited + lineage-tracked** — not a CRUD app.
+A ~10-minute walkthrough that shows the **depth** of the Open Finance Back Office without any
+real integration — everything runs on synthetic data. The story arc: **regulated, four-eyes-
+gated, separation-of-duties, fully audited + lineage-tracked** — not a CRUD app.
 
-## 0. Setup (once)
-
-```bash
-# bring up the stack (Nebras sim + BFF + portal) on a fast local Postgres, then seed depth
-pnpm db:reset && pnpm db:seed:demo          # rich "operating back office" — see below
-.claude/skills/run-ofbo/smoke.sh --keep     # launches sim + BFF, leaves them running
-(cd apps/portal && pnpm build && PORT=3000 BFF_URL=http://localhost:8787 pnpm start &)
-```
-
-Open **http://localhost:3000**. Every screen carries the persistent **DEMO banner** (a
-regulatory hard-stop: synthetic data only, zero real PSU data). `pnpm db:seed:demo` stages:
-a 30-day reconciliation history, ~11 open breaks, 16 risk signals across all types, **3
-pending four-eyes approvals**, and 6 disputes (incl. a cross-scheme one).
-
-The opening line: *"This is a bank-neutral back office for UAE Open Finance — the LFI and
-TPP-of-record roles in one regulated console. Watch the guardrails, not the CRUD."*
+The spine of the demo is **one incident, `INC-2026-0042`**, traced across every console: an
+unauthorised payment that surfaces in Customer Care, Finance, Risk, Approvals, and Ops as **one
+linked thread** — not five unrelated rows. Lead with it; everything else is supporting depth.
 
 ---
 
-## 1. Customer Care — PSU lookup, consent revoke, dispute  *(persona: Customer Care Agent)*
+## 0. Setup
+
+### Option A — hosted demo (zero setup, recommended)
+
+Open the live portal: **https://ofbo-portal.michartmann.workers.dev** (auto-deployed on every
+merge to `main`, smoke-gated). Sign in with any persona on the picker.
+
+> **Warm it up ~60s before you present.** The DB is Supabase free-tier (Mumbai, nearest region
+> to the UAE) and can auto-pause; a `*/5` cron now keeps it warm, but if the demo has been idle,
+> prime all three surfaces so the first click is instant:
+> ```bash
+> curl -s https://ofbo-portal.michartmann.workers.dev/ -o /dev/null
+> curl -s https://ofbo-bff.michartmann.workers.dev/back-office/health -o /dev/null
+> curl -s https://nebras-sim-production.up.railway.app/health -o /dev/null
+> ```
+> Warm interaction latency is ~3s/screen (Cloudflare edge → Mumbai origin — physics, not a bug);
+> cold is worse, so warm first.
+
+### Option B — local stack
+
+```bash
+# REQUIRED: point at a Postgres. WITHOUT DATABASE_URL the BFF silently falls back to in-memory
+# stores and every console shows EMPTY — none of the seeded depth below appears. See repo .env.
+export DATABASE_URL=postgres://…            # local Postgres or the Supabase session pooler
+
+pnpm db:reset && pnpm db:seed:demo          # rich "operating back office" — see below
+.claude/skills/run-ofbo/smoke.sh --keep     # launches the Nebras sim + BFF, leaves them running
+(cd apps/portal && pnpm build && PORT=3000 BFF_URL=http://localhost:8787 pnpm start &)
+```
+
+Open **http://localhost:3000**.
+
+Every screen carries the persistent **DEMO banner** (a regulatory hard-stop: synthetic data
+only, zero real PSU data). `pnpm db:seed:demo` stages a 30-day reconciliation history, **a dozen
+breaks** (~7 flagged), **13 risk signals** across all types, **4 pending four-eyes approvals**,
+7 disputes (incl. a cross-scheme one), plus Nebras service-desk cases and fraud incidents — and
+the **`INC-2026-0042`** thread woven through Care/Finance/Risk/Approvals/Ops.
+
+**Switching persona:** use **Switch persona** in the top bar (returns to the picker), then pick
+the next role. The sidebar visibly changes to that persona's scope — that *is* the separation-of-
+duties control, enforced again at the BFF.
+
+The opening line: *"This is a bank-neutral back office for UAE Open Finance — the LFI and
+TPP-of-record roles in one regulated console. Watch the guardrails, not the CRUD. And watch one
+incident, `INC-2026-0042`, move across every screen."*
+
+---
+
+## 1. Customer Care — the incident begins  *(persona: Customer Care Agent)*
 
 Sign in as **Customer Care Agent** → **Customer Care**.
 
-1. **PSU Identity Lookup** — search `cust-0001` (bank_customer_id). The profile resolves with
-   its **consent inventory** (6 TPP consents: SIP_PAYMENT + AISP_DATA_SHARING, with
-   Consumed/Suspended/Revoked states) and the **24-month event history**.
+1. **PSU Identity Lookup** — search `cust-0001`. The profile resolves with its **consent
+   inventory** (TPP consents across Consumed/Suspended/Revoked states) and the **24-month event
+   history**.
    - *Point out:* **no PSU PII** — only the internal id, scopes, and synthetic fintech names.
      The whole audit trail is PII-redacted at emission.
-2. **Admin-revoke** a Suspended consent (reason `TPP_REQUEST`). It propagates to the **Nebras
-   Consent Manager via the P6 egress port** and records the **sub-5s acknowledgment** (the
-   scheme SLA). One High-class audit row is written.
-3. **Open a dispute** from the Investigation module (`unauthorised_payment`). Note the copy:
+2. **The incident dispute** — `cust-0001` has an **in-progress `unauthorised_payment` dispute**
+   (`INC-2026-0042`), an unauthorised payment via *Fictional Fintech 01*. Open it. Note the copy:
    *"Refund initiation is four-eyes-gated downstream"* — Care **cannot** refund alone.
+3. **Admin-revoke** a Suspended consent (reason `TPP_REQUEST`). It propagates to the **Nebras
+   Consent Manager via the P6 egress port** and records the **sub-5s acknowledgment** (the scheme
+   SLA). One High-class audit row is written.
+   - *Then refresh the lookup:* the revoke now appears in **this customer's 24-month timeline** as
+     a `revoked` event attributed to **you** (the acting agent) — the operator action is traceable
+     against the PSU, not just buried in a global log. (We'll see the same record again, cross-
+     operator, in the Audit Log at §6.)
+
+*Hold the thread:* "Remember `INC-2026-0042` — we'll see this same payment in Finance, Risk,
+Approvals, and Ops."
 
 ---
 
 ## 2. Four-Eyes Approval — the load-bearing control  *(switch persona)*
 
-The dispute refund, an invoice run, and a CBUAE report are **already pending** in the queue,
-each seeded so a *different* persona is the approver than the initiator.
+Four approvals are **already pending**, each seeded so a *different* persona is the approver than
+the initiator — including the **`INC-2026-0042` refund**.
 
-- As **Customer Care Agent** → **Approvals**: one **PENDING `disputes.refund`** with dual
-  **Initiator / Approver** cards (the initiator is a *colleague*, so you can action it). Click
-  **Approve** → it executes only now, by a second principal. *The control:* an initiator is
-  always **locked out of approving their own** request — even super-admin (enforced at the BFF,
-  not just the UI).
+- As **Customer Care Agent** → **Approvals**: the **PENDING `disputes.refund` for INC-2026-0042**
+  shows dual **Initiator / Approver** cards (the initiator is a *colleague*, so you can action
+  it). Click **Approve** → the refund executes only now, by a second principal. *The control:* an
+  initiator is always **locked out of approving their own** request — even super-admin (enforced
+  at the BFF, not just the UI).
 - Switch to **Finance Analyst** → **Approvals**: a pending **invoice run** to approve.
 - Switch to **Compliance Officer** → **Approvals**: a pending **CBUAE report** to approve.
 
@@ -61,33 +103,35 @@ inline** — it waits for a second set of eyes.
 
 ## 3. Separation of duties — the scope matrix is load-bearing  *(persona: Finance Analyst)*
 
-As **Finance Analyst**, look at the sidebar: **Finance, Analytics, TPP Billing** — but **no
-Risk, no Customer Care**. Try navigating to `/risk` directly → you're **bounced to the
-dashboard**. Customer Care ≠ Finance ≠ Risk scopes; granting beyond the matrix is an automatic
-review failure. (Same enforcement at the BFF, not just the UI.)
+As **Finance Analyst**, look at the sidebar: **Finance, Analytics, TPP Billing** — but **no Risk,
+no Customer Care**. Try navigating to `/risk` directly → you're **bounced to the dashboard**.
+Customer Care ≠ Finance ≠ Risk scopes; granting beyond the matrix is an automatic review failure.
+(Same enforcement at the BFF, not just the UI.)
 
 ---
 
-## 4. Reconciliation — the three-way engine + break workflow  *(persona: Finance Analyst)*
+## 4. Reconciliation — the same payment, now a break  *(persona: Finance Analyst)*
 
 **Finance** → Reconciliation Console.
 
 - The **KPI row**: Total Lines / Matched (green) / Unmatched (red) / Disputed (amber), with a
   **30-day run history** behind the SLO dashboard.
-- The **Break Queue** (~11 open): each break shows the **three source refs** (A = Nebras
-  billing, B = the bank's metering-of-record, C = fintech billing), variance, line type, and
-  SLA clock.
-- **Claim** a flagged break → it moves to *assigned* with your name + an SLA clock. **Resolve**
-  it (outcome + a ≥20-char note). Open the **Investigation Detail** on another for the
-  side-by-side three-source diff and the one-click **escalate-to-Nebras**.
+- The **Break Queue**: a dozen breaks across the lifecycle, each showing the **three source refs**
+  (A = Nebras billing, B = the bank's metering-of-record, C = fintech billing), variance, line
+  type, and SLA clock. **One break carries the `INC-2026-0042` refs** — *"this is the same
+  unauthorised payment the dispute is about, seen from the money side."*
+- **Claim** a flagged break → it moves to *assigned* with your name + an SLA clock. **Resolve** it
+  (outcome + a ≥20-char note). Open the **Investigation Detail** for the side-by-side three-source
+  diff and the one-click **escalate-to-Nebras**.
 
 ---
 
-## 5. Risk — anomaly monitors + the predictive "regulated AI" forecast  *(persona: Risk Analyst)*
+## 5. Risk — the same payment, now a signal  *(persona: Risk Analyst)*
 
-**Risk** view. 16 signals across every type: consent anomalies, TPP behaviour (3σ), CoP
+**Risk** view. **13 signals** across every type: consent anomalies, TPP behaviour (3σ), CoP
 mismatch, Nebras liability approaching, agent anomaly, **predictive liability forecast**, and a
-missed-LFI-report-cadence signal.
+missed-LFI-report-cadence signal. **One `tpp_behaviour` signal is the `INC-2026-0042` thread** —
+the unauthorised-payment pattern flagged for *Fictional Fintech 01*.
 
 - The **predictive liability forecast** is a **regulated AI artefact** — open
   `docs/model-cards/predictive-liability-forecast.md`: deterministic + explainable, with drift
@@ -97,30 +141,75 @@ missed-LFI-report-cadence signal.
 
 ---
 
-## 6. Cross-scheme guard + lineage  *(persona: super-admin to show everything)*
+## 6. Ops + lineage — one incident, end to end  *(persona: super-admin to show everything)*
 
-- **Cross-scheme double-compensation:** one seeded dispute is marked settled in the other
-  scheme (Aani). Attempting `initiate-refund` on it returns **409** — the bank can't pay the
-  same direct loss twice across schemes.
+- **The thread closes in Ops:** the **Nebras service-desk case** for `INC-2026-0042` links the
+  recon break, the PSU dispute, *and* the risk signal — and a **fraud incident** reported to the
+  Nebras helpdesk has the customer's payments paused. *"One unauthorised payment — Care saw a
+  dispute, Finance saw a break, Risk saw a signal, Ops raised a service-desk case and a fraud
+  report, and the refund needed two sets of eyes. One incident, five consoles, fully linked."*
+- **Cross-scheme double-compensation:** a separate seeded dispute is marked settled in the other
+  scheme (Aani). Attempting `initiate-refund` on it returns **409** — the bank can't pay the same
+  direct loss twice across schemes.
+- **Audit Log — who did what, across every operator** *(persona: Compliance Officer or super-
+  admin; `audit:read`)*. Open **Audit Log** in the sidebar and filter **Event type → `consent_
+  revoked`**. The list shows the revoke you performed in §1 — attributed to
+  `demo:customer-care-agent`, with the scope, PSU, consent, and timestamp — *now visible to a
+  **different** persona (Compliance), not just the agent who did it.* Filter by acting principal to
+  answer "everything this operator touched." *The control:* the High-class audit is **INSERT-only**;
+  the read itself is logged (`audit_trail_accessed`); nothing is editable or deletable. (The
+  Dashboard's panel is a self-scoped "my recent actions" view; **this** is the cross-operator
+  oversight surface.)
 - **BCBS 239 lineage:** `GET /back-office/lineage/risk_signal` (Compliance) returns the
-  column-level lineage tree — every regulated write is traceable end-to-end. The **Q4.5 gate**
-  in CI fails the build if any table with rows lacks lineage.
+  column-level lineage tree — every regulated write is traceable end-to-end. The **Q4.5 gate** in
+  CI fails the build if any table with rows lacks lineage. *Lineage = where the data came from;
+  the Audit Log = who acted on it. Together: full end-to-end traceability.*
 
 ---
 
-## 7. Inject a fault, live  *(the "trigger breaks + signals on demand" requirement)*
+## 7. Trigger a break + signals, live  *(the "trigger breaks + signals on demand" requirement)*
 
-The Nebras simulator emulates the Hub with **injectable faults**. Show the round-trip:
+**Lever 1 — a new break: `demo:break`.** It runs the real three-way reconciliation engine
+against the demo DB with injected variance, producing a **genuinely new flagged break** in the
+queue every time. Run it, then refresh the Reconciliation Console:
 
 ```bash
-pnpm demo:fault fee-variance 2026-05 999   # inject a +999 fil fee variance into the period
-# the TPP Report for that period now carries the perturbed line — the variance a
-# reconciliation run would flag as a break against the bank's metering-of-record
-pnpm demo:fault clear                       # remove all injected faults
+pnpm demo:break            # new flagged break appears in the queue on the next refresh
 ```
 
-Other faults: `revoke-delay <ms>` (push a consent revoke past its 5s SLA), `rate-limit <n>`
-(429 the next N report polls → exercises the ingestion's exponential back-off).
+**Lever 2 — a Nebras fault, made visible: `demo:fault` + `demo:ingest`.** The simulator
+emulates the Hub with injectable faults. They perturb the upstream Nebras surfaces; the back
+office only reflects them once it runs its (headless, no-public-ingress) ingestion + risk pass —
+so `demo:ingest` runs that pass **on demand** (the same work the scheduled job does):
+
+```bash
+PERIOD=$(date +%Y-%m)
+pnpm demo:fault fee-variance "$PERIOD" 50000   # +50000 fil into that period's TPP report (the sim)
+pnpm demo:ingest "$PERIOD"                      # pull it in via P6 → refresh the analytics aggregate
+# → the Finance View's fees/freshness for the period now reflect the +50000 variance.
+pnpm demo:fault clear && pnpm demo:ingest "$PERIOD"   # restore
+
+pnpm demo:fault rate-limit 3 && pnpm demo:ingest "$PERIOD"   # 429 the report polls → amber freshness (back-off)
+pnpm demo:fault revoke-delay 7000              # push a consent revoke past its 5s SLA (recorded in audit)
+```
+
+**Lever 3 — consent drift → a Risk signal.** Grab a **Revoked** consent's id from the Customer
+Care lookup (`cust-0001` has two), then make the Hub disagree with the platform mirror:
+
+```bash
+pnpm demo:fault consent-drift <revoked_consent_id>   # Hub now reports it Authorized (drift)
+pnpm demo:ingest                                     # drift monitor → a consent_anomaly Risk signal
+pnpm demo:fault clear                                # restore (the open signal stays until triaged)
+```
+
+`demo:ingest` also re-runs the **liability / anomaly / TPP-behaviour / forecast / consent-drift
+monitors**, so risk **signals** refresh on demand (deduped against open signals) — the "signals
+on demand" half of the requirement.
+
+> **Env:** `demo:fault` reads `SIM_URL` + `SIM_ADMIN_TOKEN` from the repo `.env`; without them it
+> targets `localhost:8788`. `demo:ingest` reads the sim through the P6 adapter (`NEBRAS_SIM_URL`)
+> and needs `DATABASE_URL` — point both at the **same** sim/DB you're demoing (local or hosted),
+> or the fault lands somewhere you're not watching.
 
 ---
 
@@ -129,4 +218,4 @@ Other faults: `revoke-delay <ms>` (push a consent revoke past its 5s SLA), `rate
 *"Every screen you saw is bound to the OpenAPI contract, token-gated by the persona matrix,
 four-eyes-gated where it matters, PII-free, and lineage-tracked — and all of it port-abstracted
 so the same application core runs against the bank's real systems by swapping a config flag, not
-a line of code."*
+a line of code. And one incident, `INC-2026-0042`, walked through all of it as a single thread."*

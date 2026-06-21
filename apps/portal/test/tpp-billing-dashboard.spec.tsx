@@ -31,7 +31,8 @@ const pendingTpp: TppCounterparty = {
 const registeredTpp: TppCounterparty = { ...pendingTpp, organisation_id: 'org-2', registration_state: 'registered', financial_system_ref: 'P9-22', unbilled_traffic: false }
 const invoiceRun: InvoiceRun = { invoice_run_id: 'inv-1', billing_period: '2026-06', record_set_id: 'rec-1', status: 'pending_approval', approval_id: 'ap-1', invoices: [{}], withheld_line_count: 2, net_settlement_offset: { amount: 50000, currency: 'AED' } }
 
-const noop = () => {}
+// UX-06d — tpp write actions are useActionState actions: (prevState, formData) => Promise<result>.
+const noop = async () => ({ ok: true })
 
 describe('RegistryTable', () => {
   it('renders fee accrual + unbilled flag, and offers P9 register only for a registerable TPP with billing:write', () => {

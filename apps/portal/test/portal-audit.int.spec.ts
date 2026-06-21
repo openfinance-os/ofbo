@@ -53,4 +53,22 @@ describe('M1-PORTAL-SHELL — sign-in audit emitted and visible', () => {
     const events = await recentAudit(principal, { auditSource: reader })
     expect(events.every((e) => e.acting_principal === principal.subject)).toBe(true)
   })
+
+  it('drops low-signal event types from the dashboard panel view (DEMO-01) while keeping operations', async () => {
+    // signin (noise) already recorded above; add an operational consent_revoked.
+    await emitter.emit({
+      event_type: 'consent_revoked',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: 'consents:admin',
+      target_consent_id: crypto.randomUUID(),
+      request_trace_id: `trace-${crypto.randomUUID()}`,
+      request_body: { reason_code: 'TPP_REQUEST' },
+      response_status: 200
+    })
+    const filtered = await recentAudit(principal, { auditSource: reader }, { excludeEventTypes: ['signin_success', 'scope_denied', 'audit_trail_accessed'] })
+    expect(filtered.length).toBeGreaterThan(0)
+    expect(filtered.some((e) => e.event_type === 'consent_revoked')).toBe(true)
+    expect(filtered.every((e) => e.event_type !== 'signin_success')).toBe(true)
+  })
 })

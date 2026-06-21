@@ -15,16 +15,22 @@ NEBRAS_SIM_URL = "https://nebras-sim-production.up.railway.app"
 [observability]
 enabled = true
 
+# ── Scheduled triggers (DEMO-01) ─────────────────────────────────────────────────────
+# Two schedules, dispatched on event.cron in worker.ts scheduled():
+#   "0 1 * * *"   → the daily three-way reconciliation + ingestion + risk monitors (the job).
+#   "*/5 * * * *" → demo-warmth ping: one cheap SELECT 1 that keeps the Supabase free-tier DB
+#                   from auto-pausing and the Hyperdrive pool warm, so a presenter's first click
+#                   never lands on a cold connect (the residual hosted-demo cold-start risk).
+[triggers]
+crons = ["0 1 * * *", "*/5 * * * *"]
+
 # ── Hyperdrive (fixes the ~12s/screen hosted latency) ────────────────────────────────
 # The Worker runs at the edge but Supabase is in ap-northeast-2; a fresh Postgres connect +
-# TLS handshake per request dominates each response. Hyperdrive pools warm connections near
-# the origin so the Worker reuses them. worker.ts already prefers env.HYPERDRIVE.connectionString
-# over DATABASE_URL — so this is dormant until activated (deploys keep working meanwhile).
-#
-# Activate (one time, needs Cloudflare auth):
-#   cd services/bff
-#   pnpm exec wrangler hyperdrive create ofbo-db --connection-string="$DATABASE_URL"
-#   # paste the returned id below + uncomment, then redeploy:
-# [[hyperdrive]]
-# binding = "HYPERDRIVE"
-# id = "<paste-the-hyperdrive-config-id-here>"
+# TLS handshake per request dominated each response. Hyperdrive pools warm connections near
+# the origin so the Worker reuses them. worker.ts prefers env.HYPERDRIVE.connectionString over
+# DATABASE_URL (clean fallback when the binding is absent).
+# Config 'ofbo-db' wraps the Supabase Postgres; recreate with:
+#   pnpm exec wrangler hyperdrive create ofbo-db --connection-string="<supabase-url>"
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "06ae60ce3e704d0984e0e9062ec5a964"

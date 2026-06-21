@@ -935,3 +935,321 @@ path refs. Tests: analytics-dashboard.spec 4→10; full unit 641→654. Stitch r
 **Process note:** authored in an **isolated git worktree** (`.claude/worktrees/backoffice-64`) after BACKOFFICE-25 was nearly lost to a concurrent session resetting the shared checkout. The worktree fully isolated this story — zero clobbering. Two test gates earned their keep: typecheck caught the -25 stub after widening the `careSurface` port dep; the int test caught that `target_dispute_id` is a UUID column (fixture fixed to a real UUID).
 
 **Backlog:** BACKOFFICE-64 → done. Remaining: BACKOFFICE-33 (BD-13 governance sign-off) and M6 enterprise port-swaps (per-bank) — both genuinely human/bank-gated, not code.
+
+---
+
+## 2026-06-21 — UX-01 shared UI primitives + recon a11y propagation + a11y gate (UX-hardening)
+
+First story off the UI/UX review (`docs/ui-ux-review.md`). Closed the CRITICAL accessibility regressions outside the recon console and introduced the enforcement to keep them closed.
+
+- **Shared primitives** (`apps/portal/src/components/ui/`): `Notice` (role=status) + `ErrorBanner` (role=alert) — the WCAG 4.1.3 status-message contract the recon console proved; `StatusBadge` + one canonical `statusTone` map (kills the cross-screen colour drift the review found, e.g. `suspended` was red on analytics, amber on care → now amber everywhere); `Panel` (labelled `<section aria-labelledby>` region with aria-hidden count + sr-only phrase).
+- **Global a11y safety net** (`globals.css`): a `:focus-visible` ring on every interactive element (2.4.7 — many non-recon controls had none), a `.skip-link` (2.4.1), and `prefers-reduced-motion`.
+- **Propagated** role=status/alert banners across care/approvals/tpp-billing/analytics/risk/operations/compliance (was bare `<p>`); app-shell gained the skip-link + `<main id>`; fixed the `text-on-primary`→`text-on-primary-container` contrast bug on the persona badge + care avatar + tpp button.
+- **A11y gate**: `test/a11y.spec.tsx` (vitest-axe over every screen, WCAG 2.0/2.1 A+AA; colour-contrast deferred to the token tests as jsdom can't compute layout) + `test/ui-primitives.spec.tsx`. Added `vitest-axe` + `axe-core` dev deps.
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 203 pass (incl. design-conformance 34, design-tokens 8, no-raw-style 3 — token discipline held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
+
+**Backlog:** UX-01 → done. Remaining UX: UX-02..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
+
+---
+
+## 2026-06-21 — UX-02 confirmation + forced-choice on irreversible actions (UX-hardening)
+
+Operator-safety story from the UI/UX review: the three single-click, externally-visible, irreversible actions now require an explicit confirm, and two audited enum selects can no longer record a silent default.
+
+- **`components/ui/confirm-submit.tsx`** — an accessible two-step `ConfirmSubmit` (client island): the action button is `type=button` until armed; arming reveals a plain-language summary + a real `type=submit` "Confirm" + "Cancel". Real buttons + a labelled group (no native `confirm()`), and because Confirm submits the enclosing form, native validation (the required selects) still runs.
+- **Applied** to: consent **revoke** (care-console), **escalate-to-Nebras** (investigation-detail), **approve-gated-op** (approvals-portal). Each summary names the substance (TPP / break + variance / operation type).
+- **Forced-choice** — revoke `reason_code` + resolve `resolution_outcome` selects gain `required` + a disabled placeholder (`defaultValue=""`), so an audited action can't record an unintended first-enum default.
+
+Frontend-only — no contract/port/audit/lineage/spec change; the four-eyes server flow is unchanged (Confirm submits the same server action; nothing executes inline). Tests: portal unit 208 pass (new confirm-submit.spec 4; design-conformance 35 / tokens 8 / no-raw-style 3 held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
+
+**Backlog:** UX-02 → done. Remaining UX: UX-03..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
+
+---
+
+## 2026-06-20/21 — Demo-ability sprint + hosted performance + region relocation
+
+A run of demo-quality, performance, and infra work (driven interactively, outside the per-story loop). All merged to main, each browser-verified + hard-stop-reviewed where code; CI green.
+
+**Demo-ability (PRs #131, #132, #135, #139, #140):**
+- #131 — rich "operating back office" scenario seed (`pnpm db:seed:demo`, separate from the CI base seed): 30-day reconciliation history, ~11 open breaks, 16 risk signals, 3 pending four-eyes, 6 disputes incl. the cross-scheme 409 case. Idempotent + BCBS 239 lineage (Q4.5 green); also closed a latent gap — base seed now emits `audit_high_sensitivity` lineage.
+- #132 — presenter golden-path guide (`docs/demo-script.md`) + `pnpm demo:fault` helper wrapping the Nebras sim's injectable faults.
+- #135 — `pnpm demo:break` (live recon run with injected fee variance → fresh flagged break on demand) + the executive landing dashboard (scope-aware KPI row: pending approvals / pass-rate / open breaks / risk signals, tone-coded + deep-linked).
+- #139 — dashboard charts (30-day recon-trend area+line + risk-severity bars), token-only hand-rolled SVG.
+- #140 — charted numeric distributions in the shared generic renderer (`MiniBars`) → Analytics/Risk/Operations/Compliance all get bars at once.
+- Plus a coherent linked incident (INC-2026-0042) traceable across Care→Finance→Risk→Approvals, and #133 (compact ISO timestamps + nowrap table cells — fixed a char-stacking render bug).
+
+**Hosted performance (PRs #143, #144):**
+- #143 — bound Cloudflare **Hyperdrive** (config `ofbo-db`) to the BFF worker; worker.ts prefers `env.HYPERDRIVE.connectionString` over `DATABASE_URL` (clean fallback). Eliminated the per-request cold connect+TLS handshake.
+- #144 — batched the RLS transaction preamble (`BEGIN; SET LOCAL ROLE; set_config`) into one simple-query round-trip via shared `beginAppTx()` (UUID-validated interpolation), across all 22 stores. RLS semantics unchanged (integration 101/101).
+- Net hosted latency (measured from a non-UAE vantage): ~12s → ~5s (Hyperdrive) → ~3s (batched). The Worker→DB distance is the remaining floor.
+- Also: local dev switched to a Dockerised Postgres (`:5433`) — ~12s→sub-10ms per click; `.env` keeps the remote as `DATABASE_URL_SUPABASE`.
+
+**Demo DB region relocation (infra, no code):** moved the Supabase demo DB Seoul → Singapore → **Mumbai (`ap-south-1`)** for UAE proximity (nearest Supabase region to the UAE; Cloudflare Dubai edge → Mumbai ≈ 1,900 km). Each move: re-`db:apply`+`db:seed:demo`, repoint the Hyperdrive config + worker secret + GitHub Actions `DATABASE_URL` secret + `.env`, redeploy. Synthetic data only — re-seed *is* the migration (nothing to preserve).
+- **Caveat (unchanged):** this is the synthetic, non-prod demo. Production UAE **data residency** still requires a UAE-region Postgres (AWS `me-central-1` Dubai) provisioned via Terraform — region as an IaC parameter, a separate track. Supabase has no UAE/Middle-East region.
+
+---
+
+## 2026-06-21 — UX-03 four-eyes initiator feedback (UX-hardening; scoped)
+
+From the UI/UX review's four-eyes gap. The user chose to ship the **unblocked frontend parts** only; the operation-payload-on-cards item is blocked (the ApprovalRequest contract is PII-redacted by design) and split to UX-03c (ADR).
+
+- **Initiator gets the request id + a way to track it**: the invoice-run server action (tpp-billing) now captures the returned `approval_request_id` and appends `?ar=`; the page renders a richer notice (text + a deep-link to `/approvals`). `TppBilling.notice` widened `string → ReactNode`.
+- **Expiry urgency**: approval cards show relative expiry ("Expires in 1h 45m") via a pure `formatExpiry(expiresAt, now)` helper (now injected for determinism), with a `text-breach` + "expiring soon" tone in the last 30 minutes (2h default expiry, PRD §10).
+
+Frontend-only — no contract/port/audit/lineage/spec change; four-eyes execution flow unchanged (the surfaced `approval_request_id` is a UUID, not PII). Tests: portal unit 215 pass (new ux03-foureyes-feedback.spec 7; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-03 → done. Split: **UX-03b** (pending-count nav badge — needs per-page count or shared-shell refactor) pending; **UX-03c** (operation context on cards) blocked → ADR. Remaining UX: UX-04..09 pending; UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-04 cursor pagination, recon + TPP lists (UX-hardening; scoped)
+
+From the UI/UX review: list getters returned next_cursor but the pages discarded it, so long lists silently truncated — a trust/correctness gap in a regulated console.
+
+- **`components/ui/load-more.tsx`** — a reusable server-rendered control: a "N {noun} shown · more available / all loaded" indicator + a forward **"Next page →"** link (the page builds the href, preserving its other params + setting this list's cursor). Forward cursor navigation (replace) — the honest server-rendered cursor pattern.
+- **Wired the four lists whose getters already accept `cursor`**: recon **runs** (`runs_cursor`) + **break queue** (`breaks_cursor`) — preserving the selected `run_id`; TPP **registry** (`reg_cursor`) + **invoice runs** (`inv_cursor`). Each page reads its per-list cursor param, passes it to the getter, captures `next_cursor`, and renders LoadMore.
+
+Cursor-based only (no offset); cursors are opaque tokens (no PSU data in URLs). Split **UX-04b** for the approvals queue + care 24-month timeline (their getters need a cursor param + lib-test updates). Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 221 pass (new load-more.spec 5; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-04 → done; **UX-04b** (approvals + timeline pagination) pending. Remaining UX: UX-03b, UX-05..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-05 submitting states + stable idempotency keys (UX-hardening; scoped)
+
+From the UI/UX review: all-server-render + redirect-per-mutation gave no in-the-moment feedback, and per-call random Idempotency-Keys defeated their own purpose (every click looked new, so the 24h window never protected against a double-submit).
+
+- **`components/ui/submit-button.tsx`** — a client `SubmitButton` (useFormStatus): disabled + a pending label ("Working…"/"Claiming…"/…) + aria-busy while its enclosing form's server action is in flight. Visible feedback + a double-submit guard.
+- **`components/ui/idempotency-field.tsx`** + **`lib/idempotency.ts`** — a hidden `idempotency_key` minted once per form render; the actions read it (fallback to a fresh uuid) instead of minting per call. A double-click of the same rendered form now carries the SAME key (the BFF collapses it within the 24h window) while a fresh page load mints a new key and can legitimately retry.
+- **Wired into every mutating form** (care revoke/dispute, recon claim/resolve, tpp register/sync/invoice, approvals approve/reject) and all 9 server actions; tpp syncDirectoryAction gained a formData param.
+
+Frontend-only — no contract/port/audit/lineage/spec change; the Idempotency-Key header shape + 24h semantics are unchanged (only the value source). Split **UX-05b** for per-route loading.tsx skeletons. Tests: portal unit 228 pass (new ux05-submit-idempotency.spec 7); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-05 → done; **UX-05b** (loading skeletons) pending. Remaining UX: UX-03b, UX-04b, UX-05b, UX-06..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-07 explicit scope-denied page (UX-hardening)
+
+From the UI/UX review: out-of-scope deep links / bookmarks bounced silently to /dashboard with no explanation — disorienting for a portal whose §2 scope matrix is load-bearing.
+
+- **`/access-denied` route + `AccessDenied` component**: the 7 scope-gated pages (care, reconciliation, tpp-billing, analytics, risk, operations, compliance) now redirect an out-of-scope access to `/access-denied?module=…&required=…`, which renders inside the shell and states "Your persona `X` does not hold the `scope` scope required for `module`." with a back-to-dashboard link.
+- **Enforcement is unchanged** — the same `!superadmin && !scopes.includes(...)` gate still blocks; only the *destination* of the bounce changed (informative instead of silent). The required-scope string is disclosed to the already-authenticated user about their own denial (not a leak). Denial is now legible, not audited (a client-side informational page — no audit emission).
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 232 pass (new access-denied.spec 4; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-07 → done. Remaining UX: UX-06(a/b/c), UX-08, UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-08 wire the global search (scope-aware PSU quick-lookup)
+
+From the UI/UX review: the app-shell rendered a search input on every screen with no form/handler/target — a dead control on the natural cross-console entry point.
+
+- **Decided: wire, not remove.** The header search is now a scope-aware **PSU quick-lookup** — a GET `<form action="/care">` with `name="identifier"` + hidden `identifier_type=bank_customer_id` — shown **only to `consents:admin` (or superadmin) personas** and hidden for everyone else (no inert control for personas without a universal lookup). Submitting runs the existing Care PSU search.
+- **Scope-safe**: the target `/care` page is itself `consents:admin`-gated + BFF-enforced; a non-care persona who forces `/care` still hits the UX-07 access-denied gate. `role="search"` + aria-label + focus-visible.
+- A *true* cross-console search (breaks/TPPs/consents) needs a search backend — out of scope; noted.
+
+Frontend-only (app-shell) — no contract/port/audit/lineage/spec change. Tests: portal unit 237 pass (app-shell.spec +2; design-conformance/tokens/no-raw-style held); typecheck + lint clean; e2e untouched. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-08 → done. Remaining UX: UX-06(a/b/c), UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-09 polish cluster (copy, wayfinding, boundaries)
+
+The bounded polish items from the UI/UX review (low-severity, high-credibility for a regulator walkthrough):
+
+- Removed the 🎉 emoji in the recon Break Queue empty state → "No open breaks. Queue clear."
+- Reworded the care PSU-lookup chip "High-class audited" → "Audited (high-sensitivity)".
+- Humanized snake_case option **labels** in the revoke-reason / dispute-type / resolve-outcome selects (`value` stays the exact contract enum; display only).
+- Collapsed-nav tooltips (`title=label` on nav links + switch-persona when the sidebar is collapsed).
+- Breadcrumb `nav` (Reconciliation / Break …) on the deep-linked break-detail page.
+- New `app/not-found.tsx` (calm token-styled 404 with a back-to-dashboard link).
+
+Already done elsewhere (verified): the contrast token-pairing fix (`text-on-primary`→`-container`, landed in UX-01/03) and `error.tsx`/`global-error.tsx` (a prior DEMO-01 boundary). Split **UX-09b** for the two heavier items (point-of-action audit affordance + clearing the `?status=` notice param — needs a client `history.replaceState`).
+
+Frontend-only — no contract/port/audit/lineage/spec change; option **values** unchanged (enum integrity preserved). Tests: portal unit 240 pass (new not-found.spec + investigation breadcrumb + recon option-label update); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-09 → done; **UX-09b** pending. Remaining UX: UX-06(a/b/c) + splits UX-03b/04b/05b/09b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-05b (already covered) + UX-09b audit affordance + notice-param clearing
+
+- **UX-05b** — already satisfied: a root `app/loading.tsx` (DEMO-01) renders a token-styled animate-pulse skeleton as the Suspense fallback for any route navigation. One file covers all routes; verified, marked done.
+- **UX-09b** —
+  - `AuditNote` ("Actions here are recorded to the immutable audit trail") — display-only (the INSERT-only High-class audit is emitted server-side, unchanged) — placed near the mutating regions in care / recon / approvals / investigation consoles, so operator accountability is visible at the point of action.
+  - `ClearStatusParam` (client, mounted in the root layout) — after hydration, `history.replaceState()`s away the one-shot notice params (`status`, `ar`) so a refresh / re-share no longer re-shows a stale banner; pagination cursors are preserved.
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 245 pass (new ux09b-audit-notice.spec 3); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-05b → done (pre-covered); UX-09b → done. Remaining UX: UX-06(a/b/c), UX-03b, UX-04b, UX-10 pending; UX-03c/UX-11 ADR-gated.
+
+---
+
+## 2026-06-21 — UX-04b: cursor pagination for the approvals queue + care 24-month timeline
+
+The last two truncating lists now page. The lib getters `listPendingApprovals` and `getPsuAuditTrail` gained an optional `query: { cursor?, limit? }` (inserted before the existing `deps` arg; internal callers in `dashboard.ts` + the lib specs updated) that emits the spec's existing `cursor` query param. The approvals page reads `?cursor`, the care page reads `?timeline_cursor` (remapped to `cursor`, preserving the active PSU identifier in the next-page href); both capture `meta.next_cursor` and render the shared `LoadMore` (approvals queue + care `TimelinePanel`). Cursor-based only (no offset).
+
+Frontend-only — no contract/port/audit/lineage/spec change; both endpoints already returned `next_cursor`. Tests: portal unit 247 pass (new ux04b-pagination.spec 2; lib spec call sites updated for the new arg position); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-04b → done. Remaining UX: UX-06(a/b/c), UX-03b pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-03b: pending-approvals count badge on the Approvals nav item
+
+An approver now sees pending four-eyes work from any screen. A cached `shellBadges(token)` helper (React `cache()`) derives the count from the existing `listPendingApprovals` and returns **only the integer length** (no approval records/PII cross to the client). `AppShell` gained an optional `badges` prop and renders a count chip (capped `9+`, `aria-label="N pending"`) on the matching nav item — a small dot when the sidebar is collapsed. Threaded into all 11 AppShell pages (token-guarded; tolerant of a cold BFF → no badge).
+
+Approach chosen: per-page fetch (each page renders its own shell; +1 cached BFF GET per navigation — acceptable for the demo profile, noted in `shell.ts` for a future cached/edge source). No shared-layout refactor.
+
+Frontend-only — no contract/port/audit/lineage/spec change (reuses an existing getter). Tests: portal unit 249 pass (app-shell.spec +2); typecheck + lint clean. Reviewers: hard-stop **PASS** (only a count crosses to the client), contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-03b → done. Remaining UX: UX-06(a/b/c) pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06 (part 1): parse + render error-envelope remediation/docs_url
+
+The spec's `ErrorEnvelope` has always *required* `remediation` + `docs_url`, but the portal parsed neither — they were dropped. Now:
+
+- The 4 portal lib error classes (`CareApiError`/`ApprovalApiError`/`ReconApiError`/`TppBillingApiError`) carry optional `remediation` + `docsUrl`, and each `envelope()` parser reads `error.remediation` + `error.docs_url`.
+- `ErrorBanner` renders the remediation line + a `docs_url` link (opens in a new tab, `rel=noopener`; **http(s)-scheme-guarded** as defence-in-depth even though the URL is BFF-supplied).
+- The **care** + **reconciliation** read paths (search/load failures) forward the typed error's remediation/docsUrl to the banner; `recon-error` now uses the shared `ErrorBanner` instead of an inline `<p>`.
+
+**Split UX-06b** for parts 2+3 (the write path): surfacing the real BFF error code AND preserving form inputs on failure both need a `useActionState` refactor of the mutating forms, so they ship together. (Form inputs can contain PSU PII — preserving them via the URL is unsafe; `useActionState` keeps them client-side without a redirect.)
+
+Frontend-only — no contract/port/audit/lineage/spec change (aligns the client to existing contract fields). Tests: portal unit 253 pass (new ux06-error-envelope.spec 4); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06 → done (part 1); **UX-06b** pending (write-path useActionState). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06b: write-path useActionState (Care slice)
+
+Established the typed-error + input-preservation pattern on the **Care write path** (revoke + dispute). The two care server actions changed from `(formData) → redirect('?status=*_failed')` (which swallowed the typed error into a binary string and dropped inputs on the redirect) to React `useActionState` `(prevState, formData) → Promise<CareWriteResult>`:
+
+- On a typed `CareApiError` the action **returns** `{ ok:false, error, remediation, docsUrl, values }` (no redirect) → the form shows the **real BFF error + remediation in place** (UX-06's ErrorBanner) and **keeps the operator's inputs**; success still `redirect()`s for the notice.
+- The revoke + dispute forms became `'use client'` islands (`RevokeForm`/`DisputeForm`) using `useActionState`; inputs are re-seeded from the returned `values` via `key`+`defaultValue` (deterministic in both the browser and jsdom — React 19 resets the form on submit).
+- `CareWriteResult` lives in `lib/care` (a `'use server'` file may only export async functions).
+
+PII posture **improves**: the failure path no longer redirects with identifiers in the URL — `values` (reason/dispute-type enums + payment id) stay client-side. Idempotency-Key, `principalOrBounce` scope re-check, and the httpOnly token boundary are all unchanged.
+
+**Split UX-06c** for the remaining consoles (recon/approvals/investigation/tpp) — a mechanical application of this proven pattern, kept separate so each PR stays reviewable.
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads unchanged). Tests: portal unit 257 pass (new ux06b-write-path.spec 2; care-console.spec noop typed to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06b → done (Care slice); **UX-06c** pending. Remaining UX: UX-10/UX-11 ADR-gated (ADRs 0012/0013 Proposed — human decision); UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06c: write-path useActionState (recon + approvals)
+
+Applied the merged UX-06b pattern to two more consoles:
+
+- **Recon** (claim, resolve) and **approvals** (approve, reject) actions changed from `(formData)→redirect('?status=*_failed')` to `useActionState` `(prevState, formData)→Promise<{Recon|Approval}WriteResult>`: on a typed `XApiError` they **return** the error (message + remediation + docs_url) so the form shows the real reason **in place**, and the operator's inputs survive — the **free-text** resolution note + reject reason (strongest preservation case) and the resolution outcome, re-seeded via `key`+`defaultValue`. Success still `redirect()`s.
+- Forms extracted to `'use client'` islands: `reconciliation/{claim,resolve}-form`, `approvals/{approve,reject}-form`. `Recon/ApprovalWriteResult` live in their lib modules (a `'use server'` file may only export async functions).
+
+**Safety:** four-eyes intact (ApproveForm just submits `approval_id`; the BFF executes the gated op — no inline execution); the resolve **enum guard** is preserved (now returns the error in place instead of redirecting); PII posture **improves** (free-text stays client-side, not in the URL). Idempotency-Key + scope re-checks + httpOnly token boundary unchanged.
+
+**Split UX-06d** for the last forms (investigation escalate + tpp register/invoice).
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, enums, headers unchanged). Tests: portal unit 263 pass (new ux06c-write-path.spec 2; 3 spec noops retyped to the action signature, +voidNoop for the still-redirect escalate action); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06c → done; **UX-06d** pending (investigation + tpp). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — architect decisions recorded (ADRs 0012/0013 accepted; ADR 0014 drafted)
+
+The user resolved the three human-gated UX items:
+
+- **ADR 0013 → Accepted, Option 1** (responsive-safe). UX-10 unblocked (responsive-safe shell + table overflow + density wiring + one KPI breakpoint ladder); added **UI-MOBILE-APPROVALS** (the one mobile journey — Mobile Approval Queue/Detail, time-sensitive four-eyes).
+- **ADR 0012 → Accepted, Option 1** (keep the generic analytics renderer). The Analytics/Risk/Operations MAJOR-DRIFT is recorded **by-design (accepted)** in `docs/design-conformance-audit.md`; **UX-11 closed won't-do** (typed panels are the post-demo Option-2 target).
+- **UX-03c → ADR 0014 drafted** (`0014-approval-card-operation-context.md`, status **Proposed**): recommends a minimal, schema-constrained, **non-PII** `operation_summary` on `ApprovalRequest` (amount + masked institutional counterparty + count/scope — never PSU ids/free-text), BFF-composed + redaction-tested. Awaiting compliance sign-off; if accepted it needs a human-approved spec-change first.
+
+Docs-only change to main (ADR statuses + audit + backlog + this log), per the worktree-isolation convention. No code change. ADR 0014 is a draft for human approval — not self-accepted.
+
+**Eligible next (code):** UX-10 (responsive-safe shell) → UI-MOBILE-APPROVALS; UX-06d (investigation + tpp useActionState, the last write-path forms). **Still human-gated:** UX-03c (ADR 0014 compliance sign-off).
+
+---
+
+## 2026-06-21 — UX-06d: write-path useActionState (investigation + tpp) — refactor complete
+
+The last mutating forms, applying the merged UX-06b/c pattern:
+
+- **Investigation** escalate-to-Nebras (reuses `ReconWriteResult`) and **tpp** register / invoice-run / sync-directory (new `TppWriteResult` in `lib/tpp-billing`) converted from `(formData)→redirect('?status=*_failed')` to `useActionState` `(prevState, formData)→Promise<result>`: the typed BFF error renders **in place** on failure (no redirect); the invoice-run form preserves `billing_period`+`record_set_id` via `key`+`defaultValue`.
+- Forms extracted to `'use client'` islands: `reconciliation/escalate-form`, `tpp-billing/{register,invoice-run,sync}-form`.
+
+**Safety (reviewer-confirmed):** escalate still creates the external Nebras case **via the BFF→P6 egress gateway** (no direct egress); invoice-run remains **four-eyes** (202 + `approval_request`; success still redirects `?ar=<approval id>` for UX-03 tracking — no inline execution); PII posture improves (inputs stay client-side, not in the URL); Idempotency-Key + scope re-checks + httpOnly token boundary unchanged.
+
+**This completes the write-path refactor** — every mutating portal form is now `useActionState` with typed-error-in-place + input preservation: care (UX-06b), recon + approvals (UX-06c), investigation + tpp (UX-06d).
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, the 202 flow, headers unchanged). Tests: portal unit 278 pass (new ux06d-write-path.spec 2; 4 spec noops retyped to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06d → done. **Every implementable UX item is now complete.** Remaining: UX-03c (awaiting compliance sign-off on ADR 0014); UX-10 + UI-MOBILE-APPROVALS (eligible — layout work, not yet built); optional read-path remediation wiring for tpp/analytics/risk.
+
+---
+
+## 2026-06-21 — UX-10: responsive-safe shell (ADR 0013 Option 1)
+
+Made the existing portal shell responsive-safe so nothing breaks on a small screen:
+
+- **Off-canvas drawer below `lg`**: the sidebar is `fixed` + `-translate-x-full` with a scrim backdrop and a mobile hamburger (`open-drawer`/`close-drawer`); on `lg+` it stays the sticky collapsible rail. The desktop collapse is now `lg:`-scoped, so the mobile drawer always shows full labels; a nav-tap / backdrop / close button dismisses it.
+- **Top bar wraps** (`flex-wrap`) instead of overflowing on narrow widths.
+- **Density toggle wired** (was inert): `globals.css [data-density='compact']` now tightens content padding + data-table rows.
+- **One KPI breakpoint ladder**: dashboard standardized to `grid-cols-2 lg:grid-cols-4` (matches recon + investigation).
+- **Table overflow guards**: `overflow-x-auto` on the tpp registry + invoice-runs row containers.
+
+Token/utility-only (no raw hex/px); no contract/lib change. Tests: portal unit 279 pass (app-shell.spec +1 — drawer open/backdrop/close/nav-dismiss); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-10 → done. Eligible next: **UI-MOBILE-APPROVALS** (the mobile approval journey). Remaining human-gated: UX-03c (ADR 0014 compliance sign-off).
+
+---
+
+## 2026-06-21 — UI-MOBILE-APPROVALS: focused Mobile Approval Detail journey (ADR 0013 Option 1)
+
+The approval **queue** was already responsive (cards stack) and made mobile-safe by UX-10's shell (it's the Stitch Mobile Approval Queue ref). This adds the focused **Mobile Approval Detail** journey:
+
+- New route **`/approvals/[approval_request_id]`** + **`ApprovalDetail`** component — single-column, large-touch-target view of one four-eyes request, reusing the queue's `canActOn`/`formatExpiry` + the UX-06c approve/reject `useActionState` islands. It fetches via the existing `getApproval` (GET /approvals/{id}); a missing/▾unauthorised request shows a calm not-found notice.
+- It's the natural **deep-link target** for the UX-03 four-eyes initiator link — the tpp invoice-run notice now links to `/approvals/{ar}` ("Open this approval →") when the id is known.
+- Queue cards gained an `open_in_new` link to the detail.
+
+**Safety (reviewer-confirmed):** four-eyes intact — no inline execution; the initiator sees a lockout, not the buttons; the BFF executes the gated op. PII-safe — only the redacted `ApprovalRequest` fields + a UUID in the URL (richer operation context remains gated on **ADR 0014**).
+
+Frontend-only — no contract/lib/spec change (reuses GET /approvals/{id} + the approve/reject flow). Tests: portal unit 283 pass (new approval-detail.spec 2); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UI-MOBILE-APPROVALS → done. **Every implementable UX item is now complete.** The only open item is UX-03c, blocked on your compliance sign-off of ADR 0014.
+
+---
+
+## 2026-06-21 — DEMO-01..09: demo-ability hardening sprint
+
+A sweep to make the demo robust in front of a bank, following an in-depth demo-ability review. Nine PRs (#151–#169), each gated + hard-stop reviewed, all on isolated worktrees:
+
+- **DEMO-01 (#151):** BFF keep-warm cron (`[triggers]` */5 → cheap `SELECT 1`) so a presenter's first click never hits a cold Supabase/Hyperdrive — also fixed a latent gap where the daily recon cron was never registered. Seed depth: `service_desk_case` + `fraud_incident` woven into the `INC-2026-0042` cross-console thread. Portal `error.tsx`/`global-error.tsx` boundaries. Demo-script rewritten around the incident thread; corrected counts.
+- **DEMO-02 (#159):** Audit visibility — admin consent-revoke now stamps `target_psu_identifier` (so it shows in the per-PSU Care timeline), plus a global, `audit:read`-gated **`/audit`** screen (cross-operator "who did what", event-type filter) over `GET /audit/events`.
+- **DEMO-03 (#161):** Dashboard audit panel drops `signin_success`/`scope_denied`/`audit_trail_accessed` noise (optional `excludeEventTypes` on `PgAuditReader.recent`) so operational events stay visible; full trail unchanged in `/audit`.
+- **DEMO-04 (#162):** Demo-script documents the audit screen + the revoke-in-timeline.
+- **DEMO-05 (#164):** **`pnpm demo:ingest`** — runs the headless ingestion + risk-monitor pass on demand (CLI, no public ingress), so injected Nebras faults (`fee_variance`/`rate_limit`) surface in the Finance View and risk signals refresh. Verified: +50000 fault → aggregate +50000 exactly.
+- **DEMO-06 (#167):** Caught + fixed a regression — DEMO-01's root `loading.tsx` made Next stream a 200 (resolving `redirect()` mid-stream), so unauth `/dashboard` returned 200 not 307, **silently failing the deploy smoke gate on every merge since #151** (~16 deploys, mine + teammates'). Removed `loading.tsx`; cold-start already covered by the warm cron. Pipeline green again.
+- **DEMO-08 (#168):** Wired `consent_drift` — new `getConsentStatus` on the P6 egress port (sim adapter + contract test binding both profiles), sim consent-manager made dataset-consistent (no false positives), and a `ConsentDriftMonitor` emitting a deduped, PII-free `consent_anomaly` signal. New `demo:fault consent-drift <id>` lever. Verified live (0-drift baseline; inject → 1 signal).
+- **DEMO-09 (#169):** Consent-drift monitor added to the daily `scheduled()` pass for continuous detection (parity with the other monitors), not just the demo lever.
+- *(DEMO-07: the decorative global-search footgun turned out already fixed by UX-08 — a scope-gated PSU quick-lookup — so no change shipped.)*
+
+**Outcome:** all four Nebras sim faults now have on-demand demo effects (`demo:ingest` for fee/rate, audit for revoke-delay, Risk signal for consent-drift) plus `demo:break`; hosted demo verified live (smoke 9/9, `/audit` renders, dashboard noise filtered); deploy pipeline green. Synthetic + non-prod throughout; no contract/regulatory posture change. The dropped `originating_payment_id` dispute link stays out (no `payment` table exists).
+
+---
+
+## 2026-06-21 — ADR 0014 accepted (Option 2); spec PR #171 opened (operation_summary)
+
+User accepted **ADR 0014 Option 2**: surface a minimal, non-PII operation summary to the second four-eyes approver. Per the `spec-change` workflow (spec → tests → code):
+
+- **Spec PR #171 opened — awaiting human approval (NOT self-merged).** Adds an optional, nullable `operation_summary` to `ApprovalRequest` + a new `ApprovalOperationSummary` component (`amount` via the shared `Money` $ref; masked institutional `counterparty_label`; non-PII `descriptor`; **`additionalProperties: false`** as the anti-PII-smuggling guard) and the regenerated `api-types.generated.ts`. Additive + optional + nullable (backward-compatible); gen-drift clean; 782 unit tests + typecheck + lint green. Reviewers: hard-stop **PASS** (PII-safe by construction), contract-conformance **CONFORMANT**.
+- ADR 0014 status → **Accepted (Option 2)**; UX-03c remains blocked on the merge of #171.
+
+**After you merge #171** (the prerequisite): (a) a BFF story composes `operation_summary` per gated-operation type with a **per-type PII-redaction contract test**; (b) UX-03c renders it on the approval card + mobile detail. Both as separate PRs linking #171.
+
+This is the only remaining UX item. Everything else implementable is shipped; the rest of the backlog (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS) is enterprise/BD-gated.

@@ -72,6 +72,56 @@ describe('AppShell', () => {
     expect(screen.getByTestId('nav-operations')).toBeInTheDocument() // super-admin sees all
   })
 
+  it('UX-03b: renders a pending-count badge on the Approvals nav item (capped at 9+)', () => {
+    const sa = { subject: 'demo:sa', persona: 'platform-super-admin', scopes: ['platform:superadmin'], superadmin: true }
+    const { rerender } = render(
+      <AppShell principal={sa} badges={{ approvals: 3 }}>
+        <p>x</p>
+      </AppShell>
+    )
+    const badge = screen.getByTestId('nav-badge-approvals')
+    expect(badge).toHaveTextContent('3')
+    expect(badge).toHaveAttribute('aria-label', '3 pending')
+    rerender(
+      <AppShell principal={sa} badges={{ approvals: 12 }}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.getByTestId('nav-badge-approvals')).toHaveTextContent('9+')
+  })
+
+  it('UX-03b: renders no nav badge when there is nothing pending', () => {
+    const sa = { subject: 'demo:sa', persona: 'platform-super-admin', scopes: ['platform:superadmin'], superadmin: true }
+    render(
+      <AppShell principal={sa} badges={{}}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.queryByTestId('nav-badge-approvals')).not.toBeInTheDocument()
+  })
+
+  it('UX-08: shows a scope-aware PSU quick-search (→ care) only for a consents:admin persona', () => {
+    const care = { subject: 'demo:care', persona: 'care-agent', scopes: ['consents:admin', 'disputes:admin'], superadmin: false }
+    render(
+      <AppShell principal={care}>
+        <p>x</p>
+      </AppShell>
+    )
+    const form = screen.getByTestId('global-search-form')
+    expect(form).toHaveAttribute('action', '/care')
+    expect(form).toHaveAttribute('role', 'search')
+    expect(screen.getByTestId('global-search')).toHaveAttribute('name', 'identifier')
+  })
+
+  it('UX-08: hides the global search for a persona without consents:admin (no inert control)', () => {
+    render(
+      <AppShell principal={finance}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.queryByTestId('global-search')).not.toBeInTheDocument()
+  })
+
   it('toggles density (comfortable ↔ compact) and collapses the sidebar', () => {
     render(
       <AppShell principal={finance}>
@@ -87,5 +137,30 @@ describe('AppShell', () => {
     expect(sidebar).toHaveAttribute('data-collapsed', 'false')
     fireEvent.click(screen.getByTestId('toggle-sidebar'))
     expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+  })
+
+  it('UX-10: the mobile hamburger opens the off-canvas drawer; backdrop + close + nav-click close it', () => {
+    render(
+      <AppShell principal={finance}>
+        <p>x</p>
+      </AppShell>
+    )
+    const sidebar = screen.getByTestId('sidebar')
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
+    expect(screen.queryByTestId('drawer-backdrop')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('open-drawer'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'true')
+    expect(screen.getByTestId('drawer-backdrop')).toBeInTheDocument()
+
+    // backdrop closes it
+    fireEvent.click(screen.getByTestId('drawer-backdrop'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
+
+    // a nav link closes it (mobile: tap-to-navigate dismisses the drawer)
+    fireEvent.click(screen.getByTestId('open-drawer'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'true')
+    fireEvent.click(screen.getByTestId('nav-finance'))
+    expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
   })
 })

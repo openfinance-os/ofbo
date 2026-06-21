@@ -43,6 +43,11 @@ export interface NebrasSimOptions {
 export function createNebrasSim(options: NebrasSimOptions = {}) {
   const app = new Hono()
   const faults: Fault[] = []
+  // Dataset-consistent consent statuses so the Hub and the platform mirror AGREE by default
+  // (both derive from the same synthetic dataset). Only an injected consent_drift fault makes
+  // a consent's reported status disagree — which the back office's drift monitor flags.
+  const consentStatus = new Map<string, string>()
+  for (const psu of generateDemoDataset().psus) for (const c of psu.consents) consentStatus.set(c.consent_id, c.status)
   const revoked = new Map<string, string>() // consent_id → revoked_at ISO
   const cases = new Map<string, { status: string; dispute_type: string | null; created_at: string }>() // Case & Dispute Mgmt
 
@@ -94,8 +99,10 @@ export function createNebrasSim(options: NebrasSimOptions = {}) {
     const driftInjected = drift?.consent_id === consentId
     return c.json({
       consent_id: consentId,
-      // drift: the Hub reports a state the platform mirror won't expect
-      status: driftInjected ? 'Authorized' : revoked.has(consentId) ? 'Revoked' : 'Authorized',
+      // drift: the Hub reports a state the platform mirror won't expect (Authorized despite a
+      // revoked/suspended/consumed consent). Otherwise it agrees with the dataset (or a runtime
+      // revoke), so the drift monitor only fires when the fault is injected.
+      status: driftInjected ? 'Authorized' : revoked.has(consentId) ? 'Revoked' : (consentStatus.get(consentId) ?? 'Authorized'),
       drift_injected: driftInjected,
       revoked_at: revoked.get(consentId) ?? null
     })

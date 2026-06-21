@@ -34,10 +34,25 @@ export class ApprovalApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly remediation?: string,
+    readonly docsUrl?: string
   ) {
     super(message)
   }
+}
+
+/**
+ * UX-06c — write-path result an approvals server action returns to useActionState on failure
+ * (no redirect → the form keeps its values + shows the typed error). Lives here (not the 'use
+ * server' actions file, which may only export async functions). Mirrors CareWriteResult.
+ */
+export type ApprovalWriteResult = {
+  ok: boolean
+  error?: string
+  remediation?: string | null
+  docsUrl?: string | null
+  values?: Record<string, string>
 }
 
 export interface ApprovalApiDeps {
@@ -54,17 +69,21 @@ function resolve(deps: ApprovalApiDeps) {
 }
 
 async function envelope<T>(res: Response): Promise<{ data: T; meta?: Record<string, unknown> }> {
-  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string }; meta?: Record<string, unknown> }
-  if (!res.ok) throw new ApprovalApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status)
+  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string; remediation?: string; docs_url?: string }; meta?: Record<string, unknown> }
+  if (!res.ok) throw new ApprovalApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status, body.error?.remediation, body.error?.docs_url)
   return { data: body.data as T, meta: body.meta }
 }
 
 const authHeaders = (token: string, trace: string) => ({ authorization: `Bearer ${token}`, 'x-fapi-interaction-id': trace })
 
 /** GET /approvals/pending — pending requests the caller holds approver_required_scope for. */
-export async function listPendingApprovals(token: string, deps: ApprovalApiDeps = {}): Promise<{ approvals: ApprovalRequest[]; next_cursor: string | null }> {
+export async function listPendingApprovals(token: string, query: { cursor?: string; limit?: number } = {}, deps: ApprovalApiDeps = {}): Promise<{ approvals: ApprovalRequest[]; next_cursor: string | null }> {
   const { base, f, trace } = resolve(deps)
-  const res = await f(`${base}/approvals/pending`, { headers: authHeaders(token, trace) })
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.limit != null) params.set('limit', String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const res = await f(`${base}/approvals/pending${suffix}`, { headers: authHeaders(token, trace) })
   const { data, meta } = await envelope<ApprovalRequest[]>(res)
   return { approvals: data ?? [], next_cursor: (meta?.next_cursor as string | null) ?? null }
 }

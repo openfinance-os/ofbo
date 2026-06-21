@@ -1,4 +1,7 @@
-import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
+import { formatMoney, type ReconciliationBreak, type ReconciliationRun, type ReconWriteResult } from '../lib/reconciliation'
+import { LoadMore, AuditNote, ErrorBanner } from './ui'
+import { ClaimForm } from './reconciliation/claim-form'
+import { ResolveForm } from './reconciliation/resolve-form'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -13,11 +16,15 @@ export interface ReconConsoleProps {
   runs?: ReconciliationRun[]
   selectedRun?: ReconciliationRun | null
   breaks?: ReconciliationBreak[]
+  runsMoreHref?: string | null
+  breaksMoreHref?: string | null
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
   notice?: string | null
   canWrite?: boolean
-  claimAction?: (formData: FormData) => void | Promise<void>
-  resolveAction?: (formData: FormData) => void | Promise<void>
+  claimAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
+  resolveAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
 }
 
 /** Run status → tone (PRD §7 triad). Contract enum: running|completed|failed|partial. */
@@ -74,7 +81,7 @@ export function KpiCards({ run }: { run: ReconciliationRun }) {
   )
 }
 
-export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selectedId?: string }) {
+export function RunList({ runs, selectedId, moreHref }: { runs: ReconciliationRun[]; selectedId?: string; moreHref?: string | null }) {
   return (
     <section aria-labelledby="run-list-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="run-list">
       <div className="px-4 py-3 border-b border-outline-variant">
@@ -99,35 +106,8 @@ export function RunList({ runs, selectedId }: { runs: ReconciliationRun[]; selec
           ))
         )}
       </ul>
+      <LoadMore moreHref={moreHref ?? null} shown={runs.length} noun="runs" />
     </section>
-  )
-}
-
-function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId: string; resolveAction?: ReconConsoleProps['resolveAction'] }) {
-  if (!resolveAction) return null
-  return (
-    <form action={resolveAction} data-testid={`resolve-form-${breakId}`} className="mt-3 space-y-2 border-t border-outline-variant pt-3">
-      <input type="hidden" name="break_id" value={breakId} />
-      <input type="hidden" name="run_id" value={runId} />
-      <select name="resolution_outcome" aria-label="resolution outcome" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        {RESOLVE_OUTCOMES.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-      <textarea
-        name="resolution_note"
-        aria-label="resolution note"
-        minLength={MIN_RESOLUTION_NOTE}
-        required
-        placeholder={`Resolution note (≥ ${MIN_RESOLUTION_NOTE} chars)…`}
-        className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      />
-      <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-        Resolve break
-      </button>
-    </form>
   )
 }
 
@@ -159,20 +139,16 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
         Investigate →
       </a>
       {canWrite && CLAIMABLE.has(b.status) && claimAction ? (
-        <form action={claimAction} data-testid={`claim-form-${b.id}`} className="mt-3">
-          <input type="hidden" name="break_id" value={b.id} />
-          <input type="hidden" name="run_id" value={b.run_id} />
-          <button type="submit" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-            Claim break
-          </button>
-        </form>
+        <ClaimForm breakId={b.id} runId={b.run_id} action={claimAction} />
       ) : null}
-      {canWrite && RESOLVABLE.has(b.status) ? <ResolveForm breakId={b.id} runId={b.run_id} resolveAction={resolveAction} /> : null}
+      {canWrite && RESOLVABLE.has(b.status) && resolveAction ? (
+        <ResolveForm breakId={b.id} runId={b.run_id} action={resolveAction} />
+      ) : null}
     </div>
   )
 }
 
-export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { breaks: ReconciliationBreak[]; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction'] }) {
+export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreHref }: { breaks: ReconciliationBreak[]; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction']; moreHref?: string | null }) {
   return (
     <section aria-labelledby="break-queue-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="break-queue">
       <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
@@ -183,20 +159,24 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction }: { b
       <div className="p-3 space-y-3">
         {breaks.length === 0 ? (
           <p className="text-xs text-on-surface-variant" data-testid="breaks-empty">
-            No open breaks. 🎉
+            No open breaks. Queue clear.
           </p>
         ) : (
           breaks.map((b) => <BreakCard key={b.id} b={b} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />)
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={breaks.length} noun="breaks" />
     </section>
   )
 }
 
-export function ReconConsole({ runs = [], selectedRun, breaks = [], error, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
+export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
-      <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{selectedRun ? 'Reconciliation Run' : 'Reconciliation Console'}</h1>
+        {canWrite ? <AuditNote /> : null}
+      </div>
 
       {notice ? (
         <p role="status" className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="recon-notice">
@@ -204,18 +184,18 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], error, notic
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="recon-error">
+        <ErrorBanner testid="recon-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>
           {error}
-        </p>
+        </ErrorBanner>
       ) : null}
 
       {selectedRun ? <KpiCards run={selectedRun} /> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RunList runs={runs} selectedId={selectedRun?.run_id} />
+          <RunList runs={runs} selectedId={selectedRun?.run_id} moreHref={runsMoreHref} />
         </div>
-        <BreakQueue breaks={breaks} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />
+        <BreakQueue breaks={breaks} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} moreHref={breaksMoreHref} />
       </div>
     </div>
   )

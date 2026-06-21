@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { ApprovalsPortal } from '../../components/approvals-portal'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { verifyAndMint } from '../../lib/portal'
@@ -39,17 +40,22 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
+  const cursor = one(sp.cursor)
 
   let approvals: ApprovalRequest[] = []
+  let moreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
   try {
-    approvals = (await listPendingApprovals(token)).approvals
+    const page = await listPendingApprovals(token, { cursor })
+    approvals = page.approvals
+    moreHref = page.next_cursor ? `/approvals?cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch (e) {
     error = e instanceof ApprovalApiError ? e.message : 'Failed to load pending approvals.'
   }
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="approvals"
     >
@@ -60,6 +66,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         superadmin={principal.superadmin}
         error={error}
         notice={NOTICE[status] ?? null}
+        moreHref={moreHref}
         approveAction={approveAction}
         rejectAction={rejectAction}
       />

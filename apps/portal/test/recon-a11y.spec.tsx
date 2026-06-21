@@ -52,7 +52,8 @@ const flaggedBreak: ReconciliationBreak = {
   created_at: '2026-06-17T03:01:00Z'
 }
 const assignedBreak: ReconciliationBreak = { ...flaggedBreak, id: 'b-assigned', status: 'assigned', assigned_to: 'demo:finance', sla_clock_started_at: '2026-06-17T04:00:00Z' }
-const noop = () => {}
+// UX-06c — recon claim/resolve are useActionState actions: (prevState, formData) => Promise<result>.
+const noop = async () => ({ ok: true })
 
 describe('Reconciliation console — screen-reader traversal (1.3.1, 4.1.3)', () => {
   it('exposes the run list and break queue as named landmark regions', () => {
