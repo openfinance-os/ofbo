@@ -1,6 +1,6 @@
 # ADR 0014 — Operation context on four-eyes approval cards
 
-- Status: **Proposed** — awaiting human (compliance) decision
+- Status: **Accepted — Option 2** (user decision, 2026-06-21)
 - Date: 2026-06-21
 - Related: UI-05 (Four-Eyes Approval Portal), UX-03c, `specs/backoffice-openapi.yaml` `ApprovalRequest`, `apps/portal/src/lib/approvals.ts`; CLAUDE.md hard-stops (no PII on operational surfaces), PRD §2 (four-eyes)
 
@@ -62,15 +62,19 @@ summary; Option 3 is a poor fit because cross-persona approvers rarely hold the 
 
 ## Decision
 
-_Pending compliance sign-off._
+**Option 2, accepted by the user on 2026-06-21.** Add the constrained, non-PII
+`operation_summary` to `ApprovalRequest`.
 
-- If **Option 2**: this requires a **spec change** (human-approved PR per the `spec-change`
-  skill) adding the constrained `operation_summary` to `ApprovalRequest`, plus a BFF story to
-  compose it per gated-operation type with a per-type PII-redaction contract test, then the
-  UX-03c portal card render. The spec PR is the prerequisite; the portal work is small.
-- If **Option 1**: close UX-03c won't-do and record the redaction as an accepted, deliberate
-  control constraint.
-- If **Option 3**: a scope-gated detail-view story + the access-check tests.
+Execution (per the `spec-change` skill — spec → tests → code):
+1. **Spec PR #171** (open, awaiting human approval — NOT self-merged): adds the optional,
+   nullable `operation_summary` + the `ApprovalOperationSummary` component
+   (`amount`→Money, masked `counterparty_label`, non-PII `descriptor`, `additionalProperties:false`)
+   and the regenerated contract types. Reviewers: hard-stop PASS, conformance CONFORMANT.
+2. **After #171 merges**: a BFF story composes `operation_summary` per gated-operation type
+   with a **per-type PII-redaction contract test** (the redaction is the load-bearing control).
+3. **Then UX-03c**: the portal renders the summary on the approval card + the mobile detail.
+
+Steps 2–3 are blocked on the human approval + merge of spec PR #171.
 
 ## Consequences
 

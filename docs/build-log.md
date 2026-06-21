@@ -1240,3 +1240,16 @@ A sweep to make the demo robust in front of a bank, following an in-depth demo-a
 - *(DEMO-07: the decorative global-search footgun turned out already fixed by UX-08 — a scope-gated PSU quick-lookup — so no change shipped.)*
 
 **Outcome:** all four Nebras sim faults now have on-demand demo effects (`demo:ingest` for fee/rate, audit for revoke-delay, Risk signal for consent-drift) plus `demo:break`; hosted demo verified live (smoke 9/9, `/audit` renders, dashboard noise filtered); deploy pipeline green. Synthetic + non-prod throughout; no contract/regulatory posture change. The dropped `originating_payment_id` dispute link stays out (no `payment` table exists).
+
+---
+
+## 2026-06-21 — ADR 0014 accepted (Option 2); spec PR #171 opened (operation_summary)
+
+User accepted **ADR 0014 Option 2**: surface a minimal, non-PII operation summary to the second four-eyes approver. Per the `spec-change` workflow (spec → tests → code):
+
+- **Spec PR #171 opened — awaiting human approval (NOT self-merged).** Adds an optional, nullable `operation_summary` to `ApprovalRequest` + a new `ApprovalOperationSummary` component (`amount` via the shared `Money` $ref; masked institutional `counterparty_label`; non-PII `descriptor`; **`additionalProperties: false`** as the anti-PII-smuggling guard) and the regenerated `api-types.generated.ts`. Additive + optional + nullable (backward-compatible); gen-drift clean; 782 unit tests + typecheck + lint green. Reviewers: hard-stop **PASS** (PII-safe by construction), contract-conformance **CONFORMANT**.
+- ADR 0014 status → **Accepted (Option 2)**; UX-03c remains blocked on the merge of #171.
+
+**After you merge #171** (the prerequisite): (a) a BFF story composes `operation_summary` per gated-operation type with a **per-type PII-redaction contract test**; (b) UX-03c renders it on the approval card + mobile detail. Both as separate PRs linking #171.
+
+This is the only remaining UX item. Everything else implementable is shipped; the rest of the backlog (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS) is enterprise/BD-gated.
