@@ -74,6 +74,10 @@ export interface NebrasEgressPort {
    *  (GET /payment-consents/{consentId}/refund family) through the egress gateway;
    *  returns one of the 5 IPP status codes. */
   dispatchRefund(consentId: string, amount: Money, trace: TraceContext): Promise<{ ipp_status: string }>
+  /** DEMO-01 — read a consent's current status from the Hub Consent Manager (via the
+   *  egress gateway). The consent-drift monitor compares it to the platform's mirror; a
+   *  mismatch (the Hub reports a status the platform doesn't hold) raises a drift signal. */
+  getConsentStatus(consentId: string, trace: TraceContext): Promise<{ consent_id: string; status: string }>
 }
 
 /** P7 — Enterprise data catalogue: column-level BCBS 239 lineage at write time. */

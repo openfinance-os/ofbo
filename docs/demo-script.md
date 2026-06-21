@@ -193,9 +193,18 @@ pnpm demo:fault rate-limit 3 && pnpm demo:ingest "$PERIOD"   # 429 the report po
 pnpm demo:fault revoke-delay 7000              # push a consent revoke past its 5s SLA (recorded in audit)
 ```
 
-`demo:ingest` also re-runs the **liability / anomaly / TPP-behaviour / forecast monitors**, so
-risk **signals** refresh on demand (deduped against open signals) — the "signals on demand" half
-of the requirement.
+**Lever 3 — consent drift → a Risk signal.** Grab a **Revoked** consent's id from the Customer
+Care lookup (`cust-0001` has two), then make the Hub disagree with the platform mirror:
+
+```bash
+pnpm demo:fault consent-drift <revoked_consent_id>   # Hub now reports it Authorized (drift)
+pnpm demo:ingest                                     # drift monitor → a consent_anomaly Risk signal
+pnpm demo:fault clear                                # restore (the open signal stays until triaged)
+```
+
+`demo:ingest` also re-runs the **liability / anomaly / TPP-behaviour / forecast / consent-drift
+monitors**, so risk **signals** refresh on demand (deduped against open signals) — the "signals
+on demand" half of the requirement.
 
 > **Env:** `demo:fault` reads `SIM_URL` + `SIM_ADMIN_TOKEN` from the repo `.env`; without them it
 > targets `localhost:8788`. `demo:ingest` reads the sim through the P6 adapter (`NEBRAS_SIM_URL`)

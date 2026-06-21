@@ -181,6 +181,23 @@ const simNebrasEgress: NebrasEgressPort = {
     // Ozone Connect refund accepted into settlement processing (deterministic
     // for repeatable demos). The 5 IPP codes: ACCC, ACSP, ACSC, RJCT, PDNG.
     return { ipp_status: 'ACSP' }
+  },
+  async getConsentStatus(consentId, trace) {
+    // All Nebras-bound traffic via this P6 adapter. When the sim is reachable, read the
+    // Hub Consent Manager state (so an injected consent_drift fault is observed); otherwise
+    // a deterministic 'Authorized' (no sim → no drift to detect).
+    const base = process.env.NEBRAS_SIM_URL
+    if (base) {
+      const res = await fetch(`${base}/consent-manager/consents/${encodeURIComponent(consentId)}`, {
+        headers: { 'x-fapi-interaction-id': trace.trace_id }
+      })
+      if (!res.ok) {
+        throw new NebrasEgressError(res.status, res.status === 429 || res.status >= 500, `Nebras egress consent-status → ${res.status}`)
+      }
+      const body = (await res.json()) as { consent_id?: string; status?: string }
+      return { consent_id: body.consent_id ?? consentId, status: body.status ?? 'Unknown' }
+    }
+    return { consent_id: consentId, status: 'Authorized' }
   }
 }
 
