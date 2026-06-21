@@ -1294,3 +1294,17 @@ UX-06 part 1 wired only care + reconciliation; this completes it across the rema
 Display-only operator guidance — `remediation`/`docs_url` are already REQUIRED on the spec ErrorEnvelope; no PSU PII, no contract change (aligns the analytics client to the existing contract). Tests: portal unit 288 pass (analytics.spec +1 — envelope remediation parse); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Every console's read-path error banner now surfaces remediation.** With this, the implementable UX backlog is fully exhausted — remaining items are enterprise/BD-gated (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS).
+
+---
+
+## 2026-06-21 — ADR 0015 drafted: cross-fintech aggregation governance (BD-13 / BACKOFFICE-33)
+
+Drafted the governance decision memo for the one remaining non-adoption-gated backlog item, the same way ADR 0014 was teed up — **Proposed, for data-governance + compliance sign-off; not self-approved.**
+
+- **Finding:** the cross-fintech substrate already exists (the `bank_internal_view` SELECT-only role, the `query_purpose_registry` preventative-control table, and the RLS policies — migrations 0001–0003). BACKOFFICE-33's gap is the **enforcement wiring**: run the analytics aggregates *as* `bank_internal_view`, **purpose-match-or-reject** each query against `query_purpose_registry`, and **High-class log** every bypass query (text + row count). **BD-13** gates *enabling* it.
+- **What sign-off authorises:** (1) permissibility of cross-fintech aggregation under PDPL + scheme rules in the bank's dual role; (2) the approved purpose set; (3) control adequacy.
+- **Recommendation:** Option 1 (implement the PRD control exactly — the architecture is already blessed + built; the missing pieces are the sign-off + purpose set), with optional four-eyes on new-purpose registration (composes with the existing approvals primitive).
+
+`docs/adrs/0015-cross-fintech-aggregation-governance.md`; BACKOFFICE-33 reason updated to point at it. Docs-only to main.
+
+With this, **every implementable item is shipped and every blocked item has a decision artifact in front of the right human**: ADR 0014 (UX-03c, done) and ADR 0015 (BACKOFFICE-33, awaiting sign-off); BACKOFFICE-52 + M6-PORT-SWAPS are bank-adoption-gated (no demo-profile work).

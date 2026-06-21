@@ -73,7 +73,7 @@ milestones:
   - name: M4
     items:
       - { id: BACKOFFICE-32, title: Nebras TPP Reports + Dataset ingestion (Parquet, materialized aggregates), status: done }
-      - { id: BACKOFFICE-33, title: Cross-fintech aggregation via bank_internal_view + query_purpose_registry, status: blocked, reason: BD-13 governance sign-off required before cross-fintech aggregation (PRD default - sequence single-fintech views first) }
+      - { id: BACKOFFICE-33, title: Cross-fintech aggregation via bank_internal_view + query_purpose_registry, status: blocked, reason: "BD-13 governance sign-off required before cross-fintech aggregation (PRD default - sequence single-fintech views first). DECISION MEMO DRAFTED: docs/adrs/0015-cross-fintech-aggregation-governance.md (Proposed) — substrate exists (bank_internal_view role + query_purpose_registry + RLS, migrations 0001-0003); the gap is the governed enforcement wiring (run aggregates as bank_internal_view, purpose-match-or-reject, High-class log) which BD-13 (data governance + compliance) must sign off: permissibility under PDPL/scheme, the approved purpose set, and control adequacy. Recommends Option 1 (PRD control as specified) + optional four-eyes on new-purpose registration. Awaiting human sign-off; not self-approved." }
       - { id: BACKOFFICE-31, title: Finance View, status: done, depends_on: [BACKOFFICE-32] }
       - { id: BACKOFFICE-28, title: Operations Console (platform health, certification per role), status: done }
       - { id: BACKOFFICE-29, title: Compliance View, status: done }
