@@ -48,6 +48,7 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
               href={m.href}
               data-testid={`nav-${m.key}`}
               aria-current={active === m.key ? 'page' : undefined}
+              title={collapsed ? m.label : undefined}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${active === m.key ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold' : 'text-on-surface-variant hover:bg-surface-container'}`}
             >
               <span className="font-symbols text-base" aria-hidden>
@@ -58,7 +59,7 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
           ))}
         </nav>
         <form action="/api/logout" method="post" className="mt-auto px-2">
-          <button type="submit" data-testid="switch-persona" className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:bg-surface-container cursor-pointer">
+          <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch persona' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:bg-surface-container cursor-pointer">
             <span className="font-symbols text-base" aria-hidden>
               switch_account
             </span>

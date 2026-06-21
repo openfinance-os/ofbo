@@ -120,7 +120,7 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
         </option>
         {RESOLVE_OUTCOMES.map((o) => (
           <option key={o} value={o}>
-            {o}
+            {o.replace(/_/g, ' ')}
           </option>
         ))}
       </select>
@@ -192,7 +192,7 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreH
       <div className="p-3 space-y-3">
         {breaks.length === 0 ? (
           <p className="text-xs text-on-surface-variant" data-testid="breaks-empty">
-            No open breaks. 🎉
+            No open breaks. Queue clear.
           </p>
         ) : (
           breaks.map((b) => <BreakCard key={b.id} b={b} canWrite={canWrite} claimAction={claimAction} resolveAction={resolveAction} />)

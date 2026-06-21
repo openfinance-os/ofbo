@@ -56,9 +56,13 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
     <div className="space-y-6" data-testid="investigation-detail">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <a href="/reconciliation" className="text-xs text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="back-link">
-            ← Back to Reconciliation Console
-          </a>
+          <nav aria-label="breadcrumb" className="text-xs text-on-surface-variant flex items-center gap-1" data-testid="breadcrumb">
+            <a href="/reconciliation" className="text-secondary hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" data-testid="back-link">
+              Reconciliation
+            </a>
+            <span aria-hidden="true">/</span>
+            <span className="text-on-surface" aria-current="page">Break {break_.client_id}</span>
+          </nav>
           <h1 className="text-2xl font-semibold mt-1">Investigation · {break_.client_id}</h1>
         </div>
         <StatusBadge status={break_.status} kind="break" />

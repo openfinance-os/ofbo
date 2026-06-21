@@ -82,7 +82,8 @@ describe('BreakCard', () => {
     render(<BreakCard b={assignedBreak} canWrite claimAction={noop} resolveAction={noop} />)
     const form = screen.getByTestId('resolve-form-b-assigned')
     expect(form).toBeInTheDocument()
-    expect(within(form).getByRole('option', { name: 'resolved_matched' })).toBeInTheDocument()
+    // UX-09: option labels are humanized for display (value stays the enum); assert the visible label.
+    expect(within(form).getByRole('option', { name: 'resolved matched' })).toBeInTheDocument()
     expect(screen.queryByTestId('claim-form-b-assigned')).not.toBeInTheDocument()
   })
 
