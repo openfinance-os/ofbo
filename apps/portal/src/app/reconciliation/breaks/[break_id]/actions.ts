@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../../../lib/cookies'
 import { SCOPES } from '../../../../lib/scopes'
 import { verifyAndMint } from '../../../../lib/portal'
-import { escalateToNebras } from '../../../../lib/reconciliation'
+import { escalateToNebras, ReconApiError, type ReconWriteResult } from '../../../../lib/reconciliation'
 
 /**
  * UI-04 — Investigation Detail mutation (server action). SERVER-SIDE only: the httpOnly
@@ -16,7 +16,7 @@ import { escalateToNebras } from '../../../../lib/reconciliation'
 
 const DISPUTE_SCOPE = SCOPES.disputesWrite
 
-export async function escalateNebrasAction(formData: FormData) {
+export async function escalateNebrasAction(_prevState: ReconWriteResult, formData: FormData): Promise<ReconWriteResult> {
   const token = (await cookies()).get(TOKEN_COOKIE)?.value
   if (!token) redirect('/')
   let principal
@@ -28,11 +28,14 @@ export async function escalateNebrasAction(formData: FormData) {
   const breakId = String(formData.get('break_id') ?? '')
   if (!principal.superadmin && !principal.scopes.includes(DISPUTE_SCOPE)) redirect(`/reconciliation/breaks/${breakId}`)
 
-  let status = 'escalated'
+  // UX-06d — on failure return the typed error in place (no inputs to preserve); success redirects.
   try {
     await escalateToNebras(token, breakId, crypto.randomUUID())
-  } catch {
-    status = 'escalate_failed'
+  } catch (e) {
+    if (e instanceof ReconApiError) {
+      return { ok: false, error: e.message, remediation: e.remediation ?? null, docsUrl: e.docsUrl ?? null }
+    }
+    return { ok: false, error: 'Could not escalate to Nebras. Please retry.' }
   }
-  redirect(`/reconciliation/breaks/${encodeURIComponent(breakId)}?status=${status}`)
+  redirect(`/reconciliation/breaks/${encodeURIComponent(breakId)}?status=escalated`)
 }

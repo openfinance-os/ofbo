@@ -44,7 +44,8 @@ describe('ThreeSourceDiff', () => {
 })
 
 describe('InvestigationDetail', () => {
-  const noop = () => {}
+  // UX-06d — escalate is a useActionState action: (prevState, formData) => Promise<result>.
+  const noop = async () => ({ ok: true })
 
   it('UX-09: shows a breadcrumb (Reconciliation / Break …) for wayfinding on the deep-linked detail', () => {
     render(<InvestigationDetail break_={base} />)

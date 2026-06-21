@@ -1173,3 +1173,20 @@ The user resolved the three human-gated UX items:
 Docs-only change to main (ADR statuses + audit + backlog + this log), per the worktree-isolation convention. No code change. ADR 0014 is a draft for human approval — not self-accepted.
 
 **Eligible next (code):** UX-10 (responsive-safe shell) → UI-MOBILE-APPROVALS; UX-06d (investigation + tpp useActionState, the last write-path forms). **Still human-gated:** UX-03c (ADR 0014 compliance sign-off).
+
+---
+
+## 2026-06-21 — UX-06d: write-path useActionState (investigation + tpp) — refactor complete
+
+The last mutating forms, applying the merged UX-06b/c pattern:
+
+- **Investigation** escalate-to-Nebras (reuses `ReconWriteResult`) and **tpp** register / invoice-run / sync-directory (new `TppWriteResult` in `lib/tpp-billing`) converted from `(formData)→redirect('?status=*_failed')` to `useActionState` `(prevState, formData)→Promise<result>`: the typed BFF error renders **in place** on failure (no redirect); the invoice-run form preserves `billing_period`+`record_set_id` via `key`+`defaultValue`.
+- Forms extracted to `'use client'` islands: `reconciliation/escalate-form`, `tpp-billing/{register,invoice-run,sync}-form`.
+
+**Safety (reviewer-confirmed):** escalate still creates the external Nebras case **via the BFF→P6 egress gateway** (no direct egress); invoice-run remains **four-eyes** (202 + `approval_request`; success still redirects `?ar=<approval id>` for UX-03 tracking — no inline execution); PII posture improves (inputs stay client-side, not in the URL); Idempotency-Key + scope re-checks + httpOnly token boundary unchanged.
+
+**This completes the write-path refactor** — every mutating portal form is now `useActionState` with typed-error-in-place + input preservation: care (UX-06b), recon + approvals (UX-06c), investigation + tpp (UX-06d).
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, the 202 flow, headers unchanged). Tests: portal unit 278 pass (new ux06d-write-path.spec 2; 4 spec noops retyped to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06d → done. **Every implementable UX item is now complete.** Remaining: UX-03c (awaiting compliance sign-off on ADR 0014); UX-10 + UI-MOBILE-APPROVALS (eligible — layout work, not yet built); optional read-path remediation wiring for tpp/analytics/risk.

@@ -1,6 +1,6 @@
-import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak } from '../lib/reconciliation'
+import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak, type ReconWriteResult } from '../lib/reconciliation'
 import { StatusBadge } from './recon-console'
-import { ConfirmSubmit, AuditNote } from './ui'
+import { EscalateForm } from './reconciliation/escalate-form'
 
 /**
  * UI-04 — Investigation Detail View, translated from the Stitch "OFBO - Investigation
@@ -17,7 +17,7 @@ export interface InvestigationDetailProps {
   error?: string | null
   notice?: string | null
   canDispute?: boolean
-  escalateAction?: (formData: FormData) => void | Promise<void>
+  escalateAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
 }
 
 const SOURCES: { key: 'source_a_ref' | 'source_b_ref' | 'source_c_ref'; label: string; hint: string }[] = [
@@ -112,17 +112,7 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
           <p className="text-xs text-on-surface-variant mt-2">Raise a one-click dispute to the Nebras Case &amp; Dispute Management surface (via the egress gateway).</p>
         )}
         {canDispute && escalatable && !break_.nebras_dispute_case_id && escalateAction ? (
-          <form action={escalateAction} className="mt-3" data-testid="escalate-form">
-            <input type="hidden" name="break_id" value={break_.id} />
-            <ConfirmSubmit
-              label="Escalate to Nebras"
-              confirmLabel="Confirm escalation"
-              summary={`Raise a Nebras dispute for break ${break_.client_id}${break_.variance_amount ? ` (${formatMoney(break_.variance_amount)})` : ''}. This creates an external case via the egress gateway and cannot be undone.`}
-              className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              testid="escalate-submit"
-            />
-            <AuditNote className="mt-2" />
-          </form>
+          <EscalateForm break_={break_} action={escalateAction} />
         ) : null}
       </div>
     </div>
