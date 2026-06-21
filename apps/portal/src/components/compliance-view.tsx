@@ -1,4 +1,5 @@
 import { AnalyticsSection } from './analytics-dashboard'
+import { ErrorBanner } from './ui'
 import type { AnalyticsView } from '../lib/analytics'
 
 /**
@@ -18,11 +19,7 @@ export function ComplianceView({ view, error }: ComplianceViewProps) {
     <div className="space-y-6" data-testid="compliance-view">
       <h1 className="text-2xl font-semibold">Compliance</h1>
 
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="compliance-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorBanner testid="compliance-error">{error}</ErrorBanner> : null}
 
       {view ? (
         <AnalyticsSection title="Compliance Overview" view={view} testid="compliance-section" />

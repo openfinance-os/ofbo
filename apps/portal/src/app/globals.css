@@ -16,6 +16,36 @@
   body {
     @apply bg-surface text-on-surface font-sans m-0;
   }
+
+  /*
+   * UX-01 — global accessibility safety net. A keyboard focus ring on every interactive
+   * element (WCAG 2.4.7) so controls that lack an explicit focus-visible utility are still
+   * visible to keyboard users; Tailwind preflight resets the native outline, so without
+   * this many non-recon controls had no focus indicator at all.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-surface;
+  }
+
+  /* WCAG 2.4.1 — skip past the nav to the main content. */
+  .skip-link {
+    @apply sr-only;
+  }
+  .skip-link:focus {
+    @apply not-sr-only fixed top-2 left-2 z-50 bg-primary text-on-primary px-4 py-2 rounded-lg font-semibold;
+  }
+}
+
+/* Respect reduced-motion preferences (WCAG 2.3.3 / vestibular safety). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer components {

@@ -1,4 +1,5 @@
 import { AnalyticsSection } from './analytics-dashboard'
+import { ErrorBanner } from './ui'
 import type { AnalyticsView } from '../lib/analytics'
 
 /**
@@ -25,11 +26,7 @@ export function RiskDashboard({ riskView, liabilityMonitor, error }: RiskDashboa
         <span className="px-2 py-0.5 rounded-full bg-breach/10 text-breach text-xs font-bold uppercase tracking-wider">Narrow Risk scope</span>
       </div>
 
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="risk-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorBanner testid="risk-error">{error}</ErrorBanner> : null}
 
       {riskView ? <AnalyticsSection title="Risk Signals & Anomalies" view={riskView} testid="risk-view-section" /> : null}
       {liabilityMonitor ? <AnalyticsSection title="Nebras Liability Monitor" view={liabilityMonitor} testid="liability-section" /> : null}

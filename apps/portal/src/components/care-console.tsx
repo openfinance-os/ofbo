@@ -1,4 +1,5 @@
 import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
+import { Notice, ErrorBanner } from './ui'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -97,7 +98,7 @@ function ProfileCard({ psu }: { psu: ConsentSearchResult['psu'] }) {
         <span className="text-xs px-2 py-0.5 bg-reconciled/10 text-reconciled font-bold rounded-full">Resolved</span>
       </div>
       <div className="p-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-primary-container rounded-full flex items-center justify-center text-on-primary font-bold" aria-hidden>
+        <div className="w-12 h-12 bg-primary-container rounded-full flex items-center justify-center text-on-primary-container font-bold" aria-hidden>
           {initials}
         </div>
         <div>
@@ -227,17 +228,9 @@ export function CareConsole({ query, result, timeline, error, notice, revokeActi
       <h1 className="text-2xl font-semibold">Customer Care Console</h1>
       <SearchForm query={query} />
 
-      {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="care-notice">
-          {notice}
-        </p>
-      ) : null}
+      {notice ? <Notice testid="care-notice">{notice}</Notice> : null}
 
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="care-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorBanner testid="care-error">{error}</ErrorBanner> : null}
 
       {result ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

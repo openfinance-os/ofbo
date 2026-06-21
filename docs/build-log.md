@@ -935,3 +935,18 @@ path refs. Tests: analytics-dashboard.spec 4→10; full unit 641→654. Stitch r
 **Process note:** authored in an **isolated git worktree** (`.claude/worktrees/backoffice-64`) after BACKOFFICE-25 was nearly lost to a concurrent session resetting the shared checkout. The worktree fully isolated this story — zero clobbering. Two test gates earned their keep: typecheck caught the -25 stub after widening the `careSurface` port dep; the int test caught that `target_dispute_id` is a UUID column (fixture fixed to a real UUID).
 
 **Backlog:** BACKOFFICE-64 → done. Remaining: BACKOFFICE-33 (BD-13 governance sign-off) and M6 enterprise port-swaps (per-bank) — both genuinely human/bank-gated, not code.
+
+---
+
+## 2026-06-21 — UX-01 shared UI primitives + recon a11y propagation + a11y gate (UX-hardening)
+
+First story off the UI/UX review (`docs/ui-ux-review.md`). Closed the CRITICAL accessibility regressions outside the recon console and introduced the enforcement to keep them closed.
+
+- **Shared primitives** (`apps/portal/src/components/ui/`): `Notice` (role=status) + `ErrorBanner` (role=alert) — the WCAG 4.1.3 status-message contract the recon console proved; `StatusBadge` + one canonical `statusTone` map (kills the cross-screen colour drift the review found, e.g. `suspended` was red on analytics, amber on care → now amber everywhere); `Panel` (labelled `<section aria-labelledby>` region with aria-hidden count + sr-only phrase).
+- **Global a11y safety net** (`globals.css`): a `:focus-visible` ring on every interactive element (2.4.7 — many non-recon controls had none), a `.skip-link` (2.4.1), and `prefers-reduced-motion`.
+- **Propagated** role=status/alert banners across care/approvals/tpp-billing/analytics/risk/operations/compliance (was bare `<p>`); app-shell gained the skip-link + `<main id>`; fixed the `text-on-primary`→`text-on-primary-container` contrast bug on the persona badge + care avatar + tpp button.
+- **A11y gate**: `test/a11y.spec.tsx` (vitest-axe over every screen, WCAG 2.0/2.1 A+AA; colour-contrast deferred to the token tests as jsdom can't compute layout) + `test/ui-primitives.spec.tsx`. Added `vitest-axe` + `axe-core` dev deps.
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 203 pass (incl. design-conformance 34, design-tokens 8, no-raw-style 3 — token discipline held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Authored in an isolated worktree.
+
+**Backlog:** UX-01 → done. Remaining UX: UX-02..09 pending; UX-10/UX-11 blocked on ADRs 0013/0012.
