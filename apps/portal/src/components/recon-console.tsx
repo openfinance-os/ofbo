@@ -109,7 +109,10 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
     <form action={resolveAction} data-testid={`resolve-form-${breakId}`} className="mt-3 space-y-2 border-t border-outline-variant pt-3">
       <input type="hidden" name="break_id" value={breakId} />
       <input type="hidden" name="run_id" value={runId} />
-      <select name="resolution_outcome" aria-label="resolution outcome" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <select name="resolution_outcome" aria-label="resolution outcome" defaultValue="" required className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+        <option value="" disabled>
+          Select outcome…
+        </option>
         {RESOLVE_OUTCOMES.map((o) => (
           <option key={o} value={o}>
             {o}

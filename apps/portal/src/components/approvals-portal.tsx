@@ -1,5 +1,5 @@
 import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
-import { Notice, ErrorBanner } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit } from './ui'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -80,9 +80,13 @@ export function ApprovalCard({
         <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant pt-3">
           <form action={approveAction} data-testid={`approve-form-${approval.approval_request_id}`}>
             <input type="hidden" name="approval_id" value={approval.approval_request_id} />
-            <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
-              Approve
-            </button>
+            <ConfirmSubmit
+              label="Approve"
+              confirmLabel="Confirm approval"
+              summary={`Approve ${approval.operation_type}. As the second authorised principal, confirming makes the BFF execute this gated operation now.`}
+              className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity"
+              testid={`approve-submit-${approval.approval_request_id}`}
+            />
           </form>
           <form action={rejectAction} data-testid={`reject-form-${approval.approval_request_id}`} className="space-y-2">
             <input type="hidden" name="approval_id" value={approval.approval_request_id} />
