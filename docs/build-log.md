@@ -1253,3 +1253,17 @@ User accepted **ADR 0014 Option 2**: surface a minimal, non-PII operation summar
 **After you merge #171** (the prerequisite): (a) a BFF story composes `operation_summary` per gated-operation type with a **per-type PII-redaction contract test**; (b) UX-03c renders it on the approval card + mobile detail. Both as separate PRs linking #171.
 
 This is the only remaining UX item. Everything else implementable is shipped; the rest of the backlog (BACKOFFICE-33, BACKOFFICE-52, M6-PORT-SWAPS) is enterprise/BD-gated.
+
+---
+
+## 2026-06-21 — UX-03c BFF: compose non-PII operation_summary on the four-eyes view (ADR 0014)
+
+Spec PR #171 merged (operation_summary + ApprovalOperationSummary on ApprovalRequest). This is the BFF step:
+
+- **`summariseOperation(operation_type, operation_payload)`** — an **allowlist** composer; `toWire` now emits a non-PII `operation_summary` per gated-operation type. Surfaces only: `billing_period` (invoice-run), the `reason_code` enum (bulk-revoke), the refund `Money` amount, and static labels. **Never** copies `psu_identifier`, free-text `case_context`/`justification`, internal ids, or account/IBAN/Emirates-ID; unknown type → `null` (fail-safe).
+- **Format-validation at the summary boundary** (security-review hardening): the echoed values are validated, not just type-checked — `reason_code` must be in `{CLIENT_INSTRUCTION}`, `billing_period` must match `^\d{4}-(0[1-9]|1[0-2])$`, `Money.amount` must be an integer — so a caller hitting the generic `POST /approvals` with PSU free-text in those fields can't smuggle it onto the four-eyes surface.
+- **Per-type PII-redaction contract test** (12 cases): stuffs every operation payload with PII sentinels + asserts none leak; covers the free-text-dropped + malformed-period-dropped + unknown-type-null cases.
+
+Reviewers: hard-stop **PASS** (redaction control sound), contract-conformance **CONFORMANT** (matches the merged schema; gen-drift clean). Spec→tests→code order honored: the BFF code landed only after #171 merged + a rebase onto main.
+
+**Backlog:** UX-03c → in-progress (BFF done); **UX-03c-portal** pending — render the summary on the approval card + mobile detail (display-only; the BFF already redacted). That's the last UX step.
