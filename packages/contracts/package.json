@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/response-validator.ts"
   },
   "scripts": {
     "gen": "tsx scripts/gen.ts",
@@ -15,6 +16,8 @@
     "yaml": "^2.6.1"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "openapi-typescript": "^7.4.4",
     "tsx": "^4.19.2"
   }
