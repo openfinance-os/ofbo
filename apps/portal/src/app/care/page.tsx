@@ -36,7 +36,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.consentsAdmin)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.consentsAdmin)) redirect(`/access-denied?module=${encodeURIComponent('Customer Care')}&required=${encodeURIComponent(SCOPES.consentsAdmin)}`)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)

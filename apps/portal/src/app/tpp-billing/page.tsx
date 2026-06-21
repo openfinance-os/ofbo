@@ -39,7 +39,7 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect(`/access-denied?module=${encodeURIComponent('TPP Billing & Registry')}&required=${encodeURIComponent(SCOPES.billingRead)}`)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)

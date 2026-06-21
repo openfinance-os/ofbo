@@ -26,7 +26,7 @@ export default async function RiskPage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.riskRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.riskRead)) redirect(`/access-denied?module=${encodeURIComponent('Risk Management')}&required=${encodeURIComponent(SCOPES.riskRead)}`)
 
   let riskView: AnalyticsView | null = null
   let liabilityMonitor: AnalyticsView | null = null

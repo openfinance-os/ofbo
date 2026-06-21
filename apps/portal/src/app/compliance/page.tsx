@@ -26,7 +26,7 @@ export default async function CompliancePage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.complianceRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.complianceRead)) redirect(`/access-denied?module=${encodeURIComponent('Compliance')}&required=${encodeURIComponent(SCOPES.complianceRead)}`)
 
   let view: AnalyticsView | null = null
   let error: string | null = null

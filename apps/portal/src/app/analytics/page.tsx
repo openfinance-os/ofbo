@@ -32,7 +32,7 @@ export default async function AnalyticsPage() {
 
   const canExec = principal.superadmin || principal.scopes.includes(EXEC_SCOPE)
   const canFinance = principal.superadmin || principal.scopes.includes(FINANCE_SCOPE)
-  if (!canExec && !canFinance) redirect('/dashboard')
+  if (!canExec && !canFinance) redirect(`/access-denied?module=${encodeURIComponent('Analytics & Insights')}&required=${encodeURIComponent(`${EXEC_SCOPE} or ${FINANCE_SCOPE}`)}`)
 
   let executive: AnalyticsView | null = null
   let finance: AnalyticsView | null = null

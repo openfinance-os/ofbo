@@ -26,7 +26,7 @@ export default async function OperationsPage() {
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.operationsRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.operationsRead)) redirect(`/access-denied?module=${encodeURIComponent('Operations Console')}&required=${encodeURIComponent(SCOPES.operationsRead)}`)
 
   let view: AnalyticsView | null = null
   let error: string | null = null

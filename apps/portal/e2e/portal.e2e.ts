@@ -59,10 +59,14 @@ test.describe('scope-aware navigation (the §2 matrix, app-shell + page gates)',
     await expect(page.getByTestId('nav-customer-care')).toHaveCount(0)
   })
 
-  test('an out-of-scope page redirects to the dashboard (risk-analyst → /reconciliation)', async ({ page }) => {
+  test('an out-of-scope page shows the scope-denied surface (risk-analyst → /reconciliation)', async ({ page }) => {
+    // UX-07: out-of-scope deep links now land on an explicit /access-denied page (naming the
+    // missing scope) instead of a silent bounce to /dashboard. The gate still blocks.
     await login(page, 'risk-analyst')
     await page.goto('/reconciliation')
-    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page).toHaveURL(/\/access-denied/)
+    await expect(page.getByTestId('access-denied')).toBeVisible()
+    await expect(page.getByTestId('denied-scope')).toContainText('reconciliation:read')
   })
 })
 
