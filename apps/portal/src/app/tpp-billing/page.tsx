@@ -54,8 +54,9 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
     status === 'invoice_submitted' ? (
       <>
         Invoice run submitted to four-eyes{ar ? <> — request <span className="font-mono">{ar}</span></> : null}. A second authorised principal approves before P9 dispatch.{' '}
-        <a href="/approvals" className="underline font-semibold">
-          Track in the approvals queue →
+        {/* UI-MOBILE-APPROVALS — deep-link straight to the focused approval detail when we know its id. */}
+        <a href={ar ? `/approvals/${encodeURIComponent(ar)}` : '/approvals'} className="underline font-semibold">
+          {ar ? 'Open this approval →' : 'Track in the approvals queue →'}
         </a>
       </>
     ) : (

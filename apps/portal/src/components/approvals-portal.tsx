@@ -79,7 +79,18 @@ export function ApprovalCard({
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 shadow-sm" data-testid={`approval-${approval.approval_request_id}`}>
       <div className="flex items-center justify-between gap-2">
         <span className="font-bold text-sm text-primary">{approval.operation_type}</span>
-        <ApprovalStateBadge state={approval.state} />
+        <div className="flex items-center gap-2 shrink-0">
+          <ApprovalStateBadge state={approval.state} />
+          {/* UI-MOBILE-APPROVALS — open the focused detail (deep-link / mobile journey) */}
+          <a
+            href={`/approvals/${approval.approval_request_id}`}
+            data-testid={`open-approval-${approval.approval_request_id}`}
+            aria-label={`Open approval ${approval.operation_type}`}
+            className="font-symbols text-base text-on-surface-variant hover:text-on-surface rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            open_in_new
+          </a>
+        </div>
       </div>
 
       {/* dual initiator / approver cards */}

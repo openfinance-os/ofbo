@@ -1206,3 +1206,19 @@ Made the existing portal shell responsive-safe so nothing breaks on a small scre
 Token/utility-only (no raw hex/px); no contract/lib change. Tests: portal unit 279 pass (app-shell.spec +1 — drawer open/backdrop/close/nav-dismiss); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-10 → done. Eligible next: **UI-MOBILE-APPROVALS** (the mobile approval journey). Remaining human-gated: UX-03c (ADR 0014 compliance sign-off).
+
+---
+
+## 2026-06-21 — UI-MOBILE-APPROVALS: focused Mobile Approval Detail journey (ADR 0013 Option 1)
+
+The approval **queue** was already responsive (cards stack) and made mobile-safe by UX-10's shell (it's the Stitch Mobile Approval Queue ref). This adds the focused **Mobile Approval Detail** journey:
+
+- New route **`/approvals/[approval_request_id]`** + **`ApprovalDetail`** component — single-column, large-touch-target view of one four-eyes request, reusing the queue's `canActOn`/`formatExpiry` + the UX-06c approve/reject `useActionState` islands. It fetches via the existing `getApproval` (GET /approvals/{id}); a missing/▾unauthorised request shows a calm not-found notice.
+- It's the natural **deep-link target** for the UX-03 four-eyes initiator link — the tpp invoice-run notice now links to `/approvals/{ar}` ("Open this approval →") when the id is known.
+- Queue cards gained an `open_in_new` link to the detail.
+
+**Safety (reviewer-confirmed):** four-eyes intact — no inline execution; the initiator sees a lockout, not the buttons; the BFF executes the gated op. PII-safe — only the redacted `ApprovalRequest` fields + a UUID in the URL (richer operation context remains gated on **ADR 0014**).
+
+Frontend-only — no contract/lib/spec change (reuses GET /approvals/{id} + the approve/reject flow). Tests: portal unit 283 pass (new approval-detail.spec 2); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UI-MOBILE-APPROVALS → done. **Every implementable UX item is now complete.** The only open item is UX-03c, blocked on your compliance sign-off of ADR 0014.
