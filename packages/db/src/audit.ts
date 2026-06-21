@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { beginAppTx } from './tenant-tx.js'
 import { redactPii } from '@ofbo/redaction'
 import type { LineageSink } from './lineage.js'
 
@@ -63,9 +64,7 @@ export class PgAuditEmitter {
   private async asApp<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const out = await fn(c)
       await c.query('COMMIT')
       return out
@@ -178,9 +177,7 @@ export class PgAuditReader {
     const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100)
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const where = opts.actingPrincipal ? 'WHERE acting_principal = $1' : ''
       const params = opts.actingPrincipal ? [opts.actingPrincipal, limit] : [limit]
       const { rows } = await c.query(
@@ -264,9 +261,7 @@ export class PgAuditReader {
   private async asAppRead<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const out = await fn(c)
       await c.query('COMMIT')
       return out

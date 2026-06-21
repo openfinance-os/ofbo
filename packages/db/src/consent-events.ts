@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { beginAppTx } from './tenant-tx.js'
 import type { AuditEmitterConfig } from './audit.js'
 
 /**
@@ -75,9 +76,7 @@ export class PgConsentEventReader {
     const after = query.cursor ? decodeCursor(query.cursor) : null
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const params: unknown[] = [value, ...CONSENT_EVENT_TYPES]
       const typePlaceholders = CONSENT_EVENT_TYPES.map((_, i) => `$${i + 2}`).join(', ')
       // Keyset on (created_at, id). created_at is truncated to milliseconds on
