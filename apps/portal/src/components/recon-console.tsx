@@ -1,5 +1,7 @@
-import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
-import { LoadMore, SubmitButton, IdempotencyField, AuditNote, ErrorBanner } from './ui'
+import { formatMoney, type ReconciliationBreak, type ReconciliationRun, type ReconWriteResult } from '../lib/reconciliation'
+import { LoadMore, AuditNote, ErrorBanner } from './ui'
+import { ClaimForm } from './reconciliation/claim-form'
+import { ResolveForm } from './reconciliation/resolve-form'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -21,8 +23,8 @@ export interface ReconConsoleProps {
   errorDocsUrl?: string | null
   notice?: string | null
   canWrite?: boolean
-  claimAction?: (formData: FormData) => void | Promise<void>
-  resolveAction?: (formData: FormData) => void | Promise<void>
+  claimAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
+  resolveAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
 }
 
 /** Run status → tone (PRD §7 triad). Contract enum: running|completed|failed|partial. */
@@ -109,38 +111,6 @@ export function RunList({ runs, selectedId, moreHref }: { runs: ReconciliationRu
   )
 }
 
-function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId: string; resolveAction?: ReconConsoleProps['resolveAction'] }) {
-  if (!resolveAction) return null
-  return (
-    <form action={resolveAction} data-testid={`resolve-form-${breakId}`} className="mt-3 space-y-2 border-t border-outline-variant pt-3">
-      <IdempotencyField />
-      <input type="hidden" name="break_id" value={breakId} />
-      <input type="hidden" name="run_id" value={runId} />
-      <select name="resolution_outcome" aria-label="resolution outcome" defaultValue="" required className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        <option value="" disabled>
-          Select outcome…
-        </option>
-        {RESOLVE_OUTCOMES.map((o) => (
-          <option key={o} value={o}>
-            {o.replace(/_/g, ' ')}
-          </option>
-        ))}
-      </select>
-      <textarea
-        name="resolution_note"
-        aria-label="resolution note"
-        minLength={MIN_RESOLUTION_NOTE}
-        required
-        placeholder={`Resolution note (≥ ${MIN_RESOLUTION_NOTE} chars)…`}
-        className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      />
-      <SubmitButton pendingLabel="Resolving…" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-        Resolve break
-      </SubmitButton>
-    </form>
-  )
-}
-
 export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: ReconciliationBreak; canWrite?: boolean; claimAction?: ReconConsoleProps['claimAction']; resolveAction?: ReconConsoleProps['resolveAction'] }) {
   return (
     <div className="p-3 border border-outline-variant rounded-lg bg-surface-container-low border-l-4 border-l-break" data-testid={`break-${b.id}`}>
@@ -169,16 +139,11 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
         Investigate →
       </a>
       {canWrite && CLAIMABLE.has(b.status) && claimAction ? (
-        <form action={claimAction} data-testid={`claim-form-${b.id}`} className="mt-3">
-          <IdempotencyField />
-          <input type="hidden" name="break_id" value={b.id} />
-          <input type="hidden" name="run_id" value={b.run_id} />
-          <SubmitButton pendingLabel="Claiming…" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
-            Claim break
-          </SubmitButton>
-        </form>
+        <ClaimForm breakId={b.id} runId={b.run_id} action={claimAction} />
       ) : null}
-      {canWrite && RESOLVABLE.has(b.status) ? <ResolveForm breakId={b.id} runId={b.run_id} resolveAction={resolveAction} /> : null}
+      {canWrite && RESOLVABLE.has(b.status) && resolveAction ? (
+        <ResolveForm breakId={b.id} runId={b.run_id} action={resolveAction} />
+      ) : null}
     </div>
   )
 }

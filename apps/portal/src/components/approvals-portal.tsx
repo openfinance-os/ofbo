@@ -1,5 +1,7 @@
-import { canActOn, MIN_REJECT_REASON, type ApprovalRequest } from '../lib/approvals'
-import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField, AuditNote, LoadMore } from './ui'
+import { canActOn, type ApprovalRequest, type ApprovalWriteResult } from '../lib/approvals'
+import { Notice, ErrorBanner, AuditNote, LoadMore } from './ui'
+import { ApproveForm } from './approvals/approve-form'
+import { RejectForm } from './approvals/reject-form'
 
 /**
  * UI-05 — Four-Eyes Approval Portal, translated from the Stitch "OFBO - Four-Eyes
@@ -18,8 +20,8 @@ export interface ApprovalsPortalProps {
   error?: string | null
   notice?: string | null
   moreHref?: string | null
-  approveAction?: (formData: FormData) => void | Promise<void>
-  rejectAction?: (formData: FormData) => void | Promise<void>
+  approveAction?: (prevState: ApprovalWriteResult, formData: FormData) => Promise<ApprovalWriteResult>
+  rejectAction?: (prevState: ApprovalWriteResult, formData: FormData) => Promise<ApprovalWriteResult>
 }
 
 const STATE_TONE: Record<string, string> = {
@@ -99,32 +101,8 @@ export function ApprovalCard({
 
       {actable && approveAction && rejectAction ? (
         <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant pt-3">
-          <form action={approveAction} data-testid={`approve-form-${approval.approval_request_id}`}>
-            <IdempotencyField />
-            <input type="hidden" name="approval_id" value={approval.approval_request_id} />
-            <ConfirmSubmit
-              label="Approve"
-              confirmLabel="Confirm approval"
-              summary={`Approve ${approval.operation_type}. As the second authorised principal, confirming makes the BFF execute this gated operation now.`}
-              className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity"
-              testid={`approve-submit-${approval.approval_request_id}`}
-            />
-          </form>
-          <form action={rejectAction} data-testid={`reject-form-${approval.approval_request_id}`} className="space-y-2">
-            <IdempotencyField />
-            <input type="hidden" name="approval_id" value={approval.approval_request_id} />
-            <textarea
-              name="reject_reason"
-              aria-label="reject reason"
-              required
-              minLength={MIN_REJECT_REASON}
-              placeholder={`Reject reason (≥ ${MIN_REJECT_REASON} chars)…`}
-              className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1"
-            />
-            <SubmitButton pendingLabel="Rejecting…" className="w-full bg-breach text-on-error py-1.5 rounded text-xs font-bold hover:bg-error transition-colors">
-              Reject
-            </SubmitButton>
-          </form>
+          <ApproveForm approvalId={approval.approval_request_id} operationType={approval.operation_type} action={approveAction} />
+          <RejectForm approvalId={approval.approval_request_id} action={rejectAction} />
         </div>
       ) : approval.state === 'pending' ? (
         <p className="mt-3 text-xs text-on-surface-variant border-t border-outline-variant pt-3" data-testid={`lockout-${approval.approval_request_id}`}>

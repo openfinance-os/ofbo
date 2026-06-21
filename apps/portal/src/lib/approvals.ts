@@ -42,6 +42,19 @@ export class ApprovalApiError extends Error {
   }
 }
 
+/**
+ * UX-06c — write-path result an approvals server action returns to useActionState on failure
+ * (no redirect → the form keeps its values + shows the typed error). Lives here (not the 'use
+ * server' actions file, which may only export async functions). Mirrors CareWriteResult.
+ */
+export type ApprovalWriteResult = {
+  ok: boolean
+  error?: string
+  remediation?: string | null
+  docsUrl?: string | null
+  values?: Record<string, string>
+}
+
 export interface ApprovalApiDeps {
   baseUrl?: string
   fetchImpl?: typeof fetch

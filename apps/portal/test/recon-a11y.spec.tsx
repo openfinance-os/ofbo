@@ -52,7 +52,10 @@ const flaggedBreak: ReconciliationBreak = {
   created_at: '2026-06-17T03:01:00Z'
 }
 const assignedBreak: ReconciliationBreak = { ...flaggedBreak, id: 'b-assigned', status: 'assigned', assigned_to: 'demo:finance', sla_clock_started_at: '2026-06-17T04:00:00Z' }
-const noop = () => {}
+// UX-06c — recon claim/resolve are useActionState actions: (prevState, formData) => Promise<result>.
+const noop = async () => ({ ok: true })
+// escalate (InvestigationDetail) is still the redirect-style action (converted later in UX-06d).
+const voidNoop = () => {}
 
 describe('Reconciliation console — screen-reader traversal (1.3.1, 4.1.3)', () => {
   it('exposes the run list and break queue as named landmark regions', () => {
@@ -108,9 +111,9 @@ describe('Investigation detail — screen-reader traversal + keyboard (1.3.1, 4.
   })
 
   it('announces error/notice banners and keeps escalation a focusable named control', () => {
-    const { rerender } = render(<InvestigationDetail break_={flaggedBreak} canDispute escalateAction={noop} notice="Escalated to Nebras." />)
+    const { rerender } = render(<InvestigationDetail break_={flaggedBreak} canDispute escalateAction={voidNoop} notice="Escalated to Nebras." />)
     expect(screen.getByRole('status')).toHaveTextContent(/Escalated to Nebras/)
-    rerender(<InvestigationDetail break_={flaggedBreak} canDispute escalateAction={noop} error="Escalation failed." />)
+    rerender(<InvestigationDetail break_={flaggedBreak} canDispute escalateAction={voidNoop} error="Escalation failed." />)
     expect(screen.getByRole('alert')).toHaveTextContent(/Escalation failed/)
     const btn = screen.getByRole('button', { name: /escalate to nebras/i })
     btn.focus()

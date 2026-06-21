@@ -1142,3 +1142,20 @@ PII posture **improves**: the failure path no longer redirects with identifiers 
 Frontend-only — no contract/port/audit/lineage/spec change (wire payloads unchanged). Tests: portal unit 257 pass (new ux06b-write-path.spec 2; care-console.spec noop typed to the action signature); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-06b → done (Care slice); **UX-06c** pending. Remaining UX: UX-10/UX-11 ADR-gated (ADRs 0012/0013 Proposed — human decision); UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06c: write-path useActionState (recon + approvals)
+
+Applied the merged UX-06b pattern to two more consoles:
+
+- **Recon** (claim, resolve) and **approvals** (approve, reject) actions changed from `(formData)→redirect('?status=*_failed')` to `useActionState` `(prevState, formData)→Promise<{Recon|Approval}WriteResult>`: on a typed `XApiError` they **return** the error (message + remediation + docs_url) so the form shows the real reason **in place**, and the operator's inputs survive — the **free-text** resolution note + reject reason (strongest preservation case) and the resolution outcome, re-seeded via `key`+`defaultValue`. Success still `redirect()`s.
+- Forms extracted to `'use client'` islands: `reconciliation/{claim,resolve}-form`, `approvals/{approve,reject}-form`. `Recon/ApprovalWriteResult` live in their lib modules (a `'use server'` file may only export async functions).
+
+**Safety:** four-eyes intact (ApproveForm just submits `approval_id`; the BFF executes the gated op — no inline execution); the resolve **enum guard** is preserved (now returns the error in place instead of redirecting); PII posture **improves** (free-text stays client-side, not in the URL). Idempotency-Key + scope re-checks + httpOnly token boundary unchanged.
+
+**Split UX-06d** for the last forms (investigation escalate + tpp register/invoice).
+
+Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, enums, headers unchanged). Tests: portal unit 263 pass (new ux06c-write-path.spec 2; 3 spec noops retyped to the action signature, +voidNoop for the still-redirect escalate action); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06c → done; **UX-06d** pending (investigation + tpp). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.

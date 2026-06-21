@@ -69,7 +69,8 @@ describe('RunList', () => {
 })
 
 describe('BreakCard', () => {
-  const noop = () => {}
+  // UX-06c — recon write actions are useActionState actions: (prevState, formData) => Promise<result>.
+  const noop = async () => ({ ok: true })
 
   it('formats the variance as money and shows claim ONLY for a flagged break with write scope', () => {
     render(<BreakCard b={flaggedBreak} canWrite claimAction={noop} resolveAction={noop} />)
@@ -95,7 +96,8 @@ describe('BreakCard', () => {
 })
 
 describe('ReconConsole', () => {
-  const noop = () => {}
+  // UX-06c — recon write actions are useActionState actions: (prevState, formData) => Promise<result>.
+  const noop = async () => ({ ok: true })
 
   it('renders KPIs for the selected run, the run list, and the break queue', () => {
     render(<ReconConsole runs={[run]} selectedRun={run} breaks={[flaggedBreak]} canWrite claimAction={noop} resolveAction={noop} />)
