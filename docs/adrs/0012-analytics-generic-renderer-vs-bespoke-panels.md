@@ -1,6 +1,6 @@
 # ADR 0012 — Analytics generic renderer vs bespoke panels
 
-- Status: **Proposed** — awaiting human decision
+- Status: **Accepted — Option 1** (user decision, 2026-06-21)
 - Date: 2026-06-21
 - Related: UI-06/-07/-09 (Analytics, Risk, Operations screens), BACKOFFICE-27/-30/-31/-28 (free-form analytics contracts), `docs/design-conformance-audit.md`, `docs/ui-ux-review.md`
 
@@ -51,9 +51,11 @@ pixel-faithful before the contract is ready.
 
 ## Decision
 
-_Pending._ If Option 1: note it in the design-conformance audit as accepted, and the
-MAJOR-DRIFT on these three screens is by-design, not a defect. If Option 2: raise a
-spec-change for typed analytics sections + a charts primitive backlog item (UX-11).
+**Option 1, accepted by the user on 2026-06-21.** Keep the generic renderer for the demo;
+the MAJOR-DRIFT on Analytics/Risk/Operations is **by-design, not a defect** — recorded as
+accepted in `docs/design-conformance-audit.md`. UX-11 (bespoke/typed panels) is closed
+won't-do for now; Option 2 (typed panel sections + chart primitives, via a human-approved
+spec change) remains the post-demo target once the analytics contracts stabilise.
 
 ## Consequences
 

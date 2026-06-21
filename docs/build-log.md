@@ -1159,3 +1159,17 @@ Applied the merged UX-06b pattern to two more consoles:
 Frontend-only — no contract/port/audit/lineage/spec change (wire payloads, enums, headers unchanged). Tests: portal unit 263 pass (new ux06c-write-path.spec 2; 3 spec noops retyped to the action signature, +voidNoop for the still-redirect escalate action); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-06c → done; **UX-06d** pending (investigation + tpp). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — architect decisions recorded (ADRs 0012/0013 accepted; ADR 0014 drafted)
+
+The user resolved the three human-gated UX items:
+
+- **ADR 0013 → Accepted, Option 1** (responsive-safe). UX-10 unblocked (responsive-safe shell + table overflow + density wiring + one KPI breakpoint ladder); added **UI-MOBILE-APPROVALS** (the one mobile journey — Mobile Approval Queue/Detail, time-sensitive four-eyes).
+- **ADR 0012 → Accepted, Option 1** (keep the generic analytics renderer). The Analytics/Risk/Operations MAJOR-DRIFT is recorded **by-design (accepted)** in `docs/design-conformance-audit.md`; **UX-11 closed won't-do** (typed panels are the post-demo Option-2 target).
+- **UX-03c → ADR 0014 drafted** (`0014-approval-card-operation-context.md`, status **Proposed**): recommends a minimal, schema-constrained, **non-PII** `operation_summary` on `ApprovalRequest` (amount + masked institutional counterparty + count/scope — never PSU ids/free-text), BFF-composed + redaction-tested. Awaiting compliance sign-off; if accepted it needs a human-approved spec-change first.
+
+Docs-only change to main (ADR statuses + audit + backlog + this log), per the worktree-isolation convention. No code change. ADR 0014 is a draft for human approval — not self-accepted.
+
+**Eligible next (code):** UX-10 (responsive-safe shell) → UI-MOBILE-APPROVALS; UX-06d (investigation + tpp useActionState, the last write-path forms). **Still human-gated:** UX-03c (ADR 0014 compliance sign-off).

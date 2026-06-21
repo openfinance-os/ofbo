@@ -34,12 +34,17 @@ implementation read; layout/section/hierarchy + token usage compared.
 
 ## Root cause #1 — the generic analytics renderer (Analytics, Risk, Operations)
 
+> **RESOLVED — drift ACCEPTED (ADR 0012, Option 1, user decision 2026-06-21).** The generic
+> renderer is kept for the demo; the MAJOR-DRIFT on Analytics/Risk/Operations is **by-design,
+> not a defect**. Typed panel sections + chart primitives (ADR 0012 Option 2) are the
+> post-demo target once the analytics contracts stabilise. UX-11 closed won't-do.
+
 These three reuse one contract-driven `MetricGrid` / `AnalyticsSection`. Because the
 `BACKOFFICE-27/-31` analytics contracts return **free-form** data, the renderer cannot
 reproduce Stitch's named panels, charts, gauges, or progress bars — every screen collapses
 to uniform KPI cards. This is an **architectural tradeoff documented in the component**,
 not an accident. Closing it requires either *named-panel contracts* or *bespoke React per
-Stitch region* → **needs an ADR decision** (accept the simplification vs invest in bespoke panels).
+Stitch region* → decided in **ADR 0012 (Option 1 accepted)**.
 
 ## Root cause #2 — genuine omissions (Reconciliation, TPP Billing)
 

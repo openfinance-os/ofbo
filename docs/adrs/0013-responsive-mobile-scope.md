@@ -1,6 +1,6 @@
 # ADR 0013 — Responsive / mobile scope for the portal
 
-- Status: **Proposed** — awaiting human decision
+- Status: **Accepted — Option 1** (user decision, 2026-06-21)
 - Date: 2026-06-21
 - Related: UI-01 (App shell), `docs/ui-ux-review.md`; the Stitch project's mobile screens (Executive Mobile Pulse, Mobile Approval Queue/Detail, Mobile System Health)
 
@@ -45,10 +45,11 @@ Defer broader mobile parity unless a stakeholder requires it.
 
 ## Decision
 
-_Pending._ If Option 1: raise UX-10 (responsive-safe shell + table overflow + density
-wiring + consistent KPI breakpoints) and a UI-1x story for the Mobile Approval Queue/Detail
-(cite the Stitch mobile screen ids). If Option 3: a small "desktop-only" story + remove the
-mobile Stitch screens.
+**Option 1, accepted by the user on 2026-06-21.** Desktop-first + responsive-safe, with
+mobile only for approvals. UX-10 (responsive-safe shell + table overflow + density wiring +
+one consistent KPI breakpoint ladder) is now eligible, and a UI story (UI-MOBILE-APPROVALS)
+is added for the Mobile Approval Queue/Detail (cite the Stitch mobile screen ids). Broader
+mobile parity (Option 2) is deferred unless a stakeholder requires it.
 
 ## Consequences
 
