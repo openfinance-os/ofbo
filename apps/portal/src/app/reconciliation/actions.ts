@@ -6,6 +6,7 @@ import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { claimBreak, resolveBreak, RESOLVE_OUTCOMES, type ResolveOutcome } from '../../lib/reconciliation'
+import { idempotencyKey } from '../../lib/idempotency'
 
 /**
  * UI-03 — Reconciliation Console mutations (server actions). SERVER-SIDE only: the
@@ -42,7 +43,7 @@ export async function claimBreakAction(formData: FormData) {
 
   let status = 'claimed'
   try {
-    await claimBreak(token, breakId, crypto.randomUUID())
+    await claimBreak(token, breakId, idempotencyKey(formData))
   } catch {
     status = 'claim_failed'
   }
@@ -64,7 +65,7 @@ export async function resolveBreakAction(formData: FormData) {
 
   let status = 'resolved'
   try {
-    await resolveBreak(token, breakId, { resolution_outcome: rawOutcome as ResolveOutcome, resolution_note: note }, crypto.randomUUID())
+    await resolveBreak(token, breakId, { resolution_outcome: rawOutcome as ResolveOutcome, resolution_note: note }, idempotencyKey(formData))
   } catch {
     status = 'resolve_failed'
   }

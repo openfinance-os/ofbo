@@ -1,5 +1,5 @@
 import { DISPUTE_TYPES, IDENTIFIER_TYPES, REVOKE_REASON_CODES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../lib/care'
-import { Notice, ErrorBanner, ConfirmSubmit } from './ui'
+import { Notice, ErrorBanner, ConfirmSubmit, SubmitButton, IdempotencyField } from './ui'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -133,6 +133,7 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
         <StatusPill status={consent.status} />
         {REVOCABLE.has(consent.status) && revokeAction ? (
           <form action={revokeAction} data-testid={`revoke-form-${consent.consent_id}`} className="flex items-center gap-1">
+            <IdempotencyField />
             <input type="hidden" name="consent_id" value={consent.consent_id} />
             <input type="hidden" name="identifier_type" value={identifierType} />
             <input type="hidden" name="identifier" value={psu} />
@@ -204,6 +205,7 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
         <p className="text-xs text-on-surface-variant leading-relaxed">Raise an unauthorized-payment dispute for this PSU. Refund initiation is four-eyes-gated downstream (BACKOFFICE-21).</p>
         {disputeAction ? (
           <form action={disputeAction} className="space-y-2" data-testid="dispute-form">
+            <IdempotencyField />
             <input type="hidden" name="identifier_type" value={identifierType} />
             <input type="hidden" name="identifier" value={psu} />
             <label className="block">
@@ -217,9 +219,9 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
                 </option>
               ))}
             </select>
-            <button type="submit" className="w-full bg-breach text-on-error py-2 rounded font-bold text-xs hover:bg-error transition-colors">
+            <SubmitButton pendingLabel="Opening…" className="w-full bg-breach text-on-error py-2 rounded font-bold text-xs hover:bg-error transition-colors">
               Open dispute
-            </button>
+            </SubmitButton>
           </form>
         ) : null}
       </div>

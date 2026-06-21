@@ -1013,3 +1013,17 @@ From the UI/UX review: list getters returned next_cursor but the pages discarded
 Cursor-based only (no offset); cursors are opaque tokens (no PSU data in URLs). Split **UX-04b** for the approvals queue + care 24-month timeline (their getters need a cursor param + lib-test updates). Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 221 pass (new load-more.spec 5; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-04 → done; **UX-04b** (approvals + timeline pagination) pending. Remaining UX: UX-03b, UX-05..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-05 submitting states + stable idempotency keys (UX-hardening; scoped)
+
+From the UI/UX review: all-server-render + redirect-per-mutation gave no in-the-moment feedback, and per-call random Idempotency-Keys defeated their own purpose (every click looked new, so the 24h window never protected against a double-submit).
+
+- **`components/ui/submit-button.tsx`** — a client `SubmitButton` (useFormStatus): disabled + a pending label ("Working…"/"Claiming…"/…) + aria-busy while its enclosing form's server action is in flight. Visible feedback + a double-submit guard.
+- **`components/ui/idempotency-field.tsx`** + **`lib/idempotency.ts`** — a hidden `idempotency_key` minted once per form render; the actions read it (fallback to a fresh uuid) instead of minting per call. A double-click of the same rendered form now carries the SAME key (the BFF collapses it within the 24h window) while a fresh page load mints a new key and can legitimately retry.
+- **Wired into every mutating form** (care revoke/dispute, recon claim/resolve, tpp register/sync/invoice, approvals approve/reject) and all 9 server actions; tpp syncDirectoryAction gained a formData param.
+
+Frontend-only — no contract/port/audit/lineage/spec change; the Idempotency-Key header shape + 24h semantics are unchanged (only the value source). Split **UX-05b** for per-route loading.tsx skeletons. Tests: portal unit 228 pass (new ux05-submit-idempotency.spec 7); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-05 → done; **UX-05b** (loading skeletons) pending. Remaining UX: UX-03b, UX-04b, UX-05b, UX-06..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.

@@ -1,5 +1,5 @@
 import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
-import { LoadMore } from './ui'
+import { LoadMore, SubmitButton, IdempotencyField } from './ui'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -111,6 +111,7 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
   if (!resolveAction) return null
   return (
     <form action={resolveAction} data-testid={`resolve-form-${breakId}`} className="mt-3 space-y-2 border-t border-outline-variant pt-3">
+      <IdempotencyField />
       <input type="hidden" name="break_id" value={breakId} />
       <input type="hidden" name="run_id" value={runId} />
       <select name="resolution_outcome" aria-label="resolution outcome" defaultValue="" required className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
@@ -131,9 +132,9 @@ function ResolveForm({ breakId, runId, resolveAction }: { breakId: string; runId
         placeholder={`Resolution note (≥ ${MIN_RESOLUTION_NOTE} chars)…`}
         className="w-full bg-surface-container-lowest text-xs border border-outline-variant rounded px-2 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       />
-      <button type="submit" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+      <SubmitButton pendingLabel="Resolving…" className="w-full bg-reconciled text-on-error py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
         Resolve break
-      </button>
+      </SubmitButton>
     </form>
   )
 }
@@ -167,11 +168,12 @@ export function BreakCard({ b, canWrite, claimAction, resolveAction }: { b: Reco
       </a>
       {canWrite && CLAIMABLE.has(b.status) && claimAction ? (
         <form action={claimAction} data-testid={`claim-form-${b.id}`} className="mt-3">
+          <IdempotencyField />
           <input type="hidden" name="break_id" value={b.id} />
           <input type="hidden" name="run_id" value={b.run_id} />
-          <button type="submit" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
+          <SubmitButton pendingLabel="Claiming…" className="w-full bg-secondary text-on-secondary py-1.5 rounded text-xs font-bold hover:bg-secondary-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2">
             Claim break
-          </button>
+          </SubmitButton>
         </form>
       ) : null}
       {canWrite && RESOLVABLE.has(b.status) ? <ResolveForm breakId={b.id} runId={b.run_id} resolveAction={resolveAction} /> : null}
