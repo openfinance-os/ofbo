@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
 import { DemoBanner } from '../components/demo-banner'
+import { ClearStatusParam } from '../components/ui'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <DemoBanner />
+        <ClearStatusParam />
         {children}
       </body>
     </html>

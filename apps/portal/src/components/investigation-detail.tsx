@@ -1,6 +1,6 @@
 import { ESCALATABLE_STATES, formatMoney, type ReconciliationBreak } from '../lib/reconciliation'
 import { StatusBadge } from './recon-console'
-import { ConfirmSubmit } from './ui'
+import { ConfirmSubmit, AuditNote } from './ui'
 
 /**
  * UI-04 — Investigation Detail View, translated from the Stitch "OFBO - Investigation
@@ -121,6 +121,7 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
               className="bg-breach text-on-error px-4 py-2 rounded-lg text-xs font-bold hover:bg-error transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
               testid="escalate-submit"
             />
+            <AuditNote className="mt-2" />
           </form>
         ) : null}
       </div>
