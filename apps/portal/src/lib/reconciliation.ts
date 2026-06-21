@@ -70,6 +70,19 @@ export class ReconApiError extends Error {
   }
 }
 
+/**
+ * UX-06c — write-path result a recon server action returns to useActionState on failure (no
+ * redirect → the form keeps its values + shows the typed error). Lives here (not the 'use
+ * server' actions file, which may only export async functions). Mirrors CareWriteResult.
+ */
+export type ReconWriteResult = {
+  ok: boolean
+  error?: string
+  remediation?: string | null
+  docsUrl?: string | null
+  values?: Record<string, string>
+}
+
 export interface ReconApiDeps {
   baseUrl?: string
   fetchImpl?: typeof fetch
