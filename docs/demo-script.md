@@ -73,6 +73,10 @@ Sign in as **Customer Care Agent** → **Customer Care**.
 3. **Admin-revoke** a Suspended consent (reason `TPP_REQUEST`). It propagates to the **Nebras
    Consent Manager via the P6 egress port** and records the **sub-5s acknowledgment** (the scheme
    SLA). One High-class audit row is written.
+   - *Then refresh the lookup:* the revoke now appears in **this customer's 24-month timeline** as
+     a `revoked` event attributed to **you** (the acting agent) — the operator action is traceable
+     against the PSU, not just buried in a global log. (We'll see the same record again, cross-
+     operator, in the Audit Log at §6.)
 
 *Hold the thread:* "Remember `INC-2026-0042` — we'll see this same payment in Finance, Risk,
 Approvals, and Ops."
@@ -147,9 +151,19 @@ the unauthorised-payment pattern flagged for *Fictional Fintech 01*.
 - **Cross-scheme double-compensation:** a separate seeded dispute is marked settled in the other
   scheme (Aani). Attempting `initiate-refund` on it returns **409** — the bank can't pay the same
   direct loss twice across schemes.
+- **Audit Log — who did what, across every operator** *(persona: Compliance Officer or super-
+  admin; `audit:read`)*. Open **Audit Log** in the sidebar and filter **Event type → `consent_
+  revoked`**. The list shows the revoke you performed in §1 — attributed to
+  `demo:customer-care-agent`, with the scope, PSU, consent, and timestamp — *now visible to a
+  **different** persona (Compliance), not just the agent who did it.* Filter by acting principal to
+  answer "everything this operator touched." *The control:* the High-class audit is **INSERT-only**;
+  the read itself is logged (`audit_trail_accessed`); nothing is editable or deletable. (The
+  Dashboard's panel is a self-scoped "my recent actions" view; **this** is the cross-operator
+  oversight surface.)
 - **BCBS 239 lineage:** `GET /back-office/lineage/risk_signal` (Compliance) returns the
   column-level lineage tree — every regulated write is traceable end-to-end. The **Q4.5 gate** in
-  CI fails the build if any table with rows lacks lineage.
+  CI fails the build if any table with rows lacks lineage. *Lineage = where the data came from;
+  the Audit Log = who acted on it. Together: full end-to-end traceability.*
 
 ---
 
