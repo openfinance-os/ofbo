@@ -6,7 +6,7 @@ import { AuditPanel } from '../../components/audit-panel'
 import { DashboardOverview } from '../../components/dashboard-overview'
 import { DashboardCharts } from '../../components/dashboard-charts'
 import { TOKEN_COOKIE } from '../../lib/cookies'
-import { recentAudit, verifyAndMint } from '../../lib/portal'
+import { recentAudit, verifyAndMint, DASHBOARD_AUDIT_NOISE } from '../../lib/portal'
 import { getDashboardKpis, getDashboardCharts } from '../../lib/dashboard'
 
 /** The dashboard inside the UI-01 app shell. The persona/scope echo is absorbed
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
   }
 
   const [events, kpis, charts] = await Promise.all([
-    recentAudit(principal),
+    recentAudit(principal, {}, { excludeEventTypes: DASHBOARD_AUDIT_NOISE, limit: 15 }),
     getDashboardKpis(token, { subject: principal.subject, scopes: principal.scopes }).catch(() => []),
     getDashboardCharts(token).catch(() => ({ reconTrend: [], riskSeverity: [] }))
   ])
