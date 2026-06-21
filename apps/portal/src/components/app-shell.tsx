@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import { visibleModules } from '../lib/nav'
+import { SCOPES } from '../lib/scopes'
 
 /**
  * UI-01 — the design-system app shell (translated from the Stitch "OFBO Portal"
@@ -22,6 +23,10 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
   const [collapsed, setCollapsed] = useState(false)
   const [compact, setCompact] = useState(false)
   const modules = visibleModules(principal.scopes, principal.superadmin)
+  // UX-08 — the header search is a scope-aware PSU quick-lookup that routes to the Care
+  // console (the primary operator entry point). Shown only to consents:admin personas;
+  // hidden otherwise (no inert control for personas without a universal lookup).
+  const canSearchPsu = principal.superadmin || principal.scopes.includes(SCOPES.consentsAdmin)
 
   return (
     <div className="flex min-h-screen bg-background text-on-surface" data-testid="app-shell" data-density={compact ? 'compact' : 'comfortable'}>
@@ -69,7 +74,19 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
             <button type="button" onClick={() => setCollapsed((c) => !c)} data-testid="toggle-sidebar" aria-label="toggle sidebar" className="font-symbols text-on-surface-variant hover:text-on-surface cursor-pointer">
               menu
             </button>
-            <input type="search" placeholder="Search…" aria-label="global search" data-testid="global-search" className="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-sm text-on-surface" />
+            {canSearchPsu ? (
+              <form action="/care" method="get" role="search" data-testid="global-search-form" className="flex items-center">
+                <input type="hidden" name="identifier_type" value="bank_customer_id" />
+                <input
+                  type="search"
+                  name="identifier"
+                  placeholder="Find PSU by customer id…"
+                  aria-label="Find PSU by bank customer id"
+                  data-testid="global-search"
+                  className="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </form>
+            ) : null}
           </div>
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => setCompact((d) => !d)} data-testid="density-toggle" aria-pressed={compact} className="text-xs px-3 py-1 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container cursor-pointer">

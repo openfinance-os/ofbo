@@ -72,6 +72,28 @@ describe('AppShell', () => {
     expect(screen.getByTestId('nav-operations')).toBeInTheDocument() // super-admin sees all
   })
 
+  it('UX-08: shows a scope-aware PSU quick-search (→ care) only for a consents:admin persona', () => {
+    const care = { subject: 'demo:care', persona: 'care-agent', scopes: ['consents:admin', 'disputes:admin'], superadmin: false }
+    render(
+      <AppShell principal={care}>
+        <p>x</p>
+      </AppShell>
+    )
+    const form = screen.getByTestId('global-search-form')
+    expect(form).toHaveAttribute('action', '/care')
+    expect(form).toHaveAttribute('role', 'search')
+    expect(screen.getByTestId('global-search')).toHaveAttribute('name', 'identifier')
+  })
+
+  it('UX-08: hides the global search for a persona without consents:admin (no inert control)', () => {
+    render(
+      <AppShell principal={finance}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.queryByTestId('global-search')).not.toBeInTheDocument()
+  })
+
   it('toggles density (comfortable ↔ compact) and collapses the sidebar', () => {
     render(
       <AppShell principal={finance}>
