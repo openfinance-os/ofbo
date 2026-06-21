@@ -52,7 +52,7 @@ export function SearchForm({ query }: { query?: CareConsoleProps['query'] }) {
           person_search
         </span>
         PSU Identity Lookup
-        <span className="ml-auto text-xs font-mono bg-surface-container-high px-2 py-1 rounded text-on-surface-variant">High-class audited</span>
+        <span className="ml-auto text-xs font-mono bg-surface-container-high px-2 py-1 rounded text-on-surface-variant">Audited (high-sensitivity)</span>
       </h2>
       <form method="get" className="flex flex-wrap items-end gap-4" data-testid="search-form">
         <label className="flex-1 min-w-48">
@@ -143,7 +143,7 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
               </option>
               {REVOKE_REASON_CODES.map((r) => (
                 <option key={r} value={r}>
-                  {r}
+                  {r.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>
@@ -215,7 +215,7 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
             <select name="dispute_type" aria-label="dispute type" className="w-full bg-surface-container text-xs border border-outline-variant rounded px-2 py-1">
               {DISPUTE_TYPES.map((t) => (
                 <option key={t} value={t}>
-                  {t}
+                  {t.replace(/_/g, ' ')}
                 </option>
               ))}
             </select>

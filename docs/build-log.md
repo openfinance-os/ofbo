@@ -1054,3 +1054,22 @@ From the UI/UX review: the app-shell rendered a search input on every screen wit
 Frontend-only (app-shell) — no contract/port/audit/lineage/spec change. Tests: portal unit 237 pass (app-shell.spec +2; design-conformance/tokens/no-raw-style held); typecheck + lint clean; e2e untouched. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-08 → done. Remaining UX: UX-06(a/b/c), UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-09 polish cluster (copy, wayfinding, boundaries)
+
+The bounded polish items from the UI/UX review (low-severity, high-credibility for a regulator walkthrough):
+
+- Removed the 🎉 emoji in the recon Break Queue empty state → "No open breaks. Queue clear."
+- Reworded the care PSU-lookup chip "High-class audited" → "Audited (high-sensitivity)".
+- Humanized snake_case option **labels** in the revoke-reason / dispute-type / resolve-outcome selects (`value` stays the exact contract enum; display only).
+- Collapsed-nav tooltips (`title=label` on nav links + switch-persona when the sidebar is collapsed).
+- Breadcrumb `nav` (Reconciliation / Break …) on the deep-linked break-detail page.
+- New `app/not-found.tsx` (calm token-styled 404 with a back-to-dashboard link).
+
+Already done elsewhere (verified): the contrast token-pairing fix (`text-on-primary`→`-container`, landed in UX-01/03) and `error.tsx`/`global-error.tsx` (a prior DEMO-01 boundary). Split **UX-09b** for the two heavier items (point-of-action audit affordance + clearing the `?status=` notice param — needs a client `history.replaceState`).
+
+Frontend-only — no contract/port/audit/lineage/spec change; option **values** unchanged (enum integrity preserved). Tests: portal unit 240 pass (new not-found.spec + investigation breadcrumb + recon option-label update); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-09 → done; **UX-09b** pending. Remaining UX: UX-06(a/b/c) + splits UX-03b/04b/05b/09b pending; UX-03c/UX-10/UX-11 blocked on ADRs.
