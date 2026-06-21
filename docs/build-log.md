@@ -1027,3 +1027,16 @@ From the UI/UX review: all-server-render + redirect-per-mutation gave no in-the-
 Frontend-only — no contract/port/audit/lineage/spec change; the Idempotency-Key header shape + 24h semantics are unchanged (only the value source). Split **UX-05b** for per-route loading.tsx skeletons. Tests: portal unit 228 pass (new ux05-submit-idempotency.spec 7); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-05 → done; **UX-05b** (loading skeletons) pending. Remaining UX: UX-03b, UX-04b, UX-05b, UX-06..09 pending; UX-03c/UX-10/UX-11 blocked on ADRs.
+
+---
+
+## 2026-06-21 — UX-07 explicit scope-denied page (UX-hardening)
+
+From the UI/UX review: out-of-scope deep links / bookmarks bounced silently to /dashboard with no explanation — disorienting for a portal whose §2 scope matrix is load-bearing.
+
+- **`/access-denied` route + `AccessDenied` component**: the 7 scope-gated pages (care, reconciliation, tpp-billing, analytics, risk, operations, compliance) now redirect an out-of-scope access to `/access-denied?module=…&required=…`, which renders inside the shell and states "Your persona `X` does not hold the `scope` scope required for `module`." with a back-to-dashboard link.
+- **Enforcement is unchanged** — the same `!superadmin && !scopes.includes(...)` gate still blocks; only the *destination* of the bounce changed (informative instead of silent). The required-scope string is disclosed to the already-authenticated user about their own denial (not a leak). Denial is now legible, not audited (a client-side informational page — no audit emission).
+
+Frontend-only — no contract/port/audit/lineage/spec change. Tests: portal unit 232 pass (new access-denied.spec 4; design-conformance/tokens/no-raw-style held); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-07 → done. Remaining UX: UX-06(a/b/c), UX-08, UX-09 + splits UX-03b/04b/05b pending; UX-03c/UX-10/UX-11 blocked on ADRs.

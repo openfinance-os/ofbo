@@ -36,7 +36,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect(`/access-denied?module=${encodeURIComponent('Reconciliation')}&required=${encodeURIComponent(SCOPES.reconciliationRead)}`)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
