@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
-import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty } from '../lib/tpp-billing'
-import { Notice, ErrorBanner, LoadMore, SubmitButton, IdempotencyField } from './ui'
+import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty, type TppWriteResult } from '../lib/tpp-billing'
+import { Notice, ErrorBanner, LoadMore } from './ui'
+import { RegisterForm } from './tpp-billing/register-form'
+import { InvoiceRunForm } from './tpp-billing/invoice-run-form'
+import { SyncForm } from './tpp-billing/sync-form'
 
 /**
  * UI-08 — TPP Billing & Registry, translated from the Stitch "OFBO - TPP Billing &
@@ -22,9 +25,9 @@ export interface TppBillingProps {
   canBilling?: boolean
   /** platform:operations:write — sync the Trust Framework Directory. */
   canOps?: boolean
-  registerAction?: (formData: FormData) => void | Promise<void>
-  syncAction?: (formData: FormData) => void | Promise<void>
-  invoiceRunAction?: (formData: FormData) => void | Promise<void>
+  registerAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
+  syncAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
+  invoiceRunAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -78,14 +81,8 @@ export function RegistryTable({ counterparties, canBilling, registerAction, more
                   <span className="font-mono text-xs text-on-surface-variant" data-testid={`accrual-${c.organisation_id}`}>
                     {formatMoney(c.mtd_fee_accrual)}
                   </span>
-                  {registerable ? (
-                    <form action={registerAction} data-testid={`register-form-${c.organisation_id}`}>
-                      <IdempotencyField />
-                      <input type="hidden" name="organisation_id" value={c.organisation_id} />
-                      <SubmitButton pendingLabel="Registering…" className="bg-secondary text-on-secondary px-3 py-1 rounded text-xs font-bold hover:bg-secondary-container transition-colors">
-                        Register P9
-                      </SubmitButton>
-                    </form>
+                  {registerable && registerAction ? (
+                    <RegisterForm organisationId={c.organisation_id} action={registerAction} />
                   ) : null}
                 </div>
               </div>
@@ -132,26 +129,6 @@ export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: Invoi
   )
 }
 
-function InvoiceRunForm({ invoiceRunAction }: { invoiceRunAction?: TppBillingProps['invoiceRunAction'] }) {
-  if (!invoiceRunAction) return null
-  return (
-    <form action={invoiceRunAction} data-testid="invoice-run-form" className="flex flex-wrap items-end gap-2">
-      <IdempotencyField />
-      <label className="text-xs">
-        <span className="block text-on-surface-variant mb-1">Billing period</span>
-        <input name="billing_period" placeholder="2026-06" className="bg-surface-container text-xs border border-outline-variant rounded px-2 py-1" />
-      </label>
-      <label className="text-xs">
-        <span className="block text-on-surface-variant mb-1">Record set id</span>
-        <input name="record_set_id" placeholder="rec-…" className="bg-surface-container text-xs font-mono border border-outline-variant rounded px-2 py-1" />
-      </label>
-      <SubmitButton pendingLabel="Submitting…" className="bg-primary-container text-on-primary-container px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
-        Run monthly invoicing
-      </SubmitButton>
-    </form>
-  )
-}
-
 export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
   return (
     <div className="space-y-6" data-testid="tpp-billing">
@@ -159,14 +136,9 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], registryMore
         <h1 className="text-2xl font-semibold">TPP Billing &amp; Registry</h1>
         <div className="flex items-center gap-2">
           {canOps && syncAction ? (
-            <form action={syncAction} data-testid="sync-form">
-              <IdempotencyField />
-              <SubmitButton pendingLabel="Syncing…" className="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-low transition-colors">
-                Sync directory
-              </SubmitButton>
-            </form>
+            <SyncForm action={syncAction} />
           ) : null}
-          {canBilling ? <InvoiceRunForm invoiceRunAction={invoiceRunAction} /> : null}
+          {canBilling && invoiceRunAction ? <InvoiceRunForm action={invoiceRunAction} /> : null}
         </div>
       </div>
 
