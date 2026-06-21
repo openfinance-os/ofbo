@@ -17,10 +17,44 @@ export function Notice({ children, testid }: { children: ReactNode; testid?: str
   )
 }
 
-export function ErrorBanner({ children, testid }: { children: ReactNode; testid?: string }) {
+/**
+ * UX-06 — the error banner now surfaces the API error envelope's `remediation` (what the
+ * operator can do about it) and `docs_url` (deeper guidance) when present, instead of dropping
+ * them. Message-only callers are unaffected (both are optional).
+ */
+export function ErrorBanner({
+  children,
+  testid,
+  remediation,
+  docsUrl
+}: {
+  children: ReactNode
+  testid?: string
+  remediation?: string | null
+  docsUrl?: string | null
+}) {
+  // Defence-in-depth: only render the docs link for an http(s) URL, even though it comes from
+  // the trusted BFF envelope — never let a stray javascript:/data: value become a live href.
+  const safeDocsUrl = docsUrl && /^https?:\/\//i.test(docsUrl) ? docsUrl : null
   return (
-    <p role="alert" data-testid={testid} className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg">
-      {children}
-    </p>
+    <div role="alert" data-testid={testid} className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg space-y-1">
+      <p>{children}</p>
+      {remediation ? (
+        <p className="text-xs opacity-90" data-testid={testid ? `${testid}-remediation` : undefined}>
+          {remediation}
+        </p>
+      ) : null}
+      {safeDocsUrl ? (
+        <a
+          href={safeDocsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block text-xs font-semibold underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          data-testid={testid ? `${testid}-docs` : undefined}
+        >
+          View remediation guidance →
+        </a>
+      ) : null}
+    </div>
   )
 }

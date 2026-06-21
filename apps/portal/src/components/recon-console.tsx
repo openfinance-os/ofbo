@@ -1,5 +1,5 @@
 import { RESOLVE_OUTCOMES, MIN_RESOLUTION_NOTE, formatMoney, type ReconciliationBreak, type ReconciliationRun } from '../lib/reconciliation'
-import { LoadMore, SubmitButton, IdempotencyField, AuditNote } from './ui'
+import { LoadMore, SubmitButton, IdempotencyField, AuditNote, ErrorBanner } from './ui'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -17,6 +17,8 @@ export interface ReconConsoleProps {
   runsMoreHref?: string | null
   breaksMoreHref?: string | null
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
   notice?: string | null
   canWrite?: boolean
   claimAction?: (formData: FormData) => void | Promise<void>
@@ -203,7 +205,7 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreH
   )
 }
 
-export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
+export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
       <div className="flex items-center justify-between gap-3">
@@ -217,9 +219,9 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref
         </p>
       ) : null}
       {error ? (
-        <p role="alert" className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="recon-error">
+        <ErrorBanner testid="recon-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>
           {error}
-        </p>
+        </ErrorBanner>
       ) : null}
 
       {selectedRun ? <KpiCards run={selectedRun} /> : null}

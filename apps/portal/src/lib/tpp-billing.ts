@@ -60,7 +60,9 @@ export class TppBillingApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly remediation?: string,
+    readonly docsUrl?: string
   ) {
     super(message)
   }
@@ -80,8 +82,8 @@ function resolve(deps: TppBillingApiDeps) {
 }
 
 async function envelope<T>(res: Response): Promise<{ data: T; meta?: Record<string, unknown> }> {
-  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string }; meta?: Record<string, unknown> }
-  if (!res.ok) throw new TppBillingApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status)
+  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string; remediation?: string; docs_url?: string }; meta?: Record<string, unknown> }
+  if (!res.ok) throw new TppBillingApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status, body.error?.remediation, body.error?.docs_url)
   return { data: body.data as T, meta: body.meta }
 }
 

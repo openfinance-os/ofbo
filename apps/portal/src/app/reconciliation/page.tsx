@@ -53,6 +53,8 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   let runsMoreHref: string | null = null
   let breaksMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
+  let errorRemediation: string | null = null
+  let errorDocsUrl: string | null = null
 
   try {
     const runsPage = await listRuns(token, { limit: 10, cursor: runsCursor })
@@ -69,6 +71,10 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     breaksMoreHref = breaksPage.next_cursor ? keep({ breaks_cursor: breaksPage.next_cursor }) : null
   } catch (e) {
     error = e instanceof ReconApiError ? e.message : 'Failed to load reconciliation data.'
+    if (e instanceof ReconApiError) {
+      errorRemediation = e.remediation ?? null
+      errorDocsUrl = e.docsUrl ?? null
+    }
   }
 
   return (
@@ -84,6 +90,8 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
         runsMoreHref={runsMoreHref}
         breaksMoreHref={breaksMoreHref}
         error={error}
+        errorRemediation={errorRemediation}
+        errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
         canWrite={canWrite}
         claimAction={claimBreakAction}

@@ -50,6 +50,8 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   let timeline: CareTimeline | null = null
   let timelineMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
+  let errorRemediation: string | null = null
+  let errorDocsUrl: string | null = null
 
   if (identifier.trim()) {
     try {
@@ -69,6 +71,10 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
       }
     } catch (e) {
       error = e instanceof CareApiError ? e.message : 'Search failed. Re-check the identifier and try again.'
+      if (e instanceof CareApiError) {
+        errorRemediation = e.remediation ?? null
+        errorDocsUrl = e.docsUrl ?? null
+      }
     }
   }
 
@@ -84,6 +90,8 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
         timeline={timeline}
         timelineMoreHref={timelineMoreHref}
         error={error}
+        errorRemediation={errorRemediation}
+        errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
         revokeAction={revokeConsentAction}
         disputeAction={createDisputeAction}
