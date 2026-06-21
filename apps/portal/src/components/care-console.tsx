@@ -18,6 +18,8 @@ export interface CareConsoleProps {
   timeline?: CareTimeline | null
   timelineMoreHref?: string | null
   error?: string | null
+  errorRemediation?: string | null
+  errorDocsUrl?: string | null
   notice?: string | null
   revokeAction?: (formData: FormData) => void | Promise<void>
   disputeAction?: (formData: FormData) => void | Promise<void>
@@ -231,7 +233,7 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
   )
 }
 
-export function CareConsole({ query, result, timeline, timelineMoreHref, error, notice, revokeAction, disputeAction }: CareConsoleProps) {
+export function CareConsole({ query, result, timeline, timelineMoreHref, error, errorRemediation, errorDocsUrl, notice, revokeAction, disputeAction }: CareConsoleProps) {
   const identifierType = query?.identifier_type ?? 'bank_customer_id'
   const identifier = result?.psu.bank_customer_id ?? query?.identifier ?? ''
   return (
@@ -244,7 +246,7 @@ export function CareConsole({ query, result, timeline, timelineMoreHref, error, 
 
       {notice ? <Notice testid="care-notice">{notice}</Notice> : null}
 
-      {error ? <ErrorBanner testid="care-error">{error}</ErrorBanner> : null}
+      {error ? <ErrorBanner testid="care-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
 
       {result ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

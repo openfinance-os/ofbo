@@ -1108,3 +1108,19 @@ Approach chosen: per-page fetch (each page renders its own shell; +1 cached BFF 
 Frontend-only — no contract/port/audit/lineage/spec change (reuses an existing getter). Tests: portal unit 249 pass (app-shell.spec +2); typecheck + lint clean. Reviewers: hard-stop **PASS** (only a count crosses to the client), contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-03b → done. Remaining UX: UX-06(a/b/c) pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-06 (part 1): parse + render error-envelope remediation/docs_url
+
+The spec's `ErrorEnvelope` has always *required* `remediation` + `docs_url`, but the portal parsed neither — they were dropped. Now:
+
+- The 4 portal lib error classes (`CareApiError`/`ApprovalApiError`/`ReconApiError`/`TppBillingApiError`) carry optional `remediation` + `docsUrl`, and each `envelope()` parser reads `error.remediation` + `error.docs_url`.
+- `ErrorBanner` renders the remediation line + a `docs_url` link (opens in a new tab, `rel=noopener`; **http(s)-scheme-guarded** as defence-in-depth even though the URL is BFF-supplied).
+- The **care** + **reconciliation** read paths (search/load failures) forward the typed error's remediation/docsUrl to the banner; `recon-error` now uses the shared `ErrorBanner` instead of an inline `<p>`.
+
+**Split UX-06b** for parts 2+3 (the write path): surfacing the real BFF error code AND preserving form inputs on failure both need a `useActionState` refactor of the mutating forms, so they ship together. (Form inputs can contain PSU PII — preserving them via the URL is unsafe; `useActionState` keeps them client-side without a redirect.)
+
+Frontend-only — no contract/port/audit/lineage/spec change (aligns the client to existing contract fields). Tests: portal unit 253 pass (new ux06-error-envelope.spec 4); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-06 → done (part 1); **UX-06b** pending (write-path useActionState). Remaining UX: UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
