@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { AccessDenied } from '../../components/ui'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { verifyAndMint } from '../../lib/portal'
@@ -29,7 +30,7 @@ export default async function AccessDeniedPage({ searchParams }: { searchParams:
   const requiredScope = one(sp.required) ?? 'a scope your persona does not hold'
 
   return (
-    <AppShell principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}>
+    <AppShell principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }} badges={token ? await shellBadges(token) : undefined}>
       <AccessDenied persona={principal.persona} moduleName={moduleName} requiredScope={requiredScope} />
     </AppShell>
   )

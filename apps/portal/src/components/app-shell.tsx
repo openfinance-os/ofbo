@@ -19,7 +19,7 @@ export interface ShellPrincipal {
   superadmin: boolean
 }
 
-export function AppShell({ principal, active, children }: { principal: ShellPrincipal; active?: string; children: ReactNode }) {
+export function AppShell({ principal, active, badges, children }: { principal: ShellPrincipal; active?: string; badges?: Record<string, number>; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [compact, setCompact] = useState(false)
   const modules = visibleModules(principal.scopes, principal.superadmin)
@@ -42,21 +42,42 @@ export function AppShell({ principal, active, children }: { principal: ShellPrin
           {!collapsed ? <p className="text-xs text-on-surface-variant">Open Finance Infrastructure</p> : null}
         </div>
         <nav className="flex flex-col gap-1 px-2" aria-label="primary">
-          {modules.map((m) => (
+          {modules.map((m) => {
+            const count = badges?.[m.key] ?? 0
+            const countLabel = count > 9 ? '9+' : String(count)
+            return (
             <a
               key={m.key}
               href={m.href}
               data-testid={`nav-${m.key}`}
               aria-current={active === m.key ? 'page' : undefined}
               title={collapsed ? m.label : undefined}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${active === m.key ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${active === m.key ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold' : 'text-on-surface-variant hover:bg-surface-container'}`}
             >
               <span className="font-symbols text-base" aria-hidden>
                 {m.icon}
               </span>
               {!collapsed ? <span>{m.label}</span> : null}
+              {count > 0 ? (
+                collapsed ? (
+                  <span
+                    className="absolute top-2 right-2 w-2 h-2 rounded-full bg-error"
+                    data-testid={`nav-badge-${m.key}`}
+                    aria-label={`${count} pending`}
+                  />
+                ) : (
+                  <span
+                    className="ml-auto min-w-5 px-1.5 py-0.5 rounded-full bg-error text-on-error text-xs font-bold text-center leading-none"
+                    data-testid={`nav-badge-${m.key}`}
+                    aria-label={`${count} pending`}
+                  >
+                    {countLabel}
+                  </span>
+                )
+              ) : null}
             </a>
-          ))}
+            )
+          })}
         </nav>
         <form action="/api/logout" method="post" className="mt-auto px-2">
           <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch persona' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:bg-surface-container cursor-pointer">
