@@ -1096,3 +1096,15 @@ The last two truncating lists now page. The lib getters `listPendingApprovals` a
 Frontend-only — no contract/port/audit/lineage/spec change; both endpoints already returned `next_cursor`. Tests: portal unit 247 pass (new ux04b-pagination.spec 2; lib spec call sites updated for the new arg position); typecheck + lint clean. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Isolated worktree.
 
 **Backlog:** UX-04b → done. Remaining UX: UX-06(a/b/c), UX-03b pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.
+
+---
+
+## 2026-06-21 — UX-03b: pending-approvals count badge on the Approvals nav item
+
+An approver now sees pending four-eyes work from any screen. A cached `shellBadges(token)` helper (React `cache()`) derives the count from the existing `listPendingApprovals` and returns **only the integer length** (no approval records/PII cross to the client). `AppShell` gained an optional `badges` prop and renders a count chip (capped `9+`, `aria-label="N pending"`) on the matching nav item — a small dot when the sidebar is collapsed. Threaded into all 11 AppShell pages (token-guarded; tolerant of a cold BFF → no badge).
+
+Approach chosen: per-page fetch (each page renders its own shell; +1 cached BFF GET per navigation — acceptable for the demo profile, noted in `shell.ts` for a future cached/edge source). No shared-layout refactor.
+
+Frontend-only — no contract/port/audit/lineage/spec change (reuses an existing getter). Tests: portal unit 249 pass (app-shell.spec +2); typecheck + lint clean. Reviewers: hard-stop **PASS** (only a count crosses to the client), contract-conformance **CONFORMANT**. Isolated worktree.
+
+**Backlog:** UX-03b → done. Remaining UX: UX-06(a/b/c) pending; UX-10/UX-11 ADR-gated; UX-03c PII-blocked.

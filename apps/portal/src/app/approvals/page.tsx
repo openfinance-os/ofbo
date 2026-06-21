@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { ApprovalsPortal } from '../../components/approvals-portal'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { verifyAndMint } from '../../lib/portal'
@@ -54,6 +55,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="approvals"
     >

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { RiskDashboard } from '../../components/risk-dashboard'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
@@ -45,6 +46,7 @@ export default async function RiskPage() {
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="risk"
     >

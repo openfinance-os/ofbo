@@ -72,6 +72,34 @@ describe('AppShell', () => {
     expect(screen.getByTestId('nav-operations')).toBeInTheDocument() // super-admin sees all
   })
 
+  it('UX-03b: renders a pending-count badge on the Approvals nav item (capped at 9+)', () => {
+    const sa = { subject: 'demo:sa', persona: 'platform-super-admin', scopes: ['platform:superadmin'], superadmin: true }
+    const { rerender } = render(
+      <AppShell principal={sa} badges={{ approvals: 3 }}>
+        <p>x</p>
+      </AppShell>
+    )
+    const badge = screen.getByTestId('nav-badge-approvals')
+    expect(badge).toHaveTextContent('3')
+    expect(badge).toHaveAttribute('aria-label', '3 pending')
+    rerender(
+      <AppShell principal={sa} badges={{ approvals: 12 }}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.getByTestId('nav-badge-approvals')).toHaveTextContent('9+')
+  })
+
+  it('UX-03b: renders no nav badge when there is nothing pending', () => {
+    const sa = { subject: 'demo:sa', persona: 'platform-super-admin', scopes: ['platform:superadmin'], superadmin: true }
+    render(
+      <AppShell principal={sa} badges={{}}>
+        <p>x</p>
+      </AppShell>
+    )
+    expect(screen.queryByTestId('nav-badge-approvals')).not.toBeInTheDocument()
+  })
+
   it('UX-08: shows a scope-aware PSU quick-search (→ care) only for a consents:admin persona', () => {
     const care = { subject: 'demo:care', persona: 'care-agent', scopes: ['consents:admin', 'disputes:admin'], superadmin: false }
     render(
