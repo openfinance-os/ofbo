@@ -4134,6 +4134,16 @@ export interface components {
              */
             expires_at?: string;
             reject_reason?: string | null;
+            operation_summary?: components["schemas"]["ApprovalOperationSummary"] | null;
+        };
+        /** @description UX-03c / ADR 0014 — a minimal, NON-PII summary of the gated operation so the second four-eyes approver can exercise a real judgment (not a rubber-stamp). The BFF composes this server-side at approval-request creation, applying the same redaction it already enforces. HARD CONSTRAINT (the four-eyes surface must never leak PSU PII): this object carries only non-PII institutional facts — it MUST NOT contain PSU identifiers, names, account numbers, IBANs, Emirates IDs, raw payment references, or free text. The closed shape (additionalProperties:false) is the enforcement: nothing else may be attached. */
+        ApprovalOperationSummary: {
+            /** @description Monetary scale of the operation, when applicable (e.g. an invoice-run total). */
+            amount?: components["schemas"]["Money"] | null;
+            /** @description Masked INSTITUTIONAL counterparty only — a TPP display_name or client_id. Never a PSU name or identifier. */
+            counterparty_label?: string | null;
+            /** @description Non-PII count/scope descriptor, e.g. "invoice run · 142 line items · period 2026-05" or "fraud-suspected revoke · 1 consent". No PSU data, no free-text operator input. */
+            descriptor?: string | null;
         };
         RiskSignal: {
             /** Format: uuid */
