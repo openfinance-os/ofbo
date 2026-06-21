@@ -14,6 +14,16 @@ import type { Schemas, KeysConformToContract, AssertContract } from './contract-
 
 export type ApprovalState = 'pending' | 'approved' | 'rejected' | 'timed_out'
 
+/**
+ * UX-03c / ADR 0014 — the NON-PII operation summary the BFF composes for the second four-eyes
+ * approver. Display-only here; the BFF already redacted it to non-PII institutional facts.
+ */
+export interface ApprovalOperationSummary {
+  amount?: { amount: number; currency: string } | null
+  counterparty_label?: string | null
+  descriptor?: string | null
+}
+
 /** Mirrors the OpenAPI ApprovalRequest wire shape (no operation_payload — PII-redacted). */
 export interface ApprovalRequest {
   approval_request_id: string
@@ -24,7 +34,15 @@ export interface ApprovalRequest {
   approver: string | null
   expires_at: string
   reject_reason: string | null
+  operation_summary?: ApprovalOperationSummary | null
   execution_result?: unknown
+}
+
+/** Format integer minor units + ISO 4217 for display (no locale PII). */
+export function formatSummaryMoney(m: { amount: number; currency: string } | null | undefined): string | null {
+  if (!m) return null
+  const major = (m.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `${m.currency} ${major}`
 }
 
 /** A reject reason must be at least this many characters (BFF-enforced). */

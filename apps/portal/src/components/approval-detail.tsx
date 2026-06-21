@@ -3,6 +3,7 @@ import { canActOn } from '../lib/approvals'
 import { ApprovalStateBadge, formatExpiry, type ApprovalsPortalProps } from './approvals-portal'
 import { ApproveForm } from './approvals/approve-form'
 import { RejectForm } from './approvals/reject-form'
+import { OperationSummary } from './operation-summary'
 import { Notice, ErrorBanner, AuditNote } from './ui'
 
 /**
@@ -56,6 +57,8 @@ export function ApprovalDetail({
         {expiry.label}
         {expiry.urgent && !expiry.expired ? ' · expiring soon' : ''}
       </p>
+
+      <OperationSummary summary={approval.operation_summary} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="rounded-lg border border-outline-variant bg-surface-container-low p-3" data-testid="initiator-card">
