@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 
 /**
@@ -39,9 +40,7 @@ export class PgRiskSignalEmitter {
   async record(event: RiskSignalSinkEvent): Promise<void> {
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       await c.query(
         `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, client_id, signal_data, nebras_liability_event_ref)
          VALUES ($1, $2, $3, $4, 'open', $5, $6::jsonb, $7)`,
@@ -149,9 +148,7 @@ export class PgRiskMetricsStore {
   private async asApp<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const out = await fn(c)
       await c.query('COMMIT')
       return out

@@ -43,7 +43,7 @@ describe('care client — timeline (BACKOFFICE-19)', () => {
   it('GETs /psu/{id}/audit-trail and returns events + the next_cursor from meta', async () => {
     const events = [{ id: 'e1', consent_id: 'c1', psu_identifier: 'cust-1', event_type: 'granted', event_subtype: null, event_data: {}, acting_principal: 'sys', created_at: '2025-01-01T00:00:00.000Z' }]
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: events, meta: { next_cursor: 'CURSOR2' } }))
-    const timeline = await getPsuAuditTrail(TOKEN, 'cust-1', { baseUrl: BASE, fetchImpl })
+    const timeline = await getPsuAuditTrail(TOKEN, 'cust-1', {}, { baseUrl: BASE, fetchImpl })
 
     expect(timeline.events).toHaveLength(1)
     expect(timeline.next_cursor).toBe('CURSOR2')
@@ -52,7 +52,7 @@ describe('care client — timeline (BACKOFFICE-19)', () => {
 
   it('tolerates a missing meta (empty timeline, null cursor)', async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => okJson({ data: [] }))
-    const timeline = await getPsuAuditTrail(TOKEN, 'cust-1', { baseUrl: BASE, fetchImpl })
+    const timeline = await getPsuAuditTrail(TOKEN, 'cust-1', {}, { baseUrl: BASE, fetchImpl })
     expect(timeline.events).toEqual([])
     expect(timeline.next_cursor).toBeNull()
   })

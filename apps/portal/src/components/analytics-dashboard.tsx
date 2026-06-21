@@ -1,4 +1,5 @@
 import { formatMoney, isMoney, type AnalyticsView, type FreshnessEnvelope } from '../lib/analytics'
+import { ErrorBanner, statusTone } from './ui'
 
 /**
  * UI-06 — Analytics & Insights Dashboard, translated from the Stitch "OFBO - Analytics
@@ -26,27 +27,10 @@ export function FreshnessBadge({ freshness }: { freshness: FreshnessEnvelope }) 
 }
 
 /**
- * Operational status vocabulary → the Stitch status triad (breach=red, break=amber,
- * reconciled=green) + neutral. Only recognised tokens are badged; arbitrary strings stay
- * plain so ids/labels are never mislabelled. Keys normalised (lower-case, spaces→_).
+ * Status badge — the tone vocabulary is the canonical shared map (components/ui/status-badge,
+ * UX-01); only recognised tokens are badged, arbitrary strings stay plain so ids/labels are
+ * never mislabelled.
  */
-const STATUS_TONE: Record<string, string> = {
-  breach: 'bg-breach/10 text-breach', breached: 'bg-breach/10 text-breach', critical: 'bg-breach/10 text-breach', high: 'bg-breach/10 text-breach',
-  rejected: 'bg-breach/10 text-breach', failed: 'bg-breach/10 text-breach', error: 'bg-breach/10 text-breach', down: 'bg-breach/10 text-breach',
-  suspended: 'bg-breach/10 text-breach', overdue: 'bg-breach/10 text-breach', rjct: 'bg-breach/10 text-breach',
-  break: 'bg-break/10 text-break', warn: 'bg-break/10 text-break', warning: 'bg-break/10 text-break', at_risk: 'bg-break/10 text-break',
-  degraded: 'bg-break/10 text-break', awaiting: 'bg-break/10 text-break', pending: 'bg-break/10 text-break', medium: 'bg-break/10 text-break',
-  dual_running_required: 'bg-break/10 text-break', pdng: 'bg-break/10 text-break',
-  reconciled: 'bg-reconciled/10 text-reconciled', matched: 'bg-reconciled/10 text-reconciled', healthy: 'bg-reconciled/10 text-reconciled',
-  up: 'bg-reconciled/10 text-reconciled', ok: 'bg-reconciled/10 text-reconciled', active: 'bg-reconciled/10 text-reconciled',
-  resolved: 'bg-reconciled/10 text-reconciled', approved: 'bg-reconciled/10 text-reconciled', passed: 'bg-reconciled/10 text-reconciled',
-  registered: 'bg-reconciled/10 text-reconciled', authorized: 'bg-reconciled/10 text-reconciled', acsp: 'bg-reconciled/10 text-reconciled', accc: 'bg-reconciled/10 text-reconciled',
-  unknown: 'bg-surface-container text-on-surface-variant', none: 'bg-surface-container text-on-surface-variant',
-  info: 'bg-surface-container text-on-surface-variant', low: 'bg-surface-container text-on-surface-variant',
-  draft: 'bg-surface-container text-on-surface-variant', directory_only: 'bg-surface-container text-on-surface-variant', dormant: 'bg-surface-container text-on-surface-variant'
-}
-const statusTone = (s: string): string | null => STATUS_TONE[s.trim().toLowerCase().replace(/\s+/g, '_')] ?? null
-
 function StatusBadge({ value }: { value: string }) {
   const tone = statusTone(value)
   if (!tone) return <span className="font-mono break-words">{value}</span>
@@ -223,11 +207,7 @@ export function AnalyticsDashboard({ executive, finance, error }: AnalyticsDashb
     <div className="space-y-8" data-testid="analytics-dashboard">
       <h1 className="text-2xl font-semibold">Analytics &amp; Insights</h1>
 
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="analytics-error">
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorBanner testid="analytics-error">{error}</ErrorBanner> : null}
 
       {executive ? <AnalyticsSection title="Executive Dashboard" view={executive} testid="executive-section" /> : null}
       {finance ? <AnalyticsSection title="Finance View" view={finance} testid="finance-section" /> : null}

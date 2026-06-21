@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { beginAppTx } from './tenant-tx.js'
 
 /**
  * BACKOFFICE-29 — Compliance View metrics. Read-only aggregates over existing
@@ -42,9 +43,7 @@ export class PgComplianceMetricsStore {
   private async asApp<T>(fn: (c: pg.PoolClient) => Promise<T>): Promise<T> {
     const c = await this.pool.connect()
     try {
-      await c.query('BEGIN')
-      await c.query('SET LOCAL ROLE ofbo_app')
-      await c.query(`SELECT set_config('app.bank_id', $1, true)`, [this.config.bankId])
+      await c.query(beginAppTx(this.config.bankId))
       const out = await fn(c)
       await c.query('COMMIT')
       return out

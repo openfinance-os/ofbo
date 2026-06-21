@@ -44,7 +44,16 @@ describe('ThreeSourceDiff', () => {
 })
 
 describe('InvestigationDetail', () => {
-  const noop = () => {}
+  // UX-06d — escalate is a useActionState action: (prevState, formData) => Promise<result>.
+  const noop = async () => ({ ok: true })
+
+  it('UX-09: shows a breadcrumb (Reconciliation / Break …) for wayfinding on the deep-linked detail', () => {
+    render(<InvestigationDetail break_={base} />)
+    const crumb = screen.getByTestId('breadcrumb')
+    expect(crumb).toHaveAttribute('aria-label', 'breadcrumb')
+    expect(screen.getByTestId('back-link')).toHaveAttribute('href', '/reconciliation')
+    expect(crumb).toHaveTextContent('Break tpp-acme')
+  })
 
   it('shows the variance, three-source diff, and the escalate action for a flagged break with dispute scope', () => {
     render(<InvestigationDetail break_={base} canDispute escalateAction={noop} />)

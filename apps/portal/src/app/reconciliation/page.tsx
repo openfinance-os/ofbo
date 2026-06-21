@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { ReconConsole } from '../../components/recon-console'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
@@ -36,32 +37,49 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect(`/access-denied?module=${encodeURIComponent('Reconciliation')}&required=${encodeURIComponent(SCOPES.reconciliationRead)}`)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const runId = one(sp.run_id) ?? ''
   const status = one(sp.status) ?? ''
+  const runsCursor = one(sp.runs_cursor)
+  const breaksCursor = one(sp.breaks_cursor)
   const canWrite = principal.superadmin || principal.scopes.includes(SCOPES.reconciliationWrite)
 
   let runs: ReconciliationRun[] = []
   let breaks: ReconciliationBreak[] = []
   let selectedRun: ReconciliationRun | null = null
+  let runsMoreHref: string | null = null
+  let breaksMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
+  let errorRemediation: string | null = null
+  let errorDocsUrl: string | null = null
 
   try {
-    runs = (await listRuns(token, { limit: 10 })).runs
+    const runsPage = await listRuns(token, { limit: 10, cursor: runsCursor })
+    runs = runsPage.runs
     selectedRun = runId ? (runs.find((r) => r.run_id === runId) ?? null) : (runs[0] ?? null)
     // Break queue: the selected run's breaks (flagged + assigned + terminal), each
     // rendered with the right badge/actions. No status filter — the queue shows the
     // full picture and the BreakStatus single-value filter can't express flagged|assigned.
-    breaks = (await listBreaks(token, selectedRun ? { run_id: selectedRun.run_id } : {})).breaks
+    const breaksPage = await listBreaks(token, { ...(selectedRun ? { run_id: selectedRun.run_id } : {}), cursor: breaksCursor })
+    breaks = breaksPage.breaks
+    // Forward cursor links (UX-04) — preserve the selected run; each list has its own cursor param.
+    const keep = (extra: Record<string, string>) => `/reconciliation?${new URLSearchParams({ ...(runId ? { run_id: runId } : {}), ...extra }).toString()}`
+    runsMoreHref = runsPage.next_cursor ? keep({ runs_cursor: runsPage.next_cursor }) : null
+    breaksMoreHref = breaksPage.next_cursor ? keep({ breaks_cursor: breaksPage.next_cursor }) : null
   } catch (e) {
     error = e instanceof ReconApiError ? e.message : 'Failed to load reconciliation data.'
+    if (e instanceof ReconApiError) {
+      errorRemediation = e.remediation ?? null
+      errorDocsUrl = e.docsUrl ?? null
+    }
   }
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="finance"
     >
@@ -69,7 +87,11 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
         runs={runs}
         selectedRun={selectedRun}
         breaks={breaks}
+        runsMoreHref={runsMoreHref}
+        breaksMoreHref={breaksMoreHref}
         error={error}
+        errorRemediation={errorRemediation}
+        errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
         canWrite={canWrite}
         claimAction={claimBreakAction}

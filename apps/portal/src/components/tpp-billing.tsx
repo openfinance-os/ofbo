@@ -1,4 +1,9 @@
-import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty } from '../lib/tpp-billing'
+import type { ReactNode } from 'react'
+import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty, type TppWriteResult } from '../lib/tpp-billing'
+import { Notice, ErrorBanner, LoadMore } from './ui'
+import { RegisterForm } from './tpp-billing/register-form'
+import { InvoiceRunForm } from './tpp-billing/invoice-run-form'
+import { SyncForm } from './tpp-billing/sync-form'
 
 /**
  * UI-08 — TPP Billing & Registry, translated from the Stitch "OFBO - TPP Billing &
@@ -13,14 +18,16 @@ export interface TppBillingProps {
   counterparties?: TppCounterparty[]
   invoiceRuns?: InvoiceRun[]
   error?: string | null
-  notice?: string | null
+  notice?: ReactNode
+  registryMoreHref?: string | null
+  invoiceMoreHref?: string | null
   /** billing:write — register P9 + create invoice runs. */
   canBilling?: boolean
   /** platform:operations:write — sync the Trust Framework Directory. */
   canOps?: boolean
-  registerAction?: (formData: FormData) => void | Promise<void>
-  syncAction?: (formData: FormData) => void | Promise<void>
-  invoiceRunAction?: (formData: FormData) => void | Promise<void>
+  registerAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
+  syncAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
+  invoiceRunAction?: (prevState: TppWriteResult, formData: FormData) => Promise<TppWriteResult>
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -44,14 +51,14 @@ export function StatusPill({ status }: { status: string }) {
   )
 }
 
-export function RegistryTable({ counterparties, canBilling, registerAction }: { counterparties: TppCounterparty[]; canBilling?: boolean; registerAction?: TppBillingProps['registerAction'] }) {
+export function RegistryTable({ counterparties, canBilling, registerAction, moreHref }: { counterparties: TppCounterparty[]; canBilling?: boolean; registerAction?: TppBillingProps['registerAction']; moreHref?: string | null }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="registry">
       <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Consuming-TPP Registry</h2>
         <span className="bg-secondary-fixed text-on-secondary-fixed px-2 py-0.5 rounded-full text-xs font-bold">{counterparties.length}</span>
       </div>
-      <div className="divide-y divide-outline-variant">
+      <div className="divide-y divide-outline-variant overflow-x-auto">
         {counterparties.length === 0 ? (
           <p className="p-4 text-xs text-on-surface-variant" data-testid="registry-empty">
             No consuming TPPs in the registry.
@@ -74,13 +81,8 @@ export function RegistryTable({ counterparties, canBilling, registerAction }: { 
                   <span className="font-mono text-xs text-on-surface-variant" data-testid={`accrual-${c.organisation_id}`}>
                     {formatMoney(c.mtd_fee_accrual)}
                   </span>
-                  {registerable ? (
-                    <form action={registerAction} data-testid={`register-form-${c.organisation_id}`}>
-                      <input type="hidden" name="organisation_id" value={c.organisation_id} />
-                      <button type="submit" className="bg-secondary text-on-secondary px-3 py-1 rounded text-xs font-bold hover:bg-secondary-container transition-colors">
-                        Register P9
-                      </button>
-                    </form>
+                  {registerable && registerAction ? (
+                    <RegisterForm organisationId={c.organisation_id} action={registerAction} />
                   ) : null}
                 </div>
               </div>
@@ -88,17 +90,18 @@ export function RegistryTable({ counterparties, canBilling, registerAction }: { 
           })
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={counterparties.length} noun="TPPs" />
     </div>
   )
 }
 
-export function InvoiceRunsTable({ invoiceRuns }: { invoiceRuns: InvoiceRun[] }) {
+export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: InvoiceRun[]; moreHref?: string | null }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="invoice-runs">
       <div className="px-4 py-3 border-b border-outline-variant">
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Monthly Invoice Runs</h2>
       </div>
-      <div className="divide-y divide-outline-variant">
+      <div className="divide-y divide-outline-variant overflow-x-auto">
         {invoiceRuns.length === 0 ? (
           <p className="p-4 text-xs text-on-surface-variant" data-testid="invoice-runs-empty">
             No invoice runs yet.
@@ -121,60 +124,30 @@ export function InvoiceRunsTable({ invoiceRuns }: { invoiceRuns: InvoiceRun[] })
           ))
         )}
       </div>
+      <LoadMore moreHref={moreHref ?? null} shown={invoiceRuns.length} noun="runs" />
     </div>
   )
 }
 
-function InvoiceRunForm({ invoiceRunAction }: { invoiceRunAction?: TppBillingProps['invoiceRunAction'] }) {
-  if (!invoiceRunAction) return null
-  return (
-    <form action={invoiceRunAction} data-testid="invoice-run-form" className="flex flex-wrap items-end gap-2">
-      <label className="text-xs">
-        <span className="block text-on-surface-variant mb-1">Billing period</span>
-        <input name="billing_period" placeholder="2026-06" className="bg-surface-container text-xs border border-outline-variant rounded px-2 py-1" />
-      </label>
-      <label className="text-xs">
-        <span className="block text-on-surface-variant mb-1">Record set id</span>
-        <input name="record_set_id" placeholder="rec-…" className="bg-surface-container text-xs font-mono border border-outline-variant rounded px-2 py-1" />
-      </label>
-      <button type="submit" className="bg-primary-container text-on-primary px-3 py-1.5 rounded text-xs font-bold hover:opacity-90 transition-opacity">
-        Run monthly invoicing
-      </button>
-    </form>
-  )
-}
-
-export function TppBilling({ counterparties = [], invoiceRuns = [], error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
+export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
   return (
     <div className="space-y-6" data-testid="tpp-billing">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">TPP Billing &amp; Registry</h1>
         <div className="flex items-center gap-2">
           {canOps && syncAction ? (
-            <form action={syncAction} data-testid="sync-form">
-              <button type="submit" className="border border-outline-variant text-on-surface-variant px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-surface-container-low transition-colors">
-                Sync directory
-              </button>
-            </form>
+            <SyncForm action={syncAction} />
           ) : null}
-          {canBilling ? <InvoiceRunForm invoiceRunAction={invoiceRunAction} /> : null}
+          {canBilling && invoiceRunAction ? <InvoiceRunForm action={invoiceRunAction} /> : null}
         </div>
       </div>
 
-      {notice ? (
-        <p className="bg-reconciled/10 text-reconciled text-sm px-4 py-3 rounded-lg" data-testid="tpp-notice">
-          {notice}
-        </p>
-      ) : null}
-      {error ? (
-        <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg" data-testid="tpp-error">
-          {error}
-        </p>
-      ) : null}
+      {notice ? <Notice testid="tpp-notice">{notice}</Notice> : null}
+      {error ? <ErrorBanner testid="tpp-error">{error}</ErrorBanner> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} />
-        <InvoiceRunsTable invoiceRuns={invoiceRuns} />
+        <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
+        <InvoiceRunsTable invoiceRuns={invoiceRuns} moreHref={invoiceMoreHref} />
       </div>
     </div>
   )

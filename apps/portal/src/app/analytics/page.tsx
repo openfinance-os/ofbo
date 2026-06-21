@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { AnalyticsDashboard } from '../../components/analytics-dashboard'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
@@ -32,7 +33,7 @@ export default async function AnalyticsPage() {
 
   const canExec = principal.superadmin || principal.scopes.includes(EXEC_SCOPE)
   const canFinance = principal.superadmin || principal.scopes.includes(FINANCE_SCOPE)
-  if (!canExec && !canFinance) redirect('/dashboard')
+  if (!canExec && !canFinance) redirect(`/access-denied?module=${encodeURIComponent('Analytics & Insights')}&required=${encodeURIComponent(`${EXEC_SCOPE} or ${FINANCE_SCOPE}`)}`)
 
   let executive: AnalyticsView | null = null
   let finance: AnalyticsView | null = null
@@ -55,6 +56,7 @@ export default async function AnalyticsPage() {
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="analytics"
     >

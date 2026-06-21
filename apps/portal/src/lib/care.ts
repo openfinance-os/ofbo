@@ -82,10 +82,26 @@ export class CareApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly remediation?: string,
+    readonly docsUrl?: string
   ) {
     super(message)
   }
+}
+
+/**
+ * UX-06b — the write-path result a care server action returns to useActionState on failure
+ * (no redirect → the form keeps its values + shows the typed error). Lives here (not in the
+ * 'use server' actions file, which may only export async functions) so both the action and the
+ * client form component can import it.
+ */
+export type CareWriteResult = {
+  ok: boolean
+  error?: string
+  remediation?: string | null
+  docsUrl?: string | null
+  values?: Record<string, string>
 }
 
 export interface CareApiDeps {
@@ -102,8 +118,8 @@ function resolve(deps: CareApiDeps) {
 }
 
 async function envelope<T>(res: Response): Promise<{ data: T; meta?: Record<string, unknown> }> {
-  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string }; meta?: Record<string, unknown> }
-  if (!res.ok) throw new CareApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status)
+  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: { code?: string; message?: string; remediation?: string; docs_url?: string }; meta?: Record<string, unknown> }
+  if (!res.ok) throw new CareApiError(body.error?.code ?? 'BACKOFFICE.ERROR', body.error?.message ?? `HTTP ${res.status}`, res.status, body.error?.remediation, body.error?.docs_url)
   return { data: body.data as T, meta: body.meta }
 }
 
@@ -128,9 +144,13 @@ export async function searchConsents(token: string, identifierType: IdentifierTy
  * GET /psu/{psu_identifier}/audit-trail. The data array is the chronological
  * events; meta.next_cursor pages older events (the console renders the first page).
  */
-export async function getPsuAuditTrail(token: string, psuIdentifier: string, deps: CareApiDeps = {}): Promise<CareTimeline> {
+export async function getPsuAuditTrail(token: string, psuIdentifier: string, query: { cursor?: string; limit?: number } = {}, deps: CareApiDeps = {}): Promise<CareTimeline> {
   const { base, f, trace } = resolve(deps)
-  const url = `${base}/psu/${encodeURIComponent(psuIdentifier)}/audit-trail`
+  const params = new URLSearchParams()
+  if (query.cursor) params.set('cursor', query.cursor)
+  if (query.limit != null) params.set('limit', String(query.limit))
+  const suffix = params.toString() ? `?${params.toString()}` : ''
+  const url = `${base}/psu/${encodeURIComponent(psuIdentifier)}/audit-trail${suffix}`
   const res = await f(url, { headers: { authorization: `Bearer ${token}`, 'x-fapi-interaction-id': trace } })
   const { data, meta } = await envelope<CareTimelineEvent[]>(res)
   return { events: data ?? [], next_cursor: (meta?.next_cursor as string | null) ?? null }

@@ -84,6 +84,14 @@ function describePortContract(profile: 'demo') {
       expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(r.ipp_status)
     })
 
+    it('P6 reports a consent status for drift checks (DEMO-01)', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const r = await p6.getConsentStatus('consent-001', trace)
+      expect(r.consent_id).toBe('consent-001')
+      expect(typeof r.status).toBe('string')
+      expect(r.status.length).toBeGreaterThan(0)
+    })
+
     it('P7 accepts column-level lineage emission', async () => {
       const p7 = getAdapter('p7-lineage', profile)
       await expect(

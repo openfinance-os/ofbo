@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
+import { shellBadges } from '../../lib/shell'
 import { TppBilling } from '../../components/tpp-billing'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
@@ -38,38 +40,64 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   } catch {
     redirect('/')
   }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect('/dashboard')
+  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect(`/access-denied?module=${encodeURIComponent('TPP Billing & Registry')}&required=${encodeURIComponent(SCOPES.billingRead)}`)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
   const status = one(sp.status) ?? ''
+  const ar = one(sp.ar)
   const canBilling = principal.superadmin || principal.scopes.includes(SCOPES.billingWrite)
   const canOps = principal.superadmin || principal.scopes.includes(SCOPES.operationsWrite)
 
+  // UX-03 — on a four-eyes submit, give the initiator the request id + a deep-link to track it.
+  const notice: ReactNode =
+    status === 'invoice_submitted' ? (
+      <>
+        Invoice run submitted to four-eyes{ar ? <> — request <span className="font-mono">{ar}</span></> : null}. A second authorised principal approves before P9 dispatch.{' '}
+        {/* UI-MOBILE-APPROVALS — deep-link straight to the focused approval detail when we know its id. */}
+        <a href={ar ? `/approvals/${encodeURIComponent(ar)}` : '/approvals'} className="underline font-semibold">
+          {ar ? 'Open this approval →' : 'Track in the approvals queue →'}
+        </a>
+      </>
+    ) : (
+      NOTICE[status] ?? null
+    )
+
+  const regCursor = one(sp.reg_cursor)
+  const invCursor = one(sp.inv_cursor)
   let counterparties: TppCounterparty[] = []
   let invoiceRuns: InvoiceRun[] = []
+  let registryMoreHref: string | null = null
+  let invoiceMoreHref: string | null = null
   let error: string | null = FAILURE[status] ?? null
   try {
-    counterparties = (await listCounterparties(token, { limit: 50 })).counterparties
+    const page = await listCounterparties(token, { limit: 50, cursor: regCursor })
+    counterparties = page.counterparties
+    registryMoreHref = page.next_cursor ? `/tpp-billing?reg_cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch (e) {
     error = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
   }
   try {
-    invoiceRuns = (await listInvoiceRuns(token, { limit: 20 })).runs
+    const page = await listInvoiceRuns(token, { limit: 20, cursor: invCursor })
+    invoiceRuns = page.runs
+    invoiceMoreHref = page.next_cursor ? `/tpp-billing?inv_cursor=${encodeURIComponent(page.next_cursor)}` : null
   } catch {
     error = error ?? 'Failed to load invoice runs.'
   }
 
   return (
     <AppShell
+      badges={token ? await shellBadges(token) : undefined}
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
       active="billing"
     >
       <TppBilling
         counterparties={counterparties}
         invoiceRuns={invoiceRuns}
+        registryMoreHref={registryMoreHref}
+        invoiceMoreHref={invoiceMoreHref}
         error={error}
-        notice={NOTICE[status] ?? null}
+        notice={notice}
         canBilling={canBilling}
         canOps={canOps}
         registerAction={registerFinancialSystemAction}

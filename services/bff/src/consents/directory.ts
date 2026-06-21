@@ -40,6 +40,9 @@ export interface ConsentDirectory {
   search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null
   /** BACKOFFICE-61 — resolve a single consent by id (admin detail), or null. */
   getByConsentId(consentId: string): ConsentAdminView | null
+  /** DEMO-01 — resolve the owning PSU's bank_customer_id for a consent, or null.
+   *  Lets the admin-revoke stamp target_psu_identifier so it surfaces in the PSU timeline. */
+  psuByConsentId(consentId: string): string | null
 }
 
 export class DemoConsentDirectory implements ConsentDirectory {
@@ -47,6 +50,7 @@ export class DemoConsentDirectory implements ConsentDirectory {
   private readonly byEmiratesId = new Map<string, string>()
   private readonly byIban = new Map<string, string>()
   private readonly byConsentId = new Map<string, ConsentAdminView>()
+  private readonly psuOfConsent = new Map<string, string>()
 
   constructor(seed?: number) {
     const ds = seed === undefined ? generateDemoDataset() : generateDemoDataset(seed)
@@ -68,12 +72,19 @@ export class DemoConsentDirectory implements ConsentDirectory {
       this.byBankCustomerId.set(psu.bank_customer_id, result)
       this.byEmiratesId.set(psu.emirates_id, psu.bank_customer_id)
       for (const acct of psu.accounts) this.byIban.set(acct.iban, psu.bank_customer_id)
-      for (const consent of result.consents) this.byConsentId.set(consent.consent_id, consent)
+      for (const consent of result.consents) {
+        this.byConsentId.set(consent.consent_id, consent)
+        this.psuOfConsent.set(consent.consent_id, psu.bank_customer_id)
+      }
     }
   }
 
   getByConsentId(consentId: string): ConsentAdminView | null {
     return this.byConsentId.get(consentId) ?? null
+  }
+
+  psuByConsentId(consentId: string): string | null {
+    return this.psuOfConsent.get(consentId) ?? null
   }
 
   search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null {

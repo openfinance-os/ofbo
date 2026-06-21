@@ -46,7 +46,8 @@ describe('StatusPill', () => {
 })
 
 describe('CareConsole', () => {
-  const noop = () => {}
+  // UX-06b — the care write actions are useActionState actions: (prevState, formData) => Promise<result>.
+  const noop = async () => ({ ok: true })
 
   it('renders the PSU profile from the contract — internal id + account count, no fabricated PII', () => {
     render(<CareConsole query={{ identifier_type: 'bank_customer_id', identifier: 'cust-77' }} result={result} timeline={timeline} revokeAction={noop} disputeAction={noop} />)

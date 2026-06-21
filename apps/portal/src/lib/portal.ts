@@ -36,8 +36,15 @@ export interface AuditSink {
 }
 
 export interface AuditSource {
-  recent(opts: { actingPrincipal?: string; limit?: number }): Promise<AuditEventSummary[]>
+  recent(opts: { actingPrincipal?: string; limit?: number; excludeEventTypes?: string[] }): Promise<AuditEventSummary[]>
 }
+
+/**
+ * DEMO-01 — low-signal event types the Dashboard "my recent actions" panel drops so
+ * operational events (revokes, disputes, refunds) stay visible in its short window.
+ * These remain fully visible in the global /audit screen; only the self-scoped panel filters.
+ */
+export const DASHBOARD_AUDIT_NOISE = ['signin_success', 'scope_denied', 'audit_trail_accessed'] as const
 
 export interface PortalDeps {
   idp?: IdentityProviderPort
@@ -117,8 +124,16 @@ export async function recordSignIn(principal: PortalPrincipal, traceId: string, 
 }
 
 /** Recent High-class events for this principal — the "audit visible" surface. */
-export async function recentAudit(principal: PortalPrincipal, deps: PortalDeps = {}): Promise<AuditEventSummary[]> {
+export async function recentAudit(
+  principal: PortalPrincipal,
+  deps: PortalDeps = {},
+  opts: { excludeEventTypes?: readonly string[]; limit?: number } = {}
+): Promise<AuditEventSummary[]> {
   const source = resolveAuditSource(deps)
   if (!source) return []
-  return source.recent({ actingPrincipal: principal.subject, limit: 10 })
+  return source.recent({
+    actingPrincipal: principal.subject,
+    limit: opts.limit ?? 10,
+    ...(opts.excludeEventTypes?.length ? { excludeEventTypes: [...opts.excludeEventTypes] } : {})
+  })
 }

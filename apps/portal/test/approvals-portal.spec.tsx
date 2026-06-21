@@ -24,7 +24,8 @@ const pending: ApprovalRequest = {
   reject_reason: null
 }
 
-const noop = () => {}
+// UX-06c — approvals write actions are useActionState actions: (prevState, formData) => Promise<result>.
+const noop = async () => ({ ok: true })
 
 describe('ApprovalCard', () => {
   it('renders dual initiator/approver cards', () => {
