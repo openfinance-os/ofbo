@@ -1399,3 +1399,16 @@ Closed the design-audit's "registry has no search/filter" gap with a real server
 **Split → UIF-08c (pending):** cosmetic Stitch polish — columnar registry table layout, Billing Action Center (grouping the existing mutations), billing-cycle stepper (from InvoiceRun.status), audit-trail feed. Low priority, no contract dependency.
 
 **Next eligible: UIF-08c**, then UIF-09. The high-impact UIF-03/-04/-05 (Analytics/Risk/Ops bespoke panels) remain blocked on spec PR #181 (human merge) — the highest-leverage unblock for the loop.
+
+---
+
+## 2026-06-22 — UIF-08c: columnar consuming-TPP registry table (PR #191)
+
+Closed the design-audit's "registry reduced to a flat list (no columns)" finding (Stitch `3d6d14a3`).
+
+- **Shipped** — converted `RegistryTable` from a card-list to a semantic columnar `<table>` (thead/th[scope=col]: TPP / Status / MTD accrual / Action; overflow-x-auto). Strictly more accessible (real column headers); preserves every existing data testid (accrual-/unbilled-/tpp-/registry-empty) + the per-row P9 register action (unchanged). TDD: `uif08c-registry-table.spec` 3 (table role + column headers + row data; empty state keeps no table; axe).
+- Gates: `gen` no-drift, lint, typecheck, **full unit 856**, design-conformance clean, tpp-billing-dashboard spec stays green (testids intact), a11y.spec stays green (table axe-clean in TppBilling), build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT** (also corrected a test fixture to a contract-accurate production_status enum per the review note). Merged #191 (`0049eca0`).
+
+The other UIF-08c-listed items (action-center, single-run stepper, billing audit feed) were **dropped as low-value** rather than split again — reopen only on request.
+
+**Next eligible: UIF-09** (care console minor-drift + finance-investigation screen; part (b) needs a Stitch screen generated first per CLAUDE.md). UIF-03/-04/-05 stay blocked on spec PR #181.
