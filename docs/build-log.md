@@ -1412,3 +1412,26 @@ Closed the design-audit's "registry reduced to a flat list (no columns)" finding
 The other UIF-08c-listed items (action-center, single-run stepper, billing audit feed) were **dropped as low-value** rather than split again — reopen only on request.
 
 **Next eligible: UIF-09** (care console minor-drift + finance-investigation screen; part (b) needs a Stitch screen generated first per CLAUDE.md). UIF-03/-04/-05 stay blocked on spec PR #181.
+
+---
+
+## 2026-06-22 — UIF-09: care console connected event timeline (PR #193) + LOOP DRAINED
+
+The real, no-design-gate slice of the care console MINOR-DRIFT (Stitch `39ce3cee`).
+
+- **Shipped** — `EventTimeline` (components/care/event-timeline.tsx): a UIF-01 `SectionCard` with a connected vertical timeline (dot + flex-1 connector) whose dots are coloured by the `event_type` enum (granted→reconciled, accessed→secondary, modified→break, revoked→breach). **PII discipline preserved** — `psu_identifier`/`event_data` never projected (asserted by a negative test). `care-console.tsx` swaps the local `TimelinePanel` for it. TDD: `uif09-care-timeline.spec` 5.
+- Gates: `gen` no-drift, lint, typecheck, **full unit 862**, design-conformance clean, care-console + a11y specs stay green, build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Merged #193 (`15375fc5`).
+- **Split → UIF-09b (blocked):** bulk-revoke header (needs a bulk-revoke flow/screen) + finance Investigation rebuild (needs a Stitch finance three-source-diff screen GENERATED first per CLAUDE.md).
+
+### Loop status — ELIGIBLE QUEUE EMPTY (human decisions required)
+
+Every remaining backlog item is `blocked`. The `/next-story` loop has drained all unblocked work. Human decisions needed to refill the queue:
+
+1. **Merge spec PR #181** (`UIF-SPEC-TYPED-SECTIONS`) — the highest-leverage: unblocks **UIF-03/-04/-05** (Analytics/Risk/Operations bespoke panels, the biggest remaining visual wins) + the margin part of UIF-07b. Additive, backward-compatible, 862 tests green.
+2. **UIF-09b** — decide to GENERATE the Stitch finance-investigation screen (+ optionally a bulk-revoke screen) so the investigation rebuild + bulk-revoke header can be built.
+3. **BACKOFFICE-33** — BD-13 governance sign-off (ADR 0015, Proposed) for cross-fintech aggregation.
+4. **BACKOFFICE-52 / M6-PORT-SWAPS** — bank-adoption / enterprise-engagement gated (no demo-profile work).
+
+**UIF-10** (final re-audit vs Stitch) is intentionally NOT run yet — it should follow the bespoke screens (UIF-03/-04/-05), i.e. after #181 merges.
+
+**Shipped this UI-FIDELITY run (10 stories):** UIF-01/01b (primitives + @visx charts), UIF-02 (sign-in/shell), UIF-06 (dashboard gauge + four-eyes queue), UIF-07 (recon outcome), UIF-08/08b/08c (tpp overview + filter + table), UIF-09 (care timeline). All merged, all gates green, all hard-stop + conformance clean.
