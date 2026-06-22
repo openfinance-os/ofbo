@@ -1360,3 +1360,16 @@ Added the two signature Stitch "Executive Command" (`d8515d63`) elements the das
 Wired into `app/dashboard` (fetch the pending list + derive pass rate; both degrade on 403/empty). Existing KPI cards + hand-rolled trend/severity charts + audit feed kept (working, token-clean). TDD: `dashboard-command.spec` 6 (gauge meter + value; queue deep-links + money-from-minor-units; NO approve/reject controls; empty; axe). Gates: `gen` no-drift, lint, typecheck, **full unit 840**, design-conformance scans the new file clean, build OK. Reviewers: hard-stop **PASS** (four-eyes + PII verified), contract-conformance **CONFORMANT**. Merged #183 (`9978ea5f`).
 
 **Deferred:** the Stitch sparkline metric tiles (TPP traffic / error rate / settlement vol) — they need analytics series the dashboard getters don't expose (adding them would mean inventing data — a hard-stop — or cross-scope analytics); revisit if those endpoints land. **Next eligible:** UIF-07 (recon three-way), then UIF-08/-09.
+
+---
+
+## 2026-06-22 — UIF-07: reconciliation outcome panel (PR #185)
+
+The real-data slice of the Stitch "Reconciliation Console (Refined)" (`46e55863`). A judgment call: UIF-07's promised sections split into buildable-now vs data-gated, and I shipped the former + split the latter rather than invent data (a hard-stop).
+
+- **Shipped** — `ReconOutcomePanel` (components/recon-outcome.tsx): a UIF-01 `SectionCard` wrapping the UIF-01b **Gauge** (run pass rate) + the UIF-01 **ContributionBar** (matched/unmatched/disputed split), bound to the selected run's live counts. Rendered after the existing KPI cards — purely additive; the working, a11y-tested KPIs/run-list/break-queue untouched. TDD: `uif07-recon-outcome.spec` 3 (gauge meter + value, matched-segment proportional width, div-by-zero guard, axe).
+- Gates: `gen` no-drift, lint, typecheck, **full unit 844**, design-conformance scans the new file clean, recon-console + recon-a11y specs stay green, build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Merged #185 (`e0ba7ef9`).
+
+**Split → UIF-07b (blocked):** the data-gated Stitch remainder — (a) a true three-way SOURCE-totals table (per-source amounts aren't in the `ReconciliationRun` contract → recon spec-change), (b) Margin-by-Fintech (BACKOFFICE-31 free-form analytics, entangled with the blocked UIF-SPEC), (c) Export/monthly Sign-off (BACKOFFICE-06 four-eyes mutation → own story). Recorded with the dependency, held back behind the spec-change workflow rather than implemented against absent fields.
+
+**Next eligible:** UIF-08 (TPP billing action center), then UIF-09. UIF-03/-04/-05 stay blocked on spec PR #181 (human merge).
