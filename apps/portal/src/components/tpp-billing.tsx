@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty, type TppWriteResult } from '../lib/tpp-billing'
 import { Notice, ErrorBanner, LoadMore } from './ui'
+import { TppBillingOverview } from './tpp-billing-overview'
 import { RegisterForm } from './tpp-billing/register-form'
 import { InvoiceRunForm } from './tpp-billing/invoice-run-form'
 import { SyncForm } from './tpp-billing/sync-form'
@@ -146,6 +147,8 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], registryMore
 
       {notice ? <Notice testid="tpp-notice">{notice}</Notice> : null}
       {error ? <ErrorBanner testid="tpp-error" remediation={errorRemediation} docsUrl={errorDocsUrl}>{error}</ErrorBanner> : null}
+
+      {counterparties.length ? <TppBillingOverview counterparties={counterparties} /> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
