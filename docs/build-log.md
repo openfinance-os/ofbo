@@ -1336,3 +1336,14 @@ The bare top-left sign-in and the edge-to-edge, footer-less shell read as an uns
 TDD: `uif02-shell-firstrun.spec` 5 (brand wordmark; preserved region/heading/buttons + axe; footer `contentinfo`; max-width inner). Gates: `gen` no-drift, lint, typecheck, **full unit 833 pass**, design-conformance scans the changed files clean, **a11y + app-shell specs stay green** (footer/card add no axe violations, all shell testids preserved), build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Merged #179 (`c75f65f5`).
 
 Verified structurally (tests/gates), not via a live screenshot this run (the running portal was the prior build); live visual lands on auto-deploy and should be viewed against a **seeded BFF** (`DATABASE_URL`) for a data-populated first impression. **Next eligible:** UIF-SPEC-TYPED-SECTIONS, UIF-07/-08/-09.
+
+---
+
+## 2026-06-22 — UIF-SPEC: typed analytics sections — spec PR #181 (PARKED, human-approved)
+
+A `/next-story` iteration whose deliverable is a **contract change** — so per CLAUDE.md / the spec-change policy it is **opened, not merged** (humans approve contract changes). Authorised in direction by ADR 0016 D1.
+
+- **Spec PR #181** extends `AnalyticsView.data` with an **optional** `sections: AnalyticsSection[]` — discriminated by `kind` (`kpi-strip | gauge | contribution-bars | status-cards | alert | object-table`), per-kind payload schemas (`AnalyticsStat`/`AnalyticsGauge`/`AnalyticsContributionSegment`/`AnalyticsStatusCard`/`AnalyticsAlert`/`AnalyticsTable`) + a shared `StatTone` enum. Backward-compatible: `data` keeps `additionalProperties:true`, unknown kinds degrade to the generic grid.
+- Regenerated `api-types` from the spec; `gen`/`typecheck`/`lint`/**full unit 833** green (the response-schema conformance validator compiles the new envelope fine).
+
+**Parked:** `UIF-SPEC-TYPED-SECTIONS` set `blocked` (awaiting #181 human merge). On merge → mark done; **UIF-03/-04/-05 unblock** (their contract tests + BFF producers emitting typed sections + the bespoke renderer land there). The loop continues at the next eligible item — **UIF-06** (executive dashboard; gated only on UIF-01b, not the spec) — then UIF-07/-08/-09.
