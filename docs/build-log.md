@@ -1386,3 +1386,16 @@ The real-data slice of the Stitch "TPP Billing & Registry (Refined)" (`3d6d14a3`
 **Split → UIF-08b (pending):** the heavier Stitch sections — registry columns/search/filter, billing action center, billing-cycle stepper, audit-trail feed — all real-data-backed (no contract dependency), sequenced after the overview.
 
 **State of the UI-FIDELITY track:** primitive layer (UIF-01/01b) + sign-in/shell (UIF-02) + four bespoke overview panels (UIF-06 dashboard, UIF-07 recon, UIF-08 tpp) are in. Remaining: UIF-03/-04/-05 (Analytics/Risk/Ops — the biggest visual wins, **blocked on spec PR #181**), UIF-09 (care + finance-investigation), the *-b table/mutation follow-ups, and UIF-10 (re-audit). **Next eligible: UIF-09.**
+
+---
+
+## 2026-06-22 — UIF-08b: scope-aware TPP registry filter (PR #189)
+
+Closed the design-audit's "registry has no search/filter" gap with a real server-side filter (no Stitch mock values).
+
+- **Shipped** — `RegistryFilter` (components/tpp-billing/registry-filter.tsx): a server-rendered GET form (registration_state select + unbilled-traffic toggle + Clear, role=search, token-only, no client JS), wired through `app/tpp-billing/page.tsx` to `listCounterparties`' existing `CounterpartyQuery` so the **BFF filters server-side** (billing:read); filter values are reflected back into the form AND preserved across the `reg_cursor` pagination href. TDD: `uif08b-registry-filter.spec` 4 (GET form + options + toggle, reflects active values + clear, omits clear when inactive, axe).
+- Gates: `gen` no-drift, lint, typecheck, **full unit 853**, design-conformance scans the new file clean, tpp specs stay green, build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT** (portal `reg_state`→wire `registration_state` snake_case; enum matches the contract; cursor pagination preserved, no offset). Merged #189 (`db1d9645`).
+
+**Split → UIF-08c (pending):** cosmetic Stitch polish — columnar registry table layout, Billing Action Center (grouping the existing mutations), billing-cycle stepper (from InvoiceRun.status), audit-trail feed. Low priority, no contract dependency.
+
+**Next eligible: UIF-08c**, then UIF-09. The high-impact UIF-03/-04/-05 (Analytics/Risk/Ops bespoke panels) remain blocked on spec PR #181 (human merge) — the highest-leverage unblock for the loop.
