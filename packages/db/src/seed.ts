@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
 import { generateDemoDataset, DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
  * Seeds the deterministic demo dataset (PRD §3.1). Idempotent: natural keys +
@@ -171,6 +172,26 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
        SELECT $1, 'internal_retail', 'audit_high_sensitivity', $2::text[], 'seed-audit', 'seed-audit-high-sensitivity'
         WHERE NOT EXISTS (SELECT 1 FROM lineage_events WHERE table_name = 'audit_high_sensitivity' AND trace_id = 'seed-audit-high-sensitivity')`,
       [DEMO_BANK_ID, ['bank_id', 'channel', 'event_type', 'acting_principal', 'request_trace_id']]
+    )
+
+    // BACKOFFICE-33: seed the BD-13 cross-fintech query purposes (pre-approved) so the governed
+    // analytics reads (e.g. the Compliance View, which runs as bank_internal_view) pass the
+    // purpose-gate on a freshly-seeded DB. Without this a governed read rejects with
+    // UNREGISTERED_QUERY_PURPOSE. Idempotent on (bank_id, purpose_code).
+    for (const p of SEED_QUERY_PURPOSES) {
+      await pool.query(
+        `INSERT INTO query_purpose_registry (bank_id, channel, purpose_code, description, registered_by, approved_by)
+         VALUES ($1, 'internal_retail', $2, $3, 'system:bd-13-seed', 'system:bd-13-seed')
+         ON CONFLICT (bank_id, purpose_code) DO NOTHING`,
+        [DEMO_BANK_ID, p.purpose_code, p.description]
+      )
+    }
+    // BCBS 239 lineage for the registry write (Q4.5-green on a seed-only DB; idempotent on trace_id).
+    await pool.query(
+      `INSERT INTO lineage_events (bank_id, channel, table_name, columns, source, trace_id)
+       SELECT $1, 'internal_retail', 'query_purpose_registry', $2::text[], 'seed-bd13-purposes', 'seed-query-purpose-registry'
+        WHERE NOT EXISTS (SELECT 1 FROM lineage_events WHERE table_name = 'query_purpose_registry' AND trace_id = 'seed-query-purpose-registry')`,
+      [DEMO_BANK_ID, ['bank_id', 'channel', 'purpose_code', 'description', 'registered_by', 'approved_by']]
     )
 
     await pool.query(`REFRESH MATERIALIZED VIEW consent_admin_event`)
