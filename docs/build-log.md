@@ -1322,3 +1322,17 @@ A live portal-vs-Stitch review (screenshots of Dashboard/Analytics/Risk/Ops/Reco
 Gates (UIF-01b): `gen` no-drift, lint, typecheck, **full unit 828 pass**, design-conformance scans the new files clean, **Next build** First Load JS unchanged at 102 kB (@visx out of the shared bundle), and the **OpenNext/Cloudflare Worker build** (`.open-next/worker.js` generated, exit 0 — the explicit Worker-bundle check the story was split out for). Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. No screen changes — first live consumption is UIF-03/-04/-06.
 
 **Next eligible:** UIF-02 (sign-in/shell first-impression), UIF-SPEC-TYPED-SECTIONS (the analytics contract change), UIF-07/-08/-09 (the no-gate hand-built screens). UIF-03/-04/-06 unblock once UIF-01b (now done) + the spec-change land.
+
+---
+
+## 2026-06-22 — UIF-02: sign-in + shell first-impression polish (PR #179)
+
+The bare top-left sign-in and the edge-to-edge, footer-less shell read as an unstyled prototype. Token-utility-only polish (no contract change):
+
+- **Sign-in** — `persona-login-list` is now a centred **branded card** (rounded-xl border + shadow on `surface-container-lowest`) led by an **OFBO wordmark** + "Open Finance Back Office" product line; `app/page` centres it both axes (`flex min-h-screen items-center justify-center`) — replaces the top-left look.
+- **Shell** — added a **status footer** (`role=contentinfo`, `data-testid=shell-footer` — *DEMO profile · synthetic data only · OFBO · non-prod · egress via P6 · UAE region*, à la the Stitch screens) and a **max-width content container** (`shell-content-inner`, `mx-auto max-w-screen-2xl`) so wide screens no longer stretch edge-to-edge.
+- Persona-badge cluster + the (already-correct, UX-10) density toggle left as-is — their testids are load-bearing in `app-shell.spec`.
+
+TDD: `uif02-shell-firstrun.spec` 5 (brand wordmark; preserved region/heading/buttons + axe; footer `contentinfo`; max-width inner). Gates: `gen` no-drift, lint, typecheck, **full unit 833 pass**, design-conformance scans the changed files clean, **a11y + app-shell specs stay green** (footer/card add no axe violations, all shell testids preserved), build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Merged #179 (`c75f65f5`).
+
+Verified structurally (tests/gates), not via a live screenshot this run (the running portal was the prior build); live visual lands on auto-deploy and should be viewed against a **seeded BFF** (`DATABASE_URL`) for a data-populated first impression. **Next eligible:** UIF-SPEC-TYPED-SECTIONS, UIF-07/-08/-09.
