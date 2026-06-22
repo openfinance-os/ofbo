@@ -77,7 +77,7 @@ export const ROUTES: readonly Route[] = [
     "path": "/back-office/reconciliation/monthly-signoff",
     "tag": "reconciliation",
     "scope": "finance:reconciliation:write",
-    "fourEyes": false
+    "fourEyes": true
   },
   {
     "method": "get",

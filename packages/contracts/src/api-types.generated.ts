@@ -403,7 +403,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate + lock the monthly reconciliation summary (BACKOFFICE-06) */
+        /**
+         * Request the monthly reconciliation sign-off (four-eyes; BACKOFFICE-06)
+         * @description Locking + signing a month's reconciliation summary is a high-stakes regulated action (a 5-year-immutable compliance_report with the Finance Analyst's attested sign-off), so it is four-eyes-gated: the initiator requests, a different finance:reconciliation:write principal approves, and only then is the report generated + locked. Returns 202 + approval_request; never executes inline (the binding four-eyes hard-stop). The locked Report is produced on approval.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -430,7 +433,7 @@ export interface paths {
                 };
             };
             responses: {
-                200: components["responses"]["Report"];
+                202: components["responses"]["ApprovalPending"];
                 default: components["responses"]["Error"];
             };
         };
