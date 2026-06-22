@@ -3790,6 +3790,76 @@ export interface components {
             currency: string;
         };
         /**
+         * @description Semantic tone for a stat/trend (UIF-SPEC). Maps to the PRD §7 status triad — reconciled=green, break=amber, breach=red — plus neutral. Appearance only.
+         * @enum {string}
+         */
+        StatTone: "reconciled" | "break" | "breach" | "neutral";
+        /** @description A typed, named analytics panel (UIF-SPEC / ADR 0016). `kind` selects the bespoke portal primitive; the matching payload property carries its data (e.g. `stats` for kpi-strip, `gauge` for gauge). A client that does not recognise a `kind` MUST degrade it to the generic labelled grid — so producers can add kinds without a breaking change. Bound to the OpenAPI contract; carries no PSU PII. */
+        AnalyticsSection: {
+            /** @enum {string} */
+            kind: "kpi-strip" | "gauge" | "contribution-bars" | "status-cards" | "alert" | "object-table";
+            title: string;
+            /** @description Payload for kind=kpi-strip. */
+            stats?: components["schemas"]["AnalyticsStat"][];
+            /** @description Payload for kind=gauge. */
+            gauge?: components["schemas"]["AnalyticsGauge"];
+            /** @description Payload for kind=contribution-bars. */
+            segments?: components["schemas"]["AnalyticsContributionSegment"][];
+            /** @description Payload for kind=status-cards. */
+            cards?: components["schemas"]["AnalyticsStatusCard"][];
+            /** @description Payload for kind=alert. */
+            alert?: components["schemas"]["AnalyticsAlert"];
+            /** @description Payload for kind=object-table. */
+            table?: components["schemas"]["AnalyticsTable"];
+        };
+        /** @description One big-number stat in a kpi-strip section (renders as KpiStat). */
+        AnalyticsStat: {
+            label: string;
+            /** @description Pre-formatted display value — a string so the producer controls formatting (e.g. AED 4.82M or 32.8%). */
+            value: string;
+            unit?: string | null;
+            sublabel?: string | null;
+            trend?: {
+                label: string;
+                tone?: components["schemas"]["StatTone"];
+            } | null;
+        };
+        /** @description A radial gauge payload (renders as Gauge). */
+        AnalyticsGauge: {
+            value: number;
+            /** @default 100 */
+            max: number;
+            unit?: string | null;
+        };
+        /** @description One segment of a contribution-bars section (renders as ContributionBar). */
+        AnalyticsContributionSegment: {
+            label: string;
+            /** @description Relative weight; widths are normalised to the segment total. */
+            value: number;
+        };
+        /** @description One card in a status-cards section (status renders as a StatusBadge). */
+        AnalyticsStatusCard: {
+            label: string;
+            value?: string | null;
+            /** @description A status token mapped to a tone via the shared status vocabulary. */
+            status: string;
+            note?: string | null;
+        };
+        /** @description An inline alert/callout section. */
+        AnalyticsAlert: {
+            /** @enum {string} */
+            severity: "info" | "warning" | "critical";
+            message: string;
+            remediation?: string | null;
+        };
+        /** @description A simple object-table section (the generic grid's typed form). */
+        AnalyticsTable: {
+            columns: string[];
+            rows: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
          * @description §6.0 channel dimension (attribute, not tenant key)
          * @enum {string}
          */
@@ -4560,8 +4630,12 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Envelope"] & {
-                    /** @description View-specific widgets */
-                    data?: Record<string, never>;
+                    /** @description View-specific widgets. MAY carry an optional `sections` array of typed, named AnalyticsSection panels (UIF-SPEC / ADR 0016): the portal renders each section's `kind` with a bespoke primitive (gauge, contribution bars, KPI strip, status cards, alert, table). Any other keys — and any section whose `kind` the client does not recognise — degrade to the generic labelled grid, so this stays backward-compatible with the previous free-form `data`. */
+                    data?: {
+                        sections?: components["schemas"]["AnalyticsSection"][];
+                    } & {
+                        [key: string]: unknown;
+                    };
                     freshness?: components["schemas"]["Freshness"];
                 };
             };
