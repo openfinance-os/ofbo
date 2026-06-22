@@ -54,6 +54,16 @@ describe('RiskViewService — composition', () => {
     expect(header).not.toHaveProperty('signal_data')
   })
 
+  it('UIF-04: emits typed bespoke sections (risk-signals kpi-strip + open-by-severity bars)', async () => {
+    const { data } = await svc().view(risk)
+    const sections = data.sections as { kind: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[] }[]
+    const strip = sections.find((s) => s.kind === 'kpi-strip')
+    expect(strip?.stats?.find((st) => st.label === 'Active signals')?.value).toBe('6')
+    expect(strip?.stats?.find((st) => st.label === 'Consent anomalies')?.value).toBe('3')
+    const bars = sections.find((s) => s.kind === 'contribution-bars')
+    expect(bars?.segments?.map((g) => g.label).sort()).toEqual(['high', 'low', 'medium'])
+  })
+
   it('rejects a principal without risk:read (defence in depth)', async () => {
     await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
   })

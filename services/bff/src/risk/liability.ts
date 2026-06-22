@@ -142,11 +142,29 @@ export class LiabilityViewService {
       const [issue, party, aed] = (s.nebras_liability_event_ref ?? '').split('|')
       if (issue && party) accrual.push({ issue, liable_party: party, accrued_aed: Number(aed) || 0, severity: s.severity, created_at: s.created_at })
     }
+    // UIF-04 (ADR 0016 D1) — typed sections the portal renders as bespoke panels; live data.
+    const severitySegments = Object.entries(monitor.by_severity)
+      .map(([label, value]) => ({ label, value }))
+      .filter((seg) => seg.value > 0)
+    const sections: Record<string, unknown>[] = []
+    if (severitySegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Liability Events by Severity', segments: severitySegments })
+    if (accrual.length > 0) {
+      sections.push({
+        kind: 'object-table',
+        title: 'Approaching Liability Triggers',
+        table: {
+          columns: ['issue', 'liable_party', 'accrued_aed', 'severity'],
+          rows: accrual.map((a) => ({ issue: a.issue, liable_party: a.liable_party, accrued_aed: a.accrued_aed, severity: a.severity }))
+        }
+      })
+    }
+
     const data: Record<string, unknown> = {
       liability_matrix: { per_incident_aed: LIABILITY_MATRIX, sla_execution_tiers_aed: SLA_TIERS },
       open_count: monitor.open_count,
       by_severity: monitor.by_severity,
-      approaching_triggers: accrual
+      approaching_triggers: accrual,
+      sections
     }
     // BACKOFFICE-65 — fold in the 24h predictive forecast (regulated AI artefact) when wired.
     if (this.deps.forecast) data.forecast = await this.deps.forecast.forecastView()
