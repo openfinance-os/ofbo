@@ -1564,3 +1564,18 @@ User-directed (UIF-07b residual (c)). Contract-first: a human-approved spec chan
 - TDD: `reconciliation-monthly-signoff.spec` rewritten to the four-eyes flow (request 202 → self-approval 409 → a different finance principal approves → the locked signed report; idempotent; validations); `.int` exercises `executeMonthlySignoff` vs real PG; `uif07b-signoff-form.spec`. Gates: gen no-drift, lint, typecheck (all), **full unit 887**, build OK, reconciliation-monthly-signoff.int green vs local PG. Reviewers: hard-stop **PASS** (202+approval, no inline bypass, initiator≠approver, audit preserved), conformance **CONFORMANT**. Merged #210 (`fa664d1f`).
 
 Backlog: zero loop-eligible items remain; UIF-07b residual (a) per-source line-totals table still needs a recon spec-change; UIF-09b / BACKOFFICE-33 / -52 / M6 all need a human decision.
+
+---
+
+## 2026-06-22 — BACKOFFICE-33 PR 1/5: governed cross-fintech aggregation foundation
+
+The control core for the platform's highest-sensitivity data path (cross-fintech RLS bypass), per ADR 0015 (BD-13: Option 1 + four-eyes).
+
+- `packages/db/src/tenant-tx.ts` — `beginInternalViewTx()`: `BEGIN; SET LOCAL ROLE bank_internal_view` (no `app.bank_id` pin → reads the `internal_view_select USING(true)` MVs across tenants). Never called directly.
+- `packages/db/src/governed-aggregate.ts` — `runGovernedAggregate()`: purpose-match-or-reject vs `query_purpose_registry` (rejects with `GovernedQueryError` BEFORE any read), runs the aggregate as `bank_internal_view`, then High-class logs a `cross_fintech_query` audit event (`purpose_code` + `row_count` only — no PSU PII; written as `ofbo_app`, not the SELECT-only bypass role). Plus `isPurposeApproved`, `seedQueryPurposes`, `SEED_QUERY_PURPOSES` (the 6 BD-13 purposes seeded pre-approved).
+- `packages/db/migrations/0026_internal_view_role_membership.sql` — grants `bank_internal_view` membership to the connection user (mirrors 0008 for `ofbo_app`) so `SET ROLE` works on managed Postgres (found: 0008 only granted ofbo_app; the bypass role would have failed SET ROLE on Supabase/deployed).
+- Tests: `governed-aggregate.spec.ts` (6 unit — gate logic, reject-before-read, log shape) + `governed-aggregate.int.spec.ts` (4 integration, real PG — cross-tenant read works as bank_internal_view, bypass logged exactly once, unregistered purpose rejected with no log, AND tenant-scoped ofbo_app gets `permission denied` on the MV).
+
+Gates: gen no-drift, typecheck, lint clean; full unit **893**; integration 4/4 on local PG. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Internal DB-layer only — no API/spec change.
+
+**Remaining (PRs 2-5):** seed in the demo seed path; route the analytics stores' aggregate reads to the cross-fintech MVs via `runGovernedAggregate`; four-eyes on registering a NEW purpose; end-to-end tests. BACKOFFICE-33 stays in-progress.
