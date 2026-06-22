@@ -12,9 +12,9 @@ export default async function LoginPage({
 }) {
   const personas = await listPersonaLogins()
   const { error } = await searchParams
-  // Login is the one surface outside the app shell — keep it centred (token-styled).
+  // Login is the one surface outside the app shell — centre the branded card both axes.
   return (
-    <main className="portal-main">
+    <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <PersonaLoginList personas={personas} error={error} />
     </main>
   )
