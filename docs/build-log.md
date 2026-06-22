@@ -1502,3 +1502,17 @@ The full track shipped this session: UIF-01/01b (token primitives + @visx charts
 - **BACKOFFICE-33** — BD-13 governance sign-off (cross-fintech aggregation).
 - **BACKOFFICE-52** — PRD §7 'Must' awaiting backlog/decision.
 - **M6-PORT-SWAPS** — per-bank enterprise engagement (systems + credentials).
+
+---
+
+## 2026-06-22 — Compliance view brought up to UI-FIDELITY (bespoke panels)
+
+Spotted in the running demo: `/compliance` still rendered the generic metric grid while Analytics/Risk/Operations had bespoke panels. Root cause — the UI-FIDELITY track (UIF-03/-04/-05, ADR 0016) updated those three BFF producers to emit typed `data.sections`, but the **compliance producer was never updated**, so the (already-upgraded) shared `AnalyticsSection` renderer fell back to the generic grid for it.
+
+Fix (BFF-only — the portal renderer already supports it): `services/bff/src/analytics/compliance-view.ts` now emits typed `data.sections` using the established section kinds —
+- **kpi-strip** "Compliance Posture": consent-event volume, open disputes, open risk signals, reports awaiting approval;
+- **alert** (severity `critical`) when any table is past its immutable-retention boundary (deletion-forbidden posture flag);
+- **contribution-bars** "Open Risk Signals by Severity";
+- **object-table** "Retention Lifecycle (hot / warm / immutable)".
+
+Aggregate counts + table names only — no PSU PII (test asserts it). A first review caught a real enum drift (`alert.severity: 'high'` → not in `AnalyticsAlert`'s `[info, warning, critical]`); fixed to `critical`. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. 877 unit pass (compliance-view.spec +1); typecheck + lint clean.
