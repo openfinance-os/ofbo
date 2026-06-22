@@ -8,6 +8,20 @@
  */
 
 import { bffClient } from './bff'
+import type { Schemas } from './contract-types'
+
+/**
+ * UIF-SPEC / ADR 0016 — a typed, named analytics panel the BFF may emit in `data.sections`.
+ * The portal renders each `kind` with a bespoke UIF-01/01b primitive; unknown kinds degrade
+ * to the generic grid. Sourced from the OpenAPI contract so it can't drift.
+ */
+export type AnalyticsSection = Schemas['AnalyticsSection']
+
+/** Read `data.sections` off an analytics view (typed), or [] when the view is still free-form. */
+export function sectionsOf(view: AnalyticsView): AnalyticsSection[] {
+  const s = (view.data as { sections?: unknown }).sections
+  return Array.isArray(s) ? (s as AnalyticsSection[]) : []
+}
 
 /** Mirrors the BFF FreshnessEnvelope (BACKOFFICE-40). */
 export interface FreshnessEnvelope {
