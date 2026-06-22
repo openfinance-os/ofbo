@@ -45,4 +45,15 @@ describe('demo seed', () => {
     const r = await admin.query(`SELECT coalesce(string_agg(target_psu_identifier, ' '), '') AS blob FROM audit_high_sensitivity`)
     expect(r.rows[0].blob.replace(/[\s-]/g, '')).not.toMatch(/784\d{12}/)
   })
+
+  it('seeds the BD-13 cross-fintech query purposes pre-approved (so governed reads pass the gate)', async () => {
+    const r = await admin.query(
+      `SELECT count(*)::int AS n FROM query_purpose_registry WHERE approved_by IS NOT NULL
+         AND purpose_code IN ('executive_dashboard','finance_view','risk_monitoring','operations_monitoring','compliance_reporting','regulatory_periodic_report')`
+    )
+    expect(r.rows[0].n).toBe(6)
+    // BCBS 239 lineage for the registry write (Q4.5 stays green on a seed-only DB)
+    const lin = await admin.query(`SELECT count(*)::int AS n FROM lineage_events WHERE table_name = 'query_purpose_registry'`)
+    expect(lin.rows[0].n).toBeGreaterThan(0)
+  })
 })
