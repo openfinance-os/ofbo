@@ -182,19 +182,13 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             {children}
           </div>
         </main>
-        {/* UIF-02 — status footer (à la the Stitch screens): demo posture + egress + region. */}
+        {/* UIF-02 — status footer (à la the Stitch screens): demo posture. */}
         <footer
           data-testid="shell-footer"
           className="flex flex-wrap items-center gap-x-4 gap-y-1 px-container-padding py-2 border-t border-outline-variant bg-surface-container-lowest text-xs text-on-surface-variant"
         >
           <span>DEMO profile · synthetic data only</span>
           <span className="font-mono">OFBO · non-prod</span>
-          <span className="ml-auto inline-flex items-center gap-1">
-            <span className="font-symbols text-sm" aria-hidden>
-              lock
-            </span>
-            egress via P6 · UAE region
-          </span>
         </footer>
       </div>
     </div>
