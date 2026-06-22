@@ -1589,3 +1589,16 @@ User-directed. The portal shell sidebar rendered light (bg-surface); the Stitch 
 - TDD: design-tokens.spec (nav values), app-shell.spec (navy sidebar + light top bar). Gates: lint, typecheck (all), design-conformance clean (token-only), a11y axe green, full unit 892, build OK, all 6 CI gates green incl. Q3 Playwright E2E. Reviewer: hard-stop PASS (token-only, zero PII, no logic touched). Conformance N/A (no contract surface). Merged #216 (cf17117a).
 
 Note: the Stitch finance Three-Source Break Investigation screens have now landed (e.g. 251beaef…) — UIF-09b's design prerequisite is unblocked; wiring /reconciliation/breaks/[id] to it is the next buildable step on request.
+
+---
+
+## 2026-06-22 — UIF-09b (b): finance three-source break investigation — PR #218
+
+User-directed (after the user generated the Stitch screen). The break investigation detail (/reconciliation/breaks/[id]) already had the A/B/C diff + summary KPIs + Nebras dispute; the now-existing Stitch "Reconciliation Break Investigation (Finance, Three-Source)" screen (251beaef…) gave the design reference to finish it — UIF-09b part (b), previously blocked on the missing screen.
+
+- Per-source reconciled markers (green check on present source refs; missing ref keeps red MISSING — a null ref IS the divergence).
+- Data-honest summary strip: "{present refs} reconcile · {missing} missing → break of {variance}" (variance from the break; no fabricated per-source amounts).
+- Audit Trail timeline: detected (created_at) → assigned (assigned_to + SLA) → escalated (nebras_dispute_case_id, else "requested" while escalatable) → resolved (resolution_outcome); every node derived from a break field.
+- All from the existing getBreak — no contract change. escalate stays BACKOFFICE-05 (P6 egress). Token-only (timeline line w-px bg-outline-variant; no arbitrary values). TDD: investigation-detail.spec +4. Gates: lint, typecheck (all), design-conformance clean, a11y axe green, full unit 896, build OK, all CI gates green. Reviewer: hard-stop PASS (token-only, zero fabricated data, escalate untouched). Conformance N/A. Merged #218 (fde7f44c).
+
+Backlog: UIF-09b (b) DELIVERED; (a) bulk-revoke header / per-row Investigate remains its own gated four-eyes story (needs a portal bulk-revoke flow). The Ghost Balance Shadow Ledger Stitch screen is still off the standard shell (cosmetic, Stitch-only; doesn't affect the app).
