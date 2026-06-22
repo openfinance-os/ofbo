@@ -1627,3 +1627,18 @@ User-directed (two entry-experience improvements).
 - Token-only (navy nav-* tokens), zero PSU PII. TDD: components.spec (DemoPill aria statement, welcome hero + per-role module chips, axe). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 902, build OK, all CI gates green. Reviewer: hard-stop PASS (marker persistent + aria-complete on every screen incl. crash boundary, zero PII, token-only, sign-in intact). Conformance N/A. Merged #223 (00fb2922).
 
 Built directly against tokens (user's call); a matching Stitch "Welcome / Persona Selector" screen still to be generated + pinned for the record.
+
+---
+
+## 2026-06-22 — BACKOFFICE-33 PR 1/5 merged: governed cross-fintech aggregation foundation (#222)
+
+Control core for the platform's highest-sensitivity data path (cross-fintech RLS bypass), per ADR 0015 (BD-13: Option 1 + four-eyes). DB-layer only — no API/spec change.
+
+- `tenant-tx.ts` `beginInternalViewTx()` — `SET LOCAL ROLE bank_internal_view` (no `app.bank_id` pin → reads the `internal_view_select USING(true)` MVs across tenants); only reached via the governed helper.
+- `governed-aggregate.ts` `runGovernedAggregate()` — purpose-match-or-reject vs `query_purpose_registry` (rejects BEFORE any read), runs as `bank_internal_view`, then High-class logs a `cross_fintech_query` event (`purpose_code` + `row_count`; written as `ofbo_app`, not the SELECT-only bypass role). Plus `isPurposeApproved`, `seedQueryPurposes` (emits BCBS 239 lineage for the registry write), `SEED_QUERY_PURPOSES` (6 BD-13 purposes, pre-approved).
+- migration `0026` — grants `bank_internal_view` membership to the connection user (0008 only granted `ofbo_app`; SET ROLE would have failed on managed Postgres).
+- Tests: 6 unit + 5 integration. Gates: gen/lint/typecheck, unit 893, integration 5/5, Q4.5 lineage PASSED. Reviewers: hard-stop PASS, conformance CONFORMANT.
+
+Process note: the PR stalled for hours because it went CONFLICTING on this build-log.md (parallel sessions append constantly) — GitHub silently won't schedule pull_request CI for an unmergeable PR, which looked like an Actions outage but wasn't. Fix: the merged PR is packages/db-only (additive, never conflicts); build-log/backlog land here directly on main. Lesson: watch the PR `mergeable` state, not just CI presence.
+
+BACKOFFICE-33 stays in-progress — PRs 2-5: route analytics reads through the governed path, demo-seed integration, four-eyes on new-purpose registration, end-to-end tests.
