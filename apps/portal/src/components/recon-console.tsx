@@ -1,5 +1,6 @@
 import { formatMoney, type ReconciliationBreak, type ReconciliationRun, type ReconWriteResult } from '../lib/reconciliation'
 import { LoadMore, AuditNote, ErrorBanner } from './ui'
+import { ReconOutcomePanel } from './recon-outcome'
 import { ClaimForm } from './reconciliation/claim-form'
 import { ResolveForm } from './reconciliation/resolve-form'
 
@@ -190,6 +191,7 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref
       ) : null}
 
       {selectedRun ? <KpiCards run={selectedRun} /> : null}
+      {selectedRun ? <ReconOutcomePanel run={selectedRun} /> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
