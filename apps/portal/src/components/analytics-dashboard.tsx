@@ -1,5 +1,6 @@
-import { formatMoney, isMoney, type AnalyticsView, type FreshnessEnvelope } from '../lib/analytics'
+import { formatMoney, isMoney, sectionsOf, type AnalyticsView, type FreshnessEnvelope } from '../lib/analytics'
 import { ErrorBanner, statusTone } from './ui'
+import { AnalyticsSections } from './analytics/analytics-sections'
 
 /**
  * UI-06 — Analytics & Insights Dashboard, translated from the Stitch "OFBO - Analytics
@@ -193,13 +194,16 @@ export function MetricGrid({ data }: { data: Record<string, unknown> }) {
 }
 
 export function AnalyticsSection({ title, view, testid }: { title: string; view: AnalyticsView; testid: string }) {
+  // UIF-03 — when the BFF emits typed `sections`, render the bespoke panels; otherwise the
+  // free-form view still renders generically (backward-compatible).
+  const sections = sectionsOf(view)
   return (
     <section data-testid={testid} className="space-y-3">
       <div className="flex items-center gap-3">
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">{title}</h2>
         <FreshnessBadge freshness={view.freshness} />
       </div>
-      <MetricGrid data={view.data} />
+      {sections.length > 0 ? <AnalyticsSections sections={sections} /> : <MetricGrid data={view.data} />}
     </section>
   )
 }

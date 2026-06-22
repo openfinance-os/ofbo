@@ -63,6 +63,25 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
     expect(headline.reconciliation_throughput.success_rate).toBe(0.95)
   })
 
+  it('UIF-03: emits typed bespoke sections for the commercial persona (gauge + kpi-strip + margin-by-family bars)', async () => {
+    const { data } = await svc().view(commercial)
+    const sections = data.sections as { kind: string; title: string; gauge?: { value: number }; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[] }[]
+    const gauge = sections.find((s) => s.kind === 'gauge')
+    expect(gauge?.gauge?.value).toBe(95) // success_rate 0.95 → 95%
+    const strip = sections.find((s) => s.kind === 'kpi-strip')
+    expect(strip?.stats?.find((st) => st.label === 'TPP-AAS net margin')?.value).toBe('AED 0.30') // 30 minor units
+    const bars = sections.find((s) => s.kind === 'contribution-bars')
+    expect(bars?.segments?.map((g) => g.label).sort()).toEqual(['AISP', 'SIP'])
+  })
+
+  it('UIF-03: a base-scope persona gets the gauge section but NOT the commercial sections (scope hygiene)', async () => {
+    const { data } = await svc().view(analyticsOnly)
+    const sections = data.sections as { kind: string }[]
+    expect(sections.some((s) => s.kind === 'gauge')).toBe(true)
+    expect(sections.some((s) => s.kind === 'kpi-strip')).toBe(false)
+    expect(sections.some((s) => s.kind === 'contribution-bars')).toBe(false)
+  })
+
   it('programme persona sees the headline + programme angle only (certification, adoption); NOT commercial revenue', async () => {
     const { data } = await svc().view(programme)
     expect(data.available_angles).toEqual(['programme'])

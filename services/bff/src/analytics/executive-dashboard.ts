@@ -103,6 +103,17 @@ export class ExecutiveDashboardService {
     }
     const available: string[] = []
 
+    // UIF-03 (ADR 0016 D1) — typed analytics sections the portal renders as bespoke panels.
+    // Bound to the live-computed metrics above (no mock values); scope-gated like the angles.
+    const sections: Record<string, unknown>[] = []
+    if (reconThroughput && reconThroughput.success_rate != null) {
+      sections.push({
+        kind: 'gauge',
+        title: 'Reconciliation Pass Rate',
+        gauge: { value: Math.round(reconThroughput.success_rate * 1000) / 10, max: 100, unit: '%' }
+      })
+    }
+
     if (hasScope(principal.scopes, COMMERCIAL_SCOPE)) {
       const margin = await this.deps.margin.marginForPeriod(period)
       const pipeline = await this.deps.pipeline.pipelineCounts()
@@ -112,6 +123,25 @@ export class ExecutiveDashboardService {
         integration_pipeline: { by_state: pipeline, total: Object.values(pipeline).reduce((a, b) => a + b, 0) }
       }
       available.push('commercial')
+
+      // Commercial-angle bespoke sections (integer minor units → formatted money).
+      const fmt = (minor: number) => `${margin.currency} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      sections.push({
+        kind: 'kpi-strip',
+        title: 'Commercial Metrics',
+        stats: [
+          { label: 'TPP-AAS net margin', value: fmt(margin.total_margin) },
+          { label: 'Nebras fees', value: fmt(margin.total_nebras_fee) },
+          { label: 'Fintech charges', value: fmt(margin.total_fintech_charge) },
+          { label: 'Integration pipeline', value: String(Object.values(pipeline).reduce((a, b) => a + b, 0)), sublabel: 'active' }
+        ]
+      })
+      const familySegments = Object.entries(revenueByFamily(margin))
+        .map(([family, m]) => ({ label: family, value: Math.max(0, m.margin) }))
+        .filter((seg) => seg.value > 0)
+      if (familySegments.length > 0) {
+        sections.push({ kind: 'contribution-bars', title: 'Margin by Product Family', segments: familySegments })
+      }
     }
 
     if (hasScope(principal.scopes, PROGRAMME_SCOPE)) {
@@ -124,6 +154,7 @@ export class ExecutiveDashboardService {
     }
 
     data.available_angles = available
+    data.sections = sections
     // BACKOFFICE-40 — live-computed dashboard (no external source) → always fresh.
     return { data, freshness: liveFreshness(now) }
   }
