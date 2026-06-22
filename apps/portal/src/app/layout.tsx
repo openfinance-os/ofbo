@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
-import { DemoBanner } from '../components/demo-banner'
+import { DemoPill } from '../components/demo-banner'
 import { ClearStatusParam } from '../components/ui'
 import './globals.css'
 
@@ -22,7 +22,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
       </head>
       <body>
-        <DemoBanner />
+        <DemoPill />
         <ClearStatusParam />
         {children}
       </body>
