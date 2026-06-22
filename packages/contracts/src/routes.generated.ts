@@ -248,6 +248,13 @@ export const ROUTES: readonly Route[] = [
     "fourEyes": false
   },
   {
+    "method": "post",
+    "path": "/back-office/governance/query-purposes",
+    "tag": "governance",
+    "scope": "compliance:query-purposes:write",
+    "fourEyes": true
+  },
+  {
     "method": "get",
     "path": "/back-office/analytics/risk-view",
     "tag": "analytics",
