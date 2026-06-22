@@ -1435,3 +1435,11 @@ Every remaining backlog item is `blocked`. The `/next-story` loop has drained al
 **UIF-10** (final re-audit vs Stitch) is intentionally NOT run yet — it should follow the bespoke screens (UIF-03/-04/-05), i.e. after #181 merges.
 
 **Shipped this UI-FIDELITY run (10 stories):** UIF-01/01b (primitives + @visx charts), UIF-02 (sign-in/shell), UIF-06 (dashboard gauge + four-eyes queue), UIF-07 (recon outcome), UIF-08/08b/08c (tpp overview + filter + table), UIF-09 (care timeline). All merged, all gates green, all hard-stop + conformance clean.
+
+---
+
+## 2026-06-22 — spec PR #181 MERGED (human-approved) → UIF-03/-04/-05 UNBLOCKED
+
+The user approved + I merged spec PR #181 (`e8a8aef`): `AnalyticsView.data` gains an OPTIONAL `sections: AnalyticsSection[]` (typed/named analytics panels — kpi-strip | gauge | contribution-bars | status-cards | alert | object-table + per-kind payloads + a StatTone enum), backward-compatible (`data` stays `additionalProperties:true`; unknown kinds degrade to the generic grid). No file conflicts (no UIF PR touched the spec/api-types); post-merge **gen no-drift + typecheck clean across all 9 projects**.
+
+`UIF-SPEC-TYPED-SECTIONS` flipped blocked → **done**. The eligible queue is refilled: **UIF-03 (Analytics), UIF-04 (Risk), UIF-05 (Operations)** are now eligible — the bespoke typed-panel renderers that are the biggest remaining visual wins. Each is now: emit typed sections from the BFF analytics producer → map each `kind` to a UIF-01/01b primitive (Gauge/ContributionBar/KpiStat/StatStrip/StatusBadge/SectionCard) in a typed-section renderer, replacing the generic grid. UIF-07b's margin part also unblocks once those land. **Next `/next-story` picks up UIF-03.**
