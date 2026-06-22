@@ -245,9 +245,17 @@ paths:
   /back-office/reconciliation/monthly-signoff:
     post:
       tags: [reconciliation]
-      summary: Generate + lock the monthly reconciliation summary (BACKOFFICE-06)
+      summary: Request the monthly reconciliation sign-off (four-eyes; BACKOFFICE-06)
+      description: >
+        Locking + signing a month's reconciliation summary is a high-stakes regulated
+        action (a 5-year-immutable compliance_report with the Finance Analyst's attested
+        sign-off), so it is four-eyes-gated: the initiator requests, a different
+        finance:reconciliation:write principal approves, and only then is the report
+        generated + locked. Returns 202 + approval_request; never executes inline (the
+        binding four-eyes hard-stop). The locked Report is produced on approval.
       x-rate-limit-per-min: 5
       x-required-scope: finance:reconciliation:write
+      x-four-eyes: true
       parameters:
         - $ref: '#/components/parameters/fapiInteractionId'
         - $ref: '#/components/parameters/idempotencyKey'
@@ -262,7 +270,7 @@ paths:
               properties:
                 period: { type: string, example: "2026-07", description: Calendar month YYYY-MM }
       responses:
-        '200': { $ref: '#/components/responses/Report' }
+        '202': { $ref: '#/components/responses/ApprovalPending' }
         default: { $ref: '#/components/responses/Error' }
 
   /back-office/reconciliation/thresholds:
