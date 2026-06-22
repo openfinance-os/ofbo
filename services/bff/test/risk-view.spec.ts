@@ -33,7 +33,7 @@ function svc(over: Partial<RiskViewDeps> = {}) {
 
 describe('RiskViewService — composition', () => {
   it('summarizes signals, derives consent + TPP anomaly counts, surfaces the liability monitor', async () => {
-    const { data, freshness } = await svc().view(risk)
+    const { data, freshness } = await svc().view(risk, 'trace-test')
     expect((data.signal_summary as { active_total: number }).active_total).toBe(6)
     // consent_anomaly(2) + cop_mismatch_spike(1) = 3
     expect((data.consent_anomalies as { active: number }).active).toBe(3)
@@ -48,14 +48,14 @@ describe('RiskViewService — composition', () => {
   })
 
   it('does not surface raw signal_data (PII safety) — recent_signals carry typed fields only', async () => {
-    const { data } = await svc().view(risk)
+    const { data } = await svc().view(risk, 'trace-test')
     const header = (data.recent_signals as Record<string, unknown>[])[0]!
     expect(Object.keys(header).sort()).toEqual(['client_id', 'created_at', 'id', 'nebras_liability_event_ref', 'severity', 'signal_type', 'status'])
     expect(header).not.toHaveProperty('signal_data')
   })
 
   it('UIF-04: emits typed bespoke sections (risk-signals kpi-strip + open-by-severity bars)', async () => {
-    const { data } = await svc().view(risk)
+    const { data } = await svc().view(risk, 'trace-test')
     const sections = data.sections as { kind: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[] }[]
     const strip = sections.find((s) => s.kind === 'kpi-strip')
     expect(strip?.stats?.find((st) => st.label === 'Active signals')?.value).toBe('6')
@@ -65,7 +65,7 @@ describe('RiskViewService — composition', () => {
   })
 
   it('rejects a principal without risk:read (defence in depth)', async () => {
-    await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
+    await expect(svc().view(care, 'trace-test')).rejects.toBeInstanceOf(ScopeDeniedError)
   })
 })
 
