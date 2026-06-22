@@ -1,5 +1,6 @@
 import { IDENTIFIER_TYPES, type CareConsent, type CareTimeline, type ConsentSearchResult, type IdentifierType, type CareWriteResult } from '../lib/care'
-import { Notice, ErrorBanner, AuditNote, LoadMore } from './ui'
+import { Notice, ErrorBanner, AuditNote } from './ui'
+import { EventTimeline } from './care/event-timeline'
 import { RevokeForm } from './care/revoke-form'
 import { DisputeForm } from './care/dispute-form'
 
@@ -144,38 +145,6 @@ function ConsentRow({ consent, psu, identifierType, revokeAction }: { consent: C
   )
 }
 
-function TimelinePanel({ timeline, moreHref }: { timeline: CareTimeline; moreHref?: string | null }) {
-  return (
-    <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="event-history">
-      <div className="px-4 py-3 border-b border-outline-variant">
-        <h2 className="font-bold text-sm text-primary uppercase tracking-widest">24-Month Event History</h2>
-      </div>
-      <ol className="p-4 space-y-4">
-        {timeline.events.length === 0 ? (
-          <li className="text-xs text-on-surface-variant" data-testid="timeline-empty">
-            No consent lifecycle events in the 24-month window.
-          </li>
-        ) : (
-          timeline.events.map((e) => (
-            <li key={e.id} className="flex gap-3" data-testid={`event-${e.id}`}>
-              <span className="mt-1 w-2 h-2 rounded-full bg-secondary shrink-0" aria-hidden />
-              <div>
-                <p className="text-xs font-mono text-on-surface-variant">{e.created_at}</p>
-                <p className="text-xs text-primary">
-                  <span className="font-bold uppercase">{e.event_type}</span>
-                  {e.event_subtype ? ` · ${e.event_subtype}` : ''}
-                  {e.consent_id ? ` · ${e.consent_id}` : ''}
-                </p>
-              </div>
-            </li>
-          ))
-        )}
-      </ol>
-      <LoadMore moreHref={moreHref ?? null} shown={timeline.events.length} noun="events" />
-    </div>
-  )
-}
-
 function InvestigationModule({ psu, identifierType, disputeAction }: { psu: string; identifierType: string; disputeAction?: CareConsoleProps['disputeAction'] }) {
   return (
     <div className="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-breach rounded-xl shadow-sm" data-testid="investigation-module">
@@ -230,7 +199,7 @@ export function CareConsole({ query, result, timeline, timelineMoreHref, error, 
                 )}
               </div>
             </div>
-            {timeline ? <TimelinePanel timeline={timeline} moreHref={timelineMoreHref} /> : null}
+            {timeline ? <EventTimeline timeline={timeline} moreHref={timelineMoreHref} /> : null}
           </div>
         </div>
       ) : null}
