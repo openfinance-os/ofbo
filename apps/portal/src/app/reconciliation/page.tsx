@@ -7,6 +7,7 @@ import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { listBreaks, listRuns, ReconApiError, type ReconciliationBreak, type ReconciliationRun } from '../../lib/reconciliation'
+import { getReconFinance, type ReconFinance } from '../../lib/recon-finance'
 import { claimBreakAction, resolveBreakAction } from './actions'
 
 /**
@@ -77,6 +78,10 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     }
   }
 
+  // UIF-07b — TPP-aaS financial reconciliation (Finance View margin; same reconciliation:read
+  // scope). Degrades to null on any error so the console renders without it.
+  const finance: ReconFinance | null = await getReconFinance(token)
+
   return (
     <AppShell
       badges={token ? await shellBadges(token) : undefined}
@@ -93,6 +98,7 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
         errorRemediation={errorRemediation}
         errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
+        finance={finance}
         canWrite={canWrite}
         claimAction={claimBreakAction}
         resolveAction={resolveBreakAction}
