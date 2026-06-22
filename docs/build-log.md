@@ -1664,3 +1664,11 @@ The Compliance View's four cross-fintech metric reads (consent volumes, dispute 
 Internal read-path refactor — compliance-view response shape unchanged, no spec change. typecheck/lint, unit 908, integration 7/7 (compliance int asserts the cross-tenant read + exactly 4 cross_fintech_query bypass logs). Reviewers: hard-stop PASS, conformance CONFORMANT. Code-only PR (docs here on main to avoid the build-log merge-race).
 
 BACKOFFICE-33 stays in-progress — PRs 3-5: route the other analytics views (executive/finance/risk/operations) through the governed path, demo-seed the purposes, four-eyes on new-purpose registration.
+
+---
+
+## 2026-06-22 — BACKOFFICE-33 PR 3/5 merged: seed the BD-13 query purposes (#229)
+
+`seedDemoDataset` now seeds the 6 BD-13 cross-fintech query purposes into query_purpose_registry (pre-approved, idempotent) + a BCBS 239 lineage row. Fixes a latent regression from PR 2: the governed Compliance read rejects unregistered purposes, but the demo seed didn't seed them — so a freshly-seeded DB (incl. the auto-deployed hosted demo, whose deploy runs db:seed:demo → seedDemoScenario → seedDemoDataset) would 've failed /compliance with UNREGISTERED_QUERY_PURPOSE. seed.int asserts 6 purposes approved + lineage. unit 913, seed.int 5/5, Q4.5 PASSED. Reviewers: hard-stop PASS, conformance CONFORMANT.
+
+BACKOFFICE-33 remaining: PR 4 (route executive/finance/risk/operations through the governed path — note executive/finance pull from shared stores, higher blast radius) + PR 5 (four-eyes on new-purpose registration).
