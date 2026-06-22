@@ -1654,3 +1654,13 @@ User-directed (live feedback after viewing the running app).
 - **/profile** (in the shell): the signed-in role + its purpose, "What you can do" (scope-gated modules it can open), and "Your privileges" — each scope in plain language (SCOPE_DESCRIPTIONS) with the raw scope kept subtly alongside; a "Switch persona" action. Read-only; shows only the caller's own minted scopes (no grant/widen).
 - Token-only, no PII. TDD: app-shell.spec (friendly label, identity→/profile, no scope-count), profile-view.spec (role, reachable modules, plain-language privileges + raw scope, super-admin, axe). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 913, build OK. Reviewer: hard-stop PASS (scope hygiene — own scopes only, no grant; zero PII; token-only; sign-in/audit intact). Merged #225 (34633750).
 - **Regression + fix (#226)**: the portal E2E (portal.e2e.ts:23) still asserted the RAW persona key on role-badge, so Q3 Playwright went red — and the merge-watcher merged #225 before the E2E had registered (a polling race). Fixed forward: aligned the E2E to the friendly "Platform Super Admin" label + locked the identity-chip→/profile link. Merged #226 (474e9823) with ALL checks green (E2E included). Lessons: grep the E2E suite when a testid's text/structure changes; the watcher must wait for checks to register (use `gh pr checks --watch`).
+
+---
+
+## 2026-06-22 — BACKOFFICE-33 PR 2/5 merged: Compliance View reads via the governed path (#228)
+
+The Compliance View's four cross-fintech metric reads (consent volumes, dispute + risk backlogs, report library) now run through `runGovernedAggregate` (purpose `compliance_reporting`): as `bank_internal_view` (RLS bypassed across tenants), purpose-gated (reject if unregistered), and each bypass High-class logged (`cross_fintech_query`: purpose_code + row_count, written as ofbo_app). `PgComplianceMetricsStore.read(ctx, fn)` falls back to the single-tenant `ofbo_app` read when no ctx is supplied, so non-migrated callers (executive dashboard) are unchanged. Trace id threaded through the service + analytics-export `getViewData` path.
+
+Internal read-path refactor — compliance-view response shape unchanged, no spec change. typecheck/lint, unit 908, integration 7/7 (compliance int asserts the cross-tenant read + exactly 4 cross_fintech_query bypass logs). Reviewers: hard-stop PASS, conformance CONFORMANT. Code-only PR (docs here on main to avoid the build-log merge-race).
+
+BACKOFFICE-33 stays in-progress — PRs 3-5: route the other analytics views (executive/finance/risk/operations) through the governed path, demo-seed the purposes, four-eyes on new-purpose registration.
