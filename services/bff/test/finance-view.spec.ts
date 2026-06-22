@@ -55,6 +55,25 @@ describe('FinanceViewService — composition', () => {
     expect(freshness.view_refreshed_at).toBe('2026-05-15T12:00:00.000Z')
   })
 
+  it('UIF: emits typed sections the portal renders as bespoke panels (money in major units, no PSU PII)', async () => {
+    const { data } = await svc().view(finance, PERIOD)
+    const sections = data.sections as { kind: string; title: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[] }[]
+    const byKind = (k: string) => sections.filter((s) => s.kind === k)
+
+    const kpi = byKind('kpi-strip')[0]!
+    expect(kpi.title).toBe('Finance Overview')
+    expect(kpi.stats?.find((s) => s.label === 'MTD Nebras fee accrual')?.value).toBe('AED 5.50') // 550 minor → major
+    expect(kpi.stats?.find((s) => s.label === 'TPP-aaS margin')?.value).toBe('AED 0.30')
+    expect(kpi.stats?.find((s) => s.label === 'Open Nebras disputes')?.value).toBe('3')
+
+    const bars = byKind('contribution-bars')
+    expect(bars.map((b) => b.title)).toEqual(['Fee Accrual by Line Type', 'Margin by Product Family'])
+    expect(bars[0]?.segments).toEqual([{ label: 'lfi_access_log', value: 50 }, { label: 'payment_settlement', value: 500 }])
+    expect(bars[1]?.segments).toEqual([{ label: 'SIP', value: 30 }])
+
+    expect(JSON.stringify(sections)).not.toMatch(/784|emirates|iban|psu_/i)
+  })
+
   it('marks the view stale (amber) when the period has no ingested aggregates', async () => {
     const { data, freshness } = await svc({ feeAccrual: { feeAccrualForPeriod: async () => null } }).view(finance, PERIOD)
     expect(data.mtd_nebras_fee_accrual).toEqual({ amount: 0, currency: 'AED' })
