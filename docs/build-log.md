@@ -1642,3 +1642,15 @@ Control core for the platform's highest-sensitivity data path (cross-fintech RLS
 Process note: the PR stalled for hours because it went CONFLICTING on this build-log.md (parallel sessions append constantly) — GitHub silently won't schedule pull_request CI for an unmergeable PR, which looked like an Actions outage but wasn't. Fix: the merged PR is packages/db-only (additive, never conflicts); build-log/backlog land here directly on main. Lesson: watch the PR `mergeable` state, not just CI presence.
 
 BACKOFFICE-33 stays in-progress — PRs 2-5: route analytics reads through the governed path, demo-seed integration, four-eyes on new-purpose registration, end-to-end tests.
+
+---
+
+## 2026-06-22 — UX: collapsed-brand monogram + friendly identity chip & /profile — PR #225 (+ E2E fix #226)
+
+User-directed (live feedback after viewing the running app).
+
+- **Collapsed sidebar overlap**: the "OFBO" wordmark overflowed the 64px collapsed rail → replaced with a compact "OF" monogram tile (bg-nav-elevated) that fits; the "OFBO Portal" wordmark shows only when expanded (sr-only full name kept).
+- **De-geeked top bar**: dropped the raw persona key + "N scopes" count; now a friendly "Signed in as <Role>" chip (personaLabel: finance-analyst → Finance Analyst) that links to a new **/profile**.
+- **/profile** (in the shell): the signed-in role + its purpose, "What you can do" (scope-gated modules it can open), and "Your privileges" — each scope in plain language (SCOPE_DESCRIPTIONS) with the raw scope kept subtly alongside; a "Switch persona" action. Read-only; shows only the caller's own minted scopes (no grant/widen).
+- Token-only, no PII. TDD: app-shell.spec (friendly label, identity→/profile, no scope-count), profile-view.spec (role, reachable modules, plain-language privileges + raw scope, super-admin, axe). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 913, build OK. Reviewer: hard-stop PASS (scope hygiene — own scopes only, no grant; zero PII; token-only; sign-in/audit intact). Merged #225 (34633750).
+- **Regression + fix (#226)**: the portal E2E (portal.e2e.ts:23) still asserted the RAW persona key on role-badge, so Q3 Playwright went red — and the merge-watcher merged #225 before the E2E had registered (a polling race). Fixed forward: aligned the E2E to the friendly "Platform Super Admin" label + locked the identity-chip→/profile link. Merged #226 (474e9823) with ALL checks green (E2E included). Lessons: grep the E2E suite when a testid's text/structure changes; the watcher must wait for checks to register (use `gh pr checks --watch`).
