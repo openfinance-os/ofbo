@@ -66,15 +66,33 @@ export function ProfileView({ principal }: { principal: ShellPrincipal }) {
         </ul>
       </section>
 
-      <form action="/api/logout" method="post">
-        <button
-          type="submit"
-          data-testid="profile-switch-persona"
-          className="rounded-lg border border-outline-variant px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
-          Switch persona
-        </button>
-      </form>
+      <section className="rounded-xl border border-demo/30 bg-demo/5 p-5" aria-labelledby="persona-switch-heading" data-testid="persona-switch">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="font-symbols text-demo" aria-hidden>
+            swap_horiz
+          </span>
+          <h2 id="persona-switch-heading" className="text-sm font-bold uppercase tracking-widest text-demo">
+            Demo · explore the other roles
+          </h2>
+        </div>
+        <p className="mb-4 max-w-prose text-sm text-on-surface-variant">
+          Switching roles lets you experience the back office from every angle — Finance, Customer Care, Risk,
+          Operations and more — each with its own scoped view. This is a <strong>demo convenience</strong>: in
+          production you sign in once through your bank&apos;s identity provider, and there is no role-swapping.
+        </p>
+        <form action="/api/logout" method="post">
+          <button
+            type="submit"
+            data-testid="profile-switch-persona"
+            className="inline-flex items-center gap-2 rounded-lg bg-nav px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-nav-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <span className="font-symbols text-base" aria-hidden>
+              swap_horiz
+            </span>
+            Switch to another role
+          </button>
+        </form>
+      </section>
     </div>
   )
 }

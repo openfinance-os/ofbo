@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { visibleModules } from '../lib/nav'
 import { SCOPES } from '../lib/scopes'
 import { personaLabel } from '../lib/persona-guide'
+import { OfboMark } from './ofbo-mark'
 
 /**
  * UI-01 — the design-system app shell (translated from the Stitch "OFBO Portal"
@@ -15,7 +16,7 @@ import { personaLabel } from '../lib/persona-guide'
  * UX-10 (ADR 0013 Option 1) — responsive-safe: below `lg` the sidebar is an off-canvas
  * drawer (mobile hamburger + scrim backdrop); on `lg+` it is the in-flow, collapsible rail.
  * The desktop collapse is `lg:`-scoped so the mobile drawer always shows full labels. The
- * top bar wraps; the density toggle is wired (see [data-density] rules in globals.css).
+ * top bar wraps. (The persona switch is a demo affordance — production signs in via the bank IdP.)
  */
 
 export interface ShellPrincipal {
@@ -27,7 +28,6 @@ export interface ShellPrincipal {
 
 export function AppShell({ principal, active, badges, children }: { principal: ShellPrincipal; active?: string; badges?: Record<string, number>; children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
-  const [compact, setCompact] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const modules = visibleModules(principal.scopes, principal.superadmin)
   // UX-08 — the header search is a scope-aware PSU quick-lookup that routes to the Care
@@ -37,7 +37,7 @@ export function AppShell({ principal, active, badges, children }: { principal: S
   const closeDrawer = () => setDrawerOpen(false)
 
   return (
-    <div className="flex min-h-screen bg-background text-on-surface" data-testid="app-shell" data-density={compact ? 'compact' : 'comfortable'}>
+    <div className="flex min-h-screen bg-background text-on-surface" data-testid="app-shell">
       <a href="#shell-content" className="skip-link" data-testid="skip-link">Skip to main content</a>
 
       {/* UX-10 — scrim backdrop behind the mobile drawer (below lg only) */}
@@ -63,8 +63,8 @@ export function AppShell({ principal, active, badges, children }: { principal: S
               when there's room. The wordmark hides on the collapsed lg rail so it can't
               overflow/overlap the rail. */}
           <span className="flex items-center gap-2 font-bold text-white">
-            <span aria-hidden className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-nav-elevated text-sm font-bold tracking-tight text-white">
-              OF
+            <span aria-hidden className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-nav-elevated">
+              <OfboMark className="h-5 w-5" />
             </span>
             <span className={collapsed ? 'lg:hidden' : undefined}>OFBO Portal</span>
             <span className="sr-only">OFBO Portal</span>
@@ -114,11 +114,13 @@ export function AppShell({ principal, active, badges, children }: { principal: S
           })}
         </nav>
         <form action="/api/logout" method="post" className="mt-auto px-2">
-          <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch persona' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-nav hover:bg-nav-elevated hover:text-white cursor-pointer">
+          <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch role (demo only)' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-nav hover:bg-nav-elevated hover:text-white cursor-pointer">
             <span className="font-symbols text-base" aria-hidden>
-              switch_account
+              swap_horiz
             </span>
-            <span className={collapsed ? 'lg:hidden' : undefined}>Switch persona</span>
+            <span className={collapsed ? 'lg:hidden' : undefined}>
+              Switch role <span className="text-demo font-semibold">· demo</span>
+            </span>
           </button>
         </form>
       </aside>
@@ -150,9 +152,6 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button type="button" onClick={() => setCompact((d) => !d)} data-testid="density-toggle" aria-pressed={compact} className="text-xs px-3 py-1 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container cursor-pointer">
-              {compact ? 'Compact' : 'Comfortable'}
-            </button>
             {/* Signed-in identity — friendly "Signed in as <Role>", linking to the profile
                 where the persona's privileges are explained (the raw scopes live there, not here). */}
             <a

@@ -142,17 +142,14 @@ describe('AppShell', () => {
     expect(screen.queryByTestId('global-search')).not.toBeInTheDocument()
   })
 
-  it('toggles density (comfortable ↔ compact) and collapses the sidebar', () => {
+  it('collapses the sidebar (the density toggle was removed)', () => {
     render(
       <AppShell principal={finance}>
         <p>x</p>
       </AppShell>
     )
-    const shell = screen.getByTestId('app-shell')
-    expect(shell).toHaveAttribute('data-density', 'comfortable')
-    fireEvent.click(screen.getByTestId('density-toggle'))
-    expect(shell).toHaveAttribute('data-density', 'compact')
-
+    // the comfortable/compact density toggle is gone — it added top-bar clutter for marginal value
+    expect(screen.queryByTestId('density-toggle')).not.toBeInTheDocument()
     const sidebar = screen.getByTestId('sidebar')
     expect(sidebar).toHaveAttribute('data-collapsed', 'false')
     fireEvent.click(screen.getByTestId('toggle-sidebar'))

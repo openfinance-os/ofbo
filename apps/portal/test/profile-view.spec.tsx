@@ -36,6 +36,16 @@ describe('ProfileView', () => {
     expect(screen.getByTestId('profile-privileges')).toHaveTextContent(/super-administrator/i)
   })
 
+  it('frames the persona switch as a demo-only affordance, with a switch action (logout → welcome)', () => {
+    render(<ProfileView principal={finance} />)
+    const sw = screen.getByTestId('persona-switch')
+    expect(sw).toHaveTextContent(/demo/i)
+    expect(sw).toHaveTextContent(/in production you sign in once/i) // production framing
+    const btn = screen.getByTestId('profile-switch-persona')
+    expect(btn).toHaveTextContent(/switch to another role/i)
+    expect(btn.closest('form')).toHaveAttribute('action', '/api/logout')
+  })
+
   it('has no axe violations', async () => {
     const results = await axe(render(<ProfileView principal={finance} />).container, WCAG)
     expect(results.violations.map((v) => v.id)).toEqual([])
