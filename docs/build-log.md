@@ -1347,3 +1347,16 @@ A `/next-story` iteration whose deliverable is a **contract change** — so per 
 - Regenerated `api-types` from the spec; `gen`/`typecheck`/`lint`/**full unit 833** green (the response-schema conformance validator compiles the new envelope fine).
 
 **Parked:** `UIF-SPEC-TYPED-SECTIONS` set `blocked` (awaiting #181 human merge). On merge → mark done; **UIF-03/-04/-05 unblock** (their contract tests + BFF producers emitting typed sections + the bespoke renderer land there). The loop continues at the next eligible item — **UIF-06** (executive dashboard; gated only on UIF-01b, not the spec) — then UIF-07/-08/-09.
+
+---
+
+## 2026-06-22 — UIF-06: executive command dashboard — gauge + four-eyes queue (PR #183)
+
+Added the two signature Stitch "Executive Command" (`d8515d63`) elements the dashboard lacked, on the UIF-01/01b primitives and bound to **live data** (no Stitch mock values):
+
+- **SystemHealthPanel** — a `SectionCard` with the UIF-01b radial **Gauge** bound to the real reconciliation pass rate (latest completed run, from `getDashboardCharts().reconTrend`) = Stitch's System-Heartbeat dial.
+- **FourEyesQueuePanel** — a `SectionCard` listing `listPendingApprovals` as **deep-links to `/approvals/{id}`** with the UX-03c NON-PII `operation_summary` (humanised op type, `formatSummaryMoney`, counterparty, relative expiry via reused `formatExpiry`), a count chip, empty state. **Four-eyes hard-stop honoured:** the queue **never renders inline approve/reject** — execution stays `202` + approval, BFF-side, by a second principal (asserted in the test).
+
+Wired into `app/dashboard` (fetch the pending list + derive pass rate; both degrade on 403/empty). Existing KPI cards + hand-rolled trend/severity charts + audit feed kept (working, token-clean). TDD: `dashboard-command.spec` 6 (gauge meter + value; queue deep-links + money-from-minor-units; NO approve/reject controls; empty; axe). Gates: `gen` no-drift, lint, typecheck, **full unit 840**, design-conformance scans the new file clean, build OK. Reviewers: hard-stop **PASS** (four-eyes + PII verified), contract-conformance **CONFORMANT**. Merged #183 (`9978ea5f`).
+
+**Deferred:** the Stitch sparkline metric tiles (TPP traffic / error rate / settlement vol) — they need analytics series the dashboard getters don't expose (adding them would mean inventing data — a hard-stop — or cross-scope analytics); revisit if those endpoints land. **Next eligible:** UIF-07 (recon three-way), then UIF-08/-09.
