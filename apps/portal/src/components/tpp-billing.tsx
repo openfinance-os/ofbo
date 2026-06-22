@@ -65,36 +65,50 @@ export function RegistryTable({ counterparties, canBilling, registerAction, more
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">Consuming-TPP Registry</h2>
         <span className="bg-secondary-fixed text-on-secondary-fixed px-2 py-0.5 rounded-full text-xs font-bold">{counterparties.length}</span>
       </div>
-      <div className="divide-y divide-outline-variant overflow-x-auto">
+      <div className="overflow-x-auto">
         {counterparties.length === 0 ? (
           <p className="p-4 text-xs text-on-surface-variant" data-testid="registry-empty">
             No consuming TPPs in the registry.
           </p>
         ) : (
-          counterparties.map((c) => {
-            const registerable = canBilling && registerAction && !c.financial_system_ref && (REGISTERABLE_STATES as readonly string[]).includes(c.registration_state)
-            return (
-              <div key={c.organisation_id} className="p-4 flex items-center justify-between gap-4" data-testid={`tpp-${c.organisation_id}`}>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-primary truncate">{c.legal_name}</p>
-                  <p className="text-xs font-mono text-on-surface-variant truncate">{c.organisation_id}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <StatusPill status={c.production_status} />
-                    <StatusPill status={c.registration_state} />
-                    {c.unbilled_traffic ? <span className="text-xs font-bold text-breach" data-testid={`unbilled-${c.organisation_id}`}>● unbilled traffic</span> : null}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="font-mono text-xs text-on-surface-variant" data-testid={`accrual-${c.organisation_id}`}>
-                    {formatMoney(c.mtd_fee_accrual)}
-                  </span>
-                  {registerable && registerAction ? (
-                    <RegisterForm organisationId={c.organisation_id} action={registerAction} />
-                  ) : null}
-                </div>
-              </div>
-            )
-          })
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-on-surface-variant">
+                <th scope="col" className="px-4 py-2 text-left font-semibold">TPP</th>
+                <th scope="col" className="px-4 py-2 text-left font-semibold">Status</th>
+                <th scope="col" className="px-4 py-2 text-right font-semibold">MTD accrual</th>
+                <th scope="col" className="px-4 py-2 text-right font-semibold">
+                  <span className="sr-only">Action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {counterparties.map((c) => {
+                const registerable = canBilling && registerAction && !c.financial_system_ref && (REGISTERABLE_STATES as readonly string[]).includes(c.registration_state)
+                return (
+                  <tr key={c.organisation_id} className="align-top" data-testid={`tpp-${c.organisation_id}`}>
+                    <td className="min-w-0 px-4 py-3">
+                      <p className="truncate text-sm font-bold text-primary">{c.legal_name}</p>
+                      <p className="truncate font-mono text-xs text-on-surface-variant">{c.organisation_id}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusPill status={c.production_status} />
+                        <StatusPill status={c.registration_state} />
+                        {c.unbilled_traffic ? <span className="text-xs font-bold text-breach" data-testid={`unbilled-${c.organisation_id}`}>● unbilled traffic</span> : null}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-xs text-on-surface-variant" data-testid={`accrual-${c.organisation_id}`}>
+                      {formatMoney(c.mtd_fee_accrual)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {registerable && registerAction ? <RegisterForm organisationId={c.organisation_id} action={registerAction} /> : null}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         )}
       </div>
       <LoadMore moreHref={moreHref ?? null} shown={counterparties.length} noun="TPPs" />
