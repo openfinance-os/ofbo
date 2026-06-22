@@ -1479,3 +1479,26 @@ The last bespoke screen, shipped under the autonomous `/loop`. Same BFF-only pat
 ### Bespoke-screen tranche COMPLETE (UIF-03 / -04 / -05)
 
 All three generic-grid analytics screens — Analytics, Risk, Operations — now render bespoke typed-section panels (gauges / contribution-bars / KPI strips / status-cards / tables) bound to live, scope-gated BFF data, via the one shared UIF-03 renderer. Combined with UIF-01/01b (primitives + @visx), UIF-02 (sign-in/shell), and the dashboard/recon/tpp/care bespoke work, **the original "looks like shit" complaint is comprehensively resolved**. Only **UIF-10** (the final Stitch re-audit + canonical screen-id pinning + design-conformance-audit.md update) remains.
+
+---
+
+## 2026-06-22 — UIF-10: re-audit vs Stitch — UI-FIDELITY track COMPLETE — PR #202 [autonomous /loop]
+
+The closing gate. Re-read every portal screen on `main` after UIF-01..09 and rewrote `docs/design-conformance-audit.md` (2026-06-22 re-audit), reconciling each verdict against the original 2026-06-21 Stitch findings.
+
+- **Analytics / Risk / Operations** — the three MAJOR-DRIFT generic-renderer screens → **CONFORMANT**, resolved by the bespoke typed-section panels (UIF-03/04/05; **ADR 0016 supersedes 0012**).
+- **Reconciliation / TPP-Billing** — MAJOR → MINOR (UIF-07/08/08b/08c; remainder gated UIF-07b).
+- **Care** — MINOR, improved (timeline UIF-09; bulk-revoke/per-row-investigate gated UIF-09b).
+- **Investigation** — still MISSING REF (UIF-09b — needs a Stitch screen + a human call).
+- **Target met: no MAJOR-DRIFT remains.** Canonical Stitch screen id pinned per route in the audit doc's reference map. Docs-only — lint clean, full unit 876, build OK. Reviewers: hard-stop **PASS**, conformance **CONFORMANT** (doc's spec claims verified against the OpenAPI). Merged #202 (`d9efd389`).
+
+### UI-FIDELITY track CLOSED + autonomous loop drained
+
+The full track shipped this session: UIF-01/01b (token primitives + @visx charts), UIF-02 (sign-in/shell), UIF-03/04/05 (Analytics/Risk/Operations bespoke panels), UIF-06 (dashboard), UIF-07 (recon outcome), UIF-08/08b/08c (TPP overview/filter/table), UIF-09 (care timeline), UIF-10 (this re-audit) — plus ADR 0016 + the typed-sections spec (#181). The original "the portal looks like shit" finding is resolved at the appearance/composition level.
+
+**Eligible queue is now EMPTY — the loop is winding down.** All remaining backlog items are human/design-gated, not loop-eligible:
+- **UIF-07b** — recon three-source comparison table + Margin-by-Fintech (needs a finance sign-off + the Stitch 'Refined' data shapes).
+- **UIF-09b** — generate the finance Investigation screen in Stitch; bulk-revoke header + per-row Investigate on Care (design/flow prerequisite).
+- **BACKOFFICE-33** — BD-13 governance sign-off (cross-fintech aggregation).
+- **BACKOFFICE-52** — PRD §7 'Must' awaiting backlog/decision.
+- **M6-PORT-SWAPS** — per-bank enterprise engagement (systems + credentials).
