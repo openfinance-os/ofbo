@@ -223,7 +223,25 @@ dedicated spec PR). Pre-PR, two subagents review the diff: `contract-conformance
 egress, four-eyes, profile branching). `Q5` (manual prod approval) is evidenced at
 release time via `release-evidence.yml`, not on every PR.
 
-## 8. Diagrams
+## 8. The regulated-entity brain — training the model on the institution
+
+A regulated entity is not generic, so the model cannot be either. When the model is
+dropped into an institution it has to be **trained on it** — given the context that
+makes that entity what it is: how it works, how it words things, how it abbreviates,
+and how it is regulated. That context is a first-class asset — a **regulated-entity
+brain** the harnesses read from at every step and write back to after every cycle.
+
+- **Seeded** from what the entity already has — policies & standards, governance & org structure, glossaries & house style, regulator mandates, system & vendor inventory, past decisions.
+- **Two layers** — *general practice* ships with the model (conventions, security posture, regulatory patterns: four-eyes, INSERT-only audit, lineage); *entity-specific context* is built up over time (ways of working, terminology & wording, abbreviations & acronyms, regulatory specifics, systems & ports mapping, personas & scopes, risk taxonomy, decisions/ADRs).
+- **One governed home** — versioned in the repo: `CLAUDE.md` (binding conventions), the memory store, ADRs (decisions), and configuration (the entity's port mappings). A single source of truth, not tribal knowledge.
+- **Compounds every cycle** — each discovery and delivery deposits new context, so onboarding the next solution gets faster, safer and more clearly the entity's own.
+
+The model is generic by design and therefore copyable; the trained brain is not. It is
+the moat — where general best practice and the institution's own identity meet, turning
+"a way to build" into *this regulated entity's* way of building. See
+`docs/diagrams/entity-brain.svg`.
+
+## 9. Diagrams
 
 Standalone SVGs in `docs/diagrams/`:
 
@@ -231,6 +249,7 @@ Standalone SVGs in `docs/diagrams/`:
 |------|---------------|
 | `double-diamond.svg` | The whole process as two diamonds — discovery + delivery |
 | `discovery-harness.svg` | Discovery harness (Diamond 1) — challenge → agreed PRD |
+| `entity-brain.svg` | The regulated-entity brain — context that adapts the model |
 | `architecture.svg` | Layered runtime architecture (portal → BFF → ports → externals) |
 | `dependency-graph.svg` | Internal pnpm workspace import edges |
 | `fraud-revoke-sequence.svg` | Four-eyes fraud-revoke flow (BACKOFFICE-22) |

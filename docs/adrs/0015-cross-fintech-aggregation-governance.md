@@ -1,6 +1,6 @@
 # ADR 0015 — Cross-fintech aggregation governance (BD-13 / BACKOFFICE-33)
 
-- Status: **Proposed** — awaiting human (data governance + compliance) sign-off
+- Status: **Accepted — Option 1 + four-eyes on new-purpose registration** (user / BD-13 sign-off, 2026-06-22)
 - Date: 2026-06-21
 - Related: BACKOFFICE-33, BD-13, PRD §7 (BACKOFFICE-27/-33/-40) + §"Cross-fintech aggregation control"; migrations `0001_roles.sql`, `0002_tables.sql` (`query_purpose_registry`), `0003_rls.sql`; `services/bff/src/analytics/*`
 
@@ -39,10 +39,31 @@ Data governance + compliance must confirm three things before this is enabled:
 
 ## Decision
 
-_Pending data-governance + compliance sign-off (BD-13)._
+**Accepted by the user (BD-13 sign-off) on 2026-06-22: Option 1 + four-eyes on new-purpose
+registration.** Implement the PRD control as specified; new purposes registered after the
+seed go through the four-eyes approvals primitive (the `query_purpose_registry.approved_by`
+column already supports it). BACKOFFICE-33 is unblocked.
 
-- **If approved (Option 1/2):** unblock BACKOFFICE-33 → (a) route the analytics aggregates through `bank_internal_view` with purpose-match-or-reject against `query_purpose_registry`; (b) High-class log every bypass query (text + row count, PII-redacted at emission); (c) seed the approved purposes (+ four-eyes on new-purpose registration if Option 2); (d) a contract/integration test proving a non-registered purpose is **rejected** and that tenant-scoped roles cannot read the aggregate output. Each as its own PR.
-- **If deferred (Option 3):** record cross-fintech aggregation as out-of-scope until sign-off; keep BACKOFFICE-33 blocked.
+### Approved starter purpose set (seeded pre-approved under this sign-off)
+
+| `purpose_code` | Description | Consumer |
+|---|---|---|
+| `executive_dashboard` | Cross-fintech executive commercial + programme KPIs (incl. onboarding funnel) | BACKOFFICE-27 |
+| `finance_view` | Cross-fintech fee accrual + TPP-aaS margin | BACKOFFICE-31 |
+| `risk_monitoring` | Platform-wide risk signals + liability monitor | BACKOFFICE-30 |
+| `operations_monitoring` | Platform health, certification pipeline, outages, recon SLO | BACKOFFICE-28 |
+| `compliance_reporting` | Consent volumes, retention posture, dispute/risk backlogs | BACKOFFICE-29 |
+| `regulatory_periodic_report` | CBUAE periodic cross-fintech regulatory report generation | BACKOFFICE-23/-35 |
+
+### Build (each its own PR, normal flow)
+1. A `beginInternalViewTx()` preamble (mirrors `beginAppTx`) — `BEGIN; SET LOCAL ROLE bank_internal_view` (no `app.bank_id` pin → reads the `internal_view_select USING(true)` MVs across `bank_id`), gated by a **purpose-match-or-reject** lookup in `query_purpose_registry` and a **High-class log** of each bypass query (purpose_code + row count; PII-redacted).
+2. Seed the six approved purposes (`registered_by='system:bd-13-seed'`, `approved_by` set).
+3. Route the analytics stores' aggregate reads from the single-tenant base tables to the cross-fintech MVs via the governed path, each declaring its `purpose_code`.
+4. Four-eyes on registering a **new** purpose (via the approvals primitive → 202 + approval_request).
+5. Tests: an unregistered purpose is **rejected**; a tenant-scoped (`ofbo_app`) role **cannot** read the aggregate output; the four-eyes new-purpose flow.
+
+### Note on what changes
+The current dashboards read SINGLE-TENANT (`ofbo_app` + RLS pinned to one `bank_id`) — they do not yet read the cross-fintech MVs. BACKOFFICE-33 is the switch to genuine cross-fintech reads under the governed role; in the single-bank demo the visible numbers may be unchanged, but the **governed control path** (role + purpose-gate + log) is what ships.
 
 ## Consequences
 

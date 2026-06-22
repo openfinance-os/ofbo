@@ -1540,3 +1540,15 @@ User-directed unblock of UIF-07b's margin slice (after the demo-margin enrichmen
 - **Residual (own follow-ups, not delivered):** (a) the literal per-source LINE-amount table needs source-B totals the recon contract doesn't expose → a recon spec-change; (c) Export/monthly Sign-off is a four-eyes mutation (BACKOFFICE-06) → a standalone story.
 
 Backlog after this: zero loop-eligible items; remaining blocked items (UIF-09b, BACKOFFICE-33, -52, M6) all need a human decision/input.
+
+---
+
+## 2026-06-22 — BD-13 sign-off: ADR 0015 accepted (Option 1 + four-eyes); BACKOFFICE-33 unblocked
+
+User signed off BD-13 via **ADR 0015 → Accepted (Option 1 + four-eyes on new-purpose registration)** and approved the starter purpose set. BACKOFFICE-33 (governed cross-fintech aggregation) is now eligible.
+
+**Approved starter `query_purpose_registry` set** (seeded pre-approved): `executive_dashboard`, `finance_view`, `risk_monitoring`, `operations_monitoring`, `compliance_reporting`, `regulatory_periodic_report`. New purposes added later require four-eyes (the `approved_by` column supports it via the approvals primitive).
+
+**Finding that reframes the work:** the dashboards currently read SINGLE-TENANT (`ofbo_app` + RLS pinned to one `bank_id`) — they don't yet read the cross-fintech MVs (granted only to `bank_internal_view`). BACKOFFICE-33 is the switch to genuine cross-fintech reads under the governed role + purpose-gate + High-class query log. In the single-bank demo the visible numbers may be unchanged; the governed control path is what ships.
+
+**Build plan (each its own PR):** (1) `beginInternalViewTx()` (role + purpose-match-or-reject + High-class log); (2) seed the six purposes; (3) route analytics aggregate reads to the cross-fintech MVs via the governed path; (4) four-eyes on new-purpose registration; (5) tests (unregistered-purpose rejected, tenant role can't read aggregate output, four-eyes flow). ADR 0015 + BACKOFFICE-33 backlog updated. Docs-only commit to main; implementation follows.
