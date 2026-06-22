@@ -69,7 +69,37 @@ export class FinanceViewService {
       this.deps.unbilled.unbilledTrafficCount()
     ])
 
+    // UIF (ADR 0016 D1) — typed sections the portal renders as bespoke panels (same shared
+    // renderer as Analytics/Risk/Operations); money shown in major units, no PSU PII.
+    const cur = accrual?.currency ?? margin.currency ?? 'AED'
+    const fmtMoney = (minor: number) => `${cur} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const marginByFamily: Record<string, number> = {}
+    for (const fm of Object.values(margin.by_fintech)) {
+      for (const [family, acc] of Object.entries(fm.by_family)) marginByFamily[family] = (marginByFamily[family] ?? 0) + acc.margin
+    }
+    const feeSegments = (accrual?.by_line_type ?? [])
+      .map((l) => ({ label: l.line_type, value: l.total_fee_minor }))
+      .filter((s) => s.value > 0)
+    const familySegments = Object.entries(marginByFamily)
+      .map(([label, value]) => ({ label, value }))
+      .filter((s) => s.value > 0)
+    const sections: Record<string, unknown>[] = [
+      {
+        kind: 'kpi-strip',
+        title: 'Finance Overview',
+        stats: [
+          { label: 'MTD Nebras fee accrual', value: fmtMoney(accrual?.total_fee_minor ?? 0) },
+          { label: 'TPP-aaS margin', value: fmtMoney(margin.total_margin) },
+          { label: 'Open Nebras disputes', value: String(openDisputes) },
+          { label: 'Unbilled-traffic alerts', value: String(unbilled) }
+        ]
+      }
+    ]
+    if (feeSegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Fee Accrual by Line Type', segments: feeSegments })
+    if (familySegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Margin by Product Family', segments: familySegments })
+
     const data = {
+      sections,
       period: p,
       mtd_nebras_fee_accrual: { amount: accrual?.total_fee_minor ?? 0, currency: accrual?.currency ?? 'AED' },
       fee_accrual_by_line_type: (accrual?.by_line_type ?? []).map((l) => ({ line_type: l.line_type, amount: { amount: l.total_fee_minor, currency: accrual!.currency }, line_count: l.line_count })),

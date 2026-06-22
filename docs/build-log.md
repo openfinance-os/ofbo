@@ -1516,3 +1516,15 @@ Fix (BFF-only — the portal renderer already supports it): `services/bff/src/an
 - **object-table** "Retention Lifecycle (hot / warm / immutable)".
 
 Aggregate counts + table names only — no PSU PII (test asserts it). A first review caught a real enum drift (`alert.severity: 'high'` → not in `AnalyticsAlert`'s `[info, warning, critical]`); fixed to `critical`. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. 877 unit pass (compliance-view.spec +1); typecheck + lint clean.
+
+---
+
+## 2026-06-22 — Finance View brought up to UI-FIDELITY (bespoke panels)
+
+Found while checking the screens after the compliance fix: `/analytics` was only half-updated — the **Executive Dashboard** had bespoke panels but the **Finance View** still rendered the generic grid. Same root cause as compliance: the finance-view BFF producer never emitted typed `data.sections` (no UIF commit in its history).
+
+Fix (BFF-only): `services/bff/src/analytics/finance-view.ts` now emits typed sections — a **kpi-strip "Finance Overview"** (MTD fee accrual + total TPP-aaS margin in major units, open Nebras disputes, unbilled-traffic alerts), **contribution-bars "Fee Accrual by Line Type"**, and **contribution-bars "Margin by Product Family"** (mirroring the executive dashboard's margin rollup). The existing free-form `data.*` fields are unchanged (wire Money stays integer minor units). Aggregate finance figures + institutional labels only — no PSU PII (test asserts).
+
+Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. 879 unit pass (finance-view.spec +1); typecheck + lint clean.
+
+With this, all four analytics-renderer screens (Analytics[exec+finance] / Risk / Operations / Compliance) render bespoke typed-section panels.
