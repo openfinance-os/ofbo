@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import type { RiskSignalSummary, LiabilityMonitor, RiskSignalHeader } from '@ofbo/db'
+import type { RiskSignalSummary, LiabilityMonitor, RiskSignalHeader, GovernedReadContext } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
@@ -23,8 +23,8 @@ const CONSENT_ANOMALY_TYPES = ['consent_anomaly', 'cop_mismatch_spike']
 const TPP_ANOMALY_TYPES = ['tpp_behaviour', 'agent_anomaly']
 
 export interface RiskMetricsReader {
-  summary(): Promise<RiskSignalSummary>
-  liabilityMonitor(): Promise<LiabilityMonitor>
+  summary(ctx?: GovernedReadContext): Promise<RiskSignalSummary>
+  liabilityMonitor(ctx?: GovernedReadContext): Promise<LiabilityMonitor>
   recentActive(limit?: number): Promise<RiskSignalHeader[]>
 }
 
@@ -38,13 +38,17 @@ const sumTypes = (by: Record<string, number>, types: string[]) => types.reduce((
 export class RiskViewService {
   constructor(private readonly deps: RiskViewDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
+  async view(principal: Principal, traceId: string): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, RISK_VIEW_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
 
+    // Cross-fintech aggregate reads are purpose-gated + High-class logged via the governed path
+    // (BACKOFFICE-33, purpose risk_monitoring); the recent-active list stays a tenant-scoped read.
+    const ctx: GovernedReadContext = { actingPrincipal: principal.subject, actingPersona: principal.persona, scopeUsed: RISK_VIEW_SCOPE, traceId }
+
     const [summary, liability, recent] = await Promise.all([
-      this.deps.metrics.summary(),
-      this.deps.metrics.liabilityMonitor(),
+      this.deps.metrics.summary(ctx),
+      this.deps.metrics.liabilityMonitor(ctx),
       this.deps.metrics.recentActive(20)
     ])
 
@@ -84,7 +88,7 @@ export function riskViewRoutes(service: RiskViewService): Record<string, Handler
   return {
     'get /back-office/analytics/risk-view': async (c) => {
       try {
-        const { data, freshness } = await service.view(c.get('principal'))
+        const { data, freshness } = await service.view(c.get('principal'), c.req.header('x-fapi-interaction-id') ?? 'unknown')
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
         const denied = scopeDenied(c, e)

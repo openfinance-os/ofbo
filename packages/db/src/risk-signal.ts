@@ -1,6 +1,10 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { runGovernedAggregate, type GovernedAuditSink, type GovernedReadContext } from './governed-aggregate.js'
+
+/** BACKOFFICE-33: the risk view's cross-fintech aggregate reads run under this governed purpose. */
+const RISK_PURPOSE = 'risk_monitoring'
 
 /**
  * BACKOFFICE-80: persists Risk View signals (risk_signal table) under the
@@ -140,7 +144,9 @@ export class PgRiskMetricsStore {
   private readonly pool: pg.Pool
   constructor(
     databaseUrl: string,
-    private readonly config: { bankId: string; channel: string }
+    private readonly config: { bankId: string; channel: string },
+    /** Required for the governed (cross-fintech) read path; absent for legacy single-tenant callers. */
+    private readonly audit?: GovernedAuditSink
   ) {
     this.pool = new pg.Pool({ connectionString: databaseUrl })
   }
@@ -160,29 +166,48 @@ export class PgRiskMetricsStore {
     }
   }
 
-  async summary(): Promise<RiskSignalSummary> {
-    return this.asApp(async (c) => {
+  /**
+   * BACKOFFICE-33: an aggregate read. With a per-request `ctx` (+ injected audit sink) it goes
+   * through the GOVERNED cross-fintech path (`bank_internal_view`, purpose `risk_monitoring`,
+   * High-class logged); without `ctx` it falls back to the single-tenant `ofbo_app` read (used by
+   * the liability service + the scheduled monitor, which are not migrated to the governed path).
+   */
+  private async readGoverned<T>(ctx: GovernedReadContext | undefined, fn: (c: pg.PoolClient) => Promise<{ result: T; rowCount: number }>): Promise<T> {
+    if (ctx && this.audit) {
+      return runGovernedAggregate({ pool: this.pool, bankId: this.config.bankId, purposeCode: RISK_PURPOSE, audit: this.audit, ...ctx }, fn)
+    }
+    return this.asApp(async (c) => (await fn(c)).result)
+  }
+
+  async summary(ctx?: GovernedReadContext): Promise<RiskSignalSummary> {
+    return this.readGoverned(ctx, async (c) => {
       const [byType, bySeverity, byStatus] = await Promise.all([
         c.query(`SELECT signal_type AS k, count(*) AS n FROM risk_signal WHERE ${ACTIVE} GROUP BY signal_type`),
         c.query(`SELECT severity AS k, count(*) AS n FROM risk_signal WHERE ${ACTIVE} GROUP BY severity`),
         c.query(`SELECT status AS k, count(*) AS n FROM risk_signal GROUP BY status`)
       ])
       const byT = tallyR(byType.rows)
-      return { active_total: Object.values(byT).reduce((a, b) => a + b, 0), by_type: byT, by_severity: tallyR(bySeverity.rows), by_status: tallyR(byStatus.rows) }
+      return {
+        result: { active_total: Object.values(byT).reduce((a, b) => a + b, 0), by_type: byT, by_severity: tallyR(bySeverity.rows), by_status: tallyR(byStatus.rows) },
+        rowCount: (byType.rowCount ?? 0) + (bySeverity.rowCount ?? 0) + (byStatus.rowCount ?? 0)
+      }
     })
   }
 
-  async liabilityMonitor(): Promise<LiabilityMonitor> {
-    return this.asApp(async (c) => {
+  async liabilityMonitor(ctx?: GovernedReadContext): Promise<LiabilityMonitor> {
+    return this.readGoverned(ctx, async (c) => {
       const [bySeverity, recent] = await Promise.all([
         c.query(`SELECT severity AS k, count(*) AS n FROM risk_signal WHERE signal_type = 'nebras_liability_approach' AND ${ACTIVE} GROUP BY severity`),
         c.query(`SELECT nebras_liability_event_ref, severity, created_at FROM risk_signal WHERE signal_type = 'nebras_liability_approach' AND ${ACTIVE} ORDER BY created_at DESC LIMIT 10`)
       ])
       const by = tallyR(bySeverity.rows)
       return {
-        open_count: Object.values(by).reduce((a, b) => a + b, 0),
-        by_severity: by,
-        recent: recent.rows.map((r) => ({ nebras_liability_event_ref: (r.nebras_liability_event_ref as string) ?? null, severity: r.severity as string, created_at: isoR(r.created_at) }))
+        result: {
+          open_count: Object.values(by).reduce((a, b) => a + b, 0),
+          by_severity: by,
+          recent: recent.rows.map((r) => ({ nebras_liability_event_ref: (r.nebras_liability_event_ref as string) ?? null, severity: r.severity as string, created_at: isoR(r.created_at) }))
+        },
+        rowCount: (bySeverity.rowCount ?? 0) + (recent.rowCount ?? 0)
       }
     })
   }

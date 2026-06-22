@@ -115,7 +115,7 @@ export default {
     const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
     const outageStore = url ? new PgOutageStore(url, tenancy) : undefined
     const complianceMetricsStore = url && audit ? new PgComplianceMetricsStore(url, tenancy, audit) : undefined
-    const riskMetricsStore = url ? new PgRiskMetricsStore(url, tenancy) : undefined
+    const riskMetricsStore = url && audit ? new PgRiskMetricsStore(url, tenancy, audit) : undefined
     const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
     const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
 
