@@ -1455,3 +1455,14 @@ Reopened UX-11; the **first bespoke screen** on the typed analytics-sections con
 - TDD: `uif03-analytics-sections.spec` 8 (all 6 kinds + unknown-degrade + axe) + `executive-dashboard.spec` +2 (sections emitted; base-scope scope hygiene). Gates: gen no-drift, lint, typecheck (all), **full unit 873**, design-conformance clean, analytics + a11y green, **executive-dashboard.int green vs local PG**, build OK. Reviewers: hard-stop **PASS** (scope-gating + minor-unit money), conformance **CONFORMANT**. Merged #196 (`4fe14a3e`).
 
 **The renderer is now shared infrastructure** — UIF-04 (Risk) + UIF-05 (Operations) reuse it, so they shrink to: emit typed sections from their BFF producers (risk-view / operations-console) + the screen already renders them. **Next eligible: UIF-04.**
+
+---
+
+## 2026-06-22 — UIF-04: bespoke Risk panels (BFF-only) — PR #198
+
+Confirmed the UIF-03 renderer pays off: the RiskDashboard already renders typed sections via the shared `AnalyticsSection` wrapper, so UIF-04 was a **BFF-only change (no portal diff)**.
+
+- Both risk producers now emit `data.sections` from live data (no mock values), all `risk:read`: **RiskViewService** — a Risk-Signals kpi-strip (active / consent-anomaly / tpp-anomaly counts) + an Open-Signals-by-Severity contribution-bars; **LiabilityViewService** — a Liability-Events-by-Severity contribution-bars + an Approaching-Triggers object-table (issue/party/accrued_aed/severity). PSU-PII discipline preserved (counts + institutional refs only; no signal_data).
+- TDD: `risk-view.spec` +1, `liability-monitor.spec` +1. Gates: gen no-drift, lint, typecheck (all), **full unit 875**, build OK, **risk-view.int + liability-monitor.int green vs local PG**. Reviewers: hard-stop **PASS** (PII + scope + money), conformance **CONFORMANT**. Merged #198 (`3c8de300`).
+
+**Next eligible: UIF-05 (Operations)** — same BFF-only pattern (operations-console producer emits sections; the OperationsConsole already renders via the shared wrapper). Then **UIF-10** (the final Stitch re-audit — the capstone, run after all bespoke screens are in).
