@@ -20,7 +20,10 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
   test('persona sign-in mints a session and lands on the dashboard app shell', async ({ page }) => {
     await login(page, SUPER)
     await expect(page.getByTestId('app-shell')).toBeVisible()
-    await expect(page.getByTestId('role-badge')).toContainText(SUPER)
+    // the top bar shows the FRIENDLY role label (personaLabel), not the raw persona key;
+    // the raw scopes/privileges moved to /profile (reached via this identity chip).
+    await expect(page.getByTestId('role-badge')).toContainText('Platform Super Admin')
+    await expect(page.getByTestId('persona-badge')).toHaveAttribute('href', '/profile') // identity chip → profile
     await expect(page.getByTestId('superadmin-badge')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible()
     // the High-class audit panel is the dashboard content
