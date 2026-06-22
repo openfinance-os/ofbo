@@ -1685,3 +1685,13 @@ User-directed (live feedback).
 - Token-only, no PII. TDD: app-shell.spec (toggle gone, collapse intact), profile-view.spec (demo-framed switch + logout). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 915, build OK, all CI green (E2E included via --watch). Reviewer: hard-stop PASS. Merged #230 (fd7d8e8a).
 
 Process note: kept watching ALL checks via `gh pr checks --watch` (after the #225 race where a UI testid change broke the E2E and merged before it registered). Grepped the E2E suite for changed testids/text before pushing — switch-persona testid preserved, so E2E unaffected.
+
+---
+
+## 2026-06-22 — BACKOFFICE-33 PR 4/5 merged: Risk View reads via the governed path (#232)
+
+The Risk View's two cross-fintech aggregate reads (summary, liabilityMonitor) now run through `runGovernedAggregate` (purpose `risk_monitoring`): bank_internal_view, purpose-gated, each bypass High-class logged (cross_fintech_query). `PgRiskMetricsStore.readGoverned(ctx, fn)` falls back to single-tenant ofbo_app when no ctx — the liability service + scheduled liability-monitor cron stay single-tenant; the operational risk-signals methods (recentActive/listSignals/getSignal/updateSignalStatus) are unchanged. Trace threaded through service + getViewData.
+
+Internal read-path refactor — risk-view response shape unchanged, no spec change. unit 913, risk-view int asserts the governed reads + 2 cross_fintech_query bypass logs. Reviewers: hard-stop PASS, conformance CONFORMANT.
+
+BACKOFFICE-33 remaining: route operations + executive/finance (executive/finance pull from shared stores — higher blast radius; may warrant their own design pass), and PR 5 (four-eyes on registering a NEW query purpose via the approvals primitive).
