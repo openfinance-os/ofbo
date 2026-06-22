@@ -114,7 +114,7 @@ export default {
     const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
     const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
     const outageStore = url ? new PgOutageStore(url, tenancy) : undefined
-    const complianceMetricsStore = url ? new PgComplianceMetricsStore(url, tenancy) : undefined
+    const complianceMetricsStore = url && audit ? new PgComplianceMetricsStore(url, tenancy, audit) : undefined
     const riskMetricsStore = url ? new PgRiskMetricsStore(url, tenancy) : undefined
     const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
     const auditReader = url ? new PgAuditReader(url, tenancy) : undefined

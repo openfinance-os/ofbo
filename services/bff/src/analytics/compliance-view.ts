@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import type { ConsentVolumes, DisputeBacklog, RiskSignalBacklog, ReportLibrary, RetentionStatusRow } from '@ofbo/db'
+import type { ConsentVolumes, DisputeBacklog, RiskSignalBacklog, ReportLibrary, RetentionStatusRow, GovernedReadContext } from '@ofbo/db'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
@@ -21,10 +21,10 @@ export const COMPLIANCE_VIEW_SCOPE = 'compliance:reports:read'
 const REPORT_GENERATION_DEEPLINK = '/back-office/reports:generate'
 
 export interface ComplianceMetricsReader {
-  consentVolumes(): Promise<ConsentVolumes>
-  disputeBacklog(): Promise<DisputeBacklog>
-  riskSignalBacklog(): Promise<RiskSignalBacklog>
-  reportLibrary(): Promise<ReportLibrary>
+  consentVolumes(ctx?: GovernedReadContext): Promise<ConsentVolumes>
+  disputeBacklog(ctx?: GovernedReadContext): Promise<DisputeBacklog>
+  riskSignalBacklog(ctx?: GovernedReadContext): Promise<RiskSignalBacklog>
+  reportLibrary(ctx?: GovernedReadContext): Promise<ReportLibrary>
 }
 export interface RetentionReader {
   retentionStatus(): Promise<RetentionStatusRow[]>
@@ -40,15 +40,24 @@ export interface ComplianceViewDeps {
 export class ComplianceViewService {
   constructor(private readonly deps: ComplianceViewDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
+  async view(principal: Principal, traceId: string): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, COMPLIANCE_VIEW_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
 
+    // Each cross-fintech metric read is purpose-gated + High-class logged via the governed path
+    // (BACKOFFICE-33); pass who is reading + the trace for the bypass log.
+    const ctx: GovernedReadContext = {
+      actingPrincipal: principal.subject,
+      actingPersona: principal.persona,
+      scopeUsed: COMPLIANCE_VIEW_SCOPE,
+      traceId
+    }
+
     const [consents, disputes, riskBacklog, reports, retention] = await Promise.all([
-      this.deps.metrics.consentVolumes(),
-      this.deps.metrics.disputeBacklog(),
-      this.deps.metrics.riskSignalBacklog(),
-      this.deps.metrics.reportLibrary(),
+      this.deps.metrics.consentVolumes(ctx),
+      this.deps.metrics.disputeBacklog(ctx),
+      this.deps.metrics.riskSignalBacklog(ctx),
+      this.deps.metrics.reportLibrary(ctx),
       this.deps.retention.retentionStatus()
     ])
 
@@ -130,7 +139,7 @@ export function complianceViewRoutes(service: ComplianceViewService): Record<str
   return {
     'get /back-office/analytics/compliance-view': async (c) => {
       try {
-        const { data, freshness } = await service.view(c.get('principal'))
+        const { data, freshness } = await service.view(c.get('principal'), c.req.header('x-fapi-interaction-id') ?? 'unknown')
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
         const denied = scopeDenied(c, e)

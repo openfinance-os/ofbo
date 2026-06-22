@@ -530,11 +530,11 @@ export function createApp(deps: AppDeps = {}) {
   // BACKOFFICE-41 — analytics exports: delegate to the view services (each re-asserts
   // its own scope) so an export carries the live view data + per-view scope enforcement.
   const exportViewData: ViewDataSource = {
-    async getViewData(view, principal) {
+    async getViewData(view, principal, traceId) {
       const fetchers: Record<string, () => Promise<{ data: Record<string, unknown> }>> = {
         'executive-dashboard': () => executiveDashboardService.view(principal),
         'operations-console': () => operationsConsoleService.view(principal),
-        'compliance-view': () => complianceViewService.view(principal),
+        'compliance-view': () => complianceViewService.view(principal, traceId),
         'risk-view': () => riskViewService.view(principal),
         'finance-view': () => financeViewService.view(principal),
         'onboarding-funnel': () => onboardingFunnelService.view(principal),

@@ -36,7 +36,7 @@ function svc(over: Partial<ComplianceViewDeps> = {}) {
 
 describe('ComplianceViewService — composition', () => {
   it('composes consent volumes, retention posture, backlogs, report library + inquiry history', async () => {
-    const { data, freshness } = await svc().view(compliance)
+    const { data, freshness } = await svc().view(compliance, 'trace-test')
     expect((data.consent_volumes as { total: number }).total).toBe(7)
     expect(data.residency_posture).toMatchObject({ region: 'UAE', data_residency: 'enforced' })
     const retention = data.retention_status as { tables: unknown[]; overdue_tables: string[]; deletion_allowed: boolean }
@@ -52,7 +52,7 @@ describe('ComplianceViewService — composition', () => {
   })
 
   it('UIF: emits typed sections the portal renders as bespoke panels (no PSU PII)', async () => {
-    const { data } = await svc().view(compliance)
+    const { data } = await svc().view(compliance, 'trace-test')
     const sections = data.sections as { kind: string; title: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[]; alert?: { severity: string }; table?: { columns: string[]; rows: unknown[] } }[]
     const byKind = (k: string) => sections.filter((s) => s.kind === k)
 
@@ -75,7 +75,7 @@ describe('ComplianceViewService — composition', () => {
   })
 
   it('rejects a principal without compliance:reports:read (defence in depth)', async () => {
-    await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
+    await expect(svc().view(care, 'trace-test')).rejects.toBeInstanceOf(ScopeDeniedError)
   })
 })
 

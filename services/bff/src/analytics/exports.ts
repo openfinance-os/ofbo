@@ -42,8 +42,9 @@ export class ExportError extends Error {
 }
 
 export interface ViewDataSource {
-  /** Fetch the named view's data for this principal (the view service also asserts its own scope). */
-  getViewData(view: string, principal: Principal): Promise<Record<string, unknown>>
+  /** Fetch the named view's data for this principal (the view service also asserts its own scope).
+   *  traceId is propagated for views whose reads are High-class logged (e.g. governed cross-fintech). */
+  getViewData(view: string, principal: Principal, traceId: string): Promise<Record<string, unknown>>
 }
 
 /** Renders aggregate view data to export bytes. Demo profile: real CSV; pdf/xlsx are
@@ -120,7 +121,7 @@ export class AnalyticsExportService {
     // Service-layer enforcement of the dynamic "(scope of the exported view)".
     assertScope(principal, scope)
     // The view service re-asserts its own scope and returns the aggregate data.
-    const data = await this.deps.views.getViewData(view, principal)
+    const data = await this.deps.views.getViewData(view, principal, traceId)
     const bytes = this.renderer.render(view, format as ExportFormat, data)
     const integrity_hash = createHash('sha256').update(bytes).digest('hex')
     const now = this.now().toISOString()

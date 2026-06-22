@@ -50,6 +50,12 @@ export interface GovernedAggregateContext {
   traceId: string
 }
 
+/**
+ * Per-request audit context a store threads into a governed read — who is reading and the
+ * trace id, for the High-class bypass log. The store supplies pool/bankId/purposeCode/audit.
+ */
+export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipal' | 'actingPersona' | 'scopeUsed' | 'traceId'>
+
 /** True iff `purposeCode` is registered AND approved for this bank (checked as ofbo_app under RLS). */
 export async function isPurposeApproved(pool: pg.Pool, bankId: string, purposeCode: string): Promise<boolean> {
   const c = await pool.connect()
