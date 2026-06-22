@@ -74,6 +74,20 @@ describe('computeTppAasMargin', () => {
     // margin attributed to AISP (pass-through is data-sharing) across ≥1 fintech
     expect(Object.values(m.by_fintech).some((f) => f.by_family.AISP && f.by_family.AISP.margin > 0)).toBe(true)
   })
+
+  it('the sim re-bills consuming fintechs across SIP, AISP and CoP families (demo depth)', async () => {
+    const bundle = buildSimReconSources('2026-07-14')
+    const [nebras, fintech, platform] = await Promise.all([bundle.nebras.fetch(WINDOW), bundle.fintech.fetch(WINDOW), bundle.platform.fetch(WINDOW)])
+    const m = computeTppAasMargin({ nebras, fintech, platform })
+    // aggregate the per-fintech breakdown into a flat set of families that carry margin
+    const families = new Set<string>()
+    for (const f of Object.values(m.by_fintech)) {
+      for (const [family, acc] of Object.entries(f.by_family)) if (acc.margin > 0) families.add(family)
+    }
+    expect(families.has('SIP')).toBe(true)
+    expect(families.has('AISP')).toBe(true)
+    expect(families.has('CoP')).toBe(true)
+  })
 })
 
 describe('run + monthly sign-off margin integration', () => {
