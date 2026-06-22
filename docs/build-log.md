@@ -1466,3 +1466,16 @@ Confirmed the UIF-03 renderer pays off: the RiskDashboard already renders typed 
 - TDD: `risk-view.spec` +1, `liability-monitor.spec` +1. Gates: gen no-drift, lint, typecheck (all), **full unit 875**, build OK, **risk-view.int + liability-monitor.int green vs local PG**. Reviewers: hard-stop **PASS** (PII + scope + money), conformance **CONFORMANT**. Merged #198 (`3c8de300`).
 
 **Next eligible: UIF-05 (Operations)** — same BFF-only pattern (operations-console producer emits sections; the OperationsConsole already renders via the shared wrapper). Then **UIF-10** (the final Stitch re-audit — the capstone, run after all bespoke screens are in).
+
+---
+
+## 2026-06-22 — UIF-05: bespoke Operations panels (BFF-only) — PR #200 [autonomous /loop]
+
+The last bespoke screen, shipped under the autonomous `/loop`. Same BFF-only pattern as UIF-04 (the OperationsConsole already renders via the shared `AnalyticsSection` wrapper).
+
+- `OperationsConsoleService` now emits `data.sections` from live data (no mock values), `platform:operations:read`: a Platform-Health kpi-strip (active outages / TPP onboarding total / Nebras connectivity) + a TPP-Onboarding-Pipeline contribution-bars (`pipeline.by_state`) + an Active-Outages object-table (title/component/severity/started_at). Aggregate/institutional data only — no PSU PII.
+- TDD: `operations-console.spec` +1. Gates: gen no-drift, lint, typecheck, **full unit 876**, build OK, **operations-console.int green vs local PG**. Reviewers: hard-stop **PASS**, conformance **CONFORMANT**. Merged #200 (`aa966eff`).
+
+### Bespoke-screen tranche COMPLETE (UIF-03 / -04 / -05)
+
+All three generic-grid analytics screens — Analytics, Risk, Operations — now render bespoke typed-section panels (gauges / contribution-bars / KPI strips / status-cards / tables) bound to live, scope-gated BFF data, via the one shared UIF-03 renderer. Combined with UIF-01/01b (primitives + @visx), UIF-02 (sign-in/shell), and the dashboard/recon/tpp/care bespoke work, **the original "looks like shit" complaint is comprehensively resolved**. Only **UIF-10** (the final Stitch re-audit + canonical screen-id pinning + design-conformance-audit.md update) remains.
