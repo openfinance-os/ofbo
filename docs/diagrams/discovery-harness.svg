@@ -1,0 +1,67 @@
+<svg viewBox="0 0 980 712" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t">Discovery harness — Diamond 1, from challenge to agreed PRD</title>
+<desc id="d">The discovery harness. A challenge or trigger frames the work; Discover diverges to gather evidence through user research, market and competitor scans, regulatory and risk landscape, data analysis, and current-state mapping; Define converges to synthesize themes, frame the problem, build the business case, and scope a draft problem statement, with an optional RFP branch for build-versus-buy; an investment or CEC committee gate plus sign-off approves it; the handoff is an agreed problem statement and PRD that seeds the delivery harness.</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5f5e5a"/></marker>
+</defs>
+<style>
+  .ink{fill:#2c2c2a;} .ink2{fill:#5f5e5a;}
+  .box{fill:#faf9f5;stroke:#d3d1c7;}
+  .acc{fill:rgba(127,119,221,0.09);stroke:#7F77DD;}
+  .card{fill:#ffffff;stroke:#e6e4dc;}
+  .rfp{fill:#ffffff;stroke:#7F77DD;stroke-dasharray:5 4;}
+  .e{stroke:#5f5e5a;fill:none;stroke-width:1.4;}
+  .lbl{font-weight:700;} .mono{font-family:ui-monospace,monospace;}
+  .h{font-size:8.5px;} .ttl{font-size:9.5px;font-weight:700;}
+</style>
+<text x="24" y="28" class="ink lbl" font-size="16">Discovery harness · Diamond 1</text>
+<text x="24" y="45" class="ink2" font-size="11">challenge → discover (diverge) → define (converge) → agreed problem statement / PRD → delivery</text>
+<text x="24" y="74" class="ink2 lbl" font-size="10">①  FRAME — the challenge / trigger</text>
+<g class="mono" font-size="8.5" text-anchor="middle">
+  <g><rect x="24" y="82" width="172" height="40" rx="6" class="card"/><text x="110" y="100" class="ink">strategy / OKRs</text><text x="110" y="113" class="ink2 h">where we want to play</text></g>
+  <g><rect x="214" y="82" width="172" height="40" rx="6" class="card"/><text x="300" y="100" class="ink">regulatory mandate</text><text x="300" y="113" class="ink2 h">deadline / obligation</text></g>
+  <g><rect x="404" y="82" width="172" height="40" rx="6" class="card"/><text x="490" y="100" class="ink">customer / market signal</text><text x="490" y="113" class="ink2 h">demand, complaints</text></g>
+  <g><rect x="594" y="82" width="172" height="40" rx="6" class="card"/><text x="680" y="100" class="ink">exec sponsor ask</text><text x="680" y="113" class="ink2 h">funded intent</text></g>
+  <g><rect x="784" y="82" width="172" height="40" rx="6" class="card"/><text x="870" y="100" class="ink">pain point / incident</text><text x="870" y="113" class="ink2 h">something is broken</text></g>
+</g>
+<path class="e" marker-end="url(#a)" d="M490 122 L490 150"/>
+<rect x="24" y="156" width="932" height="120" rx="8" class="box"/>
+<text x="36" y="176" class="ink lbl mono" font-size="11">② DISCOVER · diverge — explore the problem (gather evidence, not solutions)</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="34" y="186" width="176" height="80" rx="6" class="card"/><text x="122" y="206" class="ink ttl">Stakeholder &amp; user research</text><text x="122" y="224" class="ink2 h">interviews · shadowing</text><text x="122" y="237" class="ink2 h">jobs-to-be-done</text><text x="122" y="250" class="ink2 h">people affected, first-hand</text></g>
+  <g><rect x="220" y="186" width="176" height="80" rx="6" class="card"/><text x="308" y="206" class="ink ttl">Market &amp; competitor scan</text><text x="308" y="224" class="ink2 h">what already exists</text><text x="308" y="237" class="ink2 h">benchmarks · gaps</text><text x="308" y="250" class="ink2 h">build-vs-buy signals</text></g>
+  <g><rect x="406" y="186" width="176" height="80" rx="6" class="card"/><text x="494" y="206" class="ink ttl">Regulatory &amp; risk landscape</text><text x="494" y="224" class="ink2 h">mandates · deadlines</text><text x="494" y="237" class="ink2 h">risk review (discovery-mode)</text><text x="494" y="250" class="ink2 h">feasibility &amp; constraints</text></g>
+  <g><rect x="592" y="186" width="176" height="80" rx="6" class="card"/><text x="680" y="206" class="ink ttl">Data &amp; signal analysis</text><text x="680" y="224" class="ink2 h">current-state metrics</text><text x="680" y="237" class="ink2 h">size the pain</text><text x="680" y="250" class="ink2 h">evidence base</text></g>
+  <g><rect x="778" y="186" width="178" height="80" rx="6" class="card"/><text x="867" y="206" class="ink ttl">Current-state map</text><text x="867" y="224" class="ink2 h">journey / process</text><text x="867" y="237" class="ink2 h">where it breaks</text><text x="867" y="250" class="ink2 h">make it visible</text></g>
+</g>
+<path class="e" marker-end="url(#a)" d="M490 276 L490 300"/>
+<text x="498" y="292" class="ink2" font-size="9">synthesize &amp; converge ↓</text>
+<rect x="24" y="306" width="932" height="150" rx="8" class="box"/>
+<text x="36" y="326" class="ink lbl mono" font-size="11">③ DEFINE · converge — frame the problem &amp; make the case</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="34" y="334" width="216" height="66" rx="6" class="card"/><text x="142" y="353" class="ink ttl">Synthesize → insight themes</text><text x="142" y="370" class="ink2 h">cluster evidence · cause/effect</text><text x="142" y="383" class="ink2 h">differentiate &amp; synthesize</text></g>
+  <g><rect x="266" y="334" width="216" height="66" rx="6" class="card"/><text x="374" y="353" class="ink ttl">Problem framing</text><text x="374" y="370" class="ink2 h">"How might we…"</text><text x="374" y="383" class="ink2 h">opportunity, not solution</text></g>
+  <g><rect x="498" y="334" width="216" height="66" rx="6" class="card"/><text x="606" y="353" class="ink ttl">Business case</text><text x="606" y="370" class="ink2 h">NPV / IRR · cost-benefit</text><text x="606" y="383" class="ink2 h">options &amp; trade-offs</text></g>
+  <g><rect x="730" y="334" width="226" height="66" rx="6" class="card"/><text x="843" y="353" class="ink ttl">Prioritise &amp; scope</text><text x="843" y="370" class="ink2 h">in / out · success metrics</text><text x="843" y="383" class="ink2 h">draft problem statement</text></g>
+</g>
+<rect x="34" y="408" width="922" height="40" rx="6" class="rfp"/>
+<text x="44" y="426" class="ink ttl mono" fill="#7F77DD">⌥ Optional branch — build-vs-buy</text>
+<text x="44" y="440" class="ink2 mono h">RFI → RFP issued → scored evaluation (weighted) → shortlist + PoC/demo → select partner → constraints fold back into the problem statement</text>
+<path class="e" marker-end="url(#a)" d="M490 456 L490 480"/>
+<rect x="24" y="486" width="932" height="46" rx="8" class="acc"/>
+<text x="36" y="505" class="ink lbl mono" font-size="11">④ GATE — investment / CEC committee approval + problem-statement sign-off</text>
+<text x="36" y="521" class="ink2 mono" font-size="8.5">the four-eyes of discovery · kill-criteria can stop here (a discovery is allowed to fail)</text>
+<path class="e" marker-end="url(#a)" d="M490 532 L490 552"/>
+<rect x="24" y="558" width="932" height="58" rx="8" class="acc"/>
+<text x="36" y="578" class="ink lbl mono" font-size="11">⑤ HANDOFF → Diamond 2 (delivery)</text>
+<text x="36" y="596" class="ink2 mono" font-size="8.5">agreed problem statement → PRD + acceptance criteria (+ selected partner) seeds the delivery canon:</text>
+<text x="36" y="609" class="ink2 mono" font-size="8.5">CLAUDE.md · PRD · OpenAPI spec · backlog.yaml  →  spec-first build, quality gates, deploy</text>
+<text x="24" y="644" class="ink2 lbl" font-size="10">DISCOVERY GUARDRAILS — keep the diamond honest</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="24" y="652" width="182" height="34" rx="6" class="acc"/><text x="115" y="666" class="ink">evidence over assertion</text><text x="115" y="678" class="ink2 h">every claim cites a signal</text></g>
+  <g><rect x="214" y="652" width="170" height="34" rx="6" class="acc"/><text x="299" y="666" class="ink">people-centred</text><text x="299" y="678" class="ink2 h">real users in the loop</text></g>
+  <g><rect x="392" y="652" width="178" height="34" rx="6" class="acc"/><text x="481" y="666" class="ink">visualize &amp; make tangible</text><text x="481" y="678" class="ink2 h">map it, don't tell it</text></g>
+  <g><rect x="578" y="652" width="160" height="34" rx="6" class="acc"/><text x="658" y="666" class="ink">kill-criteria</text><text x="658" y="678" class="ink2 h">stop if not worth it</text></g>
+  <g><rect x="746" y="652" width="210" height="34" rx="6" class="acc"/><text x="851" y="666" class="ink">early reg / risk feasibility</text><text x="851" y="678" class="ink2 h">no dead-end problems</text></g>
+</g>
+</svg>

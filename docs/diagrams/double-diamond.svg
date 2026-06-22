@@ -1,0 +1,52 @@
+<svg viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t d" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t">The double diamond — discovery harness and delivery harness</title>
+<desc id="d">Two diamonds. The first (Discover then Define) is the discovery harness that turns a challenge into an agreed problem statement / PRD. The second (Develop then Deliver) is the existing delivery harness that turns the PRD into shipped, demoable software. Each diamond diverges then converges; a dashed loop shows the process is non-linear — evidence can send you back.</desc>
+<style>
+  .ink{fill:#2c2c2a;} .ink2{fill:#5f5e5a;}
+  .d1{fill:rgba(127,119,221,0.10);stroke:#7F77DD;stroke-width:1.5;}
+  .d2{fill:#f1efe8;stroke:#b4b2a9;stroke-width:1.5;}
+  .node{fill:#ffffff;stroke:#7F77DD;stroke-width:1.5;}
+  .split{stroke:#9a988f;stroke-width:1;stroke-dasharray:3 4;}
+  .lbl{font-weight:700;} .mono{font-family:ui-monospace,monospace;}
+  .loop{fill:none;stroke:#7F77DD;stroke-width:1.3;stroke-dasharray:5 5;}
+</style>
+<defs><marker id="dl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7F77DD"/></marker></defs>
+<text x="28" y="30" class="ink lbl" font-size="16">The double diamond — one process, two harnesses</text>
+<text x="28" y="48" class="ink2" font-size="11">Diverge to explore, converge to decide · the PRD is the handoff between them · non-linear by design</text>
+<rect x="690" y="20" width="14" height="11" rx="2" class="d1"/><text x="710" y="30" class="ink2" font-size="10">discovery (new)</text>
+<rect x="812" y="20" width="14" height="11" rx="2" class="d2"/><text x="832" y="30" class="ink2" font-size="10">delivery (existing)</text>
+<line x1="60" y1="250" x2="910" y2="250" stroke="#d3d1c7" stroke-width="1"/>
+<polygon class="d1" points="90,250 285,135 480,250 285,365"/>
+<line class="split" x1="285" y1="140" x2="285" y2="360"/>
+<text x="188" y="120" text-anchor="middle" class="ink lbl" font-size="13">Discover</text>
+<text x="188" y="250" text-anchor="middle" class="ink2 mono" font-size="9">diverge</text>
+<text x="188" y="263" text-anchor="middle" class="ink2" font-size="8.5">explore the problem</text>
+<text x="382" y="120" text-anchor="middle" class="ink lbl" font-size="13">Define</text>
+<text x="382" y="250" text-anchor="middle" class="ink2 mono" font-size="9">converge</text>
+<text x="382" y="263" text-anchor="middle" class="ink2" font-size="8.5">frame the problem</text>
+<rect x="482" y="226" width="56" height="48" rx="8" class="node"/>
+<text x="510" y="247" text-anchor="middle" class="ink lbl mono" font-size="10">PRD</text>
+<text x="510" y="262" text-anchor="middle" class="ink2" font-size="7.5">agreed</text>
+<text x="510" y="296" text-anchor="middle" class="ink2" font-size="8.5">problem statement → spec</text>
+<polygon class="d2" points="540,250 720,135 900,250 720,365"/>
+<line class="split" x1="720" y1="140" x2="720" y2="360"/>
+<text x="630" y="120" text-anchor="middle" class="ink lbl" font-size="13">Develop</text>
+<text x="630" y="250" text-anchor="middle" class="ink2 mono" font-size="9">diverge</text>
+<text x="630" y="263" text-anchor="middle" class="ink2" font-size="8.5">explore solutions</text>
+<text x="810" y="120" text-anchor="middle" class="ink lbl" font-size="13">Deliver</text>
+<text x="810" y="250" text-anchor="middle" class="ink2 mono" font-size="9">converge</text>
+<text x="810" y="263" text-anchor="middle" class="ink2" font-size="8.5">ship the solution</text>
+<circle cx="78" cy="250" r="5" fill="#7F77DD"/>
+<text x="60" y="395" class="ink2" font-size="9" text-anchor="middle">challenge</text>
+<text x="60" y="406" class="ink2" font-size="9" text-anchor="middle">/ trigger</text>
+<circle cx="912" cy="250" r="5" fill="#5f5e5a"/>
+<text x="905" y="395" class="ink2" font-size="9" text-anchor="middle">outcome:</text>
+<text x="905" y="406" class="ink2" font-size="9" text-anchor="middle">shipped + demoable</text>
+<text x="285" y="392" text-anchor="middle" class="ink lbl" font-size="10.5">DIAMOND 1 · DISCOVERY HARNESS</text>
+<text x="285" y="406" text-anchor="middle" class="ink2" font-size="9">challenge → agreed problem (the PRD)</text>
+<text x="720" y="392" text-anchor="middle" class="ink lbl" font-size="10.5">DIAMOND 2 · DELIVERY HARNESS</text>
+<text x="720" y="406" text-anchor="middle" class="ink2" font-size="9">PRD → built, quality-gated, deployed</text>
+<path class="loop" marker-end="url(#dl)" d="M720 372 C720 445 285 445 285 372"/>
+<text x="502" y="455" text-anchor="middle" class="ink2" font-size="9">non-linear — evidence &amp; learning can send you back a diamond</text>
+<text x="28" y="476" class="ink2" font-size="9">Design Council principles: people-centred · communicate visually · collaborate &amp; co-create · iterate</text>
+</svg>
