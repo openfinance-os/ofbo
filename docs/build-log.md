@@ -1373,3 +1373,16 @@ The real-data slice of the Stitch "Reconciliation Console (Refined)" (`46e55863`
 **Split → UIF-07b (blocked):** the data-gated Stitch remainder — (a) a true three-way SOURCE-totals table (per-source amounts aren't in the `ReconciliationRun` contract → recon spec-change), (b) Margin-by-Fintech (BACKOFFICE-31 free-form analytics, entangled with the blocked UIF-SPEC), (c) Export/monthly Sign-off (BACKOFFICE-06 four-eyes mutation → own story). Recorded with the dependency, held back behind the spec-change workflow rather than implemented against absent fields.
 
 **Next eligible:** UIF-08 (TPP billing action center), then UIF-09. UIF-03/-04/-05 stay blocked on spec PR #181 (human merge).
+
+---
+
+## 2026-06-22 — UIF-08: TPP billing overview (PR #187)
+
+The real-data slice of the Stitch "TPP Billing & Registry (Refined)" (`3d6d14a3`). Same pattern as UIF-07: ship the real-data overview, split the heavier table/action sections.
+
+- **Shipped** — `TppBillingOverview` (components/tpp-billing-overview.tsx): a UIF-01 `SectionCard` with a **StatStrip** of KpiStats (consuming-TPP count, registered, unbilled-traffic, **MTD fee accrual total** summed from the real `mtd_fee_accrual` integer minor-units) + a **ContributionBar** of the `registration_state` distribution, computed from the already-fetched counterparty list and rendered above the registry grid. Additive — the registry table, invoice runs, and mutations are untouched. TDD: `uif08-tpp-overview.spec` 3 (KPI summarisation incl. money-from-minor-units, registration-state bar, axe).
+- Gates: `gen` no-drift, lint, typecheck, **full unit 848**, design-conformance scans the new file clean, tpp-billing specs stay green, build OK. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Merged #187 (`b4eea567`).
+
+**Split → UIF-08b (pending):** the heavier Stitch sections — registry columns/search/filter, billing action center, billing-cycle stepper, audit-trail feed — all real-data-backed (no contract dependency), sequenced after the overview.
+
+**State of the UI-FIDELITY track:** primitive layer (UIF-01/01b) + sign-in/shell (UIF-02) + four bespoke overview panels (UIF-06 dashboard, UIF-07 recon, UIF-08 tpp) are in. Remaining: UIF-03/-04/-05 (Analytics/Risk/Ops — the biggest visual wins, **blocked on spec PR #181**), UIF-09 (care + finance-investigation), the *-b table/mutation follow-ups, and UIF-10 (re-audit). **Next eligible: UIF-09.**
