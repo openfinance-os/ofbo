@@ -8,17 +8,25 @@ import type { PersonaLogin } from '../lib/portal'
  */
 export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]; error?: string }) {
   return (
-    <section aria-label="persona sign-in" data-testid="persona-login-list">
-      <h1>Sign in to the Internal Portal</h1>
-      <p className="mfa-note" data-testid="mfa-note">
+    <section
+      aria-label="persona sign-in"
+      data-testid="persona-login-list"
+      className="w-full max-w-2xl rounded-xl border border-outline-variant bg-surface-container-lowest p-8 shadow-sm"
+    >
+      <div data-testid="signin-brand" className="mb-6 flex items-baseline gap-2">
+        <span className="text-2xl font-bold tracking-tight text-on-surface">OFBO</span>
+        <span className="text-sm text-on-surface-variant">Open Finance Back Office</span>
+      </div>
+      <h1 className="text-xl font-bold text-on-surface">Sign in to the Internal Portal</h1>
+      <p className="mfa-note mt-1" data-testid="mfa-note">
         MFA is enforced on every sign-in. Choose a persona to continue.
       </p>
       {error ? (
-        <p role="alert" className="signin-error" data-testid="signin-error">
+        <p role="alert" className="signin-error mt-3" data-testid="signin-error">
           Sign-in failed: {error}
         </p>
       ) : null}
-      <ul className="persona-list">
+      <ul className="persona-list mt-6">
         {personas.map((p) => (
           <li key={p.persona}>
             <form action="/api/login" method="post">
