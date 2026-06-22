@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { visibleModules } from '../lib/nav'
 import { SCOPES } from '../lib/scopes'
+import { personaLabel } from '../lib/persona-guide'
 
 /**
  * UI-01 — the design-system app shell (translated from the Stitch "OFBO Portal"
@@ -57,10 +58,17 @@ export function AppShell({ principal, active, badges, children }: { principal: S
         data-collapsed={collapsed ? 'true' : 'false'}
         data-drawer-open={drawerOpen ? 'true' : 'false'}
       >
-        <div className="px-container-padding mb-6 flex items-center justify-between">
-          <p className="font-bold text-white">
-            OFBO<span className={collapsed ? 'lg:hidden' : undefined}> Portal</span>
-          </p>
+        <div className={`mb-6 flex items-center justify-between ${collapsed ? 'px-container-padding lg:justify-center lg:px-2' : 'px-container-padding'}`}>
+          {/* Brand: a compact monogram tile (fits the 64px collapsed rail) + the wordmark
+              when there's room. The wordmark hides on the collapsed lg rail so it can't
+              overflow/overlap the rail. */}
+          <span className="flex items-center gap-2 font-bold text-white">
+            <span aria-hidden className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-nav-elevated text-sm font-bold tracking-tight text-white">
+              OF
+            </span>
+            <span className={collapsed ? 'lg:hidden' : undefined}>OFBO Portal</span>
+            <span className="sr-only">OFBO Portal</span>
+          </span>
           {/* mobile-only close button inside the drawer */}
           <button type="button" onClick={closeDrawer} data-testid="close-drawer" aria-label="Close navigation" className="lg:hidden font-symbols text-on-nav hover:text-white cursor-pointer">
             close
@@ -145,20 +153,29 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             <button type="button" onClick={() => setCompact((d) => !d)} data-testid="density-toggle" aria-pressed={compact} className="text-xs px-3 py-1 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container cursor-pointer">
               {compact ? 'Compact' : 'Comfortable'}
             </button>
-            {/* persona badge — absorbs the M1 scope-echo */}
-            <div className="flex items-center gap-2" data-testid="persona-badge">
-              <span className="px-2 py-1 rounded-full bg-primary-container text-on-primary-container text-xs font-medium" data-testid="role-badge">
-                {principal.persona}
+            {/* Signed-in identity — friendly "Signed in as <Role>", linking to the profile
+                where the persona's privileges are explained (the raw scopes live there, not here). */}
+            <a
+              href="/profile"
+              data-testid="persona-badge"
+              aria-label={`Signed in as ${personaLabel(principal.persona)} — view your profile and privileges`}
+              className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-surface-container transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <span className="font-symbols text-lg text-on-surface-variant" aria-hidden>
+                account_circle
+              </span>
+              <span className="text-sm leading-tight">
+                <span className="hidden text-xs text-on-surface-variant sm:inline">Signed in as </span>
+                <span className="font-semibold text-on-surface" data-testid="role-badge">
+                  {personaLabel(principal.persona)}
+                </span>
               </span>
               {principal.superadmin ? (
-                <span className="px-2 py-1 rounded-full bg-breach text-white text-xs font-semibold" data-testid="superadmin-badge">
+                <span className="px-2 py-0.5 rounded-full bg-breach/10 text-breach text-xs font-semibold" data-testid="superadmin-badge">
                   super-admin
                 </span>
               ) : null}
-              <span className="text-xs text-on-surface-variant" data-testid="badge-scope-count">
-                {principal.scopes.length} scopes
-              </span>
-            </div>
+            </a>
           </div>
         </header>
         <main id="shell-content" className="flex-1 px-container-padding py-6 min-w-0" data-testid="shell-content">

@@ -71,8 +71,11 @@ describe('AppShell', () => {
     expect(screen.getByTestId('sidebar')).toBeInTheDocument()
     expect(screen.getByTestId('nav-finance')).toBeInTheDocument()
     expect(screen.queryByTestId('nav-risk')).not.toBeInTheDocument()
-    expect(screen.getByTestId('role-badge')).toHaveTextContent('finance-analyst')
-    expect(screen.getByTestId('badge-scope-count')).toHaveTextContent('2 scopes')
+    // friendly identity ("Finance Analyst"), not the raw persona key or scope count
+    expect(screen.getByTestId('role-badge')).toHaveTextContent('Finance Analyst')
+    // the identity chip links to the profile; the raw scopes/privileges live there, not the top bar
+    expect(screen.getByTestId('persona-badge')).toHaveAttribute('href', '/profile')
+    expect(screen.queryByTestId('badge-scope-count')).not.toBeInTheDocument()
     expect(screen.queryByTestId('superadmin-badge')).not.toBeInTheDocument()
     expect(screen.getByTestId('shell-content')).toHaveTextContent('content')
     // the DEMO banner is regulatory — it lives in the root layout, above the shell
