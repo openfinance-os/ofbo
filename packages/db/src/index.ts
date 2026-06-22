@@ -164,3 +164,13 @@ export {
   type RiskSignalBacklog,
   type ReportLibrary
 } from './compliance-view-store.js'
+export { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
+export {
+  GovernedQueryError,
+  isPurposeApproved,
+  runGovernedAggregate,
+  seedQueryPurposes,
+  SEED_QUERY_PURPOSES,
+  type GovernedAuditSink,
+  type GovernedAggregateContext
+} from './governed-aggregate.js'

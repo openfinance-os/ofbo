@@ -16,3 +16,15 @@ export function beginAppTx(bankId: string): string {
   if (!UUID_RE.test(bankId)) throw new Error(`invalid bank_id (must be a UUID v4): ${bankId}`)
   return `BEGIN; SET LOCAL ROLE ofbo_app; SELECT set_config('app.bank_id', '${bankId}', true)`
 }
+
+/**
+ * BACKOFFICE-33 (ADR 0015) — cross-fintech aggregation preamble. Assumes the SELECT-only
+ * `bank_internal_view` role and DELIBERATELY does NOT pin `app.bank_id`: the `internal_view_select`
+ * policies (`USING (true)`) let this role read the aggregate MVs ACROSS every tenant. This is the
+ * platform's single highest-sensitivity data path — the one place per-tenant RLS is bypassed — so
+ * it is ONLY ever reached through `runGovernedAggregate`, which first verifies a registered+approved
+ * `query_purpose_registry` purpose and High-class logs the bypass. Never call this directly.
+ */
+export function beginInternalViewTx(): string {
+  return `BEGIN; SET LOCAL ROLE bank_internal_view`
+}
