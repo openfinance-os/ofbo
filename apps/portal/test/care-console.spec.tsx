@@ -72,6 +72,22 @@ describe('CareConsole', () => {
     expect(screen.getByTestId('dispute-form')).toBeInTheDocument()
   })
 
+  it('UIF-09b: offers the emergency bulk-revoke module when there are revocable consents + the action; hides it otherwise', () => {
+    // with the action + a revocable (Authorized) consent present → module shows, counting only revocable ones
+    render(<CareConsole query={{ identifier: 'cust-77' }} result={result} timeline={timeline} revokeAction={noop} bulkRevokeAction={noop} />)
+    expect(screen.getByTestId('bulk-revoke-module')).toBeInTheDocument()
+    expect(screen.getByTestId('bulk-revoke-form')).toBeInTheDocument()
+    cleanup()
+    // no bulk-revoke action passed → no module
+    render(<CareConsole query={{ identifier: 'cust-77' }} result={result} timeline={timeline} revokeAction={noop} />)
+    expect(screen.queryByTestId('bulk-revoke-module')).not.toBeInTheDocument()
+    cleanup()
+    // a PSU with no revocable consents → no module (nothing to bulk-revoke)
+    const noneRevocable = { ...result, consents: [result.consents[1]!] } // only the Expired one
+    render(<CareConsole query={{ identifier: 'cust-77' }} result={noneRevocable} timeline={timeline} revokeAction={noop} bulkRevokeAction={noop} />)
+    expect(screen.queryByTestId('bulk-revoke-module')).not.toBeInTheDocument()
+  })
+
   it('shows a success notice and an error banner from the action result', () => {
     const { rerender } = render(<CareConsole notice="Consent revoked." />)
     expect(screen.getByTestId('care-notice')).toHaveTextContent('Consent revoked.')

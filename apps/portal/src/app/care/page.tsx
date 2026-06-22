@@ -7,7 +7,7 @@ import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { getPsuAuditTrail, searchConsents, CareApiError, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../../lib/care'
-import { createDisputeAction, revokeConsentAction } from './actions'
+import { createDisputeAction, revokeConsentAction, bulkRevokeAction } from './actions'
 
 /**
  * UI-02 — Customer Care Console (BACKOFFICE-16/-19/-17/-20). The first portal screen
@@ -20,7 +20,8 @@ export const dynamic = 'force-dynamic'
 
 const NOTICE: Record<string, string> = {
   revoked: 'Consent revoked — propagated to Nebras via the egress gateway.',
-  dispute_opened: 'Dispute opened. Refund initiation is four-eyes-gated.'
+  dispute_opened: 'Dispute opened. Refund initiation is four-eyes-gated.',
+  bulk_revoke_requested: 'Emergency bulk revocation submitted for four-eyes approval — a second consents-admin approver completes it in Approvals.'
 }
 const FAILURE: Record<string, string> = {
   revoke_failed: 'Revocation failed. Re-check the consent and try again.',
@@ -94,6 +95,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
         errorDocsUrl={errorDocsUrl}
         notice={NOTICE[status] ?? null}
         revokeAction={revokeConsentAction}
+        bulkRevokeAction={bulkRevokeAction}
         disputeAction={createDisputeAction}
       />
     </AppShell>
