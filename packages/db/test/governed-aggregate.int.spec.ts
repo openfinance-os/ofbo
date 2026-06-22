@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { PgAuditEmitter } from '../src/audit.js'
+import { PgLineageEmitter } from '../src/lineage.js'
 import { beginAppTx } from '../src/tenant-tx.js'
 import {
   GovernedQueryError,
@@ -29,6 +30,7 @@ const CHANNEL = 'internal_retail'
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL })
 const audit = new PgAuditEmitter(DATABASE_URL, { bankId: BANK, channel: CHANNEL })
+const lineage = new PgLineageEmitter(DATABASE_URL, { bankId: BANK, channel: CHANNEL })
 
 /** Count cross_fintech_query audit rows for this bank (as ofbo_app, RLS-bound). */
 async function countBypassLogs(): Promise<number> {
@@ -58,12 +60,14 @@ function context(purposeCode: string) {
 
 beforeAll(async () => {
   await applyMigrations(DATABASE_URL)
-  await seedQueryPurposes(pool, BANK, CHANNEL)
+  // Seed WITH the lineage sink — query_purpose_registry is a regulated write path (Q4.5 BCBS 239).
+  await seedQueryPurposes(pool, BANK, CHANNEL, { lineage, traceId: 'bd-13-seed-int' })
 })
 
 afterAll(async () => {
   await pool.end()
   await audit.close?.()
+  await lineage.close?.()
 })
 
 describe('BACKOFFICE-33 governed cross-fintech aggregation', () => {
@@ -71,6 +75,18 @@ describe('BACKOFFICE-33 governed cross-fintech aggregation', () => {
     expect(await isPurposeApproved(pool, BANK, 'compliance_reporting')).toBe(true)
     expect(await isPurposeApproved(pool, BANK, 'risk_monitoring')).toBe(true)
     expect(await isPurposeApproved(pool, BANK, `never_registered_${randomUUID()}`)).toBe(false)
+  })
+
+  it('emits BCBS 239 lineage for the query_purpose_registry write (Q4.5)', async () => {
+    const c = await pool.connect()
+    try {
+      await c.query(beginAppTx(BANK))
+      const r = await c.query(`SELECT count(*)::int AS n FROM lineage_events WHERE table_name = 'query_purpose_registry'`)
+      await c.query('COMMIT')
+      expect(r.rows[0].n).toBeGreaterThan(0)
+    } finally {
+      c.release()
+    }
   })
 
   it('runs an approved purpose as bank_internal_view (cross-tenant) and High-class logs the bypass', async () => {

@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
+import type { LineageSink } from './lineage.js'
 
 /**
  * BACKOFFICE-33 (ADR 0015) — the governed cross-fintech aggregation control. Reading the
@@ -124,13 +125,19 @@ export const SEED_QUERY_PURPOSES: { purpose_code: string; description: string }[
   { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' }
 ]
 
+/** Columns written when seeding/registering a query purpose — for BCBS 239 lineage (Q4.5). */
+export const QUERY_PURPOSE_LINEAGE_COLUMNS = ['bank_id', 'channel', 'purpose_code', 'description', 'registered_by', 'approved_by']
+
+export interface SeedQueryPurposesOptions {
+  approvedBy?: string
+  /** Lineage sink — query_purpose_registry is a regulated write path, so it MUST emit lineage (Q4.5 DoD). */
+  lineage?: LineageSink
+  traceId?: string
+}
+
 /** Idempotently seed the BD-13 starter purpose set for a bank+channel (pre-approved). */
-export async function seedQueryPurposes(
-  pool: pg.Pool,
-  bankId: string,
-  channel: string,
-  approvedBy = 'system:bd-13-seed'
-): Promise<void> {
+export async function seedQueryPurposes(pool: pg.Pool, bankId: string, channel: string, opts: SeedQueryPurposesOptions = {}): Promise<void> {
+  const approvedBy = opts.approvedBy ?? 'system:bd-13-seed'
   const c = await pool.connect()
   try {
     await c.query(beginAppTx(bankId))
@@ -148,5 +155,17 @@ export async function seedQueryPurposes(
     throw e
   } finally {
     c.release()
+  }
+  // BCBS 239 (Q4.5): query_purpose_registry is a regulated write path — emit lineage. Best-effort:
+  // the catalogue being unavailable must not fail the seed; the gate surfaces persistent gaps.
+  try {
+    await opts.lineage?.emitLineage({
+      table: 'query_purpose_registry',
+      columns: QUERY_PURPOSE_LINEAGE_COLUMNS,
+      source: 'bd-13-purpose-seed',
+      trace_id: opts.traceId ?? 'bd-13-seed'
+    })
+  } catch {
+    /* catalogue unavailable — the regulated write stands; Q4.5 surfaces persistent gaps */
   }
 }
