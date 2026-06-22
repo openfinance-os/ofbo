@@ -41,6 +41,40 @@ describe('ThreeSourceDiff', () => {
     expect(screen.getByTestId('source-B')).toHaveTextContent('PL-1')
     expect(screen.getByTestId('source-C')).toHaveTextContent('MISSING')
   })
+
+  it('UIF-09b: marks present sources reconciled and omits the marker on the missing one', () => {
+    render(<ThreeSourceDiff break_={base} />)
+    expect(screen.getByTestId('source-reconciled-A')).toBeInTheDocument()
+    expect(screen.getByTestId('source-reconciled-B')).toBeInTheDocument()
+    expect(screen.queryByTestId('source-reconciled-C')).not.toBeInTheDocument()
+  })
+
+  it('UIF-09b: a summary strip names which sources reconcile and the resulting break amount', () => {
+    render(<ThreeSourceDiff break_={base} />)
+    const strip = screen.getByTestId('three-source-summary')
+    expect(strip).toHaveTextContent('AED 1,450.00') // the break/variance amount
+    expect(strip.textContent?.toLowerCase()).toContain('missing') // C diverges
+  })
+})
+
+describe('InvestigationDetail — audit trail (UIF-09b)', () => {
+  it('renders the audit-trail timeline rooted at break detection', () => {
+    render(<InvestigationDetail break_={base} />)
+    const trail = screen.getByTestId('audit-trail')
+    expect(trail).toHaveTextContent('Break detected')
+    expect(trail).toHaveTextContent('2026-06-17') // created_at date
+  })
+
+  it('adds the assigned + escalation nodes when those fields are present', () => {
+    render(
+      <InvestigationDetail
+        break_={{ ...base, assigned_to: 'a.haddad@bank', sla_clock_started_at: '2026-06-17T04:00:00Z', status: 'escalated_nebras_dispute', nebras_dispute_case_id: 'NBR-9' }}
+      />
+    )
+    const trail = screen.getByTestId('audit-trail')
+    expect(trail).toHaveTextContent('a.haddad@bank')
+    expect(trail).toHaveTextContent('NBR-9')
+  })
 })
 
 describe('InvestigationDetail', () => {

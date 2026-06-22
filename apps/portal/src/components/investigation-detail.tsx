@@ -20,32 +20,91 @@ export interface InvestigationDetailProps {
   escalateAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
 }
 
-const SOURCES: { key: 'source_a_ref' | 'source_b_ref' | 'source_c_ref'; label: string; hint: string }[] = [
-  { key: 'source_a_ref', label: 'A · Nebras Billing', hint: 'What Nebras billed' },
-  { key: 'source_b_ref', label: 'B · Bank Platform', hint: 'Metering of record (call count + success)' },
-  { key: 'source_c_ref', label: 'C · Fintech Billing', hint: 'Downstream pass-through' }
+const SOURCES: { key: 'source_a_ref' | 'source_b_ref' | 'source_c_ref'; id: 'A' | 'B' | 'C'; label: string; hint: string }[] = [
+  { key: 'source_a_ref', id: 'A', label: 'A · Nebras Billing', hint: 'What Nebras billed' },
+  { key: 'source_b_ref', id: 'B', label: 'B · Bank Platform', hint: 'Metering of record (call count + success)' },
+  { key: 'source_c_ref', id: 'C', label: 'C · Fintech Billing', hint: 'Downstream pass-through' }
 ]
 
-function SourceCard({ label, hint, value }: { label: string; hint: string; value: string | null }) {
+function SourceCard({ id, label, hint, value }: { id: string; label: string; hint: string; value: string | null }) {
   const present = value != null && value !== ''
   return (
-    <div className={`rounded-xl border p-4 ${present ? 'border-outline-variant bg-surface-container-lowest' : 'border-l-4 border-l-breach border-outline-variant bg-error-container/10'}`} data-testid={`source-${label[0]}`}>
-      <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">{label}</p>
-      <p className="font-mono text-sm text-primary mt-2 break-all">{present ? value : 'MISSING'}</p>
+    <div className={`rounded-xl border p-4 ${present ? 'border-outline-variant bg-surface-container-lowest' : 'border-l-4 border-l-breach border-outline-variant bg-error-container/10'}`} data-testid={`source-${id}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">{label}</p>
+        {present ? (
+          <span className="font-symbols text-base text-reconciled" data-testid={`source-reconciled-${id}`} aria-label="reconciled">check_circle</span>
+        ) : (
+          <span className="font-symbols text-base text-breach" aria-hidden>error</span>
+        )}
+      </div>
+      <p className={`font-mono text-sm mt-2 break-all ${present ? 'text-primary' : 'text-breach font-bold'}`}>{present ? value : 'MISSING'}</p>
       <p className="text-xs text-on-surface-variant mt-2">{hint}</p>
     </div>
   )
 }
 
 export function ThreeSourceDiff({ break_ }: { break_: ReconciliationBreak }) {
+  const missing = SOURCES.filter((s) => !break_[s.key])
+  const present = SOURCES.filter((s) => break_[s.key])
+  const variance = break_.variance_amount ? formatMoney(break_.variance_amount) : break_.variance_count != null ? `${break_.variance_count} count` : '—'
+  // UIF-09b — a data-honest summary derived from which source refs are present: the present
+  // sources reconcile; a null ref IS the divergence (e.g. C missing = no downstream line).
+  const summary =
+    missing.length > 0 && present.length > 0
+      ? `${present.map((s) => s.id).join(' = ')} reconcile · ${missing.map((s) => s.id).join(', ')} missing → break of `
+      : missing.length === 0
+        ? 'Amount mismatch across A · B · C → break of '
+        : 'Sources unavailable → break of '
   return (
     <section data-testid="three-source-diff" aria-labelledby="three-way-heading">
       <h2 id="three-way-heading" className="font-bold text-sm text-primary uppercase tracking-widest mb-3">Three-Way Comparison</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {SOURCES.map((s) => (
-          <SourceCard key={s.key} label={s.label} hint={s.hint} value={break_[s.key]} />
+          <SourceCard key={s.key} id={s.id} label={s.label} hint={s.hint} value={break_[s.key]} />
         ))}
       </div>
+      <div data-testid="three-source-summary" className="mt-4 flex items-center gap-2 text-sm bg-surface-container rounded-lg px-4 py-2 text-on-surface-variant">
+        <span className="font-symbols text-base shrink-0" aria-hidden>info</span>
+        <span>
+          {summary}
+          <span className="text-breach font-bold font-mono">{variance}</span>
+        </span>
+      </div>
+    </section>
+  )
+}
+
+/**
+ * UIF-09b — the break's audit-trail timeline (Stitch "Reconciliation Break Investigation
+ * (Finance, Three-Source)"). Each node is derived from a break field — no fabricated
+ * history: detection (created_at), assignment (assigned_to + SLA clock), escalation
+ * (nebras_dispute_case_id, else "requested" while still escalatable), resolution.
+ */
+function AuditTrail({ break_ }: { break_: ReconciliationBreak }) {
+  const escalatable = (ESCALATABLE_STATES as readonly string[]).includes(break_.status)
+  const events: { label: string; at: string | null; tone: string }[] = [{ label: 'Break detected', at: break_.created_at, tone: 'bg-reconciled' }]
+  if (break_.assigned_to) events.push({ label: `Assigned to ${break_.assigned_to}`, at: break_.sla_clock_started_at, tone: 'bg-reconciled' })
+  if (break_.nebras_dispute_case_id) events.push({ label: `Escalated — Nebras case ${break_.nebras_dispute_case_id}`, at: null, tone: 'bg-break' })
+  else if (escalatable) events.push({ label: 'Escalation requested', at: null, tone: 'bg-break' })
+  if (break_.resolution_outcome) events.push({ label: `Resolved — ${break_.resolution_outcome}`, at: null, tone: 'bg-reconciled' })
+  return (
+    <section data-testid="audit-trail" aria-labelledby="audit-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">
+      <h2 id="audit-heading" className="font-bold text-sm text-primary uppercase tracking-widest mb-4">Audit Trail</h2>
+      <ol className="space-y-4">
+        {events.map((e, i) => (
+          <li key={i} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <span className={`w-3 h-3 rounded-full shrink-0 ${e.tone}`} aria-hidden />
+              {i < events.length - 1 ? <span className="w-px flex-1 bg-outline-variant mt-1" aria-hidden /> : null}
+            </div>
+            <div className="-mt-0.5 pb-1">
+              <p className="text-sm font-semibold text-on-surface">{e.label}</p>
+              {e.at ? <p className="font-mono text-xs text-on-surface-variant mt-0.5">{e.at}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ol>
     </section>
   )
 }
@@ -115,6 +174,8 @@ export function InvestigationDetail({ break_, error, notice, canDispute, escalat
           <EscalateForm break_={break_} action={escalateAction} />
         ) : null}
       </div>
+
+      <AuditTrail break_={break_} />
     </div>
   )
 }
