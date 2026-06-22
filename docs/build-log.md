@@ -1308,3 +1308,17 @@ Drafted the governance decision memo for the one remaining non-adoption-gated ba
 `docs/adrs/0015-cross-fintech-aggregation-governance.md`; BACKOFFICE-33 reason updated to point at it. Docs-only to main.
 
 With this, **every implementable item is shipped and every blocked item has a decision artifact in front of the right human**: ADR 0014 (UX-03c, done) and ADR 0015 (BACKOFFICE-33, awaiting sign-off); BACKOFFICE-52 + M6-PORT-SWAPS are bank-adoption-gated (no demo-profile work).
+
+---
+
+## 2026-06-22 — UI-FIDELITY track opened (ADR 0016) + UIF-01 / UIF-01b foundation
+
+A live portal-vs-Stitch review (screenshots of Dashboard/Analytics/Risk/Ops/Recon/TPP/Care against the Stitch "Refined" references) found the gap is **compositional, not token-level**: tokens are clean but no viz/panel primitives existed, so every screen collapsed to generic KPI cards on empty canvases. The user **reversed ADR 0012 Option 1** → Option 2 (typed panels).
+
+- **ADR 0016** (accepted, supersedes ADR 0012) + the sequenced **UI-FIDELITY** backlog track (PR #175): adopt typed analytics panels + **@visx** behind token-bound primitives; Stitch is appearance-only (never copy its inline REVIEW/APPROVE buttons or mock numbers). UX-11 reopened.
+- **UIF-01** (PR #176) — token-only presentation primitives in `apps/portal/src/components/ui/`: **KpiStat**, **StatStrip**, **SectionCard**, **ContributionBar** (SVG geometry in `rect` attributes — the design-conformance gate forbids inline `style`). `StatusTag` = the existing UX-01 `StatusBadge` (reused). TDD: `uif-viz-primitives.spec` 9 incl. vitest-axe.
+- **UIF-01b** (PR #177, this `/next-story` iteration) — **@visx** Gauge (270° `Arc` radial dial, ARIA `meter`) + Sparkline (`LinePath` + `scaleLinear`, `role=img`), both `'use client'` islands so @visx stays in the browser bundle, never the Worker server bundle. TDD: `uif-chart-primitives.spec` 8 incl. vitest-axe.
+
+Gates (UIF-01b): `gen` no-drift, lint, typecheck, **full unit 828 pass**, design-conformance scans the new files clean, **Next build** First Load JS unchanged at 102 kB (@visx out of the shared bundle), and the **OpenNext/Cloudflare Worker build** (`.open-next/worker.js` generated, exit 0 — the explicit Worker-bundle check the story was split out for). Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. No screen changes — first live consumption is UIF-03/-04/-06.
+
+**Next eligible:** UIF-02 (sign-in/shell first-impression), UIF-SPEC-TYPED-SECTIONS (the analytics contract change), UIF-07/-08/-09 (the no-gate hand-built screens). UIF-03/-04/-06 unblock once UIF-01b (now done) + the spec-change land.
