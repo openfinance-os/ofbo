@@ -26,6 +26,8 @@ export interface FinanceFeeAccrualReader {
 }
 export interface FinanceMarginReader {
   marginForPeriod(principal: Principal, period: string): Promise<MarginSummary>
+  /** UIF-07b — the three reconciliation sources' money totals (A Nebras / B platform metering / C fintech). */
+  threeWaySourceTotalsForPeriod(period: string): Promise<{ nebras: number; platform: number; fintech: number; currency: string }>
 }
 export interface FinanceDisputeReader {
   openNebrasDisputeCount(principal: Principal, period: string): Promise<number>
@@ -62,11 +64,12 @@ export class FinanceViewService {
     const p = period ?? (this.deps.now ?? (() => new Date()))().toISOString().slice(0, 7)
     if (!MONTH.test(p)) throw new FinanceViewError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
 
-    const [accrual, margin, openDisputes, unbilled] = await Promise.all([
+    const [accrual, margin, openDisputes, unbilled, sourceTotals] = await Promise.all([
       this.deps.feeAccrual.feeAccrualForPeriod(p),
       this.deps.margin.marginForPeriod(principal, p),
       this.deps.disputes.openNebrasDisputeCount(principal, p),
-      this.deps.unbilled.unbilledTrafficCount()
+      this.deps.unbilled.unbilledTrafficCount(),
+      this.deps.margin.threeWaySourceTotalsForPeriod(p)
     ])
 
     // UIF (ADR 0016 D1) — typed sections the portal renders as bespoke panels (same shared
@@ -97,11 +100,26 @@ export class FinanceViewService {
     ]
     if (feeSegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Fee Accrual by Line Type', segments: feeSegments })
     if (familySegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Margin by Product Family', segments: familySegments })
+    // UIF-07b — the three reconciliation sources at the money level (A Nebras / B platform / C fintech).
+    sections.push({
+      kind: 'kpi-strip',
+      title: 'Three-Way Source Reconciliation',
+      stats: [
+        { label: 'A · Nebras billing', value: fmtMoney(sourceTotals.nebras) },
+        { label: 'B · Bank metering', value: fmtMoney(sourceTotals.platform) },
+        { label: 'C · Fintech re-bill', value: fmtMoney(sourceTotals.fintech) }
+      ]
+    })
 
     const data = {
       sections,
       period: p,
       mtd_nebras_fee_accrual: { amount: accrual?.total_fee_minor ?? 0, currency: accrual?.currency ?? 'AED' },
+      three_way_source_totals: {
+        nebras_billing: { amount: sourceTotals.nebras, currency: sourceTotals.currency },
+        platform_metering: { amount: sourceTotals.platform, currency: sourceTotals.currency },
+        fintech_rebill: { amount: sourceTotals.fintech, currency: sourceTotals.currency }
+      },
       fee_accrual_by_line_type: (accrual?.by_line_type ?? []).map((l) => ({ line_type: l.line_type, amount: { amount: l.total_fee_minor, currency: accrual!.currency }, line_count: l.line_count })),
       tpp_aas_margin: margin,
       open_nebras_dispute_count: openDisputes,

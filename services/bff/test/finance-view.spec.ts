@@ -33,7 +33,7 @@ function svc(deps: Partial<ConstructorParameters<typeof FinanceViewService>[0]> 
   const margin: MarginSummary = { ...emptyMargin(), total_margin: 30, by_fintech: { 'org-1': { client_id: 'org-1', by_family: { SIP: { nebras_fee: 250, fintech_charge: 280, margin: 30 } }, total_margin: 30 } } }
   return new FinanceViewService({
     feeAccrual: { feeAccrualForPeriod: async () => accrual },
-    margin: { marginForPeriod: async () => margin },
+    margin: { marginForPeriod: async () => margin, threeWaySourceTotalsForPeriod: async () => ({ nebras: 5000, platform: 4900, fintech: 8400, currency: 'AED' }) },
     disputes: { openNebrasDisputeCount: async () => 3 },
     unbilled: { unbilledTrafficCount: async () => 2 },
     now: () => new Date('2026-05-15T12:00:00.000Z'),
@@ -49,6 +49,12 @@ describe('FinanceViewService — composition', () => {
     expect((data.tpp_aas_margin as MarginSummary).total_margin).toBe(30)
     expect(data.open_nebras_dispute_count).toBe(3)
     expect(data.unbilled_traffic_alert_count).toBe(2)
+    // UIF-07b — the three reconciliation SOURCE money totals (A Nebras / B platform metering / C fintech)
+    expect(data.three_way_source_totals).toEqual({
+      nebras_billing: { amount: 5000, currency: 'AED' },
+      platform_metering: { amount: 4900, currency: 'AED' },
+      fintech_rebill: { amount: 8400, currency: 'AED' }
+    })
     expect(data.reconciliation_console_deeplink).toBe('/back-office/reconciliation/runs')
     expect(freshness.stale).toBe(false)
     expect(freshness.source_published_at).toBe('2026-05-28T00:00:00.000Z')

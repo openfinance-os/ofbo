@@ -33,7 +33,7 @@ describe('Finance View — fee accrual over real aggregates (RLS)', () => {
   function service() {
     return new FinanceViewService({
       feeAccrual: aggregates,
-      margin: { marginForPeriod: async () => emptyMargin() },
+      margin: { marginForPeriod: async () => emptyMargin(), threeWaySourceTotalsForPeriod: async () => ({ nebras: 0, platform: 0, fintech: 0, currency: 'AED' }) },
       disputes: { openNebrasDisputeCount: async () => 0 },
       unbilled: { unbilledTrafficCount: async () => 0 }
     })

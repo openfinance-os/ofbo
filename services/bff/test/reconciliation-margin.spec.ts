@@ -99,4 +99,15 @@ describe('run + monthly sign-off margin integration', () => {
     }).runDaily('t', { window: WINDOW })
     expect(run.margin.total_margin).toBeGreaterThan(0)
   })
+
+  it('threeWaySourceTotalsForPeriod re-derives positive A (Nebras) / B (platform metering) / C (fintech) totals', async () => {
+    const store = new InMemoryReconciliationLogStore()
+    const svc = new ReconciliationService({ store, breakStore: new InMemoryReconciliationBreakStore(), audit: new InMemoryHighClassAuditSink() })
+    await svc.runDaily('t', { window: WINDOW }) // run_id recon-2026-07-14-daily
+    const totals = await svc.threeWaySourceTotalsForPeriod('2026-07')
+    expect(totals.currency).toBe('AED')
+    expect(totals.nebras).toBeGreaterThan(0) // A — Nebras billed fees
+    expect(totals.platform).toBeGreaterThan(0) // B — bank metering (schedule-expected fees)
+    expect(totals.fintech).toBeGreaterThan(0) // C — fintech re-bill
+  })
 })

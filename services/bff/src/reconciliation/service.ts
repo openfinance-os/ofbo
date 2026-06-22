@@ -20,6 +20,7 @@ import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { runThreeWayReconciliation, type ReconLineResult, type ReconResult, type ReconSources, type ReconWindow } from './engine.js'
 import { buildSimReconSources, type SimReconConfig } from './sources.js'
 import { computeTppAasMargin, emptyMargin, mergeMargin, type MarginSummary } from './margin.js'
+import { applyFeeScheduleV1, AED } from './fee-schedule.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
 import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
 
@@ -710,6 +711,33 @@ export class ReconciliationService {
       mergeMargin(margin, await this.marginFor(this.sourcesFor(runPeriod), { start: run.window_start, end: run.window_end }))
     }
     return margin
+  }
+
+  /**
+   * BACKOFFICE-31 (UIF-07b) — the three reconciliation sources' MONEY totals for a month,
+   * re-derived from each run's deterministic sources (same basis as the margin): A = Nebras
+   * billing (billed fees), B = bank platform metering-of-record (schedule-expected fees from
+   * the metered call counts), C = downstream fintech re-bill. Integer minor units (fils).
+   * Read-only; composed into the Finance View. No external source — trivially fresh.
+   */
+  async threeWaySourceTotalsForPeriod(period: string): Promise<{ nebras: number; platform: number; fintech: number; currency: string }> {
+    const runs = await this.store.listForPrefix(`recon-${period}-`)
+    let nebras = 0
+    let platform = 0
+    let fintech = 0
+    for (const run of runs) {
+      const runPeriod = dateKey(new Date(run.window_start))
+      const bundle = this.sourcesFor(runPeriod)
+      const window = { start: run.window_start, end: run.window_end }
+      const [nLines, fLines, pLines] = await Promise.all([bundle.nebras.fetch(window), bundle.fintech.fetch(window), bundle.platform.fetch(window)])
+      for (const l of nLines) nebras += l.billed_fee.amount
+      for (const l of fLines) fintech += l.billed_fee.amount
+      for (const l of pLines) {
+        const fee = applyFeeScheduleV1(l.line_type, l.call_count)
+        if (fee) platform += fee.amount
+      }
+    }
+    return { nebras, platform, fintech, currency: AED }
   }
 
   /** BACKOFFICE-31 — the open Nebras dispute queue size for a month (Finance View). */
