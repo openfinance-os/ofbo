@@ -1528,3 +1528,15 @@ Fix (BFF-only): `services/bff/src/analytics/finance-view.ts` now emits typed sec
 Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. 879 unit pass (finance-view.spec +1); typecheck + lint clean.
 
 With this, all four analytics-renderer screens (Analytics[exec+finance] / Risk / Operations / Compliance) render bespoke typed-section panels.
+
+---
+
+## 2026-06-22 — UIF-07b: TPP-aaS Financial Reconciliation panel (recon console) — PR #207
+
+User-directed unblock of UIF-07b's margin slice (after the demo-margin enrichment #204 made the data meaningful).
+
+- **Portal-only, no spec change.** New `components/recon-finance.tsx` renders the three reconciliation sources at the money level — A = Nebras billing, C = fintech re-bill, net margin = C − A (B = bank metering reconciles A via the run match counts) — as a UIF-01 StatStrip + Margin-by-Fintech + Margin-by-Product-Family ContributionBars. `lib/recon-finance.ts` parses the BACKOFFICE-31 Finance View margin defensively (same `reconciliation:read` scope the recon console already holds; `getReconFinance` degrades to null). Additive: run-list / break-queue / outcome panel untouched.
+- TDD: `uif07b-recon-finance.spec` 4 (parser totals/sort/family-agg/null-degrade; panel money + note + bars; axe). Gates: gen no-drift, lint, typecheck (all), **full unit 883**, design-conformance clean, recon-console + recon-a11y green, build OK. Reviewers: hard-stop **PASS**, conformance **CONFORMANT**. Merged #207 (`db06ea61`).
+- **Residual (own follow-ups, not delivered):** (a) the literal per-source LINE-amount table needs source-B totals the recon contract doesn't expose → a recon spec-change; (c) Export/monthly Sign-off is a four-eyes mutation (BACKOFFICE-06) → a standalone story.
+
+Backlog after this: zero loop-eligible items; remaining blocked items (UIF-09b, BACKOFFICE-33, -52, M6) all need a human decision/input.
