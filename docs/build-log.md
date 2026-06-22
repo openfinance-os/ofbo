@@ -1443,3 +1443,15 @@ Every remaining backlog item is `blocked`. The `/next-story` loop has drained al
 The user approved + I merged spec PR #181 (`e8a8aef`): `AnalyticsView.data` gains an OPTIONAL `sections: AnalyticsSection[]` (typed/named analytics panels — kpi-strip | gauge | contribution-bars | status-cards | alert | object-table + per-kind payloads + a StatTone enum), backward-compatible (`data` stays `additionalProperties:true`; unknown kinds degrade to the generic grid). No file conflicts (no UIF PR touched the spec/api-types); post-merge **gen no-drift + typecheck clean across all 9 projects**.
 
 `UIF-SPEC-TYPED-SECTIONS` flipped blocked → **done**. The eligible queue is refilled: **UIF-03 (Analytics), UIF-04 (Risk), UIF-05 (Operations)** are now eligible — the bespoke typed-panel renderers that are the biggest remaining visual wins. Each is now: emit typed sections from the BFF analytics producer → map each `kind` to a UIF-01/01b primitive (Gauge/ContributionBar/KpiStat/StatStrip/StatusBadge/SectionCard) in a typed-section renderer, replacing the generic grid. UIF-07b's margin part also unblocks once those land. **Next `/next-story` picks up UIF-03.**
+
+---
+
+## 2026-06-22 — UIF-03: bespoke Analytics panels (BFF + renderer) — PR #196
+
+Reopened UX-11; the **first bespoke screen** on the typed analytics-sections contract (#181). Spans BFF + portal.
+
+- **Portal** — `AnalyticsSections` (components/analytics/analytics-sections.tsx): the **shared typed-section renderer** mapping each `AnalyticsSection.kind` → a UIF-01/01b primitive (kpi-strip→StatStrip/KpiStat, gauge→Gauge, contribution-bars→ContributionBar, status-cards→toned cards, alert→callout, object-table→table; unknown→null/degrade). `lib/analytics` gained the contract-sourced `AnalyticsSection` type + `sectionsOf(view)`; the `AnalyticsSection` wrapper renders bespoke sections when present else the generic `MetricGrid` (backward-compatible).
+- **BFF** — `ExecutiveDashboardService.view` now emits `data.sections` from **live metrics** (no mock values), **scope-gated like the angles**: a Reconciliation-Pass-Rate gauge (base) + a Commercial-Metrics kpi-strip (margins formatted from integer minor units) + a Margin-by-Product-Family contribution-bars (`commercial:read` only).
+- TDD: `uif03-analytics-sections.spec` 8 (all 6 kinds + unknown-degrade + axe) + `executive-dashboard.spec` +2 (sections emitted; base-scope scope hygiene). Gates: gen no-drift, lint, typecheck (all), **full unit 873**, design-conformance clean, analytics + a11y green, **executive-dashboard.int green vs local PG**, build OK. Reviewers: hard-stop **PASS** (scope-gating + minor-unit money), conformance **CONFORMANT**. Merged #196 (`4fe14a3e`).
+
+**The renderer is now shared infrastructure** — UIF-04 (Risk) + UIF-05 (Operations) reuse it, so they shrink to: emit typed sections from their BFF producers (risk-view / operations-console) + the screen already renders them. **Next eligible: UIF-04.**
