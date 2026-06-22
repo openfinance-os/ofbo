@@ -1615,3 +1615,15 @@ User-directed. The BACKOFFICE-18 backend (POST /consents:revoke-bulk, four-eyes)
 - No spec change (endpoint pre-existed). TDD: bulk-revoke-form.spec + care-console gating test. Gates: gen no-drift, lint, typecheck (all), design-conformance clean, a11y axe green, full unit 900, build OK, all CI gates green. Reviewers: hard-stop PASS (four-eyes 202 no-inline, PSU-PII hidden-inputs-only, scope re-checked, idempotency + confirm), conformance CONFORMANT (body/headers/202 match spec). Merged #220 (fe9abc89).
 
 UIF-09b CLOSED (both halves). Residual (not part of the item): per-row "Investigate" on consents is undefined against the current contract — own spec/story if wanted. Remaining backlog is governance/engagement (BACKOFFICE-33, -52, M6) + cosmetic Stitch (Ghost Balance off-shell).
+
+---
+
+## 2026-06-22 — UX: subtle non-prod marker + engaging welcome/persona screen — PR #223
+
+User-directed (two entry-experience improvements).
+
+- **Non-prod marker**: the full-width orange `bg-demo` top bar → a subtle fixed top pill (DemoPill), still rendered once in the root layout (rides every screen) + added to global-error (the crash boundary that replaces the root layout — closed a pre-existing gap). Short visible label; the full "synthetic data only · no real PSU data, ever · non-production" statement is in aria-label/title (role=note) so the hard-stop "must say so on every screen" holds. Shell footer keeps the fuller line. Removed dead .demo-banner CSS.
+- **Welcome/persona screen**: PersonaLoginList redesigned into a two-panel card — a navy explainer (what OFBO is / what it does, 4 capability tiles / how it works: four-eyes · scope hygiene · zero PII · secure egress) + an enriched role chooser (each persona card shows its purpose + reachable modules via a presentation-only PERSONA_GUIDE; no contract data / no PII). MFA-enforced native form POST to /api/login + hidden token unchanged.
+- Token-only (navy nav-* tokens), zero PSU PII. TDD: components.spec (DemoPill aria statement, welcome hero + per-role module chips, axe). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 902, build OK, all CI gates green. Reviewer: hard-stop PASS (marker persistent + aria-complete on every screen incl. crash boundary, zero PII, token-only, sign-in intact). Conformance N/A. Merged #223 (00fb2922).
+
+Built directly against tokens (user's call); a matching Stitch "Welcome / Persona Selector" screen still to be generated + pinned for the record.
