@@ -1,6 +1,8 @@
 import { formatMoney, type ReconciliationBreak, type ReconciliationRun, type ReconWriteResult } from '../lib/reconciliation'
 import { LoadMore, AuditNote, ErrorBanner } from './ui'
 import { ReconOutcomePanel } from './recon-outcome'
+import { ReconFinancePanel } from './recon-finance'
+import type { ReconFinance } from '../lib/recon-finance'
 import { ClaimForm } from './reconciliation/claim-form'
 import { ResolveForm } from './reconciliation/resolve-form'
 
@@ -23,6 +25,8 @@ export interface ReconConsoleProps {
   errorRemediation?: string | null
   errorDocsUrl?: string | null
   notice?: string | null
+  /** UIF-07b — TPP-aaS financial reconciliation (Finance View margin); null → panel omitted. */
+  finance?: ReconFinance | null
   canWrite?: boolean
   claimAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
   resolveAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
@@ -171,7 +175,7 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreH
   )
 }
 
-export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
+export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, finance, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
       <div className="flex items-center justify-between gap-3">
@@ -192,6 +196,7 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref
 
       {selectedRun ? <KpiCards run={selectedRun} /> : null}
       {selectedRun ? <ReconOutcomePanel run={selectedRun} /> : null}
+      {finance ? <ReconFinancePanel finance={finance} /> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
