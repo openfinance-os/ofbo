@@ -45,6 +45,23 @@ describe('visibleModules (scope-gated nav)', () => {
 const finance = { subject: 'demo:finance', persona: 'finance-analyst', scopes: ['reconciliation:read', 'billing:read'], superadmin: false }
 
 describe('AppShell', () => {
+  it('renders the dark "institutional shell" — navy sidebar (Stitch "Operations Console (Synchronized)"), light top bar', () => {
+    render(
+      <AppShell principal={finance} active="finance">
+        <p>content</p>
+      </AppShell>
+    )
+    const sidebar = screen.getByTestId('sidebar')
+    expect(sidebar.className).toContain('bg-nav') // navy chrome — not the light bg-surface
+    expect(sidebar.className).not.toContain('bg-surface ')
+    // an inactive nav item uses the light-slate-on-navy treatment
+    expect(screen.getByTestId('nav-dashboard').className).toContain('text-on-nav')
+    // the active item gets the secondary/blue accent
+    expect(screen.getByTestId('nav-finance').className).toContain('nav-active')
+    // the top bar/content stay light
+    expect(screen.getByTestId('app-shell').querySelector('header')?.className).toContain('bg-surface-container-lowest')
+  })
+
   it('renders the scope-aware sidebar + the persona badge (scope echo absorbed), hiding out-of-scope modules', () => {
     render(
       <AppShell principal={finance} active="dashboard">

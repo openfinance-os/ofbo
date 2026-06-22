@@ -85,7 +85,21 @@ export const ext = {
     break: '#b26a00', // amber — reconciliation break / warning
     reconciled: '#146c2e' // green — matched / healthy
   },
-  demo: '#b54708'
+  demo: '#b54708',
+  /**
+   * UI-01 — the dark "institutional shell" navy chrome, codified from the Stitch
+   * "OFBO - Operations Console (Synchronized)" screen (project 8050269076066130289):
+   * a navy sidebar with light-slate nav text. The design system always intended this
+   * ("Primary Navy #0F172A: used for global navigation") — the shell now adopts it.
+   * The top bar + content stay on the light surface tokens. Active items reuse
+   * `secondary` (the Stitch active-selection blue) at low opacity + a blue-400 accent.
+   */
+  nav: {
+    surface: '#0f172a', // navy sidebar surface (Stitch bg-[#0f172a])
+    on: '#cbd5e1', // slate-300 — default nav text
+    elevated: '#1e293b', // slate-800 — hover bg + sidebar border
+    active: '#60a5fa' // blue-400 — active item accent text
+  }
 } as const
 
 /**

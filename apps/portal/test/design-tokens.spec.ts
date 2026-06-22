@@ -38,6 +38,14 @@ describe('OFBO design tokens (reconciled to Stitch)', () => {
     expect(ext.demo).toMatch(HEX)
   })
 
+  it('carries the dark "institutional shell" navy chrome (Stitch "Operations Console (Synchronized)")', () => {
+    expect(ext.nav.surface).toBe('#0f172a') // navy sidebar surface
+    expect(ext.nav.on).toBe('#cbd5e1') // slate-300 — default nav text
+    expect(ext.nav.elevated).toBe('#1e293b') // slate-800 — hover bg + sidebar border
+    expect(ext.nav.active).toBe('#60a5fa') // blue-400 — active item accent
+    for (const v of Object.values(ext.nav)) expect(v).toMatch(HEX)
+  })
+
   it('uses the Stitch 4px spacing base + named layout tokens', () => {
     expect(spacing.unit).toBe('4px')
     expect(spacing['row-height-standard']).toBe('48px') // comfortable density

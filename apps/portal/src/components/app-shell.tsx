@@ -52,21 +52,21 @@ export function AppShell({ principal, active, badges, children }: { principal: S
 
       {/* Sidebar (Stitch: w-60 = 240px). Mobile: fixed off-canvas drawer. lg+: sticky rail. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-60 transition-transform ${drawerOpen ? 'translate-x-0' : '-translate-x-full'} lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${collapsed ? 'lg:w-16' : 'lg:w-60'} shrink-0 bg-surface border-r border-outline-variant flex flex-col py-container-padding`}
+        className={`fixed inset-y-0 left-0 z-50 w-60 transition-transform ${drawerOpen ? 'translate-x-0' : '-translate-x-full'} lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0 ${collapsed ? 'lg:w-16' : 'lg:w-60'} shrink-0 bg-nav border-r border-nav-elevated flex flex-col py-container-padding`}
         data-testid="sidebar"
         data-collapsed={collapsed ? 'true' : 'false'}
         data-drawer-open={drawerOpen ? 'true' : 'false'}
       >
         <div className="px-container-padding mb-6 flex items-center justify-between">
-          <p className="font-bold text-on-surface">
+          <p className="font-bold text-white">
             OFBO<span className={collapsed ? 'lg:hidden' : undefined}> Portal</span>
           </p>
           {/* mobile-only close button inside the drawer */}
-          <button type="button" onClick={closeDrawer} data-testid="close-drawer" aria-label="Close navigation" className="lg:hidden font-symbols text-on-surface-variant hover:text-on-surface cursor-pointer">
+          <button type="button" onClick={closeDrawer} data-testid="close-drawer" aria-label="Close navigation" className="lg:hidden font-symbols text-on-nav hover:text-white cursor-pointer">
             close
           </button>
         </div>
-        <p className={`px-container-padding -mt-4 mb-6 text-xs text-on-surface-variant ${collapsed ? 'lg:hidden' : ''}`}>Open Finance Infrastructure</p>
+        <p className={`px-container-padding -mt-4 mb-6 text-xs text-on-nav opacity-70 ${collapsed ? 'lg:hidden' : ''}`}>Open Finance Infrastructure</p>
         <nav className="flex flex-col gap-1 px-2" aria-label="primary">
           {modules.map((m) => {
             const count = badges?.[m.key] ?? 0
@@ -79,7 +79,7 @@ export function AppShell({ principal, active, badges, children }: { principal: S
               data-testid={`nav-${m.key}`}
               aria-current={active === m.key ? 'page' : undefined}
               title={collapsed ? m.label : undefined}
-              className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${active === m.key ? 'bg-secondary-fixed text-on-secondary-fixed font-semibold' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm border ${active === m.key ? 'bg-secondary/20 border-secondary/30 text-nav-active font-semibold' : 'border-transparent text-on-nav hover:bg-nav-elevated hover:text-white'}`}
             >
               <span className="font-symbols text-base" aria-hidden>
                 {m.icon}
@@ -106,7 +106,7 @@ export function AppShell({ principal, active, badges, children }: { principal: S
           })}
         </nav>
         <form action="/api/logout" method="post" className="mt-auto px-2">
-          <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch persona' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-surface-variant hover:bg-surface-container cursor-pointer">
+          <button type="submit" data-testid="switch-persona" title={collapsed ? 'Switch persona' : undefined} className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-on-nav hover:bg-nav-elevated hover:text-white cursor-pointer">
             <span className="font-symbols text-base" aria-hidden>
               switch_account
             </span>

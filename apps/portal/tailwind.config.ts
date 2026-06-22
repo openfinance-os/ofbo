@@ -17,7 +17,12 @@ export default {
         breach: ext.status.breach,
         break: ext.status.break,
         reconciled: ext.status.reconciled,
-        demo: ext.demo
+        demo: ext.demo,
+        // UI-01 — dark "institutional shell" navy chrome (Stitch Operations Console (Synchronized)).
+        nav: ext.nav.surface,
+        'on-nav': ext.nav.on,
+        'nav-elevated': ext.nav.elevated,
+        'nav-active': ext.nav.active
       },
       borderRadius: { ...borderRadius },
       spacing: { ...spacing },
