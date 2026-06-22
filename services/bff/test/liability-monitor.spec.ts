@@ -86,6 +86,16 @@ describe('LiabilityViewService — read view', () => {
     expect(freshness.stale).toBe(false)
   })
 
+  it('UIF-04: emits typed sections (liability-by-severity bars + approaching-triggers table)', async () => {
+    const { data } = await new LiabilityViewService({ riskMetrics: reader }).view(risk)
+    const sections = data.sections as { kind: string; segments?: { label: string; value: number }[]; table?: { columns: string[]; rows: unknown[] } }[]
+    const bars = sections.find((s) => s.kind === 'contribution-bars')
+    expect(bars?.segments?.map((g) => g.label).sort()).toEqual(['critical', 'medium'])
+    const table = sections.find((s) => s.kind === 'object-table')
+    expect(table?.table?.rows).toHaveLength(2)
+    expect(table?.table?.columns).toContain('accrued_aed')
+  })
+
   it('rejects a principal without risk:read', async () => {
     await expect(new LiabilityViewService({ riskMetrics: reader }).view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
   })

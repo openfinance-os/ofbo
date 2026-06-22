@@ -48,12 +48,30 @@ export class RiskViewService {
       this.deps.metrics.recentActive(20)
     ])
 
+    // UIF-04 (ADR 0016 D1) — typed sections the portal renders as bespoke panels; live data.
+    const severitySegments = Object.entries(summary.by_severity)
+      .map(([label, value]) => ({ label, value }))
+      .filter((seg) => seg.value > 0)
+    const sections: Record<string, unknown>[] = [
+      {
+        kind: 'kpi-strip',
+        title: 'Risk Signals',
+        stats: [
+          { label: 'Active signals', value: String(summary.active_total) },
+          { label: 'Consent anomalies', value: String(sumTypes(summary.by_type, CONSENT_ANOMALY_TYPES)) },
+          { label: 'TPP behaviour anomalies', value: String(sumTypes(summary.by_type, TPP_ANOMALY_TYPES)) }
+        ]
+      }
+    ]
+    if (severitySegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Open Signals by Severity', segments: severitySegments })
+
     const data = {
       signal_summary: { active_total: summary.active_total, by_type: summary.by_type, by_severity: summary.by_severity, by_status: summary.by_status },
       consent_anomalies: { active: sumTypes(summary.by_type, CONSENT_ANOMALY_TYPES) },
       tpp_behaviour_anomalies: { active: sumTypes(summary.by_type, TPP_ANOMALY_TYPES) },
       liability_monitor: liability,
-      recent_signals: recent
+      recent_signals: recent,
+      sections
     }
     // BACKOFFICE-40 — live read over risk_signal → trivially fresh.
     return { data, freshness: liveFreshness(now) }
