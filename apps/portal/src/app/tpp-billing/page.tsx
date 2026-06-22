@@ -65,6 +65,9 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
 
   const regCursor = one(sp.reg_cursor)
   const invCursor = one(sp.inv_cursor)
+  // UIF-08b — scope-aware registry filter (the BFF filters server-side via CounterpartyQuery).
+  const regState = one(sp.reg_state) ?? ''
+  const unbilledOnly = one(sp.unbilled) === '1'
   let counterparties: TppCounterparty[] = []
   let invoiceRuns: InvoiceRun[] = []
   let registryMoreHref: string | null = null
@@ -73,9 +76,20 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   let errorRemediation: string | null = null
   let errorDocsUrl: string | null = null
   try {
-    const page = await listCounterparties(token, { limit: 50, cursor: regCursor })
+    const page = await listCounterparties(token, {
+      limit: 50,
+      cursor: regCursor,
+      ...(regState ? { registration_state: regState } : {}),
+      ...(unbilledOnly ? { unbilled_traffic: true } : {})
+    })
     counterparties = page.counterparties
-    registryMoreHref = page.next_cursor ? `/tpp-billing?reg_cursor=${encodeURIComponent(page.next_cursor)}` : null
+    if (page.next_cursor) {
+      const p = new URLSearchParams()
+      if (regState) p.set('reg_state', regState)
+      if (unbilledOnly) p.set('unbilled', '1')
+      p.set('reg_cursor', page.next_cursor)
+      registryMoreHref = `/tpp-billing?${p.toString()}`
+    }
   } catch (e) {
     error = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
     if (e instanceof TppBillingApiError) {
@@ -102,6 +116,8 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
         invoiceRuns={invoiceRuns}
         registryMoreHref={registryMoreHref}
         invoiceMoreHref={invoiceMoreHref}
+        registrationState={regState || undefined}
+        unbilledOnly={unbilledOnly}
         error={error}
         errorRemediation={errorRemediation}
         errorDocsUrl={errorDocsUrl}
