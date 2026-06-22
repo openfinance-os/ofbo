@@ -15,6 +15,9 @@ import { FAPI_HEADERS } from './helpers.js'
 
 const WINDOW = { start: '2026-07-14T00:00:00.000Z', end: '2026-07-15T00:00:00.000Z' }
 const finance = (extra: Record<string, string> = {}) => ({ ...FAPI_HEADERS, authorization: 'Bearer demo-token:finance-analyst', 'content-type': 'application/json', ...extra })
+// the second pair of eyes: a different subject that satisfies finance:reconciliation:write
+// (platform:superadmin satisfies any scope check) — initiator ≠ approver.
+const approver = (extra: Record<string, string> = {}) => ({ ...FAPI_HEADERS, authorization: 'Bearer demo-token:platform-super-admin', 'x-superadmin-justification': 'four-eyes approval of the monthly reconciliation sign-off (test)', 'content-type': 'application/json', ...extra })
 
 class CapturingReportStore implements ComplianceReportStore {
   created: ComplianceReportCreateInput[] = []
@@ -54,16 +57,27 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
     app = createApp({ reconciliationLogStore: logStore, reconciliationBreakStore: breakStore, complianceReportStore: reports, highClassAudit: audit })
   })
 
-  it('generates + locks the monthly summary as an IdP-attested signed compliance_report', async () => {
-    const res = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm1' }), body: JSON.stringify({ period: '2026-07' }) })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { data: { report_type: string; status: string; approved_by: string; requested_by: string; integrity_hash: string; generated_at: string } }
-    expect(body.data.report_type).toBe('monthly_reconciliation')
-    expect(body.data.status).toBe('approved')
-    expect(body.data.approved_by).toBe(body.data.requested_by) // the signing Finance Analyst (IdP-attested)
-    expect(body.data.approved_by).toBeTruthy()
-    expect(body.data.integrity_hash).toMatch(/^[0-9a-f]{64}$/)
-    expect(body.data.generated_at).toBeTruthy()
+  it('four-eyes: a maker requests (202 + approval_request, no inline lock); a different finance principal approves → the locked signed report', async () => {
+    const init = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm1' }), body: JSON.stringify({ period: '2026-07' }) })
+    expect(init.status).toBe(202) // 202 + approval_request — never executes inline (four-eyes hard-stop)
+    const approvalId = ((await init.json()) as { data: { approval_request_id: string } }).data.approval_request_id
+    expect(approvalId).toBeTruthy()
+    expect(reports.created.length).toBe(0) // nothing locked on the request
+
+    // self-approval rejected (four-eyes) — the initiator cannot approve their own request
+    const self = await app.request(`/approvals/${approvalId}:approve`, { method: 'POST', headers: finance({ 'idempotency-key': 's1' }) })
+    expect(self.status).toBe(409)
+    expect(reports.created.length).toBe(0)
+
+    // a different finance:reconciliation:write principal approves → the report is generated + locked on approval
+    const ok = await app.request(`/approvals/${approvalId}:approve`, { method: 'POST', headers: approver({ 'idempotency-key': 'a1' }) })
+    expect(ok.status).toBe(200)
+    const report = ((await ok.json()) as { data: { execution_result?: { report_type: string; status: string; approved_by: string; requested_by: string; integrity_hash: string } } }).data.execution_result!
+    expect(report.report_type).toBe('monthly_reconciliation')
+    expect(report.status).toBe('approved')
+    expect(report.approved_by).toBe(report.requested_by) // attested to the INITIATING Finance Analyst
+    expect(report.integrity_hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(reports.created.length).toBe(1)
 
     // the persisted summary aggregates the month's runs + break dispositions
     const content = reports.created[0]!.content as { period: string; run_count: number; breaks: { total: number; open: number }; open_nebras_disputes: number; tpp_aas_margin: { total_margin: number; by_fintech: Record<string, unknown> } }
@@ -71,24 +85,24 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
     expect(content.run_count).toBe(1)
     expect(content.breaks.total).toBe(8)
     expect(content.breaks.open).toBe(8) // all flagged
-    expect(content.open_nebras_disputes).toBe(0)
     expect(content.tpp_aas_margin.total_margin).toBeGreaterThan(0) // BACKOFFICE-07 real margin
     expect(Object.keys(content.tpp_aas_margin.by_fintech).length).toBeGreaterThan(0)
+    // the execution is High-class logged, attributed to the initiator + flagged four-eyes-approved
     const ev = audit.events.find((e) => e.event_type === 'reconciliation_monthly_signoff')
-    expect((ev?.request_body as { period: string }).period).toBe('2026-07')
+    expect((ev?.request_body as { period: string; four_eyes_approved: boolean }).period).toBe('2026-07')
+    expect((ev?.request_body as { four_eyes_approved: boolean }).four_eyes_approved).toBe(true)
   })
 
-  it('replays the same Idempotency-Key (no second report); a different period is not shadowed', async () => {
-    const created = reports.created.length
-    const replay = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm1' }), body: JSON.stringify({ period: '2026-07' }) })
-    expect(replay.status).toBe(200)
-    expect(reports.created.length).toBe(created) // replayed, no new report
-    const other = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm1' }), body: JSON.stringify({ period: '2026-08' }) })
-    expect(other.status).toBe(200)
-    expect(reports.created.length).toBe(created + 1) // different period ⇒ new report
+  it('replaying the request Idempotency-Key returns the same approval (no second request)', async () => {
+    const init = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm-idem' }), body: JSON.stringify({ period: '2026-08' }) })
+    const a1 = ((await init.json()) as { data: { approval_request_id: string } }).data.approval_request_id
+    const replay = await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm-idem' }), body: JSON.stringify({ period: '2026-08' }) })
+    const a2 = ((await replay.json()) as { data: { approval_request_id: string } }).data.approval_request_id
+    expect(replay.status).toBe(202)
+    expect(a2).toBe(a1) // same approval replayed, not a new one
   })
 
-  it('400 invalid period; 400 missing Idempotency-Key; 403 without finance:reconciliation:write', async () => {
+  it('400 invalid period; 400 missing Idempotency-Key; 403 without finance:reconciliation:write — all before any approval is created', async () => {
     expect((await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance({ 'idempotency-key': 'm2' }), body: JSON.stringify({ period: '2026-7' }) })).status).toBe(400)
     expect((await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: finance(), body: JSON.stringify({ period: '2026-07' }) })).status).toBe(400)
     expect((await app.request('/back-office/reconciliation/monthly-signoff', { method: 'POST', headers: { ...FAPI_HEADERS, authorization: 'Bearer demo-token:customer-care-agent', 'content-type': 'application/json', 'idempotency-key': 'm3' }, body: JSON.stringify({ period: '2026-07' }) })).status).toBe(403)

@@ -60,6 +60,8 @@ import {
   InMemoryReconciliationBreakStore,
   makeBreakReopenOperation,
   BREAK_REOPEN_OPERATION,
+  makeMonthlySignoffOperation,
+  MONTHLY_SIGNOFF_OPERATION,
   InMemoryReconciliationThresholdStore,
   type ReconciliationLogStore,
   type ReconciliationBreakStore,
@@ -339,6 +341,13 @@ export function createApp(deps: AppDeps = {}) {
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
   const breakReopenOperation = makeBreakReopenOperation({ breakStore: reconciliationBreakStore, audit: highClassAudit })
   const invoiceRunOperation = makeInvoiceRunOperation({ invoiceStore: invoiceRunStore, financialSystem: getAdapter('p9-financial-system', profileFromConfig(process.env)), audit: highClassAudit })
+  // BACKOFFICE-06 — the monthly sign-off operation executes on the reconciliation service,
+  // which is constructed below (it needs `approvals`). Late-bind via this holder to break the
+  // request↔execute cycle; the closure runs only at approval time, after svc is set.
+  const reconHolder: { svc?: ReconciliationService } = {}
+  const monthlySignoffOperation = makeMonthlySignoffOperation({
+    execute: (period, by, persona, trace) => reconHolder.svc!.executeMonthlySignoff(period, by, persona, trace)
+  })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: {
@@ -347,6 +356,7 @@ export function createApp(deps: AppDeps = {}) {
       [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
       [BULK_REVOKE_OPERATION]: bulkRevokeOperation,
       [BREAK_REOPEN_OPERATION]: breakReopenOperation,
+      [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
       [REPORT_GENERATION_OPERATION]: reportGenerationOperation
     }
@@ -400,6 +410,7 @@ export function createApp(deps: AppDeps = {}) {
     reports: complianceReportStore,
     audit: highClassAudit
   })
+  reconHolder.svc = reconciliationService // BACKOFFICE-06 — bind the monthly-signoff executor
   const tppCounterpartyStore = deps.tppCounterpartyStore ?? new InMemoryTppCounterpartyStore()
   const tppRegistryService = new TppRegistryService(
     tppCounterpartyStore,

@@ -249,8 +249,8 @@ export function reconciliationRoutes(service: ReconciliationService, idempotency
       return replayCached(c, idempotency, cacheKey, async () => {
         const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
         try {
-          const report = await service.monthlySignoff(c.get('principal'), body.period ?? '', traceId)
-          return c.json(dataEnvelope(report), 200)
+          const record = await service.initiateMonthlySignoff(c.get('principal'), body.period ?? '', traceId)
+          return c.json(dataEnvelope(approvalToWire(record)), 202)
         } catch (e) {
           return fail(c, e)
         }
