@@ -1576,3 +1576,16 @@ User-directed. I'd offered a recon spec PR for the per-source totals, but on ins
 - TDD: reconciliation-margin.spec +1 (A/B/C > 0), finance-view.spec asserts the field, uif07b-recon-finance.spec +2 (parser + table). Gates: gen no-drift, lint, typecheck (all), **full unit 890**, build OK, finance-view.int green vs local PG. Reviewers: hard-stop **PASS**, conformance **CONFORMANT** (free-form data extension, no spec change). Merged #213 (`2f2a4d12`).
 
 **UIF-07b fully closed** (a + b + c). Backlog: zero loop-eligible items; remaining blocked items (UIF-09b, BACKOFFICE-33, -52, M6) all need a human decision/input.
+
+---
+
+## 2026-06-22 — UI-01: dark navy institutional shell across every screen — PR #216
+
+User-directed. The portal shell sidebar rendered light (bg-surface); the Stitch reference "OFBO - Operations Console (Synchronized)" (screen 16229c0b…) and the design system itself ("Primary Navy #0F172A: used for global navigation") intend a dark navy side menu. Brought the shared AppShell into line — one component, so the navy chrome shows on every screen at once.
+
+- Added a semantic nav-* token group (no raw hex in components; hex lives only in design/tokens.ts): nav #0f172a (navy sidebar), on-nav #cbd5e1 (slate-300 text), nav-elevated #1e293b (slate-800 hover + border), nav-active #60a5fa (blue-400 active accent); wired through tailwind.config.
+- Restyled the AppShell sidebar to the navy tokens (white brand; inactive text-on-nav → hover:bg-nav-elevated hover:text-white; active bg-secondary/20 + border-secondary/30 + text-nav-active). Top bar + content stay light, matching the template. Scope-aware nav / persona badge unchanged.
+- NOT a design-system change (the design-md already specified navy nav) → no ADR.
+- TDD: design-tokens.spec (nav values), app-shell.spec (navy sidebar + light top bar). Gates: lint, typecheck (all), design-conformance clean (token-only), a11y axe green, full unit 892, build OK, all 6 CI gates green incl. Q3 Playwright E2E. Reviewer: hard-stop PASS (token-only, zero PII, no logic touched). Conformance N/A (no contract surface). Merged #216 (cf17117a).
+
+Note: the Stitch finance Three-Source Break Investigation screens have now landed (e.g. 251beaef…) — UIF-09b's design prerequisite is unblocked; wiring /reconciliation/breaks/[id] to it is the next buildable step on request.
