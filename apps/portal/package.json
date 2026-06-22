@@ -17,6 +17,9 @@
     "@ofbo/contracts": "workspace:*",
     "@ofbo/db": "workspace:*",
     "@ofbo/ports": "workspace:*",
+    "@visx/group": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

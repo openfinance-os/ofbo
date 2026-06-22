@@ -16,3 +16,6 @@ export { StatStrip } from './stat-strip'
 export { SectionCard } from './section-card'
 export { ContributionBar } from './contribution-bar'
 export type { ContributionSegment } from './contribution-bar'
+// UIF-01b — @visx chart primitives (ADR 0016 D2).
+export { Gauge } from './gauge'
+export { Sparkline } from './sparkline'
