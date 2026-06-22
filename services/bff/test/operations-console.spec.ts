@@ -65,6 +65,18 @@ describe('OperationsConsoleService — composition', () => {
     expect(freshness.stale_cause).toBe('no_nebras_ingestion_yet')
   })
 
+  it('UIF-05: emits typed bespoke sections (platform-health kpi-strip + pipeline bars + outages table)', async () => {
+    const { data } = await svc().view(ops)
+    const sections = data.sections as { kind: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[]; table?: { columns: string[]; rows: unknown[] } }[]
+    const strip = sections.find((s) => s.kind === 'kpi-strip')
+    expect(strip?.stats?.find((st) => st.label === 'Active outages')?.value).toBe('1')
+    expect(strip?.stats?.find((st) => st.label === 'TPP onboarding')?.value).toBe('3')
+    const bars = sections.find((s) => s.kind === 'contribution-bars')
+    expect(bars?.segments?.map((g) => g.label).sort()).toEqual(['onboarding', 'registered'])
+    const table = sections.find((s) => s.kind === 'object-table')
+    expect(table?.table?.rows).toHaveLength(1)
+  })
+
   it('rejects a principal without platform:operations:read (defence in depth)', async () => {
     await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
   })
