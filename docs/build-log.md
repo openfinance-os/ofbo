@@ -1672,3 +1672,16 @@ BACKOFFICE-33 stays in-progress — PRs 3-5: route the other analytics views (ex
 `seedDemoDataset` now seeds the 6 BD-13 cross-fintech query purposes into query_purpose_registry (pre-approved, idempotent) + a BCBS 239 lineage row. Fixes a latent regression from PR 2: the governed Compliance read rejects unregistered purposes, but the demo seed didn't seed them — so a freshly-seeded DB (incl. the auto-deployed hosted demo, whose deploy runs db:seed:demo → seedDemoScenario → seedDemoDataset) would 've failed /compliance with UNREGISTERED_QUERY_PURPOSE. seed.int asserts 6 purposes approved + lineage. unit 913, seed.int 5/5, Q4.5 PASSED. Reviewers: hard-stop PASS, conformance CONFORMANT.
 
 BACKOFFICE-33 remaining: PR 4 (route executive/finance/risk/operations through the governed path — note executive/finance pull from shared stores, higher blast radius) + PR 5 (four-eyes on new-purpose registration).
+
+---
+
+## 2026-06-22 — UX: OFBO brand mark + demo-framed persona switch + remove density toggle — PR #230
+
+User-directed (live feedback).
+
+- **Brand logo**: replaced the "OF" text monogram with OfboMark — a layered "ledger" glyph (white open-ledger card + ledger lines + a navy record card stacked behind for depth). Token-driven fills only (fill-white/fill-nav/fill-nav-active) → design-conformance clean; aria-hidden decorative (paired with the wordmark). Shown in the sidebar tile + the sign-in brand.
+- **Persona switch — demo-framed + engaging**: on /profile, a demo-tinted "Demo · explore the other roles" card explains role-switching is a demo convenience (production signs in once via the bank IdP, no role-swapping) with a "Switch to another role" action; the sidebar button now reads "Switch role · demo". Same /api/logout flow + testids (switch-persona / profile-switch-persona) — behaviour unchanged.
+- **Removed the comfortable/compact density toggle**: it only tightened content/table padding (marginal in a demo) + cluttered the top bar we'd just decluttered. Dropped the toggle, compact state, data-density attr, and [data-density] CSS; row-height tokens kept (explained the value to the user; one-liner to restore).
+- Token-only, no PII. TDD: app-shell.spec (toggle gone, collapse intact), profile-view.spec (demo-framed switch + logout). Gates: lint, typecheck (all), design-conformance clean, a11y green, full unit 915, build OK, all CI green (E2E included via --watch). Reviewer: hard-stop PASS. Merged #230 (fd7d8e8a).
+
+Process note: kept watching ALL checks via `gh pr checks --watch` (after the #225 race where a UI testid change broke the E2E and merged before it registered). Grepped the E2E suite for changed testids/text before pushing — switch-persona testid preserved, so E2E unaffected.
