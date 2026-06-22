@@ -97,7 +97,34 @@ export class OperationsConsoleService {
         .filter((c) => c.role === role)
         .map((c) => ({ subject: c.subject, track: c.track, current_stage: c.current_stage, stages_completed: c.stages_completed, stages_total: c.stages_total, status: c.status }))
 
+    // UIF-05 (ADR 0016 D1) — typed sections the portal renders as bespoke panels; live data.
+    const pipelineTotal = Object.values(pipeline).reduce((n, v) => n + v, 0)
+    const pipelineSegments = Object.entries(pipeline).map(([label, value]) => ({ label, value })).filter((seg) => seg.value > 0)
+    const sections: Record<string, unknown>[] = [
+      {
+        kind: 'kpi-strip',
+        title: 'Platform Health',
+        stats: [
+          { label: 'Active outages', value: String(activeOutages.length) },
+          { label: 'TPP onboarding', value: String(pipelineTotal), sublabel: 'in pipeline' },
+          { label: 'Nebras connectivity', value: connectivityStatus }
+        ]
+      }
+    ]
+    if (pipelineSegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'TPP Onboarding Pipeline', segments: pipelineSegments })
+    if (activeOutages.length > 0) {
+      sections.push({
+        kind: 'object-table',
+        title: 'Active Outages',
+        table: {
+          columns: ['title', 'component', 'severity', 'started_at'],
+          rows: activeOutages.map((o) => ({ title: o.title, component: o.component, severity: o.severity, started_at: o.started_at }))
+        }
+      })
+    }
+
     const data = {
+      sections,
       nebras_connectivity: {
         status: connectivityStatus,
         last_contact_at: latestSnapshot?.ingested_at ?? null,
