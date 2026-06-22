@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { formatMoney, REGISTERABLE_STATES, type InvoiceRun, type TppCounterparty, type TppWriteResult } from '../lib/tpp-billing'
 import { Notice, ErrorBanner, LoadMore } from './ui'
 import { TppBillingOverview } from './tpp-billing-overview'
+import { RegistryFilter } from './tpp-billing/registry-filter'
 import { RegisterForm } from './tpp-billing/register-form'
 import { InvoiceRunForm } from './tpp-billing/invoice-run-form'
 import { SyncForm } from './tpp-billing/sync-form'
@@ -24,6 +25,9 @@ export interface TppBillingProps {
   notice?: ReactNode
   registryMoreHref?: string | null
   invoiceMoreHref?: string | null
+  /** UIF-08b — active registry filter values (reflected back into the filter form). */
+  registrationState?: string
+  unbilledOnly?: boolean
   /** billing:write — register P9 + create invoice runs. */
   canBilling?: boolean
   /** platform:operations:write — sync the Trust Framework Directory. */
@@ -132,7 +136,7 @@ export function InvoiceRunsTable({ invoiceRuns, moreHref }: { invoiceRuns: Invoi
   )
 }
 
-export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, error, errorRemediation, errorDocsUrl, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
+export function TppBilling({ counterparties = [], invoiceRuns = [], registryMoreHref, invoiceMoreHref, registrationState, unbilledOnly, error, errorRemediation, errorDocsUrl, notice, canBilling, canOps, registerAction, syncAction, invoiceRunAction }: TppBillingProps) {
   return (
     <div className="space-y-6" data-testid="tpp-billing">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -151,7 +155,10 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], registryMore
       {counterparties.length ? <TppBillingOverview counterparties={counterparties} /> : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
+        <div className="space-y-4">
+          <RegistryFilter registrationState={registrationState} unbilledOnly={unbilledOnly} />
+          <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
+        </div>
         <InvoiceRunsTable invoiceRuns={invoiceRuns} moreHref={invoiceMoreHref} />
       </div>
     </div>
