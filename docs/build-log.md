@@ -1552,3 +1552,15 @@ User signed off BD-13 via **ADR 0015 → Accepted (Option 1 + four-eyes on new-p
 **Finding that reframes the work:** the dashboards currently read SINGLE-TENANT (`ofbo_app` + RLS pinned to one `bank_id`) — they don't yet read the cross-fintech MVs (granted only to `bank_internal_view`). BACKOFFICE-33 is the switch to genuine cross-fintech reads under the governed role + purpose-gate + High-class query log. In the single-bank demo the visible numbers may be unchanged; the governed control path is what ships.
 
 **Build plan (each its own PR):** (1) `beginInternalViewTx()` (role + purpose-match-or-reject + High-class log); (2) seed the six purposes; (3) route analytics aggregate reads to the cross-fintech MVs via the governed path; (4) four-eyes on new-purpose registration; (5) tests (unregistered-purpose rejected, tenant role can't read aggregate output, four-eyes flow). ADR 0015 + BACKOFFICE-33 backlog updated. Docs-only commit to main; implementation follows.
+
+---
+
+## 2026-06-22 — BACKOFFICE-06: four-eyes monthly reconciliation sign-off — spec #209 + feature #210
+
+User-directed (UIF-07b residual (c)). Contract-first: a human-approved spec change, then the implementation.
+
+- **Spec #209 (human-approved):** `POST /reconciliation/monthly-signoff` → `x-four-eyes: true`, response `200` (Report) → `202` (ApprovalPending). Mirrors the fraud-revoke four-eyes spec (#26). Locking a 5-year-immutable monthly `compliance_report` must not be a single-actor inline mutation.
+- **Feature #210:** BFF split `monthlySignoff` → `initiateMonthlySignoff` (requests the approval; asserts finance:reconciliation:write) + `executeMonthlySignoff` (locks the report attested to the INITIATOR, runs only on approval). Registered the `reconciliation.monthly_signoff` GatedOperation (late-bound via a holder to break the request↔execute cycle); the route returns 202 + approval_request and the old inline path is GONE. Portal: `requestMonthlySignoff` + `requestSignoffAction` + a "Request monthly sign-off" control on the recon console → 202 → links to /approvals.
+- TDD: `reconciliation-monthly-signoff.spec` rewritten to the four-eyes flow (request 202 → self-approval 409 → a different finance principal approves → the locked signed report; idempotent; validations); `.int` exercises `executeMonthlySignoff` vs real PG; `uif07b-signoff-form.spec`. Gates: gen no-drift, lint, typecheck (all), **full unit 887**, build OK, reconciliation-monthly-signoff.int green vs local PG. Reviewers: hard-stop **PASS** (202+approval, no inline bypass, initiator≠approver, audit preserved), conformance **CONFORMANT**. Merged #210 (`fa664d1f`).
+
+Backlog: zero loop-eligible items remain; UIF-07b residual (a) per-source line-totals table still needs a recon spec-change; UIF-09b / BACKOFFICE-33 / -52 / M6 all need a human decision.
