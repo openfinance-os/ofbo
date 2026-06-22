@@ -1,5 +1,6 @@
 import type { PersonaLogin } from '../lib/portal'
 import { PERSONA_GUIDE, CAPABILITIES } from '../lib/persona-guide'
+import { OfboMark } from './ofbo-mark'
 
 /**
  * Welcome / persona-selector — the one surface outside the app shell. A two-panel card:
@@ -18,9 +19,14 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
     >
       {/* Left — welcome / explainer (navy institutional panel, matching the app shell) */}
       <div className="flex flex-col gap-6 bg-nav p-8 text-on-nav lg:p-10" data-testid="welcome-hero">
-        <div data-testid="signin-brand" className="flex items-baseline gap-2">
-          <span className="text-2xl font-bold tracking-tight text-white">OFBO</span>
-          <span className="text-sm text-on-nav">Open Finance Back Office</span>
+        <div data-testid="signin-brand" className="flex items-center gap-2.5">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-nav-elevated" aria-hidden>
+            <OfboMark className="h-6 w-6" />
+          </span>
+          <span className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-white">OFBO</span>
+            <span className="text-sm text-on-nav">Open Finance Back Office</span>
+          </span>
         </div>
         <div className="space-y-3">
           <h1 className="text-xl font-semibold leading-snug text-white">The bank-neutral back office for UAE Open Finance</h1>
