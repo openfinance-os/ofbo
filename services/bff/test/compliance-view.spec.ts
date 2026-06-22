@@ -51,6 +51,29 @@ describe('ComplianceViewService — composition', () => {
     expect(freshness.view_refreshed_at).toBe('2026-06-15T12:00:00.000Z')
   })
 
+  it('UIF: emits typed sections the portal renders as bespoke panels (no PSU PII)', async () => {
+    const { data } = await svc().view(compliance)
+    const sections = data.sections as { kind: string; title: string; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[]; alert?: { severity: string }; table?: { columns: string[]; rows: unknown[] } }[]
+    const byKind = (k: string) => sections.filter((s) => s.kind === k)
+
+    const kpi = byKind('kpi-strip')[0]!
+    expect(kpi.title).toBe('Compliance Posture')
+    expect(kpi.stats?.map((s) => s.label)).toEqual(['Consent events', 'Open disputes', 'Open risk signals', 'Reports awaiting approval'])
+    expect(kpi.stats?.find((s) => s.label === 'Open risk signals')?.value).toBe('3')
+
+    // retention alert fires because reconciliation_log is past the immutable boundary
+    expect(byKind('alert')[0]?.alert?.severity).toBe('critical')
+    // risk signals by severity → contribution bars (non-zero severities only)
+    expect(byKind('contribution-bars')[0]?.segments).toEqual([{ label: 'high', value: 1 }, { label: 'medium', value: 2 }])
+    // retention lifecycle table
+    const table = byKind('object-table')[0]?.table
+    expect(table?.columns).toContain('past_immutable_count')
+    expect(table?.rows).toHaveLength(2)
+
+    // PII guard: aggregate counts / table names only
+    expect(JSON.stringify(sections)).not.toMatch(/784|emirates|iban|psu_/i)
+  })
+
   it('rejects a principal without compliance:reports:read (defence in depth)', async () => {
     await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
   })

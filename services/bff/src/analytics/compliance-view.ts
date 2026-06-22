@@ -53,7 +53,57 @@ export class ComplianceViewService {
     ])
 
     const overdueRetention = retention.filter((r) => r.past_immutable_count > 0).map((r) => r.table_name)
+
+    // UIF (ADR 0016 D1) — typed sections the portal renders as bespoke panels (same shared
+    // renderer as Analytics/Risk/Operations); aggregate counts only, no PSU PII.
+    const reportsAwaiting = reports.by_status?.awaiting_approval ?? 0
+    const severitySegments = Object.entries(riskBacklog.by_severity ?? {})
+      .map(([label, value]) => ({ label, value }))
+      .filter((seg) => seg.value > 0)
+    const sections: Record<string, unknown>[] = [
+      {
+        kind: 'kpi-strip',
+        title: 'Compliance Posture',
+        stats: [
+          { label: 'Consent events', value: String(consents.total), sublabel: '24-month volume' },
+          { label: 'Open disputes', value: String(disputes.open) },
+          { label: 'Open risk signals', value: String(riskBacklog.open) },
+          { label: 'Reports awaiting approval', value: String(reportsAwaiting) }
+        ]
+      }
+    ]
+    if (overdueRetention.length > 0) {
+      sections.push({
+        kind: 'alert',
+        title: 'Retention posture',
+        alert: {
+          // AnalyticsAlert.severity enum is [info, warning, critical] — a past-immutable-boundary
+          // breach on deletion-forbidden regulated records is critical.
+          severity: 'critical',
+          message: `${overdueRetention.length} table(s) past the immutable-retention boundary.`,
+          remediation: `Review tiering for: ${overdueRetention.join(', ')}. Regulated records are never deleted (deletion-forbidden) — confirm warm/immutable lifecycle.`
+        }
+      })
+    }
+    if (severitySegments.length > 0) {
+      sections.push({ kind: 'contribution-bars', title: 'Open Risk Signals by Severity', segments: severitySegments })
+    }
+    sections.push({
+      kind: 'object-table',
+      title: 'Retention Lifecycle (hot / warm / immutable)',
+      table: {
+        columns: ['table_name', 'hot_tier_count', 'warm_tier_count', 'past_immutable_count'],
+        rows: retention.map((r) => ({
+          table_name: r.table_name,
+          hot_tier_count: r.hot_tier_count,
+          warm_tier_count: r.warm_tier_count,
+          past_immutable_count: r.past_immutable_count
+        }))
+      }
+    })
+
     const data = {
+      sections,
       consent_volumes: consents,
       residency_posture: { region: this.deps.region ?? 'UAE', data_residency: 'enforced', basis: 'PDPL + CBUAE data-residency (IaC region parameter)' },
       retention_status: {
