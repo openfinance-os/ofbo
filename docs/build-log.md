@@ -1602,3 +1602,16 @@ User-directed (after the user generated the Stitch screen). The break investigat
 - All from the existing getBreak — no contract change. escalate stays BACKOFFICE-05 (P6 egress). Token-only (timeline line w-px bg-outline-variant; no arbitrary values). TDD: investigation-detail.spec +4. Gates: lint, typecheck (all), design-conformance clean, a11y axe green, full unit 896, build OK, all CI gates green. Reviewer: hard-stop PASS (token-only, zero fabricated data, escalate untouched). Conformance N/A. Merged #218 (fde7f44c).
 
 Backlog: UIF-09b (b) DELIVERED; (a) bulk-revoke header / per-row Investigate remains its own gated four-eyes story (needs a portal bulk-revoke flow). The Ghost Balance Shadow Ledger Stitch screen is still off the standard shell (cosmetic, Stitch-only; doesn't affect the app).
+
+---
+
+## 2026-06-22 — UIF-09b (a): emergency PSU-wide bulk-revoke flow — PR #220 (UIF-09b fully closed)
+
+User-directed. The BACKOFFICE-18 backend (POST /consents:revoke-bulk, four-eyes) existed but had no portal journey; this adds it — the last buildable gated UI flow.
+
+- BulkRevokeModule on the care console PSU view (emergency red-bordered card), shown only when the PSU has ≥1 revocable consent. Revokes ALL of the PSU's active consents at once (reason CLIENT_INSTRUCTION — the only enum value).
+- bulkRevoke lib client → POST /consents:revoke-bulk → 202 + approval_request; bulkRevokeAction server action (re-checks consents:admin) → notice + link to /approvals. A second consents-admin approver completes it, never inline. Two-step ConfirmSubmit guards the trigger.
+- PII discipline: the PSU identifier travels server-side via hidden inputs (reuses the care console PSU context) — not re-typed into the browser.
+- No spec change (endpoint pre-existed). TDD: bulk-revoke-form.spec + care-console gating test. Gates: gen no-drift, lint, typecheck (all), design-conformance clean, a11y axe green, full unit 900, build OK, all CI gates green. Reviewers: hard-stop PASS (four-eyes 202 no-inline, PSU-PII hidden-inputs-only, scope re-checked, idempotency + confirm), conformance CONFORMANT (body/headers/202 match spec). Merged #220 (fe9abc89).
+
+UIF-09b CLOSED (both halves). Residual (not part of the item): per-row "Investigate" on consents is undefined against the current contract — own spec/story if wanted. Remaining backlog is governance/engagement (BACKOFFICE-33, -52, M6) + cosmetic Stitch (Ghost Balance off-shell).
