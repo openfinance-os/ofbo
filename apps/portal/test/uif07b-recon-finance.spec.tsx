@@ -27,6 +27,11 @@ const view = (over: Partial<AnalyticsView['data']> = {}): AnalyticsView => ({
   data: {
     period: '2026-06',
     open_nebras_dispute_count: 2,
+    three_way_source_totals: {
+      nebras_billing: { amount: 4500, currency: 'AED' },
+      platform_metering: { amount: 4480, currency: 'AED' },
+      fintech_rebill: { amount: 8400, currency: 'AED' }
+    },
     tpp_aas_margin: {
       currency: 'AED',
       total_nebras_fee: 4500,
@@ -54,20 +59,37 @@ describe('reconFinanceFromView (parser)', () => {
     expect(Object.fromEntries(f.by_family.map((x) => [x.family, x.margin]))).toEqual({ AISP: 1900, SIP: 1500, CoP: 500 })
   })
 
+  it('parses the three reconciliation SOURCE totals (A Nebras / B platform metering / C fintech)', () => {
+    const f = reconFinanceFromView(view())!
+    expect(f.source_totals).toEqual({
+      nebras: { amount: 4500, currency: 'AED' },
+      platform: { amount: 4480, currency: 'AED' },
+      fintech: { amount: 8400, currency: 'AED' }
+    })
+  })
+
+  it('source_totals is null when the view omits three_way_source_totals (degrades)', () => {
+    expect(reconFinanceFromView(view({ three_way_source_totals: undefined }))!.source_totals).toBeNull()
+  })
+
   it('returns null when the view carries no margin (degrade-to-nothing)', () => {
     expect(reconFinanceFromView(view({ tpp_aas_margin: undefined }))).toBeNull()
   })
 })
 
 describe('ReconFinancePanel', () => {
-  it('renders the three-source money summary and the margin breakdowns', () => {
+  it('renders the headline strip, the three-way SOURCE comparison table, and the margin breakdowns', () => {
     const f = reconFinanceFromView(view())!
     render(<ReconFinancePanel finance={f} />)
     const panel = screen.getByTestId('recon-finance-panel')
     expect(within(panel).getByTestId('recon-fin-nebras')).toHaveTextContent('AED 45.00')
     expect(within(panel).getByTestId('recon-fin-fintech')).toHaveTextContent('AED 84.00')
     expect(within(panel).getByTestId('recon-fin-margin')).toHaveTextContent('AED 39.00')
-    expect(within(panel).getByTestId('recon-fin-note')).toHaveTextContent('2 open Nebras disputes')
+    // the three-source comparison table — A, B (the previously-missing metering total), C
+    const table = within(panel).getByTestId('three-source-table')
+    expect(within(table).getByTestId('src-nebras')).toHaveTextContent('AED 45.00')
+    expect(within(table).getByTestId('src-platform')).toHaveTextContent('AED 44.80')
+    expect(within(table).getByTestId('src-fintech')).toHaveTextContent('AED 84.00')
     // both contribution bars present (by fintech + by family)
     expect(within(panel).getByRole('group', { name: 'Margin by fintech' })).toBeInTheDocument()
     expect(within(panel).getByRole('group', { name: 'Margin by product family' })).toBeInTheDocument()

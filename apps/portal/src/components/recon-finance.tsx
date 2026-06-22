@@ -32,10 +32,39 @@ export function ReconFinancePanel({ finance }: { finance: ReconFinance }) {
           />
         </StatStrip>
 
-        <p className="text-xs text-on-surface-variant" data-testid="recon-fin-note">
-          Source B (bank metering of record) reconciles source A — see the run match counts above.
-          {finance.open_nebras_disputes > 0 ? ` ${finance.open_nebras_disputes} open Nebras dispute${finance.open_nebras_disputes === 1 ? '' : 's'} for the period.` : ''}
-        </p>
+        {finance.source_totals ? (
+          <section aria-labelledby="three-source-heading" className="space-y-1.5">
+            <h3 id="three-source-heading" className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Three-Way Source Comparison</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse" data-testid="three-source-table">
+                <thead>
+                  <tr className="border-b border-outline-variant text-xs uppercase tracking-wider text-on-surface-variant">
+                    <th scope="col" className="text-left font-semibold py-1.5 pr-3">Source</th>
+                    <th scope="col" className="text-right font-semibold py-1.5">Period total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-outline-variant/40">
+                    <td className="py-1.5 pr-3 text-primary">A · Nebras billing</td>
+                    <td className="py-1.5 text-right font-mono tabular-nums text-primary" data-testid="src-nebras">{formatMoney(finance.source_totals.nebras)}</td>
+                  </tr>
+                  <tr className="border-b border-outline-variant/40">
+                    <td className="py-1.5 pr-3 text-primary">B · Bank platform metering</td>
+                    <td className="py-1.5 text-right font-mono tabular-nums text-primary" data-testid="src-platform">{formatMoney(finance.source_totals.platform)}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 pr-3 text-primary">C · Fintech re-bill</td>
+                    <td className="py-1.5 text-right font-mono tabular-nums text-primary" data-testid="src-fintech">{formatMoney(finance.source_totals.fintech)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              A (Nebras billed) reconciles against B (the bank&apos;s metering of record); C re-bills consuming fintechs with the bank&apos;s margin.
+              {finance.open_nebras_disputes > 0 ? ` ${finance.open_nebras_disputes} open Nebras dispute${finance.open_nebras_disputes === 1 ? '' : 's'} for the period.` : ''}
+            </p>
+          </section>
+        ) : null}
 
         {fintechSegments.length > 0 ? <ContributionBar label="Margin by fintech" segments={fintechSegments} /> : null}
         {familySegments.length > 0 ? <ContributionBar label="Margin by product family" segments={familySegments} /> : null}

@@ -19,8 +19,11 @@ export interface ReconFinance {
   open_nebras_disputes: number
   by_fintech: { client_id: string; margin: number }[]
   by_family: { family: string; margin: number }[]
+  /** UIF-07b — the three reconciliation SOURCE totals (A Nebras / B platform metering / C fintech); null when absent. */
+  source_totals: { nebras: Money; platform: Money; fintech: Money } | null
 }
 
+type RawMoney = { amount?: number; currency?: string }
 type RawMargin = {
   currency?: string
   total_nebras_fee?: number
@@ -33,10 +36,18 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 
 /** Parse a Finance View envelope into the recon-finance shape, or null when no margin is present. */
 export function reconFinanceFromView(view: AnalyticsView): ReconFinance | null {
-  const data = view.data as { period?: string; tpp_aas_margin?: RawMargin; open_nebras_dispute_count?: number }
+  const data = view.data as {
+    period?: string
+    tpp_aas_margin?: RawMargin
+    open_nebras_dispute_count?: number
+    three_way_source_totals?: { nebras_billing?: RawMoney; platform_metering?: RawMoney; fintech_rebill?: RawMoney }
+  }
   const margin = data.tpp_aas_margin
   if (!margin || typeof margin !== 'object') return null
   const currency = margin.currency ?? 'AED'
+  const st = data.three_way_source_totals
+  const money = (m: RawMoney | undefined): Money => ({ amount: num(m?.amount), currency: m?.currency ?? currency })
+  const source_totals = st && typeof st === 'object' ? { nebras: money(st.nebras_billing), platform: money(st.platform_metering), fintech: money(st.fintech_rebill) } : null
   const byFintech = margin.by_fintech ?? {}
 
   const by_fintech = Object.entries(byFintech)
@@ -61,7 +72,8 @@ export function reconFinanceFromView(view: AnalyticsView): ReconFinance | null {
     net_margin: { amount: num(margin.total_margin), currency },
     open_nebras_disputes: num(data.open_nebras_dispute_count),
     by_fintech,
-    by_family
+    by_family,
+    source_totals
   }
 }
 
