@@ -2374,7 +2374,21 @@ components:
               - $ref: '#/components/schemas/Envelope'
               - type: object
                 properties:
-                  data: { type: object, description: View-specific widgets }
+                  data:
+                    type: object
+                    description: >-
+                      View-specific widgets. MAY carry an optional `sections` array of typed,
+                      named AnalyticsSection panels (UIF-SPEC / ADR 0016): the portal renders
+                      each section's `kind` with a bespoke primitive (gauge, contribution
+                      bars, KPI strip, status cards, alert, table). Any other keys — and any
+                      section whose `kind` the client does not recognise — degrade to the
+                      generic labelled grid, so this stays backward-compatible with the
+                      previous free-form `data`.
+                    additionalProperties: true
+                    properties:
+                      sections:
+                        type: array
+                        items: { $ref: '#/components/schemas/AnalyticsSection' }
                   freshness: { $ref: '#/components/schemas/Freshness' }
 
   schemas:
@@ -2412,6 +2426,112 @@ components:
       properties:
         amount: { type: integer, description: Integer minor units (fils for AED); may be negative for offsets/credits }
         currency: { type: string, pattern: '^[A-Z]{3}$', example: AED, description: ISO 4217 alphabetic code }
+    StatTone:
+      type: string
+      enum: [reconciled, break, breach, neutral]
+      description: >-
+        Semantic tone for a stat/trend (UIF-SPEC). Maps to the PRD §7 status triad —
+        reconciled=green, break=amber, breach=red — plus neutral. Appearance only.
+    AnalyticsSection:
+      type: object
+      required: [kind, title]
+      description: >-
+        A typed, named analytics panel (UIF-SPEC / ADR 0016). `kind` selects the bespoke
+        portal primitive; the matching payload property carries its data (e.g. `stats` for
+        kpi-strip, `gauge` for gauge). A client that does not recognise a `kind` MUST
+        degrade it to the generic labelled grid — so producers can add kinds without a
+        breaking change. Bound to the OpenAPI contract; carries no PSU PII.
+      properties:
+        kind:
+          type: string
+          enum: [kpi-strip, gauge, contribution-bars, status-cards, alert, object-table]
+        title: { type: string }
+        stats:
+          type: array
+          description: Payload for kind=kpi-strip.
+          items: { $ref: '#/components/schemas/AnalyticsStat' }
+        gauge:
+          allOf: [{ $ref: '#/components/schemas/AnalyticsGauge' }]
+          description: Payload for kind=gauge.
+        segments:
+          type: array
+          description: Payload for kind=contribution-bars.
+          items: { $ref: '#/components/schemas/AnalyticsContributionSegment' }
+        cards:
+          type: array
+          description: Payload for kind=status-cards.
+          items: { $ref: '#/components/schemas/AnalyticsStatusCard' }
+        alert:
+          allOf: [{ $ref: '#/components/schemas/AnalyticsAlert' }]
+          description: Payload for kind=alert.
+        table:
+          allOf: [{ $ref: '#/components/schemas/AnalyticsTable' }]
+          description: Payload for kind=object-table.
+    AnalyticsStat:
+      type: object
+      required: [label, value]
+      description: One big-number stat in a kpi-strip section (renders as KpiStat).
+      properties:
+        label: { type: string }
+        value:
+          type: string
+          description: >-
+            Pre-formatted display value — a string so the producer controls formatting
+            (e.g. AED 4.82M or 32.8%).
+        unit: { type: string, nullable: true }
+        sublabel: { type: string, nullable: true }
+        trend:
+          type: object
+          nullable: true
+          required: [label]
+          properties:
+            label: { type: string }
+            tone: { $ref: '#/components/schemas/StatTone' }
+    AnalyticsGauge:
+      type: object
+      required: [value]
+      description: A radial gauge payload (renders as Gauge).
+      properties:
+        value: { type: number }
+        max: { type: number, default: 100 }
+        unit: { type: string, nullable: true }
+    AnalyticsContributionSegment:
+      type: object
+      required: [label, value]
+      description: One segment of a contribution-bars section (renders as ContributionBar).
+      properties:
+        label: { type: string }
+        value: { type: number, description: Relative weight; widths are normalised to the segment total. }
+    AnalyticsStatusCard:
+      type: object
+      required: [label, status]
+      description: One card in a status-cards section (status renders as a StatusBadge).
+      properties:
+        label: { type: string }
+        value: { type: string, nullable: true }
+        status: { type: string, description: A status token mapped to a tone via the shared status vocabulary. }
+        note: { type: string, nullable: true }
+    AnalyticsAlert:
+      type: object
+      required: [severity, message]
+      description: An inline alert/callout section.
+      properties:
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        message: { type: string }
+        remediation: { type: string, nullable: true }
+    AnalyticsTable:
+      type: object
+      required: [columns, rows]
+      description: A simple object-table section (the generic grid's typed form).
+      properties:
+        columns:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items: { type: object, additionalProperties: true }
     Channel:
       type: string
       enum: [internal_retail, internal_sme, internal_corporate, external_direct, external_tpp_aas]
