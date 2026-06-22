@@ -1,10 +1,11 @@
 import { formatMoney, type ReconciliationBreak, type ReconciliationRun, type ReconWriteResult } from '../lib/reconciliation'
-import { LoadMore, AuditNote, ErrorBanner } from './ui'
+import { LoadMore, AuditNote, ErrorBanner, SectionCard } from './ui'
 import { ReconOutcomePanel } from './recon-outcome'
 import { ReconFinancePanel } from './recon-finance'
 import type { ReconFinance } from '../lib/recon-finance'
 import { ClaimForm } from './reconciliation/claim-form'
 import { ResolveForm } from './reconciliation/resolve-form'
+import { SignoffForm } from './reconciliation/signoff-form'
 
 /**
  * UI-03 — Reconciliation Console, translated from the Stitch "OFBO - Reconciliation
@@ -30,6 +31,9 @@ export interface ReconConsoleProps {
   canWrite?: boolean
   claimAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
   resolveAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
+  /** UIF-07b(c)/BACKOFFICE-06 — four-eyes monthly sign-off (finance:reconciliation:write). */
+  signoffAction?: (prevState: ReconWriteResult, formData: FormData) => Promise<ReconWriteResult>
+  signoffPeriod?: string
 }
 
 /** Run status → tone (PRD §7 triad). Contract enum: running|completed|failed|partial. */
@@ -175,7 +179,7 @@ export function BreakQueue({ breaks, canWrite, claimAction, resolveAction, moreH
   )
 }
 
-export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, finance, canWrite, claimAction, resolveAction }: ReconConsoleProps) {
+export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref, breaksMoreHref, error, errorRemediation, errorDocsUrl, notice, finance, canWrite, claimAction, resolveAction, signoffAction, signoffPeriod }: ReconConsoleProps) {
   return (
     <div className="space-y-6" data-testid="recon-console">
       <div className="flex items-center justify-between gap-3">
@@ -197,6 +201,11 @@ export function ReconConsole({ runs = [], selectedRun, breaks = [], runsMoreHref
       {selectedRun ? <KpiCards run={selectedRun} /> : null}
       {selectedRun ? <ReconOutcomePanel run={selectedRun} /> : null}
       {finance ? <ReconFinancePanel finance={finance} /> : null}
+      {canWrite && signoffAction ? (
+        <SectionCard title="Monthly Sign-off" testid="recon-signoff-panel">
+          <SignoffForm defaultPeriod={signoffPeriod ?? ''} action={signoffAction} />
+        </SectionCard>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">

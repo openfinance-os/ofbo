@@ -48,7 +48,9 @@ describe('monthly sign-off — aggregate + locked report + lineage + audit', () 
 
     const trace = randomUUID()
     const service = new ReconciliationService({ store: logStore, breakStore, reports, audit })
-    const report = await service.monthlySignoff(FINANCE, PERIOD, trace)
+    // post-four-eyes execution (the route now requests an approval; the operation executes
+    // this on approval — see the unit spec for the 202 + approve flow). Attested to the initiator.
+    const report = await service.executeMonthlySignoff(PERIOD, FINANCE.subject, FINANCE.persona, trace)
     expect(report.report_type).toBe('monthly_reconciliation')
     expect(report.status).toBe('approved')
     expect(report.approved_by).toBe('demo:finance-analyst')

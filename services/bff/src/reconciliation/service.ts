@@ -85,6 +85,7 @@ function canonicalJson(value: unknown): string {
 }
 export const COMPLIANCE_SCOPE = 'audit:read'
 export const BREAK_REOPEN_OPERATION = 'reconciliation.break_reopen'
+export const MONTHLY_SIGNOFF_OPERATION = 'reconciliation.monthly_signoff'
 /** Resolve outcomes accepted by the resolve endpoint (escalated_nebras_dispute is
  *  the separate escalate-nebras flow, BACKOFFICE-05). */
 export const RESOLVE_OUTCOMES = ['resolved_matched', 'resolved_internal_correction', 'escalated_fintech_billing'] as const
@@ -123,6 +124,25 @@ export function makeBreakReopenOperation(deps: { breakStore: ReconciliationBreak
       })
       return { break_id: breakId, status: reopened?.status ?? 'unchanged', reopened: !!reopened, reopened_count: reopened?.reopened_count ?? null }
     }
+  }
+}
+
+/** BACKOFFICE-06 — the four-eyes monthly reconciliation sign-off operation; executes on
+ *  approval (a different finance:reconciliation:write principal approves the initiator's
+ *  request, then the report is generated + locked). Late-bound to the service to break the
+ *  request↔execute cycle: the service REQUESTS the approval; this EXECUTES it. The signed
+ *  report is attested to the INITIATOR (payload.initiated_by). */
+export function makeMonthlySignoffOperation(deps: { execute: (period: string, attestedBy: string, attestedByPersona: string, traceId: string) => Promise<StoredComplianceReport> }): GatedOperation {
+  return {
+    initiatorScope: RECON_WRITE_SCOPE,
+    approverScope: RECON_WRITE_SCOPE,
+    execute: async (payload) =>
+      deps.execute(
+        String(payload.period),
+        String(payload.initiated_by ?? 'unknown'),
+        String(payload.initiated_by_persona ?? 'unknown'),
+        String(payload.trace_id ?? 'unknown')
+      )
   }
 }
 
@@ -708,11 +728,37 @@ export class ReconciliationService {
    * principal) + a SHA-256 integrity hash. The report is the locked, 5-yr-archived
    * artifact; PDF/XLSX rendering is a downstream concern off this signed record.
    */
-  async monthlySignoff(principal: Principal, period: string, traceId: string): Promise<StoredComplianceReport> {
+  /**
+   * BACKOFFICE-06 — REQUEST the monthly sign-off (four-eyes). The initiator
+   * (finance:reconciliation:write) creates an approval; a DIFFERENT finance principal
+   * approves, and only then is the report generated + locked (executeMonthlySignoff via
+   * the reconciliation.monthly_signoff operation). Returns the approval_request (202),
+   * never executes inline — the binding four-eyes hard-stop.
+   */
+  async initiateMonthlySignoff(principal: Principal, period: string, traceId: string): Promise<ApprovalRecord> {
     assertScope(principal, RECON_WRITE_SCOPE)
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
       throw new BreakWorkflowError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
     }
+    if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
+    if (!this.approvals) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off four-eyes is not configured.', 404)
+    return this.approvals.requestApproval(
+      principal,
+      {
+        operation_type: MONTHLY_SIGNOFF_OPERATION,
+        operation_payload: { period, initiated_by: principal.subject, initiated_by_persona: principal.persona, trace_id: traceId }
+      },
+      traceId
+    )
+  }
+
+  /**
+   * Execute the month-close sign-off AFTER four-eyes approval — generate + lock the
+   * compliance_report attested to the INITIATOR (attestedBy). Scope is already enforced by
+   * the approvals flow (initiator at request, a different approver at approve), so it is not
+   * re-asserted here; this is reachable only via the registered four-eyes operation.
+   */
+  async executeMonthlySignoff(period: string, attestedBy: string, attestedByPersona: string, traceId: string): Promise<StoredComplianceReport> {
     if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
     const prefix = `recon-${period}-`
     const [runs, byStatus] = await Promise.all([this.store.listForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
@@ -749,8 +795,8 @@ export class ReconciliationService {
         reporting_period_start: start,
         reporting_period_end: end,
         classification: 'restricted',
-        requested_by: principal.subject,
-        approved_by: principal.subject,
+        requested_by: attestedBy,
+        approved_by: attestedBy,
         integrity_hash,
         generated_at: end,
         content: summary
@@ -760,13 +806,12 @@ export class ReconciliationService {
 
     await this.audit.emit({
       event_type: 'reconciliation_monthly_signoff',
-      acting_principal: principal.subject,
-      acting_persona: principal.persona,
+      acting_principal: attestedBy,
+      acting_persona: attestedByPersona,
       scope_used: RECON_WRITE_SCOPE,
       request_trace_id: traceId,
-      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, integrity_hash },
-      response_status: 200,
-      superadmin_marker: principal.scopes.includes('platform:superadmin')
+      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, integrity_hash, four_eyes_approved: true },
+      response_status: 200
     })
     return report
   }

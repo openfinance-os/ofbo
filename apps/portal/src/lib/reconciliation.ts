@@ -159,6 +159,21 @@ export async function claimBreak(token: string, breakId: string, idempotencyKey:
 }
 
 /**
+ * BACKOFFICE-06 — REQUEST the monthly reconciliation sign-off (four-eyes;
+ * finance:reconciliation:write). Returns 202 + the approval_request; a different finance
+ * principal approves it in /approvals before the month is locked — never inline.
+ */
+export async function requestMonthlySignoff(token: string, period: string, idempotencyKey: string, deps: ReconApiDeps = {}): Promise<{ approval_request_id: string }> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(`${base}${RECON_BASE}/monthly-signoff`, {
+    method: 'POST',
+    headers: { ...authHeaders(token, trace), 'idempotency-key': idempotencyKey, 'content-type': 'application/json' },
+    body: JSON.stringify({ period })
+  })
+  return (await envelope<{ approval_request_id: string }>(res)).data
+}
+
+/**
  * BACKOFFICE-04/-06 — resolve a break with an outcome + note (finance:reconciliation:write).
  * Mutating → Idempotency-Key mandatory; the note must be ≥ MIN_RESOLUTION_NOTE chars (BFF-enforced).
  */

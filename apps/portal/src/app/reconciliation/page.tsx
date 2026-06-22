@@ -8,7 +8,7 @@ import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
 import { listBreaks, listRuns, ReconApiError, type ReconciliationBreak, type ReconciliationRun } from '../../lib/reconciliation'
 import { getReconFinance, type ReconFinance } from '../../lib/recon-finance'
-import { claimBreakAction, resolveBreakAction } from './actions'
+import { claimBreakAction, resolveBreakAction, requestSignoffAction } from './actions'
 
 /**
  * UI-03 — Reconciliation Console (BACKOFFICE-01/-02/-03/-04/-06). Wired to the Hono
@@ -21,7 +21,8 @@ export const dynamic = 'force-dynamic'
 
 const NOTICE: Record<string, string> = {
   claimed: 'Break claimed — SLA clock started.',
-  resolved: 'Break resolved.'
+  resolved: 'Break resolved.',
+  signoff_requested: 'Monthly sign-off submitted for four-eyes approval — a second finance approver completes it in Approvals.'
 }
 const FAILURE: Record<string, string> = {
   claim_failed: 'Could not claim the break. It may already be claimed.',
@@ -102,6 +103,8 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
         canWrite={canWrite}
         claimAction={claimBreakAction}
         resolveAction={resolveBreakAction}
+        signoffAction={requestSignoffAction}
+        signoffPeriod={new Date().toISOString().slice(0, 7)}
       />
     </AppShell>
   )

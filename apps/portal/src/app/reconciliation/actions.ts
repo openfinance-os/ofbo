@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
-import { claimBreak, resolveBreak, ReconApiError, RESOLVE_OUTCOMES, type ResolveOutcome, type ReconWriteResult } from '../../lib/reconciliation'
+import { claimBreak, resolveBreak, requestMonthlySignoff, ReconApiError, RESOLVE_OUTCOMES, type ResolveOutcome, type ReconWriteResult } from '../../lib/reconciliation'
 import { idempotencyKey } from '../../lib/idempotency'
 
 /**
@@ -59,6 +59,25 @@ export async function claimBreakAction(_prevState: ReconWriteResult, formData: F
     return reconFailure(e, 'Could not claim the break. Please retry.', {})
   }
   redirect(reconHref(runId, 'claimed'))
+}
+
+/**
+ * BACKOFFICE-06 — REQUEST the four-eyes monthly sign-off. The BFF returns 202 + an
+ * approval_request; a different finance principal approves it in /approvals (never inline).
+ * On success we redirect with a notice; the typed BFF error re-renders the form in place.
+ */
+export async function requestSignoffAction(_prevState: ReconWriteResult, formData: FormData): Promise<ReconWriteResult> {
+  const token = await tokenOrBounce()
+  const period = String(formData.get('period') ?? '')
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    return { ok: false, error: 'Enter a calendar month as YYYY-MM (e.g. 2026-06).', values: { period } }
+  }
+  try {
+    await requestMonthlySignoff(token, period, idempotencyKey(formData))
+  } catch (e) {
+    return reconFailure(e, 'Could not request the monthly sign-off. Please retry.', { period })
+  }
+  redirect(reconHref('', 'signoff_requested'))
 }
 
 export async function resolveBreakAction(_prevState: ReconWriteResult, formData: FormData): Promise<ReconWriteResult> {
