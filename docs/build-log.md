@@ -1695,3 +1695,7 @@ The Risk View's two cross-fintech aggregate reads (summary, liabilityMonitor) no
 Internal read-path refactor — risk-view response shape unchanged, no spec change. unit 913, risk-view int asserts the governed reads + 2 cross_fintech_query bypass logs. Reviewers: hard-stop PASS, conformance CONFORMANT.
 
 BACKOFFICE-33 remaining: route operations + executive/finance (executive/finance pull from shared stores — higher blast radius; may warrant their own design pass), and PR 5 (four-eyes on registering a NEW query purpose via the approvals primitive).
+
+## 2026-06-22 — fix: DEMO non-prod pill → bottom-right corner — PR #233
+
+Follow-up to #223/#230: the fixed top-center DEMO pill overlapped the top bar (hamburger + persona chip), worst on narrow/mobile widths. Moved to a bottom-right corner badge + pointer-events-none (can't intercept a tap). Still rendered once in the root layout (every screen), role=note with the full synthetic-data statement in aria-label; visible label trimmed to "DEMO · non-prod". Hard-stop unchanged (present + announced everywhere). Token-only; gates green, all CI green. Merged #233 (b95f2007).
