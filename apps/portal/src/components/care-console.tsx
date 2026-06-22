@@ -3,6 +3,7 @@ import { Notice, ErrorBanner, AuditNote } from './ui'
 import { EventTimeline } from './care/event-timeline'
 import { RevokeForm } from './care/revoke-form'
 import { DisputeForm } from './care/dispute-form'
+import { BulkRevokeForm } from './care/bulk-revoke-form'
 
 /**
  * UI-02 — Customer Care Console, translated from the Stitch "OFBO - Customer Care
@@ -26,6 +27,8 @@ export interface CareConsoleProps {
   notice?: string | null
   revokeAction?: (prevState: CareWriteResult, formData: FormData) => Promise<CareWriteResult>
   disputeAction?: (prevState: CareWriteResult, formData: FormData) => Promise<CareWriteResult>
+  /** UIF-09b(a)/BACKOFFICE-18 — emergency PSU-wide bulk revocation (four-eyes). */
+  bulkRevokeAction?: (prevState: CareWriteResult, formData: FormData) => Promise<CareWriteResult>
 }
 
 /** Maps the 7 consent states to the OFBO status palette (PRD §7 triad + neutral). */
@@ -162,7 +165,24 @@ function InvestigationModule({ psu, identifierType, disputeAction }: { psu: stri
   )
 }
 
-export function CareConsole({ query, result, timeline, timelineMoreHref, error, errorRemediation, errorDocsUrl, notice, revokeAction, disputeAction }: CareConsoleProps) {
+function BulkRevokeModule({ psu, identifierType, consentCount, action }: { psu: string; identifierType: string; consentCount: number; action: NonNullable<CareConsoleProps['bulkRevokeAction']> }) {
+  return (
+    <div className="bg-surface-container-lowest border border-outline-variant border-l-4 border-l-breach rounded-xl shadow-sm" data-testid="bulk-revoke-module">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-outline-variant">
+        <span className="font-symbols text-breach text-lg" aria-hidden>
+          gpp_maybe
+        </span>
+        <span className="font-bold text-xs text-primary uppercase tracking-widest">Emergency Bulk Revocation</span>
+      </div>
+      <div className="p-4 space-y-3">
+        <p className="text-xs text-on-surface-variant leading-relaxed">Revoke every active consent for this PSU at once (e.g. on a client instruction). Four-eyes-gated — submitted for approval, never inline.</p>
+        <BulkRevokeForm psu={psu} identifierType={identifierType} consentCount={consentCount} action={action} />
+      </div>
+    </div>
+  )
+}
+
+export function CareConsole({ query, result, timeline, timelineMoreHref, error, errorRemediation, errorDocsUrl, notice, revokeAction, disputeAction, bulkRevokeAction }: CareConsoleProps) {
   const identifierType = query?.identifier_type ?? 'bank_customer_id'
   const identifier = result?.psu.bank_customer_id ?? query?.identifier ?? ''
   return (
@@ -182,6 +202,14 @@ export function CareConsole({ query, result, timeline, timelineMoreHref, error, 
           <div className="space-y-6">
             <ProfileCard psu={result.psu} />
             <InvestigationModule psu={identifier} identifierType={identifierType} disputeAction={disputeAction} />
+            {bulkRevokeAction && result.consents.some((c) => REVOCABLE.has(c.status)) ? (
+              <BulkRevokeModule
+                psu={identifier}
+                identifierType={identifierType}
+                consentCount={result.consents.filter((c) => REVOCABLE.has(c.status)).length}
+                action={bulkRevokeAction}
+              />
+            ) : null}
           </div>
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm" data-testid="consents-panel">

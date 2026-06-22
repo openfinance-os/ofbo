@@ -184,6 +184,33 @@ export async function revokeConsent(
 }
 
 /**
+ * BACKOFFICE-18 — emergency PSU-wide bulk revocation (consents:admin, four-eyes). POST
+ * /consents:revoke-bulk returns 202 + an approval_request; a different consents-admin
+ * principal approves before any consent is revoked — it never executes inline. Mutating →
+ * Idempotency-Key mandatory. reason_code is fixed to CLIENT_INSTRUCTION (the only enum).
+ */
+export async function bulkRevoke(
+  token: string,
+  identifierType: string,
+  identifier: string,
+  idempotencyKey: string,
+  deps: CareApiDeps = {}
+): Promise<{ approval_request_id: string }> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(`${base}/consents:revoke-bulk`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'x-fapi-interaction-id': trace,
+      'idempotency-key': idempotencyKey,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ psu_identifier_type: identifierType, psu_identifier: identifier, reason_code: 'CLIENT_INSTRUCTION' })
+  })
+  return unwrap<{ approval_request_id: string }>(res)
+}
+
+/**
  * BACKOFFICE-20 — one-click unauthorized-payment dispute (disputes:admin). POST
  * /disputes; mutating (Idempotency-Key mandatory). Nebras-linked via P6 in the BFF.
  */

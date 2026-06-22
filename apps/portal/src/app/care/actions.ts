@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
 import { verifyAndMint } from '../../lib/portal'
-import { createDispute, revokeConsent, CareApiError, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode, type CareWriteResult } from '../../lib/care'
+import { createDispute, revokeConsent, bulkRevoke, CareApiError, DISPUTE_TYPES, type DisputeType, type RevokeReasonCode, type CareWriteResult } from '../../lib/care'
 import { idempotencyKey } from '../../lib/idempotency'
 
 /**
@@ -62,6 +62,24 @@ export async function revokeConsentAction(_prevState: CareWriteResult, formData:
     return careFailure(e, 'Could not revoke the consent. Please retry.', { reason_code: reasonCode })
   }
   redirect(careHref(identifierType, identifier, 'revoked'))
+}
+
+/**
+ * BACKOFFICE-18 — request the emergency PSU-wide bulk revocation (four-eyes). The BFF
+ * returns 202 + an approval_request; a different consents-admin approver completes it in
+ * /approvals. Re-checks consents:admin (BFF re-enforces). Success redirects with a notice.
+ */
+export async function bulkRevokeAction(_prevState: CareWriteResult, formData: FormData): Promise<CareWriteResult> {
+  const { token } = await principalOrBounce(SCOPES.consentsAdmin)
+  const identifierType = String(formData.get('identifier_type') ?? 'bank_customer_id')
+  const identifier = String(formData.get('identifier') ?? '')
+  if (!identifier.trim()) return { ok: false, error: 'No PSU in context to bulk-revoke. Search a PSU first.' }
+  try {
+    await bulkRevoke(token, identifierType, identifier, idempotencyKey(formData))
+  } catch (e) {
+    return careFailure(e, 'Could not request the bulk revocation. Please retry.', {})
+  }
+  redirect(careHref(identifierType, identifier, 'bulk_revoke_requested'))
 }
 
 export async function createDisputeAction(_prevState: CareWriteResult, formData: FormData): Promise<CareWriteResult> {
