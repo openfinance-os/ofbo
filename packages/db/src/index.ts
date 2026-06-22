@@ -172,5 +172,6 @@ export {
   seedQueryPurposes,
   SEED_QUERY_PURPOSES,
   type GovernedAuditSink,
-  type GovernedAggregateContext
+  type GovernedAggregateContext,
+  type GovernedReadContext
 } from './governed-aggregate.js'
