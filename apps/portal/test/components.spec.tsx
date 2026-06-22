@@ -2,20 +2,22 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
+import { axe } from 'vitest-axe'
 
 afterEach(cleanup)
-import { DemoBanner } from '../src/components/demo-banner.js'
+import { DemoPill } from '../src/components/demo-banner.js'
 import { PersonaLoginList } from '../src/components/persona-login-list.js'
 import { ScopeEcho } from '../src/components/scope-echo.js'
 import { AuditPanel } from '../src/components/audit-panel.js'
 
-describe('DemoBanner', () => {
-  it('renders the persistent DEMO / synthetic-data banner', () => {
-    render(<DemoBanner />)
+describe('DemoPill (persistent non-prod marker)', () => {
+  it('renders a subtle DEMO pill that still announces the full synthetic-data statement', () => {
+    render(<DemoPill />)
     const banner = screen.getByTestId('demo-banner')
     expect(banner).toBeInTheDocument()
-    expect(banner).toHaveTextContent(/DEMO/)
-    expect(banner).toHaveTextContent(/synthetic data only/i)
+    expect(banner).toHaveTextContent(/DEMO/) // short visible label
+    // the full regulatory statement is announced via aria-label (the hard-stop "must say so")
+    expect(banner.getAttribute('aria-label') ?? '').toMatch(/synthetic data only.*no real PSU data/i)
   })
 })
 
@@ -40,6 +42,23 @@ describe('PersonaLoginList', () => {
   it('surfaces a sign-in error when present', () => {
     render(<PersonaLoginList personas={personas} error="mfa_not_satisfied" />)
     expect(screen.getByTestId('signin-error')).toHaveTextContent('mfa_not_satisfied')
+  })
+
+  it('UX: shows the welcome explainer + enriches each role card with its purpose and reachable modules', () => {
+    render(<PersonaLoginList personas={personas} />)
+    const hero = screen.getByTestId('welcome-hero')
+    expect(hero).toHaveTextContent(/Open Finance Back Office/i)
+    expect(hero).toHaveTextContent(/what it does/i)
+    const risk = screen.getByTestId('login-risk-analyst')
+    expect(risk).toHaveTextContent(/Anomaly detection/i) // role purpose (PERSONA_GUIDE tagline)
+    expect(within(risk).getByText('Risk')).toBeInTheDocument() // reachable-module chip
+  })
+
+  it('has no axe violations', async () => {
+    const results = await axe(render(<PersonaLoginList personas={personas} />).container, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }
+    })
+    expect(results.violations.map((v) => v.id)).toEqual([])
   })
 })
 

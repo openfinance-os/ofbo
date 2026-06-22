@@ -49,9 +49,6 @@
 }
 
 @layer components {
-  .demo-banner {
-    @apply sticky top-0 z-50 px-4 py-2 font-bold text-center text-white bg-demo tracking-wide;
-  }
   .portal-main {
     @apply mx-auto px-4 pt-6 pb-16;
     max-width: 60rem;
