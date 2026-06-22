@@ -1579,3 +1579,5 @@ The control core for the platform's highest-sensitivity data path (cross-fintech
 Gates: gen no-drift, typecheck, lint clean; full unit **893**; integration 4/4 on local PG. Reviewers: hard-stop **PASS**, contract-conformance **CONFORMANT**. Internal DB-layer only — no API/spec change.
 
 **Remaining (PRs 2-5):** seed in the demo seed path; route the analytics stores' aggregate reads to the cross-fintech MVs via `runGovernedAggregate`; four-eyes on registering a NEW purpose; end-to-end tests. BACKOFFICE-33 stays in-progress.
+
+<!-- ci-retrigger 19b3949 -->
