@@ -1,5 +1,6 @@
 import type { Money } from '@ofbo/ports'
 import { applyFeeScheduleV1, AED, type ReconLineType } from './fee-schedule.js'
+import { productFamily, type ProductFamily } from './margin.js'
 import type {
   FintechBillingLine,
   FintechBillingSource,
@@ -50,6 +51,16 @@ const CHANNELS = ['internal_retail', 'internal_corporate'] as const
 // BACKOFFICE-68 — DAO API calls (dao_api_call) join the three-way match like any
 // other data-sharing line; the engine + fee schedule + thresholds treat them uniformly.
 const MATCHED_TYPES: ReconLineType[] = ['payment_settlement', 'consent_record', 'lfi_access_log', 'tpp_aas_pass_through', 'nebras_fees', 'dao_api_call']
+
+/**
+ * Per-family TPP-aaS pass-through markup (base fils/line). The bank, as TPP-of-record,
+ * re-bills consuming fintechs the Nebras fee + this markup across product families —
+ * SIP (payment initiation), AISP (data sharing), CoP (confirmation of payee). The markup
+ * IS the bank's margin. nebras_fees/OTHER carry no re-bill. (Only PASS_THROUGH lines are
+ * break-checked against source C in the engine, so re-billing other families adds margin
+ * depth without changing break/match counts.)
+ */
+const TPP_AAS_MARKUP: Partial<Record<ProductFamily, number>> = { SIP: 6, AISP: 3, CoP: 2 }
 
 export interface SimReconConfig {
   matchedLines?: number
@@ -102,10 +113,11 @@ function build(period: string, cfg: Required<SimReconConfig>): Built {
     const billed: Money = expected ?? { amount: 40 + (fnv1a(lineRef) % 200), currency: AED } // nebras_fees pass-through
     platform.push({ line_ref: lineRef, line_type: lineType, channel: chan(i), client_id: client(i), call_count: count, call_success: true })
     nebras.push({ line_ref: lineRef, line_type: lineType, channel: chan(i), client_id: client(i), billed_fee: billed })
-    // TPP-aaS (BACKOFFICE-07): the bank re-bills the fintech the Nebras fee + a
-    // deterministic markup — that markup is the bank's pass-through margin.
-    if (lineType === 'tpp_aas_pass_through') {
-      const markup = 2 + (fnv1a(`margin:${lineRef}`) % 3) // 2–4 fils per line
+    // TPP-aaS (BACKOFFICE-07): the bank re-bills the consuming fintech the Nebras fee + a
+    // deterministic per-family markup — that markup is the bank's pass-through margin.
+    const baseMarkup = TPP_AAS_MARKUP[productFamily(lineType)]
+    if (baseMarkup) {
+      const markup = baseMarkup + (fnv1a(`margin:${lineRef}`) % baseMarkup) // baseMarkup..2·baseMarkup-1 fils
       fintech.push({ line_ref: lineRef, billed_fee: { amount: billed.amount + markup, currency: AED } })
     }
   }
