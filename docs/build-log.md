@@ -1564,3 +1564,15 @@ User-directed (UIF-07b residual (c)). Contract-first: a human-approved spec chan
 - TDD: `reconciliation-monthly-signoff.spec` rewritten to the four-eyes flow (request 202 → self-approval 409 → a different finance principal approves → the locked signed report; idempotent; validations); `.int` exercises `executeMonthlySignoff` vs real PG; `uif07b-signoff-form.spec`. Gates: gen no-drift, lint, typecheck (all), **full unit 887**, build OK, reconciliation-monthly-signoff.int green vs local PG. Reviewers: hard-stop **PASS** (202+approval, no inline bypass, initiator≠approver, audit preserved), conformance **CONFORMANT**. Merged #210 (`fa664d1f`).
 
 Backlog: zero loop-eligible items remain; UIF-07b residual (a) per-source line-totals table still needs a recon spec-change; UIF-09b / BACKOFFICE-33 / -52 / M6 all need a human decision.
+
+---
+
+## 2026-06-22 — UIF-07b (a): three-way source comparison table — PR #213 (UIF-07b fully closed)
+
+User-directed. I'd offered a recon spec PR for the per-source totals, but on inspection it was buildable spec-free (the source-B/platform metering total is derivable from the same sources the finance-view already re-derives — the original "needs a spec change" analysis assumed the totals had to live on ReconciliationRun).
+
+- **BFF:** `ReconciliationService.threeWaySourceTotalsForPeriod(period)` re-derives each run's sources and sums the three at the money level — A = Nebras billing (billed fees), B = bank platform metering-of-record (schedule-expected fees from metered call counts), C = fintech re-bill (integer fils). finance-view emits `data.three_way_source_totals` + a "Three-Way Source Reconciliation" kpi-strip section.
+- **Portal:** lib/recon-finance parses it (degrades to null); ReconFinancePanel renders a Three-Way Source Comparison table (A/B/C period totals) — B is the previously-missing total, so it's a genuine three-source comparison now.
+- TDD: reconciliation-margin.spec +1 (A/B/C > 0), finance-view.spec asserts the field, uif07b-recon-finance.spec +2 (parser + table). Gates: gen no-drift, lint, typecheck (all), **full unit 890**, build OK, finance-view.int green vs local PG. Reviewers: hard-stop **PASS**, conformance **CONFORMANT** (free-form data extension, no spec change). Merged #213 (`2f2a4d12`).
+
+**UIF-07b fully closed** (a + b + c). Backlog: zero loop-eligible items; remaining blocked items (UIF-09b, BACKOFFICE-33, -52, M6) all need a human decision/input.
