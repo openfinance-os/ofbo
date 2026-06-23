@@ -201,7 +201,62 @@ milestones:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
 
 deferred: # Could / Phase 2 — not in build scope until promoted by the user
-  - { id: BACKOFFICE-53, title: Agentic spend-control for admin-scope MCP tools }
+  # BACKOFFICE-60 and BACKOFFICE-53 fleshed out under ADR 0017 (agent-first MCP gateway,
+  # spike at services/mcp-gateway). Both stay deferred/blocked until ADR 0017 is Accepted.
+  - id: BACKOFFICE-60
+    title: Programmatic admin-scope access for internal automation (DCR-registered agents)
+    status: deferred
+    priority: Could
+    adr: docs/adrs/0017-agent-first-mcp-gateway.md
+    blocked_on: ADR 0017 acceptance (agent identity + autonomy bounds is a humans-decide auth path, CLAUDE.md rule 6)
+    note: >-
+      Gives a model/automation the same operations a human persona performs today,
+      via the MCP gateway (services/mcp-gateway) over the existing OpenAPI contract.
+      Adds NO new enforcement path — auth, RBAC, four-eyes, audit, lineage stay BFF-side.
+    acceptance:
+      - Agent identity is minted via Dynamic Client Registration (DCR); registration is itself
+        a four-eyes-approved operation (202 + approval_request), human-ratified before the agent
+        can authenticate.
+      - Each agent binds to an agent persona whose scopes are a STRICT SUBSET of an existing
+        human persona's scopes (SCOPE_MATRIX in services/bff/src/auth.ts) — least privilege;
+        a superset is an automatic review FAIL.
+      - Agent identities are service accounts and are REJECTED for platform-super-admin at
+        sign-in (BACKOFFICE-80 already enforces isServiceAccountSubject) — no agent ever holds
+        platform:superadmin.
+      - Every agent tool call emits exactly one High-class audit event with acting_principal=agent,
+        scope_used, and the propagated x-fapi-interaction-id; PII redacted at emission; zero PII in
+        the agent's prompt/transcript/context store.
+      - Four-eyes operations (fourEyes:true in ROUTES) return 202 to the agent and are ratified by
+        a DIFFERENT, human principal — the agent never closes the approval loop (self-approval
+        rejected at the service layer).
+      - Mutating tools stay disabled until BACKOFFICE-53 (spend-control) is built; the initial
+        enablement is read-only (fourEyes:false, *:read / audit:read scopes only).
+      - The tool catalogue is generated from @ofbo/contracts ROUTES — contract drift surfaces as a
+        catalogue diff (spec stays ground truth for the agent surface).
+      - Idempotency-Key is sent on every mutating tool call (agents retry); replay within 24h
+        returns the original result with no duplicate audit emit.
+    depends_on: [BACKOFFICE-44, BACKOFFICE-45, BACKOFFICE-80]
+  - id: BACKOFFICE-53
+    title: Agentic spend-control for admin-scope MCP tools
+    status: deferred
+    priority: Could
+    adr: docs/adrs/0017-agent-first-mcp-gateway.md
+    blocked_on: BACKOFFICE-60 (no agent identity to bound until DCR access exists)
+    note: >-
+      Per-session blast-radius budget on consequential agent operations, mirroring the
+      BACKOFFICE-80 per-session guardrail pattern. Bounds damage from a confused or
+      adversarially-prompted agent.
+    acceptance:
+      - A per-session budget caps the count of consequential operations (initiated revokes,
+        refunds, sign-offs, report/invoice runs) an agent may perform before it MUST escalate
+        to a human; exceeding it blocks further mutations for the session.
+      - Each session-budget threshold crossing raises a Risk signal (type agent_anomaly) and an
+        informational ITSM ticket — the BACKOFFICE-80 auto-raise pattern, reused not reinvented.
+      - Budgets are configured per agent persona (config, not code) and default to the most
+        restrictive (read-only) until explicitly raised by a human.
+      - Spend-control is enforced at the MCP gateway as a pre-flight check AND re-asserted by the
+        BFF (defence in depth) — the gateway is never the sole guard.
+      - Four-eyes operations count against the budget at INITIATION (the 202), not at approval.
+    depends_on: [BACKOFFICE-60]
   - { id: BACKOFFICE-59, title: Training environment for Customer Care }
-  - { id: BACKOFFICE-60, title: Programmatic admin-scope access (DCR automations) }
   - { id: BACKOFFICE-63, title: AML GO portal submission for STR drafts }
