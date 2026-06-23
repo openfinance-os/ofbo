@@ -71,6 +71,12 @@ export function summariseOperation(operationType: string, payload: Record<string
     case 'reconciliation.break_reopen':
       // NEVER: break_id, justification (operator free text). Label only.
       return { descriptor: 'Reopen reconciliation break' }
+    case 'query_purpose.register': {
+      // safe: purpose_code — a format-validated snake_case identifier (never PSU data).
+      // NEVER: description (operator free text).
+      const code = safeMatch(payload.purpose_code, /^[a-z][a-z0-9_]{2,63}$/)
+      return { descriptor: code ? `Register cross-fintech query purpose · ${code}` : 'Register cross-fintech query purpose' }
+    }
     default:
       // Unknown operation → no summary (fail safe; never echo an unmodelled payload).
       return null

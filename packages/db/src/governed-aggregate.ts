@@ -175,3 +175,81 @@ export async function seedQueryPurposes(pool: pg.Pool, bankId: string, channel: 
     /* catalogue unavailable — the regulated write stands; Q4.5 surfaces persistent gaps */
   }
 }
+
+export interface RegisterQueryPurposeInput {
+  purpose_code: string
+  description: string
+  /** Subject who initiated the registration (the four-eyes initiator). */
+  registered_by: string
+  /** Subject who approved it (the four-eyes second principal) — flips the purpose to active. */
+  approved_by: string
+}
+
+/**
+ * BACKOFFICE-33 PR 5 — register a SINGLE new cross-fintech query purpose with approved_by set,
+ * AFTER a different principal approved (four-eyes; BD-13 / ADR 0015). Unlike seedQueryPurposes
+ * (pre-approved starter set), this is the governed post-seed path: a duplicate purpose_code is
+ * REJECTED (UNIQUE (bank_id, purpose_code)) rather than silently no-op'd. Emits BCBS 239 lineage
+ * (regulated write path, Q4.5 DoD) best-effort.
+ */
+export async function registerQueryPurpose(
+  pool: pg.Pool,
+  bankId: string,
+  channel: string,
+  input: RegisterQueryPurposeInput,
+  opts: { lineage?: LineageSink; traceId?: string } = {}
+): Promise<void> {
+  const c = await pool.connect()
+  try {
+    await c.query(beginAppTx(bankId))
+    const res = await c.query(
+      `INSERT INTO query_purpose_registry (bank_id, channel, purpose_code, description, registered_by, approved_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (bank_id, purpose_code) DO NOTHING`,
+      [bankId, channel, input.purpose_code, input.description, input.registered_by, input.approved_by]
+    )
+    await c.query('COMMIT')
+    if ((res.rowCount ?? 0) === 0) {
+      throw new GovernedQueryError('BACKOFFICE.PURPOSE_ALREADY_REGISTERED', `query purpose '${input.purpose_code}' is already registered for this bank`)
+    }
+  } catch (e) {
+    await c.query('ROLLBACK').catch(() => undefined)
+    throw e
+  } finally {
+    c.release()
+  }
+  try {
+    await opts.lineage?.emitLineage({
+      table: 'query_purpose_registry',
+      columns: QUERY_PURPOSE_LINEAGE_COLUMNS,
+      source: 'governed-purpose-registration',
+      trace_id: opts.traceId ?? 'purpose-registration'
+    })
+  } catch {
+    /* catalogue unavailable — the regulated write stands; Q4.5 surfaces persistent gaps */
+  }
+}
+
+/**
+ * Pg-backed registrar (structural match for the BFF's QueryPurposeRegistrar) — the worker wires
+ * this when a DATABASE_URL is present; the demo profile uses the BFF's in-memory registrar.
+ */
+export class PgQueryPurposeRegistrar {
+  private readonly pool: pg.Pool
+
+  constructor(
+    databaseUrl: string,
+    private readonly config: { bankId: string; channel: string },
+    private readonly lineage?: LineageSink
+  ) {
+    this.pool = new pg.Pool({ connectionString: databaseUrl })
+  }
+
+  async register(input: RegisterQueryPurposeInput & { trace_id: string }): Promise<void> {
+    await registerQueryPurpose(this.pool, this.config.bankId, this.config.channel, input, { lineage: this.lineage, traceId: input.trace_id })
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end()
+  }
+}

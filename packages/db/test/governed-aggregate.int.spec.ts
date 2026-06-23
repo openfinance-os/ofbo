@@ -8,6 +8,7 @@ import { beginAppTx } from '../src/tenant-tx.js'
 import {
   GovernedQueryError,
   isPurposeApproved,
+  registerQueryPurpose,
   runGovernedAggregate,
   seedQueryPurposes
 } from '../src/governed-aggregate.js'
@@ -107,6 +108,24 @@ describe('BACKOFFICE-33 governed cross-fintech aggregation', () => {
       runGovernedAggregate(context(`unregistered_${randomUUID()}`), async () => ({ result: 1, rowCount: 1 }))
     ).rejects.toBeInstanceOf(GovernedQueryError)
     expect(await countBypassLogs()).toBe(before) // nothing logged for a rejected bypass
+  })
+
+  it('registerQueryPurpose activates a NEW purpose (approved_by set) — and rejects a duplicate', async () => {
+    const code = `governed_test_${randomUUID().replace(/-/g, '').slice(0, 12)}`
+    expect(await isPurposeApproved(pool, BANK, code)).toBe(false) // not yet registered
+    await registerQueryPurpose(
+      pool,
+      BANK,
+      CHANNEL,
+      { purpose_code: code, description: 'integration-test cross-fintech purpose', registered_by: 'demo:compliance-officer', approved_by: 'demo:platform-super-admin' },
+      { lineage, traceId: 'register-int' }
+    )
+    expect(await isPurposeApproved(pool, BANK, code)).toBe(true) // active after a four-eyes approval
+
+    // UNIQUE (bank_id, purpose_code): re-registering the same purpose is rejected, never a silent no-op.
+    await expect(
+      registerQueryPurpose(pool, BANK, CHANNEL, { purpose_code: code, description: 'dup', registered_by: 'demo:compliance-officer', approved_by: 'demo:platform-super-admin' })
+    ).rejects.toBeInstanceOf(GovernedQueryError)
   })
 
   it('a tenant-scoped role (ofbo_app) cannot read the cross-fintech MV', async () => {

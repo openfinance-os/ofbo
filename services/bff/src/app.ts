@@ -38,6 +38,14 @@ import {
   makeBulkRevokeOperation,
   BULK_REVOKE_OPERATION
 } from './consents/bulk-revoke.js'
+import {
+  RegisterQueryPurposeService,
+  registerQueryPurposeRoutes,
+  makeRegisterQueryPurposeOperation,
+  InMemoryQueryPurposeRegistrar,
+  QUERY_PURPOSE_REGISTER_OPERATION,
+  type QueryPurposeRegistrar
+} from './governance/query-purposes.js'
 import { DisputeService, InMemoryDisputeStore, makeRefundOperation, REFUND_OPERATION, type DisputeStore } from './disputes/service.js'
 import { disputeRoutes } from './disputes/routes.js'
 import { CallRecordingService, callRecordingRoutes } from './disputes/call-recording.js'
@@ -138,6 +146,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /consents/{consent_id}:revoke-admin',
   'post /consents:revoke-bulk',
   'post /consents/{consent_id}:revoke-fraud',
+  'post /back-office/governance/query-purposes',
   'get /consents/{consent_id}/audit-trail',
   'get /psu/{psu_identifier}/audit-trail',
   'get /payments/{payment_id}:admin',
@@ -281,6 +290,9 @@ export interface AppDeps {
    *  wires the Pg compliance-metrics store + retention reader. */
   complianceMetricsReader?: ComplianceMetricsReader
   retentionReader?: RetentionReader
+  /** BACKOFFICE-33 PR 5 — registrar for four-eyes query-purpose registration (defaults
+   *  in-memory for the demo profile; the worker wires PgQueryPurposeRegistrar). */
+  queryPurposeRegistrar?: QueryPurposeRegistrar
   /** BACKOFFICE-30 — Risk View source (risk_signal aggregates). Default empty reader;
    *  the worker wires the Pg risk-metrics store. */
   riskMetricsReader?: RiskMetricsReader
@@ -338,6 +350,8 @@ export function createApp(deps: AppDeps = {}) {
   const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
   const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
+  const queryPurposeRegistrar = deps.queryPurposeRegistrar ?? new InMemoryQueryPurposeRegistrar()
+  const registerQueryPurposeOperation = makeRegisterQueryPurposeOperation({ registrar: queryPurposeRegistrar, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
   const breakReopenOperation = makeBreakReopenOperation({ breakStore: reconciliationBreakStore, audit: highClassAudit })
   const invoiceRunOperation = makeInvoiceRunOperation({ invoiceStore: invoiceRunStore, financialSystem: getAdapter('p9-financial-system', profileFromConfig(process.env)), audit: highClassAudit })
@@ -354,6 +368,7 @@ export function createApp(deps: AppDeps = {}) {
       ...deps.approvals?.operations,
       [REFUND_OPERATION]: refundOperation,
       [FRAUD_REVOKE_OPERATION]: fraudRevokeOperation,
+      [QUERY_PURPOSE_REGISTER_OPERATION]: registerQueryPurposeOperation,
       [BULK_REVOKE_OPERATION]: bulkRevokeOperation,
       [BREAK_REOPEN_OPERATION]: breakReopenOperation,
       [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
@@ -362,6 +377,7 @@ export function createApp(deps: AppDeps = {}) {
     }
   })
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
+  const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
   const paymentSource = deps.paymentSource ?? sharedDemoPaymentDirectory()
   const disputeService = new DisputeService({
@@ -560,6 +576,7 @@ export function createApp(deps: AppDeps = {}) {
     ...careSurfaceRoutes(careSurfaceService, idempotencyStore),
     ...consentBulkRevokeRoutes(bulkRevokeService, idempotencyStore),
     ...consentFraudRevokeRoutes(fraudRevokeService, idempotencyStore),
+    ...registerQueryPurposeRoutes(registerQueryPurposeService, idempotencyStore),
     ...consentAuditTrailRoutes(auditTrail),
     ...disputeRoutes(disputeService, idempotencyStore),
     ...callRecordingRoutes(callRecordingService),

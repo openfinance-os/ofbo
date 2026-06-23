@@ -171,6 +171,9 @@ export {
   runGovernedAggregate,
   seedQueryPurposes,
   SEED_QUERY_PURPOSES,
+  registerQueryPurpose,
+  PgQueryPurposeRegistrar,
+  type RegisterQueryPurposeInput,
   type GovernedAuditSink,
   type GovernedAggregateContext,
   type GovernedReadContext
