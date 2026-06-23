@@ -3798,6 +3798,171 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/agents:register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register an automation agent identity (DCR) — four-eyes (BACKOFFICE-60)
+         * @description Programmatic admin-scope access (ADR 0017). Registers an automation under a pre-defined least-privilege agent persona whose scopes are a STRICT SUBSET of a human persona (PRD §2) and never platform:superadmin (BACKOFFICE-80 — agents are service accounts). The caller NAMES A PERSONA; the server binds that persona's scopes — the request can never request arbitrary scopes, so DCR is not a scope- escalation path. Granting agent authority is four-eyes-gated: returns 202 + approval_request; a different principal approves before the client credential is issued — it never registers inline. Issued read-only (allow_mutations=false, spend_budget=0) until a human raises both AND spend-control (BACKOFFICE-53) is live.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Agent persona id from the AGENT_PERSONAS catalogue (e.g. care-readonly-agent). Its scopes are bound server-side. */
+                        persona: string;
+                        /** @description Human-readable label for the automation (no PII) */
+                        display_name: string;
+                    };
+                };
+            };
+            responses: {
+                202: components["responses"]["ApprovalPending"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List registered automation agents (BACKOFFICE-60) */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Agents"];
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a registered automation agent (BACKOFFICE-60) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    agent_id: components["parameters"]["agentId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Agent"];
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/agents/{agent_id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke (deactivate) an automation agent — single-actor kill switch (BACKOFFICE-60)
+         * @description Deactivates an agent credential immediately. Deliberately NOT four-eyes: granting authority needs two principals, REMOVING it needs one — so a rogue or compromised agent can be killed without waiting for a second approver. High-class audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    agent_id: components["parameters"]["agentId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Why the agent is being deactivated (no PII) */
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                200: components["responses"]["Agent"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3827,6 +3992,35 @@ export interface components {
                 /** Format: date-time */
                 timestamp?: string;
             };
+        };
+        /** @description A registered automation agent identity (BACKOFFICE-60 / ADR 0017). No PII — this describes a service account, not a person. Scopes are a STRICT SUBSET of the human persona named by `derived_from` (PRD §2) and never include platform:superadmin (BACKOFFICE-80). */
+        AgentRegistration: {
+            /** Format: uuid */
+            agent_id: string;
+            /** @description OAuth2 client id issued on approval (DCR */
+            client_id: string;
+            display_name: string;
+            /** @description Agent persona id (e.g. care-readonly-agent) */
+            persona: string;
+            /** @description Human persona this agent is a strict subset of (PRD §2) */
+            derived_from: string;
+            /** @description Bound server-side from the persona; strict subset of derived_from's scopes; never platform:superadmin. */
+            scopes: string[];
+            /** @enum {string} */
+            status: "pending" | "active" | "revoked";
+            /** @description ADR 0017 — false until a human raises it AND spend-control (BACKOFFICE-53) is live */
+            allow_mutations: boolean;
+            /** @description Per-session consequential-operation budget (BACKOFFICE-53); 0 = read-only */
+            spend_budget: number;
+            /** @description IdP subject of the four-eyes initiator */
+            registered_by: string;
+            /** @description IdP subject of the four-eyes approver (different principal) */
+            approved_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            revoke_reason?: string | null;
         };
         /** @description Binding money convention (CLAUDE.md): integer minor units + ISO 4217 — never floating point. Example: { "amount": 150000, "currency": "AED" } = AED 1,500.00. */
         Money: {
@@ -4642,6 +4836,28 @@ export interface components {
                 };
             };
         };
+        /** @description Registered automation agent */
+        Agent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Envelope"] & {
+                    data?: components["schemas"]["AgentRegistration"];
+                };
+            };
+        };
+        /** @description Registered automation agents (paginated; cursor in meta.next_cursor) */
+        Agents: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Envelope"] & {
+                    data?: components["schemas"]["AgentRegistration"][];
+                };
+            };
+        };
         /** @description Revocation outcome */
         RevocationResult: {
             headers: {
@@ -4711,6 +4927,7 @@ export interface components {
         approvalId: string;
         participantId: string;
         serviceDeskCaseId: string;
+        agentId: string;
     };
     requestBodies: never;
     headers: never;

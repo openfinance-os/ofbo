@@ -31,6 +31,7 @@ tags:
   - name: risk-signals
   - name: tpp-billing
   - name: governance
+  - name: agents
 
 paths:
   # ---------- 7.1 Reconciliation ----------
@@ -2185,6 +2186,99 @@ paths:
         default: { $ref: '#/components/responses/Error' }
 
 
+  /back-office/agents:register:
+    post:
+      tags: [agents]
+      summary: Register an automation agent identity (DCR) — four-eyes (BACKOFFICE-60)
+      description: >
+        Programmatic admin-scope access (ADR 0017). Registers an automation under a
+        pre-defined least-privilege agent persona whose scopes are a STRICT SUBSET of a
+        human persona (PRD §2) and never platform:superadmin (BACKOFFICE-80 — agents are
+        service accounts). The caller NAMES A PERSONA; the server binds that persona's
+        scopes — the request can never request arbitrary scopes, so DCR is not a scope-
+        escalation path. Granting agent authority is four-eyes-gated: returns 202 +
+        approval_request; a different principal approves before the client credential is
+        issued — it never registers inline. Issued read-only (allow_mutations=false,
+        spend_budget=0) until a human raises both AND spend-control (BACKOFFICE-53) is live.
+      x-rate-limit-per-min: 5
+      x-required-scope: platform:agents:write
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [persona, display_name]
+              properties:
+                persona:
+                  type: string
+                  description: Agent persona id from the AGENT_PERSONAS catalogue (e.g. care-readonly-agent). Its scopes are bound server-side.
+                display_name: { type: string, minLength: 3, description: Human-readable label for the automation (no PII) }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/agents:
+    get:
+      tags: [agents]
+      summary: List registered automation agents (BACKOFFICE-60)
+      x-rate-limit-per-min: 60
+      x-required-scope: platform:agents:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': { $ref: '#/components/responses/Agents' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/agents/{agent_id}:
+    get:
+      tags: [agents]
+      summary: Get a registered automation agent (BACKOFFICE-60)
+      x-rate-limit-per-min: 60
+      x-required-scope: platform:agents:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/agentId'
+      responses:
+        '200': { $ref: '#/components/responses/Agent' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/agents/{agent_id}:revoke:
+    post:
+      tags: [agents]
+      summary: Revoke (deactivate) an automation agent — single-actor kill switch (BACKOFFICE-60)
+      description: >
+        Deactivates an agent credential immediately. Deliberately NOT four-eyes: granting
+        authority needs two principals, REMOVING it needs one — so a rogue or compromised
+        agent can be killed without waiting for a second approver. High-class audited.
+      x-rate-limit-per-min: 30
+      x-required-scope: platform:agents:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - $ref: '#/components/parameters/agentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 10, description: Why the agent is being deactivated (no PII) }
+      responses:
+        '200': { $ref: '#/components/responses/Agent' }
+        default: { $ref: '#/components/responses/Error' }
+
+
 components:
   securitySchemes:
     adminOAuth:
@@ -2305,6 +2399,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    agentId:
+      name: agent_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
 
   responses:
     Error:
@@ -2384,6 +2483,28 @@ components:
               - type: object
                 properties:
                   data: { $ref: '#/components/schemas/ApprovalRequest' }
+    Agent:
+      description: Registered automation agent
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AgentRegistration' }
+    Agents:
+      description: Registered automation agents (paginated; cursor in meta.next_cursor)
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AgentRegistration' }
     RevocationResult:
       description: Revocation outcome
       content:
@@ -2466,6 +2587,32 @@ components:
           properties:
             request_id: { type: string }
             timestamp: { type: string, format: date-time }
+    AgentRegistration:
+      type: object
+      description: >
+        A registered automation agent identity (BACKOFFICE-60 / ADR 0017). No PII — this
+        describes a service account, not a person. Scopes are a STRICT SUBSET of the
+        human persona named by `derived_from` (PRD §2) and never include
+        platform:superadmin (BACKOFFICE-80).
+      required: [agent_id, client_id, display_name, persona, derived_from, scopes, status, allow_mutations, spend_budget, registered_by, created_at]
+      properties:
+        agent_id: { type: string, format: uuid }
+        client_id: { type: string, description: OAuth2 client id issued on approval (DCR, RFC 7591) }
+        display_name: { type: string }
+        persona: { type: string, description: Agent persona id (e.g. care-readonly-agent) }
+        derived_from: { type: string, description: Human persona this agent is a strict subset of (PRD §2) }
+        scopes:
+          type: array
+          items: { type: string }
+          description: Bound server-side from the persona; strict subset of derived_from's scopes; never platform:superadmin.
+        status: { type: string, enum: [pending, active, revoked] }
+        allow_mutations: { type: boolean, description: ADR 0017 — false until a human raises it AND spend-control (BACKOFFICE-53) is live }
+        spend_budget: { type: integer, minimum: 0, description: Per-session consequential-operation budget (BACKOFFICE-53); 0 = read-only }
+        registered_by: { type: string, description: IdP subject of the four-eyes initiator }
+        approved_by: { type: string, nullable: true, description: IdP subject of the four-eyes approver (different principal) }
+        created_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        revoke_reason: { type: string, nullable: true }
     Money:
       type: object
       required: [amount, currency]

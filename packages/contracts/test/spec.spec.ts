@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { loadSpec, listRoutes } from '../src/spec.js'
 
 describe('contract canon', () => {
-  it('has exactly 76 paths and 10 tags', () => {
+  it('has exactly 80 paths and 11 tags', () => {
     const spec = loadSpec()
-    expect(Object.keys(spec.paths)).toHaveLength(76)
-    expect(spec.tags).toHaveLength(10)
+    expect(Object.keys(spec.paths)).toHaveLength(80)
+    expect(spec.tags).toHaveLength(11)
   })
 
   it('every route requires x-fapi-interaction-id', () => {
