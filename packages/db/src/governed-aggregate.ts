@@ -52,9 +52,14 @@ export interface GovernedAggregateContext {
 
 /**
  * Per-request audit context a store threads into a governed read — who is reading and the
- * trace id, for the High-class bypass log. The store supplies pool/bankId/purposeCode/audit.
+ * trace id, for the High-class bypass log. The store supplies pool/bankId/audit and a default
+ * purposeCode; a caller MAY override `purposeCode` when the SAME aggregate is authorised under a
+ * different approved purpose (e.g. the executive dashboard reads cross-fintech consent volumes
+ * under `executive_dashboard`, not the compliance store's default `compliance_reporting`).
  */
-export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipal' | 'actingPersona' | 'scopeUsed' | 'traceId'>
+export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipal' | 'actingPersona' | 'scopeUsed' | 'traceId'> & {
+  purposeCode?: string
+}
 
 /** True iff `purposeCode` is registered AND approved for this bank (checked as ofbo_app under RLS). */
 export async function isPurposeApproved(pool: pg.Pool, bankId: string, purposeCode: string): Promise<boolean> {

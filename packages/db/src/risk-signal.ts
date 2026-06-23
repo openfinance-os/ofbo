@@ -174,7 +174,9 @@ export class PgRiskMetricsStore {
    */
   private async readGoverned<T>(ctx: GovernedReadContext | undefined, fn: (c: pg.PoolClient) => Promise<{ result: T; rowCount: number }>): Promise<T> {
     if (ctx && this.audit) {
-      return runGovernedAggregate({ pool: this.pool, bankId: this.config.bankId, purposeCode: RISK_PURPOSE, audit: this.audit, ...ctx }, fn)
+      // Risk reads are always logged under risk_monitoring — purposeCode last so a caller's ctx
+      // can never relabel this store's bypass provenance.
+      return runGovernedAggregate({ pool: this.pool, bankId: this.config.bankId, audit: this.audit, ...ctx, purposeCode: RISK_PURPOSE }, fn)
     }
     return this.asApp(async (c) => (await fn(c)).result)
   }

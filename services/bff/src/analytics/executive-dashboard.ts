@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import type { ConsentVolumes, StoredCertification } from '@ofbo/db'
+import type { ConsentVolumes, StoredCertification, GovernedReadContext } from '@ofbo/db'
 import type { OnboardingHandoverPort } from '@ofbo/ports'
 import type { MarginSummary } from '../reconciliation/margin.js'
 import type { ProgrammeAngleBuilder } from './programme.js'
@@ -23,9 +23,12 @@ import { dataEnvelope } from '../envelope.js'
 export const EXEC_DASHBOARD_SCOPE = 'platform:analytics:read'
 const COMMERCIAL_SCOPE = 'commercial:read'
 const PROGRAMME_SCOPE = 'programme:read'
+// BACKOFFICE-33 — the dashboard's one genuinely cross-fintech aggregate (platform-wide consent
+// volumes) is read under this approved purpose, distinct from the compliance store's default.
+const EXEC_PURPOSE = 'executive_dashboard'
 
 export interface ExecConsentReader {
-  consentVolumes(): Promise<ConsentVolumes>
+  consentVolumes(ctx?: GovernedReadContext): Promise<ConsentVolumes>
 }
 export interface ExecMarginReader {
   marginForPeriod(period: string): Promise<MarginSummary>
@@ -75,15 +78,20 @@ function summarizeHandover(events: { entry_path: string; stage: string; at: stri
 export class ExecutiveDashboardService {
   constructor(private readonly deps: ExecutiveDashboardDeps) {}
 
-  async view(principal: Principal): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
+  async view(principal: Principal, traceId: string): Promise<{ data: Record<string, unknown>; freshness: FreshnessEnvelope }> {
     assertScope(principal, EXEC_DASHBOARD_SCOPE)
     const now = (this.deps.now ?? (() => new Date()))()
     const period = now.toISOString().slice(0, 7)
     const windowEnd = now.toISOString()
     const windowStart = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString()
 
+    // Platform-wide consent volumes are a CROSS-FINTECH aggregate → governed path (BACKOFFICE-33),
+    // logged under purpose executive_dashboard. The other headline metrics are service-computed
+    // roll-ups (margin, onboarding funnel via P8) or directory data, not RLS-walled tenant reads.
+    const govCtx: GovernedReadContext = { actingPrincipal: principal.subject, actingPersona: principal.persona, scopeUsed: EXEC_DASHBOARD_SCOPE, traceId, purposeCode: EXEC_PURPOSE }
+
     const [consents, handoverEvents, latestRun] = await Promise.all([
-      this.deps.consents.consentVolumes(),
+      this.deps.consents.consentVolumes(govCtx),
       this.deps.handover.getFunnelEvents({ from: windowStart, to: windowEnd }),
       this.deps.recon.latestRun()
     ])
@@ -166,7 +174,7 @@ export function executiveDashboardRoutes(service: ExecutiveDashboardService): Re
   return {
     'get /back-office/analytics/executive-dashboard': async (c) => {
       try {
-        const { data, freshness } = await service.view(c.get('principal'))
+        const { data, freshness } = await service.view(c.get('principal'), c.req.header('x-fapi-interaction-id') ?? 'unknown')
         return c.json({ ...dataEnvelope(data), freshness }, 200)
       } catch (e) {
         const denied = scopeDenied(c, e)

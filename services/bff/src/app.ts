@@ -548,7 +548,7 @@ export function createApp(deps: AppDeps = {}) {
   const exportViewData: ViewDataSource = {
     async getViewData(view, principal, traceId) {
       const fetchers: Record<string, () => Promise<{ data: Record<string, unknown> }>> = {
-        'executive-dashboard': () => executiveDashboardService.view(principal),
+        'executive-dashboard': () => executiveDashboardService.view(principal, traceId),
         'operations-console': () => operationsConsoleService.view(principal),
         'compliance-view': () => complianceViewService.view(principal, traceId),
         'risk-view': () => riskViewService.view(principal, traceId),
