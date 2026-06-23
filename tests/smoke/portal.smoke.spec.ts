@@ -18,7 +18,7 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
     expect(html).toMatch(/DEMO/)
     expect(html).toMatch(/synthetic data only/i)
     // sign-in screen with at least one MFA-gated persona option
-    expect(html).toMatch(/Sign in to the Internal Portal/i)
+    expect(html).toMatch(/Choose a role to explore/i)
     expect(html).toMatch(/MFA is enforced/i)
     expect(html).toContain('/api/login')
   })
