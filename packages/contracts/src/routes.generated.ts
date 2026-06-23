@@ -610,5 +610,33 @@ export const ROUTES: readonly Route[] = [
     "tag": "analytics",
     "scope": "platform:operations:write",
     "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/agents:register",
+    "tag": "agents",
+    "scope": "platform:agents:write",
+    "fourEyes": true
+  },
+  {
+    "method": "get",
+    "path": "/back-office/agents",
+    "tag": "agents",
+    "scope": "platform:agents:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/agents/{agent_id}",
+    "tag": "agents",
+    "scope": "platform:agents:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/agents/{agent_id}:revoke",
+    "tag": "agents",
+    "scope": "platform:agents:write",
+    "fourEyes": false
   }
 ] as const
