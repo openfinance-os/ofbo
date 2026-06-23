@@ -1,5 +1,6 @@
 import { buildCatalog, type McpTool } from './catalog.js'
 import { classify, SpendGuard, toPendingApproval, type PendingApproval } from './governance.js'
+import { spendExhaustedEvent, type AgentAnomalySink } from './anomaly.js'
 
 /**
  * ADR 0017 — the MCP gateway is a PURE CONTRACT CLIENT. It maps the agent's tool
@@ -21,6 +22,8 @@ export interface GatewaySession {
   scopes: readonly string[]
   /** Stable session id for tracing + spend accounting. */
   sessionId: string
+  /** Agent persona id, for anomaly attribution (BACKOFFICE-53). */
+  personaId?: string
 }
 
 export interface GatewayConfig {
@@ -32,6 +35,8 @@ export interface GatewayConfig {
   spendBudget?: number
   /** Fires when the session spend budget is exhausted — wire to a Risk signal + ITSM ticket. */
   onSpendExhausted?: (used: number, budget: number) => void
+  /** BACKOFFICE-53: emits an agent_anomaly Risk signal + ITSM ticket on spend exhaustion. */
+  anomalySink?: AgentAnomalySink
   /** Injected for tests; defaults to global fetch. */
   fetchImpl?: FetchLike
 }
@@ -75,7 +80,10 @@ export class McpGateway {
     })
     this.tools = new Map(catalog.map((t) => [t.name, t]))
     this.fetchImpl = config.fetchImpl ?? ((url, init) => fetch(url, init))
-    this.spend = new SpendGuard(config.spendBudget ?? 0, config.onSpendExhausted)
+    this.spend = new SpendGuard(config.spendBudget ?? 0, (used, budget) => {
+      config.onSpendExhausted?.(used, budget)
+      void config.anomalySink?.report(spendExhaustedEvent(config.session.personaId ?? 'unknown-agent', config.session.sessionId, used, budget))
+    })
   }
 
   /** MCP `tools/list` — the scope-filtered, policy-filtered catalogue for this agent. */

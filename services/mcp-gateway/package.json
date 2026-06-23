@@ -6,10 +6,17 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "bin": {
+    "ofbo-mcp-gateway": "./src/bin.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@ofbo/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@ofbo/bff": "workspace:*"
   }
 }

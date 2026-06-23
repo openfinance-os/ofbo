@@ -20,3 +20,17 @@ export {
 } from './governance.js'
 export { McpGateway, type GatewayConfig, type GatewaySession, type ToolResult, type FetchLike } from './gateway.js'
 export { handleJsonRpc, type JsonRpcRequest, type JsonRpcResponse } from './server.js'
+export { runStdioServer } from './stdio.js'
+export {
+  AGENT_PERSONAS,
+  assertSubsetOf,
+  LeastPrivilegeViolation,
+  type AgentPersona,
+  type AgentPersonaId
+} from './agent-personas.js'
+export {
+  InMemoryAgentAnomalySink,
+  spendExhaustedEvent,
+  type AgentAnomalyEvent,
+  type AgentAnomalySink
+} from './anomaly.js'

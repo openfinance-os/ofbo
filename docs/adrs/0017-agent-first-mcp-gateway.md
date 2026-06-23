@@ -1,6 +1,6 @@
 # ADR 0017 — Agent-first interface via an MCP gateway over the BFF contract (BACKOFFICE-60 / BACKOFFICE-53)
 
-- Status: **Proposed** — awaiting human decision (raised 2026-06-23)
+- Status: **Accepted** — chosen by the user (2026-06-23)
 - Date: 2026-06-23
 - Stories: BACKOFFICE-60 (Programmatic admin-scope access — DCR automations) · BACKOFFICE-53 (Agentic spend-control for admin-scope MCP tools)
 - Spike: `services/mcp-gateway` (experimental, NOT in the deploy pipeline)
@@ -116,11 +116,23 @@ existing deferred stories this ADR scopes.
 
 ## Decision
 
-_Pending._ This ADR is **Proposed**. The `services/mcp-gateway` spike demonstrates the
-governed tool-mapping core (catalogue generation from `ROUTES`, scope filtering,
-four-eyes interception, audit/idempotency propagation) against the in-process BFF, with
-no transport wired and nothing in the deploy pipeline. It exists to make the decision
-concrete, not to ship an agent.
+**Accepted (2026-06-23).** Option 1 — the MCP gateway over the existing contract — in
+the read-only → initiate-only → bounded-autonomy rollout above. Build proceeds in this
+order:
+
+1. **Now (this decision):** wire `services/mcp-gateway` to a real MCP stdio transport
+   (read-only, `allowMutations:false`); define **agent personas** as least-privilege
+   *subsets* of human personas with a build-time subset invariant (BACKOFFICE-60
+   groundwork); and make the spend-control hook concrete (BACKOFFICE-53). All of this
+   stays in the gateway package and config — the BFF auth path is untouched.
+2. **Next, behind a human-approved spec-change (separate PR):** the **DCR registration
+   endpoint** is a new auth path (CLAUDE.md rule 6) and therefore ground-truth-first —
+   it adds a contract path and BFF enforcement. It is intentionally NOT invented in the
+   gateway. Until it lands, agent identity is provided by the existing IdP port (P2)
+   issuing an agent persona; DCR self-registration is the production hardening.
+
+No mutating agent tool is enabled until BACKOFFICE-53 spend-control is built AND a human
+raises `allowMutations`.
 
 ## Consequences
 
