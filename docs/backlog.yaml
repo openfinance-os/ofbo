@@ -202,13 +202,21 @@ milestones:
 
 deferred: # Could / Phase 2 — not in build scope until promoted by the user
   # BACKOFFICE-60 and BACKOFFICE-53 fleshed out under ADR 0017 (agent-first MCP gateway,
-  # spike at services/mcp-gateway). Both stay deferred/blocked until ADR 0017 is Accepted.
+  # services/mcp-gateway). ADR 0017 ACCEPTED 2026-06-23 — step-1 groundwork landed:
+  # real MCP stdio transport (read-only), least-privilege agent personas with a
+  # build-time subset invariant against the real SCOPE_MATRIX, and the spend-control
+  # anomaly hook. Remaining: the DCR registration ENDPOINT is a new auth path → needs a
+  # human-approved spec-change PR first (CLAUDE.md rule 6), so both stay deferred.
   - id: BACKOFFICE-60
     title: Programmatic admin-scope access for internal automation (DCR-registered agents)
     status: deferred
     priority: Could
     adr: docs/adrs/0017-agent-first-mcp-gateway.md
-    blocked_on: ADR 0017 acceptance (agent identity + autonomy bounds is a humans-decide auth path, CLAUDE.md rule 6)
+    progress: >-
+      Step-1 groundwork landed (gateway-side, BFF auth path untouched): AGENT_PERSONAS
+      (least-privilege read-only subsets) + assertSubsetOf invariant tested against the
+      real @ofbo/bff SCOPE_MATRIX; runnable MCP stdio server (src/bin.ts, src/stdio.ts).
+    blocked_on: DCR registration endpoint is a new auth path → human-approved spec-change PR required (CLAUDE.md rule 6) before BFF implementation
     note: >-
       Gives a model/automation the same operations a human persona performs today,
       via the MCP gateway (services/mcp-gateway) over the existing OpenAPI contract.
@@ -241,6 +249,11 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
     status: deferred
     priority: Could
     adr: docs/adrs/0017-agent-first-mcp-gateway.md
+    progress: >-
+      Gateway-side mechanism landed: SpendGuard (per-session consequential-op budget) +
+      agent_anomaly event (Risk-signal/ITSM shape, no PII) emitted on budget exhaustion,
+      tested. Remaining: wire the anomaly sink to the BFF risk-signals endpoint + P3 ITSM,
+      and re-assert the budget BFF-side (defence in depth) once mutating tools are enabled.
     blocked_on: BACKOFFICE-60 (no agent identity to bound until DCR access exists)
     note: >-
       Per-session blast-radius budget on consequential agent operations, mirroring the

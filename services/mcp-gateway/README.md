@@ -1,7 +1,9 @@
-# @ofbo/mcp-gateway — agent-first interface spike
+# @ofbo/mcp-gateway — agent-first interface
 
-> **EXPERIMENTAL SPIKE (ADR 0017).** Not in the deploy pipeline. Read-only by default.
-> Gated on **BACKOFFICE-60** (agent identity via DCR) and **BACKOFFICE-53** (spend-control).
+> **EXPERIMENTAL (ADR 0017 — Accepted).** Not in the deploy pipeline. Read-only by
+> default. Mutating tools remain gated on **BACKOFFICE-53** (spend-control) + a human
+> raising a persona's budget; the **DCR registration endpoint** (BACKOFFICE-60) is a new
+> auth path awaiting a human-approved spec-change PR.
 
 This package demonstrates how the human-operated portal could be replaced — or
 augmented — by an **agent-first interface**, by exposing the existing OFBO BFF contract
@@ -24,8 +26,27 @@ agent and an operation, that's a bug.
   `x-fapi-interaction-id`, and `Idempotency-Key`; a four-eyes `202` becomes a **pending
   approval the agent can never self-ratify** (BACKOFFICE-44).
 - `server.ts` — transport-agnostic MCP JSON-RPC dispatcher (`initialize`, `tools/list`,
-  `tools/call`). Binding it to a real stdio transport (`@modelcontextprotocol/sdk`) is
-  boilerplate, intentionally left out of the spike.
+  `tools/call`), useful for in-process tests.
+- `stdio.ts` + `bin.ts` — a **runnable MCP stdio server** over `@modelcontextprotocol/sdk`
+  (ADR 0017 step 1). The transport is a dumb pipe; all governance stays in the gateway.
+- `agent-personas.ts` — **least-privilege agent personas** (BACKOFFICE-60). Each is a
+  STRICT subset of a human persona (`@ofbo/bff` `SCOPE_MATRIX`), read-only today;
+  `assertSubsetOf` enforces the invariant (tested against the real matrix so drift fails CI).
+- `anomaly.ts` — the **agent_anomaly** event (Risk-signal/ITSM shape, no PII) emitted by
+  the gateway when a session crosses its spend budget (BACKOFFICE-53).
+
+## Run it (read-only, against the demo BFF)
+
+```sh
+BFF_URL=https://ofbo-bff.michartmann.workers.dev \
+AGENT_TOKEN=<bearer the IdP (P2) minted for the agent persona> \
+AGENT_PERSONA=care-readonly-agent \
+node services/mcp-gateway/src/bin.ts
+```
+
+`AGENT_PERSONA` is one of `care-readonly-agent`, `reconciliation-readonly-agent`,
+`compliance-readonly-agent`, `analytics-readonly-agent`. All ship read-only
+(`allowMutations:false`, `spendBudget:0`).
 
 ## Safety posture (ADR 0017 rollout)
 
