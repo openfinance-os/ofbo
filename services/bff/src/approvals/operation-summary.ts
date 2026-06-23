@@ -77,6 +77,17 @@ export function summariseOperation(operationType: string, payload: Record<string
       const code = safeMatch(payload.purpose_code, /^[a-z][a-z0-9_]{2,63}$/)
       return { descriptor: code ? `Register cross-fintech query purpose · ${code}` : 'Register cross-fintech query purpose' }
     }
+    case 'agents.register': {
+      // safe: persona + derived_from — controlled kebab-case persona ids (BACKOFFICE-60).
+      // NEVER: display_name (operator free text). Agents carry no PSU data.
+      const persona = safeMatch(payload.persona, /^[a-z][a-z0-9-]{2,63}$/)
+      const from = safeMatch(payload.derived_from, /^[a-z][a-z0-9-]{2,63}$/)
+      return {
+        descriptor: persona
+          ? `Register automation agent · ${persona}${from ? ` (least-privilege subset of ${from})` : ''}`
+          : 'Register automation agent'
+      }
+    }
     default:
       // Unknown operation → no summary (fail safe; never echo an unmodelled payload).
       return null

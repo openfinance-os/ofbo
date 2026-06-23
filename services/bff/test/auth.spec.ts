@@ -63,8 +63,11 @@ describe('BACKOFFICE-47 — mandatory MFA sign-in + admin-scope minting', () => 
   })
 
   it('mints exactly the PRD §2 scope matrix — no persona exceeds it', () => {
-    expect(ALL_PERSONAS).toHaveLength(8)
+    // 9 = the 7 operational personas + platform-super-admin + platform-admin (BACKOFFICE-60).
+    expect(ALL_PERSONAS).toHaveLength(9)
     expect(mintScopes('customer-care-agent')).toEqual(['consents:admin', 'disputes:admin', 'audit:read'])
+    // BACKOFFICE-60 — the agent-admin persona holds ONLY the agent-registry scopes.
+    expect(mintScopes('platform-admin')).toEqual(['platform:agents:read', 'platform:agents:write'])
     expect(mintScopes('risk-analyst')).toEqual(['risk:read', 'risk:investigations:write', 'consents:admin:fraud-revoke'])
     // scope hygiene is load-bearing: Finance never holds consent-admin; Care never holds finance/risk
     expect(mintScopes('finance-analyst')).not.toContain('consents:admin')

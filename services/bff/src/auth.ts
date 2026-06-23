@@ -25,6 +25,10 @@ export const SCOPE_MATRIX = {
   'risk-analyst': ['risk:read', 'risk:investigations:write', 'consents:admin:fraud-revoke'],
   'commercial-desk-head': ['platform:analytics:read', 'commercial:read', 'pipeline:read'],
   'programme-manager': ['platform:analytics:read', 'programme:read', 'certification:read'],
+  // BACKOFFICE-60: dedicated agent-administration persona (ADR 0017). Holds ONLY the
+  // agent-registry scopes — registering an automation is four-eyes-gated and never
+  // grants the admin any operational data scope; the agent itself runs least-privilege.
+  'platform-admin': ['platform:agents:read', 'platform:agents:write'],
   // BACKOFFICE-80: marker scope + union of all; guardrails (auto-signal, no
   // self-approval, justification) land with the BACKOFFICE-80 story.
   'platform-super-admin': ['platform:superadmin']
