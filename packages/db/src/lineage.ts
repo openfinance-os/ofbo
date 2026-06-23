@@ -109,7 +109,7 @@ export async function validateLineageCoverage(
 ): Promise<{ covered: string[]; gaps: string[] }> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
-    const tables = ['reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case', 'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request', 'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run', 'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification', 'platform_outage']
+    const tables = ['reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case', 'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request', 'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run', 'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification', 'platform_outage', 'agent_registry']
     const covered: string[] = []
     const gaps: string[] = []
     for (const t of tables) {

@@ -7,6 +7,7 @@ import {
   PgDisputeStore,
   PgRespondentDisputeStore,
   PgFraudIncidentStore,
+  PgAgentStore,
   PgSchemeNotificationStore,
   PgTrustFrameworkParticipantStore,
   PgServiceDeskCaseStore,
@@ -101,6 +102,7 @@ export default {
     const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
     const respondentDisputeStore = url ? new PgRespondentDisputeStore(url, tenancy, lineage) : undefined
     const fraudIncidentStore = url ? new PgFraudIncidentStore(url, tenancy, lineage) : undefined
+    const agentStore = url ? new PgAgentStore(url, tenancy, lineage) : undefined
     const schemeNotificationStore = url ? new PgSchemeNotificationStore(url, tenancy, lineage) : undefined
     const trustFrameworkStore = url ? new PgTrustFrameworkParticipantStore(url, tenancy, lineage) : undefined
     const serviceDeskStore = url ? new PgServiceDeskCaseStore(url, tenancy, lineage) : undefined
@@ -130,6 +132,7 @@ export default {
       ...(disputeStore ? { disputeStore } : {}),
       ...(respondentDisputeStore ? { respondentDisputeStore } : {}),
       ...(fraudIncidentStore ? { fraudIncidentStore } : {}),
+      ...(agentStore ? { agentStore } : {}),
       ...(schemeNotificationStore ? { schemeNotificationStore } : {}),
       ...(trustFrameworkStore ? { trustFrameworkStore } : {}),
       ...(serviceDeskStore ? { serviceDeskStore } : {}),
@@ -154,7 +157,7 @@ export default {
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
