@@ -68,8 +68,10 @@ const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, line
 const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
 const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
 const outageStore = url ? new PgOutageStore(url, tenancy) : undefined
-const complianceMetricsStore = url ? new PgComplianceMetricsStore(url, tenancy) : undefined
-const riskMetricsStore = url ? new PgRiskMetricsStore(url, tenancy) : undefined
+// Pass the audit sink so the cross-fintech aggregate reads take the GOVERNED path (BACKOFFICE-33),
+// matching worker.ts — without it the local dev server silently falls back to single-tenant reads.
+const complianceMetricsStore = url && audit ? new PgComplianceMetricsStore(url, tenancy, audit) : undefined
+const riskMetricsStore = url && audit ? new PgRiskMetricsStore(url, tenancy, audit) : undefined
 const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
 const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
 

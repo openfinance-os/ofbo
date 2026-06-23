@@ -23,7 +23,10 @@ describe('Executive Dashboard — composition over real stores (RLS)', () => {
   const lineage = new PgLineageEmitter(url!, TENANCY)
   const reconLog = new PgReconciliationLogStore(url!, TENANCY, lineage)
   const certifications = new PgCertificationStore(url!, TENANCY)
-  const complianceMetrics = new PgComplianceMetricsStore(url!, TENANCY)
+  // BACKOFFICE-33 — with an audit sink the consent-volume read goes through the governed
+  // cross-fintech path; the bypass is High-class logged under purpose executive_dashboard.
+  const govAudit = new InMemoryHighClassAuditSink()
+  const complianceMetrics = new PgComplianceMetricsStore(url!, TENANCY, govAudit)
   const tpp = new PgTppCounterpartyStore(url!, TENANCY, lineage)
 
   beforeAll(async () => {
@@ -65,7 +68,7 @@ describe('Executive Dashboard — composition over real stores (RLS)', () => {
       now
     })
 
-    const { data } = await svc.view(superAdmin)
+    const { data } = await svc.view(superAdmin, 'trace-exec-int')
     expect(data.available_angles).toEqual(['commercial', 'programme'])
     const commercial = data.commercial as { tpp_aas_margin: { total_margin: number }; integration_pipeline: { total: number } }
     expect(commercial.tpp_aas_margin.total_margin).toBeGreaterThan(0) // real margin from the run
@@ -77,5 +80,10 @@ describe('Executive Dashboard — composition over real stores (RLS)', () => {
     expect(programme.multi_entity.entity_count).toBeGreaterThan(0)
     const headline = data.headline as { consent_volumes: { total: number } }
     expect(headline.consent_volumes.total).toBeGreaterThan(0) // seeded consent events
+    // the cross-fintech consent-volume read was governed + High-class logged under executive_dashboard
+    const bypass = govAudit.events.find((e) => e.event_type === 'cross_fintech_query')
+    expect(bypass).toBeDefined()
+    expect((bypass?.request_body as { purpose_code: string }).purpose_code).toBe('executive_dashboard')
+    expect(bypass?.request_trace_id).toBe('trace-exec-int')
   })
 })

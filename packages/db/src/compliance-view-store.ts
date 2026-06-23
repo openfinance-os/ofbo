@@ -55,7 +55,9 @@ export class PgComplianceMetricsStore {
    */
   private async read<T>(ctx: GovernedReadContext | undefined, fn: (c: pg.PoolClient) => Promise<{ result: T; rowCount: number }>): Promise<T> {
     if (ctx && this.audit) {
-      return runGovernedAggregate({ pool: this.pool, bankId: this.config.bankId, purposeCode: PURPOSE, audit: this.audit, ...ctx }, fn)
+      // Default to compliance_reporting; a caller may override (e.g. the executive dashboard reads
+      // the same cross-fintech aggregate under executive_dashboard). purposeCode last so it wins.
+      return runGovernedAggregate({ pool: this.pool, bankId: this.config.bankId, audit: this.audit, ...ctx, purposeCode: ctx.purposeCode ?? PURPOSE }, fn)
     }
     const c = await this.pool.connect()
     try {

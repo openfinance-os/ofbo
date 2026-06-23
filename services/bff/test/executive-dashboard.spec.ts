@@ -4,7 +4,7 @@ import { ExecutiveDashboardService, type ExecutiveDashboardDeps } from '../src/a
 import { ScopeDeniedError } from '../src/rbac.js'
 import type { Principal } from '../src/auth.js'
 import { emptyMargin, type MarginSummary } from '../src/reconciliation/margin.js'
-import type { StoredCertification } from '@ofbo/db'
+import type { StoredCertification, GovernedReadContext } from '@ofbo/db'
 import { ProgrammeReportService } from '../src/analytics/programme.js'
 import { FAPI_HEADERS } from './helpers.js'
 
@@ -50,7 +50,7 @@ function svc(over: Partial<ExecutiveDashboardDeps> = {}) {
 
 describe('ExecutiveDashboardService — persona-aware angles', () => {
   it('commercial persona sees the headline + commercial angle only (revenue by family, margin, pipeline)', async () => {
-    const { data } = await svc().view(commercial)
+    const { data } = await svc().view(commercial, 'trace-1')
     expect(data.available_angles).toEqual(['commercial'])
     expect(data).toHaveProperty('commercial')
     expect(data).not.toHaveProperty('programme')
@@ -64,7 +64,7 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
   })
 
   it('UIF-03: emits typed bespoke sections for the commercial persona (gauge + kpi-strip + margin-by-family bars)', async () => {
-    const { data } = await svc().view(commercial)
+    const { data } = await svc().view(commercial, 'trace-1')
     const sections = data.sections as { kind: string; title: string; gauge?: { value: number }; stats?: { label: string; value: string }[]; segments?: { label: string; value: number }[] }[]
     const gauge = sections.find((s) => s.kind === 'gauge')
     expect(gauge?.gauge?.value).toBe(95) // success_rate 0.95 → 95%
@@ -75,7 +75,7 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
   })
 
   it('UIF-03: a base-scope persona gets the gauge section but NOT the commercial sections (scope hygiene)', async () => {
-    const { data } = await svc().view(analyticsOnly)
+    const { data } = await svc().view(analyticsOnly, 'trace-1')
     const sections = data.sections as { kind: string }[]
     expect(sections.some((s) => s.kind === 'gauge')).toBe(true)
     expect(sections.some((s) => s.kind === 'kpi-strip')).toBe(false)
@@ -83,7 +83,7 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
   })
 
   it('programme persona sees the headline + programme angle only (certification, adoption); NOT commercial revenue', async () => {
-    const { data } = await svc().view(programme)
+    const { data } = await svc().view(programme, 'trace-1')
     expect(data.available_angles).toEqual(['programme'])
     expect(data).toHaveProperty('programme')
     expect(data).not.toHaveProperty('commercial') // scope hygiene: no commercial revenue leak
@@ -92,12 +92,12 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
   })
 
   it('super-admin sees both angles (marker scope)', async () => {
-    const { data } = await svc().view(superAdmin)
+    const { data } = await svc().view(superAdmin, 'trace-1')
     expect(data.available_angles).toEqual(['commercial', 'programme'])
   })
 
   it('platform:analytics:read alone sees the headline but no angle', async () => {
-    const { data } = await svc().view(analyticsOnly)
+    const { data } = await svc().view(analyticsOnly, 'trace-1')
     expect(data.available_angles).toEqual([])
     expect(data).toHaveProperty('headline')
     expect(data).not.toHaveProperty('commercial')
@@ -105,7 +105,23 @@ describe('ExecutiveDashboardService — persona-aware angles', () => {
   })
 
   it('rejects a principal without platform:analytics:read (defence in depth)', async () => {
-    await expect(svc().view(care)).rejects.toBeInstanceOf(ScopeDeniedError)
+    await expect(svc().view(care, 'trace-1')).rejects.toBeInstanceOf(ScopeDeniedError)
+  })
+
+  it('BACKOFFICE-33: reads platform-wide consent volumes through the governed path under purpose executive_dashboard', async () => {
+    let seen: GovernedReadContext | undefined
+    const consents = {
+      consentVolumes: async (ctx?: GovernedReadContext) => {
+        seen = ctx
+        return { total: 5, by_event_type: { consent_granted: 5 } }
+      }
+    }
+    await svc({ consents }).view(commercial, 'trace-xyz')
+    expect(seen).toBeDefined()
+    expect(seen?.purposeCode).toBe('executive_dashboard') // distinct from the compliance store default
+    expect(seen?.actingPrincipal).toBe('demo:cdh')
+    expect(seen?.scopeUsed).toBe('platform:analytics:read')
+    expect(seen?.traceId).toBe('trace-xyz')
   })
 })
 
