@@ -1444,6 +1444,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/governance/query-purposes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a cross-fintech query purpose (BACKOFFICE-33)
+         * @description Registers a new purpose in the query_purpose_registry that authorises a class of cross-fintech (bank_internal_view) aggregate reads. Four-eyes-gated (BD-13 / ADR 0015): returns 202 + approval_request; a DIFFERENT principal approves before the purpose becomes active (approved_by set) — it never registers inline. The BD-13 starter set is seeded pre-approved; this endpoint governs purposes added afterwards.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description snake_case identifier for the purpose (must be unique per bank) */
+                        purpose_code: string;
+                        /** @description What class of cross-fintech aggregate reads this purpose authorises */
+                        description: string;
+                    };
+                };
+            };
+            responses: {
+                202: components["responses"]["ApprovalPending"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/analytics/risk-view": {
         parameters: {
             query?: never;

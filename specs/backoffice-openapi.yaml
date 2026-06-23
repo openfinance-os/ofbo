@@ -30,6 +30,7 @@ tags:
   - name: audit
   - name: risk-signals
   - name: tpp-billing
+  - name: governance
 
 paths:
   # ---------- 7.1 Reconciliation ----------
@@ -839,6 +840,44 @@ paths:
       parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
       responses:
         '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/governance/query-purposes:
+    post:
+      tags: [governance]
+      summary: Register a cross-fintech query purpose (BACKOFFICE-33)
+      description: >
+        Registers a new purpose in the query_purpose_registry that authorises a class of
+        cross-fintech (bank_internal_view) aggregate reads. Four-eyes-gated (BD-13 / ADR 0015):
+        returns 202 + approval_request; a DIFFERENT principal approves before the purpose becomes
+        active (approved_by set) — it never registers inline. The BD-13 starter set is seeded
+        pre-approved; this endpoint governs purposes added afterwards.
+      x-rate-limit-per-min: 30
+      x-required-scope: compliance:query-purposes:write
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose_code, description]
+              additionalProperties: false
+              properties:
+                purpose_code:
+                  type: string
+                  pattern: '^[a-z][a-z0-9_]{2,63}$'
+                  description: snake_case identifier for the purpose (must be unique per bank)
+                description:
+                  type: string
+                  minLength: 8
+                  maxLength: 280
+                  description: What class of cross-fintech aggregate reads this purpose authorises
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
         default: { $ref: '#/components/responses/Error' }
 
   /back-office/analytics/risk-view:
