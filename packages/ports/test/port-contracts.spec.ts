@@ -19,11 +19,12 @@ function describePortContract(profile: 'demo') {
       expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
     })
 
-    it('P2 verifies tokens with MFA and exposes the 8 demo personas', async () => {
+    it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
       const p2 = getAdapter('p2-identity-provider', profile)
       const personas = await p2.personaLogins()
-      expect(personas).toHaveLength(8)
+      expect(personas).toHaveLength(9)
       expect(personas.map((p) => p.persona)).toContain('platform-super-admin')
+      expect(personas.map((p) => p.persona)).toContain('platform-admin')
       const claims = await p2.verifyToken(personas[0]!.demo_token)
       expect(claims.mfa).toBe(true)
       expect(claims.persona).toBe(personas[0]!.persona)

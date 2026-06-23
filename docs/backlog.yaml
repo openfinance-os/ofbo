@@ -209,14 +209,21 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
   # human-approved spec-change PR first (CLAUDE.md rule 6), so both stay deferred.
   - id: BACKOFFICE-60
     title: Programmatic admin-scope access for internal automation (DCR-registered agents)
-    status: deferred
+    status: in-progress
     priority: Could
     adr: docs/adrs/0017-agent-first-mcp-gateway.md
     progress: >-
-      Step-1 groundwork landed (gateway-side, BFF auth path untouched): AGENT_PERSONAS
-      (least-privilege read-only subsets) + assertSubsetOf invariant tested against the
-      real @ofbo/bff SCOPE_MATRIX; runnable MCP stdio server (src/bin.ts, src/stdio.ts).
-    blocked_on: DCR registration endpoint is a new auth path → human-approved spec-change PR required (CLAUDE.md rule 6) before BFF implementation
+      Contract merged (#241) then BFF agent-registry implemented: POST :register
+      (four-eyes via ApprovalsService → 202), GET list/get, POST :revoke (single-actor
+      kill switch); dedicated platform-admin persona (platform:agents:read/write only);
+      scopes bound server-side from the AGENT_PERSONAS catalogue (no DCR scope escalation),
+      never platform:superadmin; High-class audit on register/revoke. Gateway step-1
+      groundwork (MCP stdio transport, agent personas, spend-control anomaly hook) already
+      landed (#240). Hard-stop review PASS.
+    remaining: >-
+      Durable Pg agent store + BCBS 239 lineage at write time; surface the registry in the
+      portal; wire the @ofbo/mcp-gateway agent personas to read identity from the registry.
+    blocked_on: none (read-only agents only; mutating tools still gated on BACKOFFICE-53)
     note: >-
       Gives a model/automation the same operations a human persona performs today,
       via the MCP gateway (services/mcp-gateway) over the existing OpenAPI contract.

@@ -30,6 +30,7 @@ const PERSONAS = [
   ['risk-analyst', 'OF Risk Analyst'],
   ['commercial-desk-head', 'Commercial Desk Head'],
   ['programme-manager', 'OF Programme Manager'],
+  ['platform-admin', 'OF Platform Administrator'],
   ['platform-super-admin', 'Platform Super Administrator']
 ] as const
 

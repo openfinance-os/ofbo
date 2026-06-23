@@ -53,6 +53,14 @@ import { RespondentDisputeService, InMemoryRespondentDisputeStore, type Responde
 import { respondentDisputeRoutes } from './respondent-disputes/routes.js'
 import { FraudIncidentService, InMemoryFraudIncidentStore, type FraudIncidentStore } from './fraud-incidents/service.js'
 import { fraudIncidentRoutes } from './fraud-incidents/routes.js'
+import {
+  AgentRegistryService,
+  InMemoryAgentStore,
+  makeAgentRegisterOperation,
+  AGENT_REGISTER_OPERATION,
+  type AgentStore
+} from './agents/service.js'
+import { agentRoutes } from './agents/routes.js'
 import { SchemeNotificationService, InMemorySchemeNotificationStore, type SchemeNotificationStore } from './scheme-notifications/service.js'
 import { schemeNotificationRoutes } from './scheme-notifications/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
@@ -219,7 +227,11 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/reports/{report_id}:approve',
   'post /back-office/reports/{report_id}:submit',
   'get /audit/events',
-  'get /audit/events/{event_id}'
+  'get /audit/events/{event_id}',
+  'post /back-office/agents:register',
+  'get /back-office/agents',
+  'get /back-office/agents/{agent_id}',
+  'post /back-office/agents/{agent_id}:revoke'
 ])
 
 /**
@@ -262,6 +274,9 @@ export interface AppDeps {
   /** BACKOFFICE-77 — fraud-incident store (defaults in-memory; the worker wires the
    *  durable PgFraudIncidentStore). */
   fraudIncidentStore?: FraudIncidentStore
+  /** BACKOFFICE-60 — agent DCR registry store (defaults in-memory; the worker wires the
+   *  durable Pg store). */
+  agentStore?: AgentStore
   /** BACKOFFICE-78 — outbound scheme-notification store (defaults in-memory; the
    *  worker wires the durable PgSchemeNotificationStore). */
   schemeNotificationStore?: SchemeNotificationStore
@@ -362,6 +377,10 @@ export function createApp(deps: AppDeps = {}) {
   const monthlySignoffOperation = makeMonthlySignoffOperation({
     execute: (period, by, persona, trace) => reconHolder.svc!.executeMonthlySignoff(period, by, persona, trace)
   })
+  // BACKOFFICE-60 — agent DCR registration is four-eyes; the credential is issued only on
+  // the second principal's approval (makeAgentRegisterOperation.execute).
+  const agentStore = deps.agentStore ?? new InMemoryAgentStore()
+  const agentRegisterOperation = makeAgentRegisterOperation({ store: agentStore, audit: highClassAudit })
   const approvals = new ApprovalsService(audit, {
     ...deps.approvals,
     operations: {
@@ -373,9 +392,11 @@ export function createApp(deps: AppDeps = {}) {
       [BREAK_REOPEN_OPERATION]: breakReopenOperation,
       [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
-      [REPORT_GENERATION_OPERATION]: reportGenerationOperation
+      [REPORT_GENERATION_OPERATION]: reportGenerationOperation,
+      [AGENT_REGISTER_OPERATION]: agentRegisterOperation
     }
   })
+  const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit)
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
@@ -582,6 +603,7 @@ export function createApp(deps: AppDeps = {}) {
     ...callRecordingRoutes(callRecordingService),
     ...respondentDisputeRoutes(respondentDisputeService, idempotencyStore),
     ...fraudIncidentRoutes(fraudIncidentService, idempotencyStore),
+    ...agentRoutes(agentRegistryService, idempotencyStore),
     ...schemeNotificationRoutes(schemeNotificationService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
