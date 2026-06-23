@@ -1699,3 +1699,19 @@ BACKOFFICE-33 remaining: route operations + executive/finance (executive/finance
 ## 2026-06-22 — fix: DEMO non-prod pill → bottom-right corner — PR #233
 
 Follow-up to #223/#230: the fixed top-center DEMO pill overlapped the top bar (hamburger + persona chip), worst on narrow/mobile widths. Moved to a bottom-right corner badge + pointer-events-none (can't intercept a tap). Still rendered once in the root layout (every screen), role=note with the full synthetic-data statement in aria-label; visible label trimmed to "DEMO · non-prod". Hard-stop unchanged (present + announced everywhere). Token-only; gates green, all CI green. Merged #233 (b95f2007).
+
+---
+
+## 2026-06-23 — BACKOFFICE-33 COMPLETE: four-eyes purpose registration (#237) + Executive Dashboard governed (#242)
+
+Closes BACKOFFICE-33 (governed cross-fintech aggregation via `bank_internal_view` + `query_purpose_registry`, ADR 0015 / BD-13).
+
+**PR 5/5 — four-eyes new-purpose registration (#237, merged f95ec32).** `POST /back-office/governance/query-purposes` registers a NEW cross-fintech query purpose. Four-eyes-gated: 202 + approval_request, becomes active (`approved_by` set) only on a DIFFERENT principal's approval, never inline. New scope `compliance:query-purposes:write` on compliance-officer (user-approved scope-matrix change, #236 spec). `GatedOperation.execute` now receives the approving principal (optional ctx) so the registrar records `approved_by`; `registerQueryPurpose()` (packages/db) inserts with lineage + rejects duplicates; in-memory registrar for demo, `PgQueryPurposeRegistrar` for the worker. Approval summary echoes only the format-validated `purpose_code`, never the free-text description. Reviewers: hard-stop PASS, conformance CONFORMANT.
+
+**Executive Dashboard governed routing (#242).** The dashboard's platform-wide consent volumes — the one genuine cross-fintech aggregate — now read through `runGovernedAggregate` under purpose `executive_dashboard` (bank_internal_view, RLS bypassed, bypass High-class logged). `GovernedReadContext` gained an optional `purposeCode` so a SHARED aggregate reads under the caller's approved purpose (compliance store keeps `compliance_reporting` default; risk store hard-pinned to `risk_monitoring` so a caller can't relabel its provenance). Fixed a pre-existing serve.ts gap (audit sink not passed to the compliance/risk stores → local dev silently fell back to single-tenant). Response shape unchanged, no spec change. unit 938, integration 118 (exec int asserts the bypass logs under executive_dashboard), Q4.5 PASSED. Reviewers: hard-stop PASS, conformance CONFORMANT.
+
+**Scope decision (user-directed, "you decide" / "mark completed").** The high-value cross-fintech set is done: **Compliance + Risk + Executive**. Two views are intentionally left off the governed path:
+- **Operations Console — NOT routed (by design).** Its data (Nebras connectivity, scheme certificate chain, SLOs, outages) is platform-**singleton**, not tenant-partitioned — there is nothing cross-fintech to aggregate, so the RLS-bypass path would be ceremony.
+- **Finance View accrual/margin — deferred.** A real partial roll-up, but the rest of finance is naturally per-counterparty; pursue only when a bank needs the cross-fintech finance aggregate.
+
+Milestone state: the backlog is now drained — every item is `done` or correctly `blocked` for bank adoption (BACKOFFICE-52 gateway mTLS, M6 enterprise port-swaps). BACKOFFICE-33 marked `done`.
