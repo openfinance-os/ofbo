@@ -12,7 +12,9 @@ import { errorEnvelope, DOCS_BASE } from './envelope.js'
 export const SCOPE_MATRIX = {
   'operations-analyst': ['platform:operations:read', 'platform:operations:write', 'certification:read'],
   'customer-care-agent': ['consents:admin', 'disputes:admin', 'audit:read'],
-  'compliance-officer': ['audit:read', 'compliance:reports:read', 'compliance:reports:generate'],
+  // compliance:query-purposes:write (BACKOFFICE-33 PR 5) — data governance owns the cross-fintech
+  // query_purpose_registry; registering a NEW purpose is four-eyes-gated.
+  'compliance-officer': ['audit:read', 'compliance:reports:read', 'compliance:reports:generate', 'compliance:query-purposes:write'],
   'finance-analyst': [
     'reconciliation:read',
     'finance:reconciliation:write',

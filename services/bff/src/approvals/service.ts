@@ -55,7 +55,12 @@ export interface GatedOperation {
   /** Scope required to INITIATE the operation — the spec's '(initiator scope)'. */
   initiatorScope: string
   approverScope: string
-  execute(payload: Record<string, unknown>): Promise<unknown>
+  /**
+   * Runs ONLY on the second principal's approval. `ctx` carries the approving principal so an
+   * operation that records who approved (e.g. four-eyes query-purpose registration → approved_by)
+   * has it; existing operations that don't need it simply ignore the argument.
+   */
+  execute(payload: Record<string, unknown>, ctx?: { approver: string; approverPersona: string }): Promise<unknown>
 }
 
 export class ApprovalError extends Error {
@@ -181,7 +186,7 @@ export class ApprovalsService {
     if (!op) throw new ApprovalError(409, 'BACKOFFICE.OPERATION_UNREGISTERED', `${r.operation_type} has no registered executor — refusing to approve silently`)
     r.state = 'approved'
     r.approver = principal.subject
-    r.execution_result = await op.execute(r.operation_payload)
+    r.execution_result = await op.execute(r.operation_payload, { approver: principal.subject, approverPersona: principal.persona })
     await this.store.update(r)
     await this.auditEvent('approval_approved', principal, r.approval_request_id, traceId)
     return r
