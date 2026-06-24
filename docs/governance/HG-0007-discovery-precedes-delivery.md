@@ -53,8 +53,12 @@ they cannot be weakened by the build loop they govern.
 ## Decision
 
 _Pending._ Once accepted: feature backlog items reference their `discovery/runs/<slug>/handoff.md`;
-CI runs `discovery/gates/validate.mjs` on changed runs; the discovery control surface is added
-to CODEOWNERS (HG-0002).
+the discovery control surface is added to CODEOWNERS (HG-0002).
+
+**Implemented so far (mechanism, not the policy decision):** the `discovery-gates` job in
+`.github/workflows/ci.yml` runs the harness tests and validates every `discovery/runs/*` through
+D1–D8 on each PR — pure-Node, dependency-free. Making a green discovery hand-off a *required*
+entry condition for feature work (branch protection + CODEOWNERS) remains the human decision.
 
 ## Consequences
 
