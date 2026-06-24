@@ -34,3 +34,11 @@ export {
   type AgentAnomalyEvent,
   type AgentAnomalySink
 } from './anomaly.js'
+export {
+  fetchAgentRegistration,
+  sessionFromRegistration,
+  AgentRegistryLookupError,
+  type AgentRegistration,
+  type FetchRegistrationOptions,
+  type SessionFromRegistrationOptions
+} from './registry.js'
