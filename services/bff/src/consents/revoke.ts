@@ -42,8 +42,8 @@ export interface ConsentRevokeDeps {
   audit: HighClassAuditSink
   /** DEMO-01 — resolves the consent's owning PSU so the audit row carries
    *  target_psu_identifier (without it the revoke never shows in the per-PSU timeline).
-   *  Optional: absent in degraded wiring → the field is simply left null. */
-  directory?: Pick<ConsentDirectory, 'psuByConsentId'>
+   *  `markRevoked` makes the revoke reflect on re-lookup (DEMO fidelity). Both optional. */
+  directory?: Pick<ConsentDirectory, 'psuByConsentId' | 'markRevoked'>
 }
 
 export class ConsentRevokeService {
@@ -69,6 +69,8 @@ export class ConsentRevokeService {
 
     // All Nebras-bound traffic goes through the P6 egress port.
     const ack = await this.deps.egress.revokeConsent(consentId, reasonCode, { trace_id: traceId })
+    // DEMO fidelity — reflect the new status so a re-lookup shows Revoked (no-op in enterprise).
+    this.deps.directory?.markRevoked?.(consentId)
     const result: RevocationResult = {
       consent_id: consentId,
       status: 'Revoked',
