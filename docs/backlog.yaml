@@ -200,10 +200,14 @@ milestones:
     items:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
 
-  # Build-harness improvements — machinery that governs the autonomous build loop itself.
-  # HARNESS-01..04 land via PR #250 (ADR 0019); HARNESS-05 here (ADR 0020).
+  # Build-harness improvements — the machinery that governs the autonomous build loop itself
+  # (not a product feature). Researched against 2025-26 agentic-coding practice; ADR 0019 (01-04), ADR 0020 (05).
   - name: HARNESS
     items:
+      - { id: HARNESS-01, title: "Anti-reward-hacking: test-tripwire hook + Q1b test-integrity gate", status: done, adr: docs/adrs/0019-build-harness-hardening.md, note: ".claude/hooks/test-tripwire.sh (advisory) + scripts/test-integrity.mjs (CI Q1b, merge-blocking) stop the loop making a RED test green by weakening it. Exempts *-testfix-*/*-spec-* branches." }
+      - { id: HARNESS-02, title: "Contract self-correction: pnpm verify:contract agent tool", status: done, adr: docs/adrs/0019-build-harness-hardening.md, note: "services/bff/scripts/verify-contract.ts validates live BFF responses against the OpenAPI each iteration (28 probes, CONFORMANT/DRIFT). Wired into run-ofbo/smoke.sh + skill. Specmatic self-correcting-loop pattern." }
+      - { id: HARNESS-03, title: "Agent provenance sealed into the release evidence bundle", status: done, adr: docs/adrs/0019-build-harness-hardening.md, note: "parseProvenance over git trailers (model/session/story) → BuildProvenance, folded into the sha256-sealed bundle. EU AI Act Art. 12/17 traceability." }
+      - { id: HARNESS-04, title: "Mutation testing gate (StrykerJS) on the security-critical BFF core", status: pending, adr: docs/adrs/0019-build-harness-hardening.md, depends_on: [HARNESS-01], note: "Catches HOLLOW-GREEN tests (pass but assert nothing) that the assertion-count heuristic in Q1b can't. Deferred until a real CI run calibrates the mutation-score threshold + runtime so it doesn't become a flaky gate; scope to rbac/approvals first. See ADR 0019 §Follow-ups." }
       - { id: HARNESS-05, title: "Documentation-drift gate: doc->file reference + ADR-number check", status: done, adr: docs/adrs/0020-documentation-drift-gate.md, note: "scripts/doc-link-check.mjs + CI Q2b (pnpm docs:check) fail on a current-state doc referencing a non-existent file, or two ADRs sharing a number (the 0018 collision). Excludes the historical build-log. implement-story DoD gains a 'update cited docs on file move' line." }
 
 deferred: # Could / Phase 2 — not in build scope until promoted by the user

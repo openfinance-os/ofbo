@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { CONTROL_MAPPINGS, QUALITY_GATES, type ControlMapping, type QualityGateId } from './control-mappings.js'
+import { EMPTY_PROVENANCE, type BuildProvenance } from './provenance.js'
 
 /**
  * BACKOFFICE-57 — assembles the per-release evidence bundle (control mappings,
@@ -51,6 +52,8 @@ export interface EvidenceBundleInput {
   test_results: TestResults[]
   scan_outputs: ScanOutput[]
   lineage_proof: LineageProof
+  /** Agent build provenance for the release range. Optional — defaults to an empty (honest-gap) record. */
+  provenance?: BuildProvenance
 }
 
 export interface EvidenceBundle {
@@ -61,6 +64,7 @@ export interface EvidenceBundle {
   test_results: TestResults[]
   scan_outputs: ScanOutput[]
   lineage_proof: LineageProof
+  provenance: BuildProvenance
   integrity: { algorithm: 'sha256'; digest: string }
 }
 
@@ -104,7 +108,8 @@ export function buildEvidenceBundle(input: EvidenceBundleInput): EvidenceBundle 
     quality_gates: input.gates,
     test_results: input.test_results,
     scan_outputs: input.scan_outputs,
-    lineage_proof: input.lineage_proof
+    lineage_proof: input.lineage_proof,
+    provenance: input.provenance ?? EMPTY_PROVENANCE
   }
   const digest = createHash('sha256').update(canonicalJson(content)).digest('hex')
   return { ...content, integrity: { algorithm: 'sha256', digest } }
@@ -158,6 +163,17 @@ export function renderBundleMarkdown(bundle: EvidenceBundle): string {
     '',
     `- Covered tables: ${bundle.lineage_proof.covered.join(', ') || '(none observed)'}`,
     `- Gaps: ${bundle.lineage_proof.gaps.join(', ') || 'none'}`,
+    '',
+    '## Build provenance (agent attribution — EU AI Act Art. 12/17)',
+    '',
+    `- Build agents: ${bundle.provenance.build_agents.join(', ') || '(none recorded)'}`,
+    `- Commits in range: ${bundle.provenance.commits.length} (${bundle.provenance.unattributed_commits} unattributed)`,
+    '',
+    '| Commit | Model | Story | Session |',
+    '| --- | --- | --- | --- |',
+    ...bundle.provenance.commits.map(
+      (c) => `| \`${c.commit.slice(0, 12)}\` | ${c.model ?? '—'} | ${c.story ?? '—'} | ${c.session ?? '—'} |`
+    ),
     '',
     '## Control mappings',
     '',

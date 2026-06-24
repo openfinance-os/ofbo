@@ -105,5 +105,11 @@ export const CONTROL_MAPPINGS: ControlMapping[] = [
     requirement: 'CI/CD Q5 (CLAUDE.md)',
     gates: ['Q5'],
     evidence: 'release approval record (GitHub environment / release sign-off)'
+  },
+  {
+    control: 'Agent build provenance — model/session/story attributed per change (EU AI Act Art. 12/17)',
+    requirement: 'HARNESS-03 (HG-0003 traceability)',
+    gates: ['Q5'],
+    evidence: 'provenance section: parseProvenance over the release commit range (git-trailer attribution)'
   }
 ]

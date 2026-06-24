@@ -68,6 +68,20 @@ describe('integrity', () => {
     expect(verifyEvidenceBundle(tampered)).toBe(false)
   })
 
+  it('seals build provenance into the digest (attribution cannot be altered silently)', () => {
+    const b = buildEvidenceBundle(
+      input({ provenance: { commits: [{ commit: 'abc', author: 'bot', model: 'Claude Opus 4.8', session: 's', story: 'BACKOFFICE-1' }], build_agents: ['Claude Opus 4.8'], unattributed_commits: 0 } })
+    )
+    expect(verifyEvidenceBundle(b)).toBe(true)
+    const tampered = { ...b, provenance: { ...b.provenance, build_agents: ['Some Other Model'] } }
+    expect(verifyEvidenceBundle(tampered)).toBe(false)
+  })
+
+  it('defaults to an empty (honest-gap) provenance record when none is supplied', () => {
+    const b = buildEvidenceBundle(input())
+    expect(b.provenance).toEqual({ commits: [], build_agents: [], unattributed_commits: 0 })
+  })
+
   it('digest is stable regardless of key order (canonical JSON)', () => {
     const a = buildEvidenceBundle(input())
     const reordered = buildEvidenceBundle(
@@ -111,6 +125,7 @@ describe('serialisation', () => {
     expect(md).toContain('## Quality gates')
     expect(md).toContain('## Scan outputs')
     expect(md).toContain('## BCBS 239 lineage proof')
+    expect(md).toContain('## Build provenance')
     expect(md).toContain('## Control mappings')
   })
 })

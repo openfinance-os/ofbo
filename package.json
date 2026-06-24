@@ -13,6 +13,8 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:smoke": "vitest run --project smoke",
+    "test:integrity": "node scripts/test-integrity.mjs",
+    "verify:contract": "pnpm --filter @ofbo/bff verify:contract",
     "docs:check": "node scripts/doc-link-check.mjs",
     "db:apply": "pnpm --filter @ofbo/db apply",
     "db:seed": "pnpm --filter @ofbo/db seed",

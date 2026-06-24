@@ -34,6 +34,24 @@ jobs:
       - run: pnpm build
       - run: pnpm test
 
+  q1b-test-integrity:
+    name: Q1b — test integrity (anti-reward-hacking)
+    runs-on: ubuntu-latest
+    # Only meaningful on a PR (needs a merge base to diff against). Skipped on push to main.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so merge-base against the PR target resolves.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Deterministic, no install needed: fails if the diff weakens tests (skip/only/.fails
+      # markers, or net assertion loss alongside an implementation change). The control of
+      # record behind the local .claude/hooks/test-tripwire.sh advisory tripwire.
+      - run: node scripts/test-integrity.mjs
+
   q2-static-sast:
     name: Q2 — static analysis + SAST
     runs-on: ubuntu-latest

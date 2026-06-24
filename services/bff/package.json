@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "demo:break": "tsx scripts/demo-break.ts",
-    "demo:ingest": "tsx scripts/demo-ingest.ts"
+    "demo:ingest": "tsx scripts/demo-ingest.ts",
+    "verify:contract": "tsx scripts/verify-contract.ts"
   },
   "dependencies": {
     "@ofbo/contracts": "workspace:*",
