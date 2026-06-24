@@ -27,6 +27,7 @@ CLAUDE.md rules are binding throughout; the OpenAPI contract is ground truth. Fo
    - integration tests against the real local Postgres (RLS actually exercised)
    - lineage emission (Q4.5) in the same change — never retrofit
    - grep the diff for PII-shaped literals, browser-storage writes, and any Nebras call not going through the P6 port
+   - if the story moves/renames a file a current-state doc cites, update that doc in the same change — `pnpm docs:check` (Q2b) fails on a broken doc→file reference or a duplicate ADR number; never retrofit
    - demo walkthrough for the story runs end-to-end (seeded data; fault injection where relevant)
 7. **Commit + PR.** Every commit and the PR cite `BACKOFFICE-NN`. After merge, confirm the story is demonstrable at the demo URL before reporting done.
 
