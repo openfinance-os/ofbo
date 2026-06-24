@@ -19,7 +19,9 @@ export const SCOPES = {
   operationsRead: 'platform:operations:read',
   operationsWrite: 'platform:operations:write',
   complianceRead: 'compliance:reports:read',
-  riskRead: 'risk:read'
+  riskRead: 'risk:read',
+  agentsRead: 'platform:agents:read',
+  agentsWrite: 'platform:agents:write'
 } as const
 
 export type Scope = (typeof SCOPES)[keyof typeof SCOPES]
