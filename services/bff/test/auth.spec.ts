@@ -36,7 +36,7 @@ describe('BACKOFFICE-47 — mandatory MFA sign-in + admin-scope minting', () => 
 
   it('rejects a token without MFA — there is no MFA-skip path (401) — and audits it', async () => {
     const noMfaIdp: IdentityProviderPort = {
-      personaLogins: () => idp.personaLogins(),
+      ...idp,
       verifyToken: async () => ({ subject: 'demo:finance-analyst', persona: 'finance-analyst', mfa: false })
     }
     const { app, audit } = await appWith({ idp: noMfaIdp })

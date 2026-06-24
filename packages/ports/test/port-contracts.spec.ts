@@ -30,6 +30,48 @@ function describePortContract(profile: 'demo') {
       expect(claims.persona).toBe(personas[0]!.persona)
     })
 
+    it('P2 mints + verifies an agent session token (ADR 0018) — round-trip carries the bound identity', async () => {
+      const p2 = getAdapter('p2-identity-provider', profile)
+      const minted = await p2.mintAgentSession(
+        { agent_id: 'agent-abc', persona: 'care-readonly-agent', scopes: ['consents:admin', 'audit:read'], allow_mutations: true, spend_budget: 3 },
+        trace
+      )
+      expect(minted.token).toMatch(/^agent-session\./)
+      expect(minted.session_id).toBeTruthy()
+      expect(new Date(minted.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
+
+      const verified = await p2.verifyAgentSession(minted.token)
+      expect(verified).not.toBeNull()
+      expect(verified!.agent_id).toBe('agent-abc')
+      expect(verified!.persona).toBe('care-readonly-agent')
+      expect(verified!.session_id).toBe(minted.session_id)
+      expect(verified!.scopes).toEqual(['consents:admin', 'audit:read'])
+      expect(verified!.allow_mutations).toBe(true)
+      expect(verified!.spend_budget).toBe(3)
+    })
+
+    it('P2 returns null for a non-agent (human) bearer — the human OIDC path handles it', async () => {
+      const p2 = getAdapter('p2-identity-provider', profile)
+      expect(await p2.verifyAgentSession('demo-token:platform-admin')).toBeNull()
+      expect(await p2.verifyAgentSession('not-a-token')).toBeNull()
+    })
+
+    it('P2 rejects a tampered agent session token (forged identity must not verify)', async () => {
+      const p2 = getAdapter('p2-identity-provider', profile)
+      const minted = await p2.mintAgentSession(
+        { agent_id: 'agent-xyz', persona: 'care-readonly-agent', scopes: ['audit:read'], allow_mutations: false, spend_budget: 0 },
+        trace
+      )
+      // Swap the payload for a forged one (claims an inflated budget + mutations) — the HMAC no longer matches.
+      const forgedPayload = Buffer.from(
+        JSON.stringify({ agent_id: 'agent-xyz', persona: 'care-readonly-agent', session_id: 's', scopes: ['consents:admin'], allow_mutations: true, spend_budget: 9999, exp: Date.now() + 60_000 }),
+        'utf8'
+      ).toString('base64url')
+      const sig = minted.token.split('.')[2]
+      const forged = `agent-session.${forgedPayload}.${sig}`
+      await expect(p2.verifyAgentSession(forged)).rejects.toThrow()
+    })
+
     it('P3 creates ITSM tickets with team routing', async () => {
       const p3 = getAdapter('p3-itsm', profile)
       const t = await p3.createTicket(

@@ -47,8 +47,25 @@ export function mintScopes(persona: string): string[] {
 
 export interface Principal {
   subject: string
-  persona: Persona
+  /** A human persona from the §2 matrix, or — for an automation (ADR 0018) — the agent
+   *  persona id bound at registration (e.g. care-readonly-agent). The `(string & {})` keeps
+   *  the known-persona autocomplete while admitting agent persona ids. */
+  persona: Persona | (string & {})
   scopes: string[]
+  /** ADR 0018 — set when the caller is a registered automation agent (a verified agent
+   *  session token, NOT a human OIDC token). Carries the server-verified identity + the
+   *  registration's policy so the BFF can re-assert per-(agent_id, session_id) spend-control
+   *  (BACKOFFICE-53) and attribute audit to the agent. Absent for human sessions. */
+  agent?: AgentPrincipalContext
+}
+
+export interface AgentPrincipalContext {
+  agent_id: string
+  session_id: string
+  /** From the registration — mutating tools stay blocked BFF-side when false. */
+  allow_mutations: boolean
+  /** From the registration — per-session consequential-op budget re-asserted BFF-side. */
+  spend_budget: number
 }
 
 export interface AuthAuditEvent {
@@ -106,6 +123,10 @@ export interface AuthHooks {
   onSuperAdminSession?: (subject: string, tokenKey: string, traceId: string) => Promise<void>
   /** BACKOFFICE-80 guardrail (a): the role is never held by automations. */
   isServiceAccountSubject?: (subject: string) => boolean
+  /** ADR 0018 — liveness for an agent session. The registry is the source of truth, so a
+   *  single-actor revoke (BACKOFFICE-60) denylists the agent's sessions IMMEDIATELY, even
+   *  before the short token TTL elapses. Returns false → the credential is rejected (401). */
+  isAgentActive?: (agentId: string) => Promise<boolean>
 }
 
 export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAuditSink, hooks: AuthHooks = {}): MiddlewareHandler {
@@ -136,6 +157,61 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       return deny('BACKOFFICE.UNAUTHENTICATED', 'A bearer token from the enterprise IdP is required.', 'missing_token', 'anonymous')
     }
     const token = header.slice('Bearer '.length)
+
+    // ADR 0018 — agent path FIRST. An agent session token is server-verifiable (the BFF
+    // minted it via P2); a human OIDC token returns null here and falls through. A token that
+    // IS an agent token but is tampered/expired throws → rejected, never downgraded to human.
+    let agentClaims: Awaited<ReturnType<IdentityProviderPort['verifyAgentSession']>> = null
+    try {
+      agentClaims = await idp.verifyAgentSession(token)
+    } catch {
+      return deny('BACKOFFICE.UNAUTHENTICATED', 'The agent session token was rejected (tampered or expired).', 'invalid_token', 'agent-unverified')
+    }
+    if (agentClaims) {
+      // Revoked/inactive agent → its session is dead immediately (registry is source of truth).
+      if (hooks.isAgentActive && !(await hooks.isAgentActive(agentClaims.agent_id))) {
+        await audit.record({
+          event_type: 'signin_failure',
+          acting_principal: agentClaims.agent_id,
+          acting_persona: agentClaims.persona,
+          reason: 'invalid_token',
+          trace_id: traceId
+        })
+        return c.json(
+          errorEnvelope(
+            'BACKOFFICE.AGENT_REVOKED',
+            'This agent credential has been revoked.',
+            'Revoked agents cannot be reinstated (BACKOFFICE-60 single-actor kill switch); register and approve a new agent.',
+            DOCS_BASE
+          ),
+          401
+        )
+      }
+      // Service accounts NEVER hold platform:superadmin — strip defensively (BACKOFFICE-80),
+      // even though issuance already bound a least-privilege scope set.
+      const agentScopes = agentClaims.scopes.filter((s) => s !== 'platform:superadmin')
+      await audit.record({
+        event_type: 'signin_success',
+        acting_principal: agentClaims.agent_id,
+        acting_persona: agentClaims.persona,
+        reason: null,
+        trace_id: traceId,
+        superadmin_marker: false
+      })
+      c.set('principal', {
+        subject: agentClaims.agent_id,
+        persona: agentClaims.persona,
+        scopes: agentScopes,
+        agent: {
+          agent_id: agentClaims.agent_id,
+          session_id: agentClaims.session_id,
+          allow_mutations: agentClaims.allow_mutations,
+          spend_budget: agentClaims.spend_budget
+        }
+      })
+      await next()
+      return
+    }
 
     let claims: Awaited<ReturnType<IdentityProviderPort['verifyToken']>>
     try {

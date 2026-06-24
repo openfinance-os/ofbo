@@ -59,12 +59,47 @@ export async function fetchAgentRegistration(opts: FetchRegistrationOptions): Pr
   return payload.data
 }
 
+/** The fields the gateway needs from a minted agent session token (ADR 0018). */
+export interface MintedAgentSession {
+  session_token: string
+  session_id: string
+}
+
+/**
+ * ADR 0018 — POST /back-office/agents/{agent_id}:mint-session under the admin token. Returns
+ * the short-lived, server-verifiable agent session token the gateway presents as its bearer,
+ * so the BFF sees a real (agent_id, session_id) — not a borrowed human token — and can
+ * re-assert spend-control. Throws on non-200 (e.g. a non-active agent → 409).
+ */
+export async function mintAgentSession(opts: FetchRegistrationOptions): Promise<MintedAgentSession> {
+  const f = opts.fetchImpl ?? ((url, init) => fetch(url, init))
+  const url = opts.baseUrl.replace(/\/$/, '') + `/back-office/agents/${encodeURIComponent(opts.agentId)}:mint-session`
+  const res = await f(url, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${opts.adminToken}`,
+      'x-fapi-interaction-id': crypto.randomUUID(),
+      'idempotency-key': crypto.randomUUID(),
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: '{}'
+  })
+  const payload = (await res.json().catch(() => ({}))) as { data?: { session_token?: string; session_id?: string }; error?: { message?: string } }
+  if (res.status >= 400 || !payload.data?.session_token || !payload.data.session_id) {
+    throw new AgentRegistryLookupError('lookup_failed', payload.error?.message ?? `Agent session mint failed (HTTP ${res.status}).`)
+  }
+  return { session_token: payload.data.session_token, session_id: payload.data.session_id }
+}
+
 export interface SessionFromRegistrationOptions {
   sessionId: string
   /**
-   * The agent's operational bearer for calling the BFF. Defaults to the demo IdP token of
-   * the agent's human persona (`demo-token:<derived_from>`); pass the DCR client credential
-   * in production.
+   * The agent's operational bearer for calling the BFF. With ADR 0018, pass the minted agent
+   * SESSION token (from `mintAgentSession`) and its `session_id` as `sessionId`, so the BFF
+   * verifies a real agent identity and re-asserts spend-control. The DCR client credential
+   * (Option 1) slots in here at M6. Falls back to the demo human token (`demo-token:<derived_from>`)
+   * only when no session is minted (legacy/test path).
    */
   agentToken?: string
 }

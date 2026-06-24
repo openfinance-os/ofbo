@@ -2278,6 +2278,43 @@ paths:
         '200': { $ref: '#/components/responses/Agent' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/agents/{agent_id}:mint-session:
+    post:
+      tags: [agents]
+      summary: Mint a short-lived agent session token (ADR 0018 — BACKOFFICE-53/-60)
+      description: >
+        Generalises the ADR 0001 act/sub minting into an agent SESSION token
+        (token-exchange, RFC 8693). Issued ONLY for an `active` registration: returns a
+        short-lived, server-verifiable token whose act = agent_id, scopes = the
+        registration's bound scopes (a strict subset of a human persona; never
+        platform:superadmin), plus a session_id + spend_budget. The MCP gateway presents
+        this token as its bearer; the BFF verifies it (it minted it), re-asserts
+        per-(agent_id, session_id) spend-control BFF-side — closing BACKOFFICE-53's
+        defence-in-depth criterion (the gateway guard is never the sole layer) — and stamps
+        the High-class audit with acting_principal = agent_id. NOT four-eyes: registration
+        already was, and this grants no authority beyond the bound scopes; revoking the
+        agent (single-actor kill switch) denylists the session before its TTL. Mutating:
+        Idempotency-Key required — a replay within the 24h window returns the original
+        session token (no duplicate session); a fresh key yields a fresh session.
+      x-rate-limit-per-min: 60
+      x-required-scope: platform:agents:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/agentId'
+      responses:
+        '200':
+          description: A short-lived agent session token.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AgentSessionToken' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -2615,6 +2652,27 @@ components:
         created_at: { type: string, format: date-time }
         revoked_at: { type: string, format: date-time, nullable: true }
         revoke_reason: { type: string, nullable: true }
+    AgentSessionToken:
+      type: object
+      description: >
+        A short-lived agent session token (ADR 0018, Option 2). Generalises the ADR 0001
+        act/sub minting: act = agent_id, scopes = the registration's bound scopes (a strict
+        subset of a human persona; never platform:superadmin), plus a session_id +
+        spend_budget so the BFF can re-assert per-(agent_id, session_id) spend-control
+        BFF-side (BACKOFFICE-53). Issued only for an `active` registration. No PII — an
+        agent is a service account, not a person.
+      required: [session_token, agent_id, session_id, scopes, allow_mutations, spend_budget, expires_at]
+      properties:
+        session_token: { type: string, description: Opaque, server-verifiable bearer — the BFF minted it and verifies it (no client-asserted identity). No PII. }
+        agent_id: { type: string, format: uuid, description: The registry agent id (act). Server-verified — never taken from a client header. }
+        session_id: { type: string, description: Stable id for per-session spend accounting + trace correlation. }
+        scopes:
+          type: array
+          items: { type: string }
+          description: The registration's bound scopes; a strict subset of a human persona; never platform:superadmin.
+        allow_mutations: { type: boolean, description: Mirrors the registration; mutating tools stay disabled when false. }
+        spend_budget: { type: integer, minimum: 0, description: Per-session consequential-operation budget re-asserted BFF-side (BACKOFFICE-53); 0 = read-only. }
+        expires_at: { type: string, format: date-time, description: Short TTL; revoking the agent denylists the session before it expires. }
     Money:
       type: object
       required: [amount, currency]

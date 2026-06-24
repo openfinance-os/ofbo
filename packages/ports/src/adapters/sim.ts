@@ -56,6 +56,65 @@ const simCareSurface: CareSurfacePort = {
   }
 }
 
+/**
+ * ADR 0018 (Option 2) — demo agent session token. An HMAC-signed, server-verifiable bearer
+ * so that EVEN IN THE DEMO an agent identity cannot be forged: the BFF (which shares this
+ * sim adapter) is the only party that can mint or verify it — there is no client-asserted
+ * agent_id. Format: `agent-session.<payload-b64url>.<sig-b64url>`, payload = the claims JSON,
+ * sig = HMAC-SHA256 over `agent-session.<payload-b64url>`. The enterprise adapter (M6) swaps
+ * this for DCR client-credentials + mTLS (Option 1). Synthetic, non-prod key — never real.
+ */
+const AGENT_SESSION_PREFIX = 'agent-session.'
+const AGENT_SESSION_TTL_MS = 15 * 60_000
+const DEMO_AGENT_SESSION_KEY = 'ofbo-demo-agent-session-signing-key-synthetic-non-prod'
+
+interface AgentSessionClaims {
+  agent_id: string
+  persona: string
+  session_id: string
+  scopes: string[]
+  allow_mutations: boolean
+  spend_budget: number
+  /** Absolute expiry (epoch ms). Short TTL; registry revoke denylists earlier (BACKOFFICE-60). */
+  exp: number
+}
+
+const b64url = (bytes: ArrayBuffer | Uint8Array): string =>
+  Buffer.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)).toString('base64url')
+
+function agentSessionKey() {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(DEMO_AGENT_SESSION_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
+}
+
+/** Constant-time compare — no early-out on the first differing byte (timing-safe). */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!
+  return diff === 0
+}
+
+async function signAgentSession(claims: AgentSessionClaims): Promise<string> {
+  const payload = b64url(new TextEncoder().encode(JSON.stringify(claims)))
+  const body = AGENT_SESSION_PREFIX + payload
+  const sig = await crypto.subtle.sign('HMAC', await agentSessionKey(), new TextEncoder().encode(body))
+  return `${body}.${b64url(sig)}`
+}
+
+async function verifyAgentSessionToken(token: string): Promise<AgentSessionClaims | null> {
+  if (!token.startsWith(AGENT_SESSION_PREFIX)) return null // not an agent token → human path handles it
+  const parts = token.split('.') // ['agent-session', '<payload>', '<sig>'] — b64url never contains '.'
+  if (parts.length !== 3) throw new Error('malformed agent session token')
+  const [, payload, sig] = parts as [string, string, string]
+  const body = `${AGENT_SESSION_PREFIX}${payload}`
+  const expected = new Uint8Array(await crypto.subtle.sign('HMAC', await agentSessionKey(), new TextEncoder().encode(body)))
+  const provided = new Uint8Array(Buffer.from(sig, 'base64url'))
+  if (!constantTimeEqual(provided, expected)) throw new Error('agent session signature mismatch')
+  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as AgentSessionClaims
+  if (typeof claims.exp !== 'number' || claims.exp < Date.now()) throw new Error('agent session expired')
+  return claims
+}
+
 const simIdentityProvider: IdentityProviderPort = {
   async personaLogins() {
     return PERSONAS.map(([persona, display_name]) => ({
@@ -68,6 +127,27 @@ const simIdentityProvider: IdentityProviderPort = {
     const persona = token.replace(/^demo-token:/, '')
     if (!PERSONAS.some(([p]) => p === persona)) throw new Error('unknown demo token')
     return { subject: `demo:${persona}`, persona, mfa: true }
+  },
+  // Token minting is non-deterministic by nature (fresh session_id + expiry per mint) — like
+  // mintCareToken above. The signature makes the token unforgeable; the claims are verifiable.
+  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget }) {
+    const session_id = crypto.randomUUID()
+    const exp = Date.now() + AGENT_SESSION_TTL_MS
+    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, exp })
+    return { token, session_id, expires_at: new Date(exp).toISOString() }
+  },
+  async verifyAgentSession(token) {
+    const claims = await verifyAgentSessionToken(token)
+    if (!claims) return null
+    return {
+      agent_id: claims.agent_id,
+      persona: claims.persona,
+      session_id: claims.session_id,
+      scopes: claims.scopes,
+      allow_mutations: claims.allow_mutations,
+      spend_budget: claims.spend_budget,
+      expires_at: new Date(claims.exp).toISOString()
+    }
   }
 }
 

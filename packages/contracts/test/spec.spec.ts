@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { loadSpec, listRoutes } from '../src/spec.js'
 
 describe('contract canon', () => {
-  it('has exactly 80 paths and 11 tags', () => {
+  it('has exactly 81 paths and 11 tags', () => {
     const spec = loadSpec()
-    expect(Object.keys(spec.paths)).toHaveLength(80)
+    expect(Object.keys(spec.paths)).toHaveLength(81)
     expect(spec.tags).toHaveLength(11)
   })
 

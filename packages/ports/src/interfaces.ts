@@ -19,6 +19,30 @@ export interface CareSurfacePort {
 export interface IdentityProviderPort {
   verifyToken(token: string): Promise<{ subject: string; persona: string; mfa: boolean }>
   personaLogins(): Promise<{ persona: string; display_name: string; demo_token: string }[]>
+  /** ADR 0018 (Option 2) — mint a short-lived AGENT session token (token-exchange, RFC 8693)
+   *  for an already-registered, ACTIVE automation. act = agent_id; scopes are the
+   *  registration's bound scopes (a strict subset of a human persona; never
+   *  platform:superadmin). The session_id + budget travel inside the token so the BFF can
+   *  re-assert per-(agent_id, session_id) spend-control without trusting a client header.
+   *  The demo (sim) mints an HMAC-signed token; the enterprise adapter (M6) mints a
+   *  DCR client-credentials / mTLS token via the bank auth service (Option 1). */
+  mintAgentSession(
+    input: { agent_id: string; persona: string; scopes: string[]; allow_mutations: boolean; spend_budget: number },
+    trace: TraceContext
+  ): Promise<{ token: string; session_id: string; expires_at: string }>
+  /** Verify an agent session token this port minted. Returns the claims, or null when the
+   *  bearer is NOT an agent session token (so the human OIDC path handles it). Throws when
+   *  the bearer IS an agent token but is tampered or expired — a forged or stale credential
+   *  must be rejected, never silently downgraded to the human path. */
+  verifyAgentSession(token: string): Promise<{
+    agent_id: string
+    persona: string
+    session_id: string
+    scopes: string[]
+    allow_mutations: boolean
+    spend_budget: number
+    expires_at: string
+  } | null>
 }
 
 /** P3 — ITSM & alerting: ticket creation with team routing. */

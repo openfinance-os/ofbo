@@ -61,6 +61,7 @@ import {
   type AgentStore
 } from './agents/service.js'
 import { agentRoutes } from './agents/routes.js'
+import { AgentSpendLedger, createAgentSpendMiddleware } from './agents/spend.js'
 import { SchemeNotificationService, InMemorySchemeNotificationStore, type SchemeNotificationStore } from './scheme-notifications/service.js'
 import { schemeNotificationRoutes } from './scheme-notifications/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
@@ -231,7 +232,8 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/agents:register',
   'get /back-office/agents',
   'get /back-office/agents/{agent_id}',
-  'post /back-office/agents/{agent_id}:revoke'
+  'post /back-office/agents/{agent_id}:revoke',
+  'post /back-office/agents/{agent_id}:mint-session'
 ])
 
 /**
@@ -336,9 +338,14 @@ function sharedDemoPaymentDirectory(): PaymentSource {
 export function createApp(deps: AppDeps = {}) {
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
+  // Shared P3 ITSM + Risk-signal sinks (BACKOFFICE-80). Reused by the super-admin guardrails
+  // AND the agent spend-control auto-raise (BACKOFFICE-53 / ADR 0018) — one place an
+  // agent_anomaly lands, the same place the Risk View reads.
+  const itsmPort = deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env))
+  const riskSignalSink = deps.superadmin?.riskSignals ?? new InMemoryRiskSignalSink()
   const guardrails = new SuperAdminGuardrails({
-    itsm: deps.superadmin?.itsm ?? getAdapter('p3-itsm', profileFromConfig(process.env)),
-    riskSignals: deps.superadmin?.riskSignals ?? new InMemoryRiskSignalSink(),
+    itsm: itsmPort,
+    riskSignals: riskSignalSink,
     ...(deps.superadmin?.sessionTtlMs !== undefined ? { sessionTtlMs: deps.superadmin.sessionTtlMs } : {})
   })
   // High-class audit for story services: prefer an explicit sink, else reuse the
@@ -398,7 +405,7 @@ export function createApp(deps: AppDeps = {}) {
       [AGENT_REGISTER_OPERATION]: agentRegisterOperation
     }
   })
-  const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit)
+  const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit, idp)
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
@@ -654,11 +661,17 @@ export function createApp(deps: AppDeps = {}) {
     '*',
     createAuthMiddleware(idp, audit, {
       isServiceAccountSubject,
-      onSuperAdminSession: (subject, tokenKey, traceId) => guardrails.onSession(subject, tokenKey, traceId)
+      onSuperAdminSession: (subject, tokenKey, traceId) => guardrails.onSession(subject, tokenKey, traceId),
+      // ADR 0018 — the registry is the source of truth for agent liveness: a single-actor
+      // revoke (BACKOFFICE-60) kills the session immediately, ahead of the short token TTL.
+      isAgentActive: async (agentId) => (await agentStore.get(agentId))?.status === 'active'
     })
   )
   app.use('*', createScopeMiddleware(audit))
   app.use('*', createJustificationMiddleware(audit))
+  // ADR 0018 / BACKOFFICE-53 — BFF-side re-assertion of agentic spend-control. Runs after
+  // auth (needs the verified agent principal) + scope; no-ops for human sessions.
+  app.use('*', createAgentSpendMiddleware({ ledger: new AgentSpendLedger(), riskSignals: riskSignalSink, itsm: itsmPort }))
 
   app.all('*', async (c) => {
     const url = new URL(c.req.url)

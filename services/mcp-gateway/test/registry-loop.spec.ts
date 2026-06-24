@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createApp } from '@ofbo/bff'
-import { fetchAgentRegistration, sessionFromRegistration, McpGateway, type FetchLike } from '../src/index.js'
+import { fetchAgentRegistration, mintAgentSession, sessionFromRegistration, McpGateway, type FetchLike } from '../src/index.js'
 
 /**
  * The agent-first loop, end to end against the in-process demo BFF: register an agent
@@ -64,6 +64,35 @@ describe('agent-first loop: registry-driven gateway', () => {
     const res = await gw.callTool('get_consents_search_psu', { query: { identifier_type: 'bank_customer_id', identifier: 'cust-0001' } })
     expect(res.ok).toBe(true)
     expect((res as { status: number }).status).toBe(200)
+  })
+
+  it('ADR 0018 — the gateway drives the BFF with a MINTED agent session token (not a human token)', async () => {
+    const { app, f, registration } = await registerApproveLoad('care-readonly-agent')
+
+    // Mint a server-verified agent session token (token-exchange) and present THAT as the bearer.
+    const minted = await mintAgentSession({ baseUrl: '', adminToken: ADMIN, agentId: registration.agent_id, fetchImpl: f })
+    expect(minted.session_token).toMatch(/^agent-session\./)
+    const { session, allowMutations, spendBudget } = sessionFromRegistration(registration, {
+      sessionId: minted.session_id,
+      agentToken: minted.session_token
+    })
+    expect(session.agentToken).toBe(minted.session_token)
+
+    // The BFF verifies the minted token as a first-class agent identity and serves the bound read.
+    const gw = new McpGateway({ baseUrl: '', session, allowMutations, spendBudget, fetchImpl: f })
+    const res = await gw.callTool('get_consents_search_psu', { query: { identifier_type: 'bank_customer_id', identifier: 'cust-0001' } })
+    expect(res.ok).toBe(true)
+    expect((res as { status: number }).status).toBe(200)
+
+    // A revoked agent's session is dead immediately at the BFF (single-actor kill switch).
+    await app.request(`/back-office/agents/${registration.agent_id}:revoke`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${ADMIN}`, 'x-fapi-interaction-id': 'rev', 'idempotency-key': 'rev-1', 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'killing the loop demo agent (ADR 0018 revoke test)' })
+    })
+    const afterRevoke = await gw.callTool('get_consents_search_psu', { query: { identifier_type: 'bank_customer_id', identifier: 'cust-0001' } })
+    expect(afterRevoke.ok).toBe(false)
+    expect((afterRevoke as { status: number }).status).toBe(401)
   })
 
   it('reflects a different persona registration (reconciliation) — different scopes, no consent tools', async () => {

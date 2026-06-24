@@ -3963,6 +3963,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/agents/{agent_id}:mint-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a short-lived agent session token (ADR 0018 — BACKOFFICE-53/-60)
+         * @description Generalises the ADR 0001 act/sub minting into an agent SESSION token (token-exchange, RFC 8693). Issued ONLY for an `active` registration: returns a short-lived, server-verifiable token whose act = agent_id, scopes = the registration's bound scopes (a strict subset of a human persona; never platform:superadmin), plus a session_id + spend_budget. The MCP gateway presents this token as its bearer; the BFF verifies it (it minted it), re-asserts per-(agent_id, session_id) spend-control BFF-side — closing BACKOFFICE-53's defence-in-depth criterion (the gateway guard is never the sole layer) — and stamps the High-class audit with acting_principal = agent_id. NOT four-eyes: registration already was, and this grants no authority beyond the bound scopes; revoking the agent (single-actor kill switch) denylists the session before its TTL. Mutating: Idempotency-Key required — a replay within the 24h window returns the original session token (no duplicate session); a fresh key yields a fresh session.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                };
+                path: {
+                    agent_id: components["parameters"]["agentId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A short-lived agent session token. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["AgentSessionToken"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4021,6 +4070,29 @@ export interface components {
             /** Format: date-time */
             revoked_at?: string | null;
             revoke_reason?: string | null;
+        };
+        /** @description A short-lived agent session token (ADR 0018, Option 2). Generalises the ADR 0001 act/sub minting: act = agent_id, scopes = the registration's bound scopes (a strict subset of a human persona; never platform:superadmin), plus a session_id + spend_budget so the BFF can re-assert per-(agent_id, session_id) spend-control BFF-side (BACKOFFICE-53). Issued only for an `active` registration. No PII — an agent is a service account, not a person. */
+        AgentSessionToken: {
+            /** @description Opaque */
+            session_token: string;
+            /**
+             * Format: uuid
+             * @description The registry agent id (act). Server-verified — never taken from a client header.
+             */
+            agent_id: string;
+            /** @description Stable id for per-session spend accounting + trace correlation. */
+            session_id: string;
+            /** @description The registration's bound scopes; a strict subset of a human persona; never platform:superadmin. */
+            scopes: string[];
+            /** @description Mirrors the registration; mutating tools stay disabled when false. */
+            allow_mutations: boolean;
+            /** @description Per-session consequential-operation budget re-asserted BFF-side (BACKOFFICE-53); 0 = read-only. */
+            spend_budget: number;
+            /**
+             * Format: date-time
+             * @description Short TTL; revoking the agent denylists the session before it expires.
+             */
+            expires_at: string;
         };
         /** @description Binding money convention (CLAUDE.md): integer minor units + ISO 4217 — never floating point. Example: { "amount": 150000, "currency": "AED" } = AED 1,500.00. */
         Money: {

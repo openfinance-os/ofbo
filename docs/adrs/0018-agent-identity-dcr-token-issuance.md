@@ -1,6 +1,6 @@
 # ADR 0018 — Agent identity at the BFF: DCR client-credential issuance for automations (BACKOFFICE-53 / BACKOFFICE-60)
 
-- Status: **Proposed** — awaiting human decision (raised 2026-06-24)
+- Status: **Accepted** — Option 2 chosen and built end-to-end in the demo (2026-06-24)
 - Date: 2026-06-24
 - Stories: BACKOFFICE-53 (Agentic spend-control — BFF-side re-assertion) · BACKOFFICE-60 (Programmatic admin-scope access — DCR automations)
 - Builds on: ADR 0017 (agent-first MCP gateway, Accepted) · ADR 0001 (care-surface `act`/`sub` token minting, Accepted)
@@ -119,9 +119,24 @@ Sequence (each its own PR, spec-first where the contract changes):
 
 ## Decision
 
-_Pending._ This ADR is **Proposed**. Until it is Accepted and Option 2 is built, agents
-remain **read-only by default** and **gateway-guarded only**; no mutating agent tool is
-enabled in production on the strength of the gateway guard alone.
+**Accepted — Option 2, built end-to-end in the demo.** The agent session token is minted by
+the P2 IdP port (`mintAgentSession` / `verifyAgentSession`; the demo sim signs an HMAC-bound,
+server-verifiable bearer — format `agent-session.<payload>.<sig>` — so even in the demo no
+client can forge an `agent_id`). The contract gained `POST /back-office/agents/{agent_id}:mint-session`
+(scope `platform:agents:read`, `Idempotency-Key`). The BFF auth middleware verifies the token
+into a first-class agent `Principal` (`subject = agent_id`, scopes = the registration's bound
+set, `agent: { agent_id, session_id }`; MFA skipped — there is no PSU at the keyboard — and
+`platform:superadmin` stripped defensively). A BFF spend-control middleware re-asserts the
+registration's `allow_mutations` and per-(`agent_id`, `session_id`) `spend_budget`, returning
+`403` (read-only) / `429` (exhausted) and raising the `agent_anomaly` Risk signal + ITSM
+ticket **BFF-side** on first exhaustion — closing BACKOFFICE-53's defence-in-depth criterion.
+The MCP gateway now presents the minted session token as its bearer; a registry revoke
+(single-actor kill switch) denylists the session immediately, ahead of the short token TTL.
+
+Option 1 (full DCR client-credentials + mTLS via the bank auth service) remains the M6
+enterprise port-swap behind the same `IdentityProviderPort` seam. Until then, agents stay
+**read-only by default** (the persona catalogue ships `allow_mutations:false`,
+`spend_budget:0`); enabling mutations is a deliberate four-eyes registration change.
 
 ## Consequences
 
