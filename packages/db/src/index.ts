@@ -76,6 +76,12 @@ export {
   type FraudIncidentPage
 } from './fraud-incident-store.js'
 export {
+  PgAgentStore,
+  type StoredAgent as StoredAgentRow,
+  type AgentListQuery as AgentRegistryListQuery,
+  type AgentPage as AgentRegistryPage
+} from './agent-registry-store.js'
+export {
   PgSchemeNotificationStore,
   type StoredSchemeNotification,
   type SchemeNotificationCreateInput,

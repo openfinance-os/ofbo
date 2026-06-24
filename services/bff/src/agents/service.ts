@@ -57,10 +57,10 @@ export class AgentRegistryError extends Error {
 }
 
 export interface AgentStore {
-  create(agent: StoredAgent): Promise<StoredAgent>
+  create(agent: StoredAgent, traceId: string): Promise<StoredAgent>
   get(agentId: string): Promise<StoredAgent | null>
   list(query: AgentListQuery): Promise<AgentPage>
-  update(agentId: string, patch: Partial<StoredAgent>): Promise<StoredAgent | null>
+  update(agentId: string, patch: Partial<StoredAgent>, traceId: string): Promise<StoredAgent | null>
 }
 
 /** No-database default (tests / demo profile). The worker wires a durable Pg store. */
@@ -112,7 +112,7 @@ export function makeAgentRegisterOperation(deps: { store: AgentStore; audit: Hig
         revoked_at: null,
         revoke_reason: null
       }
-      await deps.store.create(agent)
+      await deps.store.create(agent, String(payload.trace_id ?? 'unknown'))
       await deps.audit.emit({
         event_type: 'agent_registered',
         acting_principal: ctx?.approver ?? String(payload.initiated_by ?? 'unknown'),
@@ -221,11 +221,15 @@ export class AgentRegistryService {
     if (agent.status === 'revoked') {
       throw new AgentRegistryError('BACKOFFICE.AGENT_ALREADY_REVOKED', 'That agent is already revoked.', 409)
     }
-    const updated = await this.store.update(agentId, {
-      status: 'revoked',
-      revoked_at: new Date().toISOString(),
-      revoke_reason: input.reason.trim()
-    })
+    const updated = await this.store.update(
+      agentId,
+      {
+        status: 'revoked',
+        revoked_at: new Date().toISOString(),
+        revoke_reason: input.reason.trim()
+      },
+      traceId
+    )
     if (!updated) throw new AgentRegistryError('BACKOFFICE.AGENT_NOT_FOUND', 'No agent matches that id.', 404)
 
     await this.audit.emit({

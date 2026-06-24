@@ -75,6 +75,39 @@ gateway.listTools()                             // scope-filtered MCP catalogue
 await gateway.callTool('get_consents_search_psu', { query: { iban: 'AE07...' } })
 ```
 
+## Use it from Claude (cloud cowork) — the OFBO demo
+
+`.mcp.json` at the repo root registers a **self-contained** MCP server (`ofbo-backoffice`)
+that any Claude Code session — including Claude Code on the web — auto-discovers. It runs
+the **demo-profile BFF in-process** (`createApp()`, seeded synthetic data, zero PII): the
+gateway dispatches each tool call straight to it via `app.request`, so there is **no
+separate service to start and no external network** (the deployed demo isn't reachable
+from the cowork sandbox). Every call is still governed by the real BFF — auth, RBAC,
+four-eyes, and High-class audit all apply.
+
+**One-time prep in the session:** `pnpm install` (so `pnpm --filter @ofbo/mcp-gateway run
+demo` can spawn). Then approve the `ofbo-backoffice` MCP server when Claude prompts.
+
+**Look up Back Office info (read-only, default).** Six tools are exposed — consent search,
+consent admin view, consent + PSU audit trails, audit events. Example asks:
+- "Search the back office for consents belonging to customer `cust-0001`." (seeded demo
+  PSUs are `cust-0001`, `cust-0002`, …)
+- "Show the audit trail for that consent."
+
+**Revoke a consent (later).** Flip the env in `.mcp.json` to enable mutating tools:
+```json
+"env": { "OFBO_DEMO_ALLOW_MUTATIONS": "true" }
+```
+Then the `post_consents_consent_id_revoke_admin` tool appears. Single-consent revoke is
+`consents:admin` and **not** four-eyes, so it executes inline (High-class audited).
+Emergency *bulk* revoke stays four-eyes — the agent can initiate it but only ever gets a
+**pending approval** back; a human ratifies it in the portal. Keep this `false` until you
+want the agent to make changes.
+
+> DEMO ONLY — synthetic data. The agent authenticates with a demo IdP token
+> (`demo-token:customer-care-agent`); the gateway restricts the catalogue to the
+> least-privilege `care-readonly-agent` subset. Never point this at real data.
+
 ## Tests
 
 `pnpm test` (unit project) covers catalogue generation, scope filtering, the
