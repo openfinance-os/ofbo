@@ -5,6 +5,7 @@ import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import type { ConsentDirectory } from './directory.js'
 import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
@@ -34,6 +35,8 @@ export interface FraudRevokeApprovalRequester {
 export function makeFraudRevokeOperation(deps: {
   egress: Pick<NebrasEgressPort, 'revokeConsent'>
   audit: HighClassAuditSink
+  /** DEMO fidelity — reflect the revoke on re-lookup (no-op in enterprise). Optional. */
+  directory?: Pick<ConsentDirectory, 'markRevoked'>
 }): GatedOperation {
   return {
     initiatorScope: FRAUD_REVOKE_SCOPE,
@@ -47,6 +50,8 @@ export function makeFraudRevokeOperation(deps: {
 
       // Revoke through P6 with the reserved fraud reason (no direct egress).
       const ack = await deps.egress.revokeConsent(consentId, 'FRAUD_SUSPECTED', { trace_id: traceId })
+      // DEMO fidelity — reflect the new status so a re-lookup shows Revoked (no-op in enterprise).
+      deps.directory?.markRevoked?.(consentId)
       // STR draft auto-created in the bank's STR workflow; the Back Office holds
       // only the reference (submission to AML GO is BACKOFFICE-63, Phase 2).
       const strDraftRef = `str-draft-${consentId}`

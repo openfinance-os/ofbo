@@ -83,6 +83,8 @@ export function makeBulkRevokeOperation(deps: {
       // Parallel dispatch ⇒ wall time ≈ the slowest single revoke.
       const total_ms = acks.reduce((m, a) => Math.max(m, a.nebras_propagation_ms), 0)
       const consent_ids = acks.map((a) => a.consent_id)
+      // DEMO fidelity — reflect each revocation so a re-lookup shows Revoked (no-op in enterprise).
+      for (const id of consent_ids) deps.directory.markRevoked?.(id)
       const sla_met = total_ms < NEBRAS_SLA_MS
 
       // ONE grouped audit record carrying every revocation id + a single
