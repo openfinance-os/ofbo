@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ofbo-backoffice": {
+      "command": "pnpm",
+      "args": ["--filter", "@ofbo/mcp-gateway", "run", "demo"],
+      "env": {
+        "OFBO_DEMO_ALLOW_MUTATIONS": "false"
+      }
+    }
+  }
+}

@@ -10,13 +10,15 @@
     "ofbo-mcp-gateway": "./src/bin.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "demo": "tsx src/demo-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@ofbo/bff": "workspace:*",
     "@ofbo/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@ofbo/bff": "workspace:*"
+    "tsx": "^4.19.2"
   }
 }
