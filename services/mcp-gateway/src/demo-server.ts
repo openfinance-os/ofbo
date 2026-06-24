@@ -1,7 +1,9 @@
 import { createApp } from '@ofbo/bff'
+import { getAdapter } from '@ofbo/ports'
 import { McpGateway, type FetchLike } from './gateway.js'
 import { runStdioServer } from './stdio.js'
 import { AGENT_PERSONAS } from './agent-personas.js'
+import { BffBackedAnomalySink, type AgentRiskSignalRecorder } from './anomaly.js'
 
 /**
  * Self-contained OFBO demo MCP server (ADR 0017). Lets a Claude client (e.g. Claude
@@ -20,7 +22,17 @@ import { AGENT_PERSONAS } from './agent-personas.js'
 const persona = AGENT_PERSONAS['care-readonly-agent']
 const allowMutations = process.env.OFBO_DEMO_ALLOW_MUTATIONS === 'true'
 
-const app = createApp()
+// BACKOFFICE-53 — share one Risk-signal recorder + P3 ITSM between the BFF and the
+// gateway's spend-anomaly reporter, so a budget-exhaustion auto-raises into the same sinks
+// the Risk View reads (the BACKOFFICE-80 pattern, reused — no new primitive).
+const riskSignals: AgentRiskSignalRecorder & { signals: unknown[] } = {
+  signals: [],
+  async record(event) {
+    this.signals.push(event)
+  }
+}
+const itsm = getAdapter('p3-itsm', 'demo')
+const app = createApp(allowMutations ? { superadmin: { itsm, riskSignals } } : {})
 // Route the gateway's HTTP client to the in-process Hono app (no socket, no network).
 const inProcessFetch: FetchLike = (url, init) => Promise.resolve(app.request(url, init))
 
@@ -37,6 +49,7 @@ const gateway = new McpGateway({
   },
   allowMutations,
   spendBudget: allowMutations ? 25 : 0,
+  ...(allowMutations ? { anomalySink: new BffBackedAnomalySink({ riskSignals, itsm }) } : {}),
   fetchImpl: inProcessFetch
 })
 

@@ -108,6 +108,18 @@ want the agent to make changes.
 > (`demo-token:customer-care-agent`); the gateway restricts the catalogue to the
 > least-privilege `care-readonly-agent` subset. Never point this at real data.
 
+## Spend-control (BACKOFFICE-53)
+
+When mutating tools are enabled, the gateway caps the count of **consequential** operations
+per session (`spendBudget`; four-eyes ops count at *initiation*). On exhaustion it blocks
+further mutations **and** raises a real `agent_anomaly` Risk signal + an ITSM ticket via
+`BffBackedAnomalySink` — reusing the BACKOFFICE-80 auto-raise sinks (no PSU PII), wired in
+the demo server to the same sinks the Risk View reads.
+
+This is the gateway-side guard. The **BFF-side re-assertion** (so the gateway is never the
+sole guard) needs trusted agent identity at the BFF — DCR agent-token issuance — and is
+tracked as the open part of BACKOFFICE-53.
+
 ## Registry-driven mode (the agent-first loop)
 
 `pnpm --filter @ofbo/mcp-gateway run demo:registry` runs the gateway driven by the **agent

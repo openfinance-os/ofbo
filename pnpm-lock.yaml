@@ -229,6 +229,9 @@ importers:
       '@ofbo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ofbo/ports':
+        specifier: workspace:*
+        version: link:../../packages/ports
     devDependencies:
       tsx:
         specifier: ^4.19.2
