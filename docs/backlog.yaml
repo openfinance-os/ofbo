@@ -200,6 +200,15 @@ milestones:
     items:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
 
+  # Build-harness improvements — the machinery that governs the autonomous build loop itself
+  # (not a product feature). Researched against 2025-26 agentic-coding practice; ADR 0018.
+  - name: HARNESS
+    items:
+      - { id: HARNESS-01, title: "Anti-reward-hacking: test-tripwire hook + Q1b test-integrity gate", status: done, adr: docs/adrs/0018-build-harness-hardening.md, note: ".claude/hooks/test-tripwire.sh (advisory) + scripts/test-integrity.mjs (CI Q1b, merge-blocking) stop the loop making a RED test green by weakening it. Exempts *-testfix-*/*-spec-* branches." }
+      - { id: HARNESS-02, title: "Contract self-correction: pnpm verify:contract agent tool", status: done, adr: docs/adrs/0018-build-harness-hardening.md, note: "services/bff/scripts/verify-contract.ts validates live BFF responses against the OpenAPI each iteration (28 probes, CONFORMANT/DRIFT). Wired into run-ofbo/smoke.sh + skill. Specmatic self-correcting-loop pattern." }
+      - { id: HARNESS-03, title: "Agent provenance sealed into the release evidence bundle", status: done, adr: docs/adrs/0018-build-harness-hardening.md, note: "parseProvenance over git trailers (model/session/story) → BuildProvenance, folded into the sha256-sealed bundle. EU AI Act Art. 12/17 traceability." }
+      - { id: HARNESS-04, title: "Mutation testing gate (StrykerJS) on the security-critical BFF core", status: pending, adr: docs/adrs/0018-build-harness-hardening.md, depends_on: [HARNESS-01], note: "Catches HOLLOW-GREEN tests (pass but assert nothing) that the assertion-count heuristic in Q1b can't. Deferred until a real CI run calibrates the mutation-score threshold + runtime so it doesn't become a flaky gate; scope to rbac/approvals first. See ADR 0018 §Follow-ups." }
+
 deferred: # Could / Phase 2 — not in build scope until promoted by the user
   # BACKOFFICE-60 and BACKOFFICE-53 fleshed out under ADR 0017 (agent-first MCP gateway,
   # services/mcp-gateway). ADR 0017 ACCEPTED 2026-06-23 — step-1 groundwork landed:

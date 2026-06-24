@@ -11,7 +11,7 @@ Bank-neutral back office for UAE Open Finance (CBUAE / Al Tareq / Nebras), for a
 - **Gateway:** The bank's existing API gateway; admin-scope enforcement at the gateway AND the service layer (defence in depth).
 - **Observability:** OpenTelemetry everywhere; `x-fapi-interaction-id` propagated end-to-end. Enterprise APM is a bridge off the OTel stream, never a second instrumentation path.
 - **IaC:** Terraform, region-parameterised.
-- **CI/CD:** Quality gates per release — Q1 build+unit, Q2 static analysis+SAST, Q3 integration+contract tests, Q4 security review+dependency scan, Q4.5 BCBS 239 lineage validation, Q5 manual prod approval. Failed gate blocks merge. Release evidence bundle committed to git.
+- **CI/CD:** Quality gates per release — Q1 build+unit, Q1b test-integrity (anti-reward-hacking), Q2 static analysis+SAST, Q3 integration+contract tests, Q4 security review+dependency scan, Q4.5 BCBS 239 lineage validation, Q5 manual prod approval. Failed gate blocks merge. Release evidence bundle committed to git (with sealed agent build-provenance — ADR 0018).
 
 ## Ports — never hardcode a vendor
 
@@ -45,9 +45,9 @@ M0 foundation → M1 substrate + demo deployment live (auto-deploy on merge) →
 
 0. **Worktree isolation (enforced).** This repo runs concurrent autonomous build loops against one shared checkout; a prior session reset the working dir mid-commit and nearly lost work. Build/feature/source changes MUST be made in an isolated git worktree — call `EnterWorktree` before editing source. `worktree.bgIsolation="worktree"` (`.claude/settings.json`) hard-blocks Edit/Write in the main checkout for background sessions until you do. Only docs-only updates to main (build-log, backlog status, ADR status) are exempt.
 1. One story per session/branch: `feature/BACKOFFICE-NN-short-name`. Follow the milestone order in PRD §9 (M0 → M5); E4 substrate before features.
-2. Spec first: contract tests from the OpenAPI paths + the requirement's acceptance criteria MUST exist and fail before implementation.
-3. Implement to green. Coverage ≥80%. Integration tests hit real stores (local/containerised).
-4. Every commit and PR cites the BACKOFFICE-ID.
+2. Spec first: contract tests from the OpenAPI paths + the requirement's acceptance criteria MUST exist and fail before implementation. Never reach green by weakening a test — the test-tripwire hook + Q1b test-integrity gate block it (ADR 0018); a genuine test defect is fixed on a `feature/BACKOFFICE-NN-testfix-<slug>` branch.
+3. Implement to green. Coverage ≥80%. Integration tests hit real stores (local/containerised). Run `pnpm verify:contract` against the running BFF each iteration to catch live response drift from the OpenAPI before opening the PR (run-ofbo skill).
+4. Every commit and PR cites the BACKOFFICE-ID. Keep the agent build-provenance trailers (`Co-Authored-By`, `Claude-Session`) on every commit — the release evidence bundle seals them as Art. 12/17 attribution (ADR 0018).
 5. Audit-relevant operations: emit to `audit_high_sensitivity` (INSERT-only), redact PII at emission, propagate the trace id. Lineage emission (Q4.5) is part of each story's Definition of Done — never retrofit.
 6. Compose, don't invent: no new platform primitives (gateways, auth paths, approval mechanisms). Extensions only. If something seems genuinely uncovered, raise an ADR and stop — humans decide.
 

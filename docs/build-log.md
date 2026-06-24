@@ -1715,3 +1715,19 @@ Closes BACKOFFICE-33 (governed cross-fintech aggregation via `bank_internal_view
 - **Finance View accrual/margin — deferred.** A real partial roll-up, but the rest of finance is naturally per-counterparty; pursue only when a bank needs the cross-fintech finance aggregate.
 
 Milestone state: the backlog is now drained — every item is `done` or correctly `blocked` for bank adoption (BACKOFFICE-52 gateway mTLS, M6 enterprise port-swaps). BACKOFFICE-33 marked `done`.
+
+---
+
+## 2026-06-24 — HARNESS-01..03: build-harness hardening (anti-reward-hacking, contract self-correction, agent provenance) — ADR 0018
+
+Researched 2025-26 agentic-coding practice (Anthropic Claude Code guidance, Spec Kit/Specmatic, SWE-bench-style verification, the reward-hacking literature, EU AI Act traceability) against the existing harness and implemented the three gaps the user selected. Not product features — the loop's own machinery. ADR 0018 ACCEPTED.
+
+**HARNESS-01 — anti-reward-hacking (test integrity).** Closes the loop's one cheat path: making a RED test green by weakening it instead of fixing the code. Two layers: `.claude/hooks/test-tripwire.sh` (PreToolUse advisory — denies `it.skip/.only/.todo/.fails`, `xit`, commented-out `expect`/`assert` on feature/claude branches; narrow, never blocks adding cases) and `scripts/test-integrity.mjs` + CI gate **Q1b** (deterministic, merge-blocking control of record — diffs the PR vs merge base, fails on added disabler markers or net assertion loss alongside an implementation change). Both exempt `*-testfix-*`/`*-spec-*`. Validated end-to-end (disabler + assertion-loss scenarios both fail correctly).
+
+**HARNESS-02 — contract self-correction (`pnpm verify:contract`).** Specmatic self-correcting-loop pattern: `services/bff/scripts/verify-contract.ts` validates live BFF responses against `specs/backoffice-openapi.yaml` (reusing `buildResponseValidator`), auto-probing every implemented parameter-less GET + the 400/401 error envelopes. CONFORMANT/DRIFT, exit 0/1/2. Run locally: **28 conformant, 0 drift**. Wired into `run-ofbo/smoke.sh` as its final check + documented in the run-ofbo skill. The loop now catches live drift before PR, not at review.
+
+**HARNESS-03 — agent provenance.** Recovers `{commit, model, session, story}` deterministically from the `Co-Authored-By`/`Claude-Session`/`Build-Model` git trailers the loop already stamps, and folds it into the **same** sha256-sealed release evidence bundle as the quality gates — tamper-evident agent attribution (EU AI Act Art. 12/17). `parseProvenance` unit-tested (human co-authors NOT attributed as build agents; explicit Build-Model wins; story id from subject). New control-mapping row; `collect-provenance.ts` + release-evidence.yml wired (fetch-depth: 0, prev-tag..commit range).
+
+**Follow-up parked:** HARNESS-04 (StrykerJS mutation testing on rbac/approvals) — catches hollow-green tests Q1b's assertion-count can't; deferred until a real CI run calibrates the score threshold + runtime so it isn't a flaky gate. Backlog HARNESS-04 (pending).
+
+Evidence: full unit suite **968 passing** (148 files), repo typecheck clean, eslint clean on changed files, release-evidence 21 tests (incl. provenance sealing + parser). Reviewers: pending PR (hard-stop + conformance run on the diff). Commits e5f9d8e, dd5f0d4, 608ee81 + docs.
