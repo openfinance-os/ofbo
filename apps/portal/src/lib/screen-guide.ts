@@ -217,6 +217,17 @@ export const SCREEN_GUIDE: ScreenGuide[] = [
       'Availability and incident handling are scheme obligations: a participant that is down or slow degrades the whole ecosystem. Nebras provides the shared case & dispute channel the bank operates through.'
   },
   {
+    key: 'agents',
+    title: 'Agent Registry',
+    icon: 'smart_toy',
+    whatItIs:
+      'The register of programmatic identities — service accounts, agents and MCP integrations — that hold admin scopes. You register one (four-eyes) and revoke its credential immediately when needed.',
+    helpsYou:
+      'Control which automated, non-human identities can act on the platform and with exactly what scope — under the same four-eyes issuance and audit trail that govern human operators.',
+    whyOpenFinance:
+      'Admin-scope access is powerful whether a person or a machine wields it. The scheme’s least-privilege, separation-of-duties and accountability rules apply to programmatic actors too: their credentials must be governed, four-eyes-issued, revocable, and fully audited.'
+  },
+  {
     key: 'audit',
     title: 'Audit Log',
     icon: 'fact_check',
