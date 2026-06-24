@@ -45,3 +45,30 @@ test('content is HTML-escaped (no injection)', () => {
 test('unknown mode throws', () => {
   assert.throws(() => render('poster', {}, brand));
 });
+
+// The seam: the SAME content rendered against a SECOND brand is a different-looking,
+// still-conformant artifact — with no change to the renderer. This is the solution-agnostic
+// proof, mechanically.
+test('swapping the brand seam re-skins identical content (no code change)', () => {
+  const MERIDIAN = resolve(ROOT, 'discovery/brand/examples/meridian-trust.design.md');
+  const meridian = parseTokens(MERIDIAN);
+  const meridianTokens = parseBrand(MERIDIAN);
+
+  const ofboHtml = render('deck', SPECS.deck, brand);
+  const meridianHtml = render('deck', SPECS.deck, meridian);
+
+  // Same machinery, both branded + marked.
+  assert.ok(ofboHtml.includes(MARKER) && meridianHtml.includes(MARKER));
+  // Different brand actually applied: OFBO blue/Inter vs Meridian purple/serif.
+  assert.ok(ofboHtml.includes('#1F4DB8') && !ofboHtml.includes('#5B2A86'));
+  assert.ok(meridianHtml.includes('#5B2A86') && !meridianHtml.includes('#1F4DB8'));
+  assert.ok(meridianHtml.includes('Georgia') && !meridianHtml.includes('Inter'));
+  assert.notEqual(ofboHtml, meridianHtml);
+
+  // Each output is D7-conformant against ITS OWN brand…
+  assert.equal(checkVisualHtml('d.html', ofboHtml, brandTokens).length, 0);
+  assert.equal(checkVisualHtml('d.html', meridianHtml, meridianTokens).length, 0);
+  // …and D7 is a real check: each fails against the OTHER brand's token allow-list.
+  assert.ok(checkVisualHtml('d.html', meridianHtml, brandTokens).length > 0);
+  assert.ok(checkVisualHtml('d.html', ofboHtml, meridianTokens).length > 0);
+});
