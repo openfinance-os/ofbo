@@ -12,8 +12,6 @@ import { MARKER } from '../gates/brand.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-const STATUS = { ok: 'color.brand.accent', warn: 'color.status.warn', danger: 'color.status.danger', neutral: 'color.ink.muted' };
-
 /** Shared branded shell. All colours/fonts come from tokens, so D7 (tokens-only) holds by
  *  construction. Layout px are literal (D7 checks colour + font, not spacing). */
 function shell({ title, body, t, version, banner, extraCss = '' }) {
@@ -48,7 +46,7 @@ ${body}
 `;
 }
 
-function blocks(list, t) {
+function blocks(list, _t) {
   return (list || []).map((b) => {
     if (b.p) return `<p>${esc(b.p)}</p>`;
     if (b.note) return `<div class="note">${esc(b.note)}</div>`;
