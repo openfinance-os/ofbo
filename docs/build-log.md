@@ -1743,3 +1743,17 @@ Follow-up to the HARNESS-01..03 set (ADR 0019, PR #250), raised when the user as
 The duplicate-ADR-number check directly closes the hole that bit PR #250: while it was open, `main` took ADR 0018 (agent-identity DCR, #252) and #250 also numbered its ADR 0018 — a collision git can't see (different filenames). #250's ADR was renumbered to 0019; this gate would have caught it mechanically. Also: `implement-story` DoD gains a line requiring cited docs to be updated when a file moves.
 
 Reviewers: pending PR. node --check clean; docs:check green on this branch.
+
+---
+
+## 2026-06-24 — HARNESS-04: mutation testing of the security-critical BFF core — ADR 0021
+
+Realises the HARNESS-04 follow-up parked in ADR 0019. Q1b proves tests aren't *weakened*; this proves they aren't *hollow* — a surviving mutant is a behaviour change no test caught.
+
+StrykerJS (`@stryker-mutator/vitest-runner`) scoped to the security core — `rbac.ts` (scope enforcement), `auth.ts` (persona→scope minting), `approvals/service.ts` + `approvals/operation-summary.ts` (four-eyes) — driven by a DB-free `vitest.mutation.config.ts` (BFF unit specs only; the integration project needs live Postgres and must never be in the mutation loop). `coverageAnalysis: perTest`.
+
+**Calibrated against a real run, not guessed** (the reason it was parked): first full run measured **70.3% mutation score** (rbac 78.9 / auth 69.9 / approvals 68.8) over ~390 mutants in **8m34s** at concurrency 2. Two decisions fell out of that measurement: (1) **not a universal per-PR gate** — 8.5 min would tax every PR, so `.github/workflows/mutation.yml` runs weekly + `workflow_dispatch` + on PRs that touch the security-core paths; (2) **`break=65`, below the 70.3 baseline** — a real regression fails CI without flaking on the score's noise floor; the floor is meant to ratchet upward. HTML/JSON report uploaded as a 14-day CI artifact.
+
+Honest baseline, not a vanity number. The 101 survivors are the hardening backlog — `StringLiteral` (audit/error text), `Regex` (code-format validation), and the highest-value `ConditionalExpression` flips in the four-eyes guards. Killing those + raising `break` is the intended ongoing ratchet.
+
+Adds two devDeps (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`); `test:mutation` script; `.stryker-tmp/` + `reports/mutation/` gitignored. Reviewers: pending PR. ADR 0021; backlog HARNESS-04 → done.

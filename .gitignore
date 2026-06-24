@@ -8,6 +8,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# StrykerJS mutation-testing run artifacts (HARNESS-04; report uploaded as a CI artifact)
+.stryker-tmp/
+reports/mutation/
+
 # Playwright MCP visual-sweep artifacts (local only)
 .playwright-mcp/
 portal-*.png

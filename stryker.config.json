@@ -1,0 +1,19 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "HARNESS-04 (ADR 0019 follow-up): mutation testing scoped to the security-critical BFF core. Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a behaviour change no test caught. Scoped to rbac/auth/approvals (scope enforcement + four-eyes) and DB-free (vitest.mutation.config.ts) so it runs fast and hermetically. `break` is calibrated below the measured baseline so a real regression fails CI without flaking on the noise floor.",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "services/bff/src/rbac.ts",
+    "services/bff/src/auth.ts",
+    "services/bff/src/approvals/service.ts",
+    "services/bff/src/approvals/operation-summary.ts"
+  ],
+  "reporters": ["clear-text", "progress", "json", "html"],
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "thresholds": { "high": 90, "low": 70, "break": 65 },
+  "concurrency": 2,
+  "timeoutMS": 60000
+}

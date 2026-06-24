@@ -1,0 +1,47 @@
+# HARNESS-04 — mutation testing of the security-critical BFF core (rbac / auth / four-eyes).
+# Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a
+# behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run is
+# ~8 min, so it would tax every unrelated PR. Instead it runs on a schedule, on demand, and on
+# PRs that actually touch the security core. `break` (stryker.config.json) sits below the
+# measured baseline so a real regression fails without flaking on the mutation-score noise floor.
+name: mutation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, Monday 03:17 UTC (off-peak, off-minute so the fleet doesn't stampede the runner pool).
+    - cron: '17 3 * * 1'
+  pull_request:
+    paths:
+      - 'services/bff/src/rbac.ts'
+      - 'services/bff/src/auth.ts'
+      - 'services/bff/src/approvals/**'
+      - 'stryker.config.json'
+      - 'vitest.mutation.config.ts'
+      - '.github/workflows/mutation.yml'
+
+concurrency:
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Mutation testing — security core (rbac/auth/four-eyes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Fails (exit 1) if the mutation score drops below the calibrated break threshold.
+      - run: pnpm test:mutation
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation
+          retention-days: 14
