@@ -1,5 +1,5 @@
 import { buildCatalog, type McpTool } from './catalog.js'
-import { classify, SpendGuard, toPendingApproval, type PendingApproval } from './governance.js'
+import { classify, SpendGuard, SpendBudgetExceededError, toPendingApproval, type PendingApproval } from './governance.js'
 import { spendExhaustedEvent, type AgentAnomalySink } from './anomaly.js'
 
 /**
@@ -37,6 +37,8 @@ export interface GatewayConfig {
   onSpendExhausted?: (used: number, budget: number) => void
   /** BACKOFFICE-53: emits an agent_anomaly Risk signal + ITSM ticket on spend exhaustion. */
   anomalySink?: AgentAnomalySink
+  /** Per-request timeout (ms) so a hung BFF can't hang the MCP tools/call forever. Default 30s. */
+  timeoutMs?: number
   /** Injected for tests; defaults to global fetch. */
   fetchImpl?: FetchLike
 }
@@ -62,10 +64,31 @@ function buildQuery(query: unknown): string {
   if (!query || typeof query !== 'object') return ''
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(query as Record<string, unknown>)) {
-    if (v !== undefined && v !== null) params.set(k, String(v))
+    if (v === undefined || v === null) continue
+    // Repeat the key for arrays (?k=a&k=b) rather than stringifying to "a,b".
+    if (Array.isArray(v)) {
+      for (const item of v) if (item !== undefined && item !== null) params.append(k, String(item))
+    } else {
+      params.append(k, String(v))
+    }
   }
   const s = params.toString()
   return s ? `?${s}` : ''
+}
+
+/** Stable FNV-1a hash of a canonical (key-sorted) JSON — for a retry-stable Idempotency-Key. */
+function stableHash(value: unknown): string {
+  const canonical = JSON.stringify(value, (_k, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : v
+  )
+  let h = 0x811c9dc5
+  for (let i = 0; i < canonical.length; i++) {
+    h ^= canonical.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0).toString(16)
 }
 
 export class McpGateway {
@@ -82,7 +105,13 @@ export class McpGateway {
     this.fetchImpl = config.fetchImpl ?? ((url, init) => fetch(url, init))
     this.spend = new SpendGuard(config.spendBudget ?? 0, (used, budget) => {
       config.onSpendExhausted?.(used, budget)
-      void config.anomalySink?.report(spendExhaustedEvent(config.session.personaId ?? 'unknown-agent', config.session.sessionId, used, budget))
+      const reported = config.anomalySink?.report(spendExhaustedEvent(config.session.personaId ?? 'unknown-agent', config.session.sessionId, used, budget))
+      // The raise must never be a silent unhandled rejection (BFF/ITSM down) — surface it.
+      if (reported && typeof (reported as Promise<void>).then === 'function') {
+        void (reported as Promise<void>).catch((err) =>
+          console.error(`[mcp-gateway] agent_anomaly raise failed: ${err instanceof Error ? err.message : String(err)}`)
+        )
+      }
     })
   }
 
@@ -100,35 +129,74 @@ export class McpGateway {
     }
 
     const route = tool._route
-    // Pre-flight spend reservation (BFF re-asserts; this only bounds attempts).
-    if (classify(route) !== 'read') this.spend.consume(route)
+    const consequential = classify(route) !== 'read'
+
+    // Pre-flight gate: block (without consuming) when the budget is exhausted. Return a
+    // structured result the agent can act on — never throw past the MCP transport.
+    if (consequential) {
+      try {
+        this.spend.check(route)
+      } catch (e) {
+        if (e instanceof SpendBudgetExceededError) {
+          return {
+            ok: false,
+            status: 429,
+            error: { code: 'SPEND_BUDGET_EXCEEDED', message: e.message, remediation: 'Escalate to a human principal; this agent session has spent its operation budget (BACKOFFICE-53).' }
+          }
+        }
+        throw e
+      }
+    }
 
     const traceId = newTraceId()
-    const url = this.config.baseUrl.replace(/\/$/, '') + substitutePath(route.path, args) + (route.method === 'get' ? buildQuery(args.query) : '')
+    const url = this.config.baseUrl.replace(/\/$/, '') + substitutePath(route.path, args) + buildQuery(args.query)
 
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.config.session.agentToken}`,
       'x-fapi-interaction-id': traceId,
       accept: 'application/json'
     }
-    const init: RequestInit = { method: route.method.toUpperCase(), headers }
+    const init: RequestInit = { method: route.method.toUpperCase(), headers, signal: AbortSignal.timeout(this.config.timeoutMs ?? 30_000) }
     if (route.method !== 'get') {
       headers['content-type'] = 'application/json'
-      // Agents retry — idempotency is mandatory on mutating calls (CLAUDE.md).
-      headers['idempotency-key'] = `${this.config.session.sessionId}:${name}:${traceId}`
+      // Idempotency-Key (CLAUDE.md): derived from (session, tool, args) so a RETRIED
+      // identical call carries the SAME key and the BFF dedupes it within the 24h window.
+      // The trace id stays fresh per attempt; it must NOT be part of the idempotency key.
+      headers['idempotency-key'] = `${this.config.session.sessionId}:${name}:${stableHash(args.body ?? {})}`
       init.body = JSON.stringify(args.body ?? {})
     }
 
-    const res = await this.fetchImpl(url, init)
+    let res: Response
+    try {
+      res = await this.fetchImpl(url, init)
+    } catch (e) {
+      // Network failure / timeout (AbortSignal) — return a structured result, never throw past the transport.
+      const aborted = e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
+      return { ok: false, status: 504, error: { code: aborted ? 'BFF_TIMEOUT' : 'BFF_UNREACHABLE', message: e instanceof Error ? e.message : String(e) } }
+    }
     const payload = (await res.json().catch(() => ({}))) as { data?: Record<string, unknown>; error?: unknown }
 
-    // Four-eyes: never auto-approve. Surface the pending approval and stop.
-    if (res.status === 202 && payload.data) {
-      return { ok: true, status: 202, pendingApproval: toPendingApproval(payload.data) }
+    // Four-eyes is determined by the CONTRACT (tool.fourEyes), never guessed from the
+    // payload shape — so a malformed/unparseable approval can never degrade to a success.
+    if (tool.fourEyes) {
+      if (res.status === 202) {
+        const pending = payload.data ? toPendingApproval(payload.data) : null
+        if (!pending) {
+          return { ok: false, status: 502, error: { code: 'MALFORMED_APPROVAL', message: 'Four-eyes operation returned 202 without a valid approval_request — refusing to treat as success.' } }
+        }
+        if (consequential) this.spend.commit(route) // four-eyes counts at INITIATION
+        return { ok: true, status: 202, pendingApproval: pending }
+      }
+      if (res.status >= 400) return { ok: false, status: res.status, error: payload.error ?? payload }
+      // A four-eyes op that did not return 202 is a contract violation — never assume it executed.
+      return { ok: false, status: 502, error: { code: 'UNEXPECTED_FOUR_EYES_RESPONSE', message: `Four-eyes operation returned ${res.status}; expected 202 + approval_request.` } }
     }
+
     if (res.status >= 400) {
+      // A rejected mutation does NOT burn budget (only successful consequential ops commit).
       return { ok: false, status: res.status, error: payload.error ?? payload }
     }
+    if (consequential) this.spend.commit(route)
     return { ok: true, status: res.status, data: payload.data ?? payload }
   }
 

@@ -58,8 +58,19 @@ export function isLeastPrivilege(persona: AgentPersonaDef): boolean {
   if (persona.derivedFrom === 'platform-super-admin') return false
   const human = (SCOPE_MATRIX as Record<string, readonly string[]>)[persona.derivedFrom]
   if (!human) return false
-  if (persona.scopes.some((s) => s === 'platform:superadmin')) return false
-  if (!persona.scopes.every((s) => human.includes(s))) return false
-  // strict subset — an agent that mirrors its human persona is not least privilege
-  return persona.scopes.length < human.length
+  const distinct = new Set(persona.scopes)
+  if (distinct.has('platform:superadmin')) return false
+  for (const s of distinct) if (!human.includes(s)) return false
+  // strict subset by DISTINCT scope count — an agent that mirrors its human persona is not least privilege
+  return distinct.size < human.length
+}
+
+// Load-bearing invariant (CLAUDE.md: the persona scope matrix is load-bearing; granting
+// beyond it is an automatic review FAIL). Enforced at MODULE LOAD so a non-least-privilege
+// edit to the catalogue fails the build/boot, not a code review — the check is no longer
+// merely test-asserted.
+for (const persona of Object.values(AGENT_PERSONAS)) {
+  if (!isLeastPrivilege(persona)) {
+    throw new Error(`AGENT_PERSONAS misconfigured: ${persona.id} is not a least-privilege subset of ${persona.derivedFrom} (BACKOFFICE-60).`)
+  }
 }

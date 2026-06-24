@@ -77,17 +77,22 @@ describe('governance helpers', () => {
     expect(isConsequential(fourEyes)).toBe(true)
   })
 
-  it('SpendGuard bounds consequential ops and fires onExhausted (BACKOFFICE-53)', () => {
+  it('SpendGuard: check gates, commit consumes, anomaly fires exactly once (BACKOFFICE-53)', () => {
     const onExhausted = vi.fn()
     const guard = new SpendGuard(1, onExhausted)
     const mutate = ROUTES.find((r) => r.method === 'post' && !r.fourEyes)!
     const read = ROUTES.find((r) => r.method === 'get')!
-    guard.consume(read) // reads are free
+    guard.check(read)
+    guard.commit(read) // reads are free — never consume
     expect(guard.remaining).toBe(1)
-    guard.consume(mutate) // exhausts budget
+    guard.check(mutate) // budget available, does NOT consume
+    guard.commit(mutate) // consume → exhausts, fires once
     expect(guard.remaining).toBe(0)
     expect(onExhausted).toHaveBeenCalledTimes(1)
-    expect(() => guard.consume(mutate)).toThrow(SpendBudgetExceededError)
+    // further consequential ops are gated by check (a throw), with no second raise
+    expect(() => guard.check(mutate)).toThrow(SpendBudgetExceededError)
+    guard.commit(mutate)
+    expect(onExhausted).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -162,14 +167,51 @@ describe('McpGateway dispatch', () => {
     expect(calls[0]).not.toContain(':approve')
   })
 
-  it('blocks further mutations once the session spend budget is exhausted', async () => {
+  it('blocks further mutations once the budget is exhausted — structured 429, never a throw past the transport', async () => {
     const onSpendExhausted = vi.fn()
     const fetchImpl = vi.fn<FetchLike>(async () => jsonResponse({ data: { state: 'revoked' } }))
     const gw = gateway(fetchImpl, { allowMutations: true, spendBudget: 1, onSpendExhausted })
-    await gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c1', body: {} })
-    await expect(gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c2', body: {} })).rejects.toBeInstanceOf(SpendBudgetExceededError)
-    expect(onSpendExhausted).toHaveBeenCalled()
+    const first = await gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c1', body: {} })
+    expect(first.ok).toBe(true)
+    const blocked = await gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c2', body: {} })
+    expect(blocked.ok).toBe(false)
+    expect((blocked as { status: number }).status).toBe(429)
+    expect((blocked as { error: { code: string } }).error.code).toBe('SPEND_BUDGET_EXCEEDED')
+    // the blocked op never hit the BFF, and the anomaly fired exactly once (no double-raise)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(onSpendExhausted).toHaveBeenCalledTimes(1)
     expect(gw.remainingBudget).toBe(0)
+  })
+
+  it('does NOT burn budget on a failed (4xx) mutation', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => jsonResponse({ error: { code: 'BACKOFFICE.INVALID_BODY' } }, 422))
+    const gw = gateway(fetchImpl, { allowMutations: true, spendBudget: 1 })
+    const res = await gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c1', body: {} })
+    expect(res.ok).toBe(false)
+    expect(gw.remainingBudget).toBe(1) // the rejected op did not consume budget
+  })
+
+  it('derives a RETRY-STABLE Idempotency-Key from (session, tool, body) — same args ⇒ same key', async () => {
+    const keys: string[] = []
+    const fetchImpl = vi.fn<FetchLike>(async (_url, init) => {
+      keys.push((init.headers as Record<string, string>)['idempotency-key']!)
+      return jsonResponse({ data: { state: 'revoked' } })
+    })
+    const gw = gateway(fetchImpl, { allowMutations: true, spendBudget: 5 })
+    const args = { consent_id: 'c1', body: { reason_code: 'TPP_REQUEST' } }
+    await gw.callTool('post_consents_consent_id_revoke_admin', args)
+    await gw.callTool('post_consents_consent_id_revoke_admin', args)
+    expect(keys[0]).toBe(keys[1]) // a retry of the identical call dedupes at the BFF
+    // a different body yields a different key
+    await gw.callTool('post_consents_consent_id_revoke_admin', { consent_id: 'c1', body: { reason_code: 'REGULATORY' } })
+    expect(keys[2]).not.toBe(keys[0])
+  })
+
+  it('refuses to treat a four-eyes 202 without a valid approval_request as success', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => jsonResponse({ data: { expires_at: '2026-06-23T12:00:00Z' } }, 202)) // no approval_request_id
+    const res = await gateway(fetchImpl, { allowMutations: true, spendBudget: 5 }).callTool('post_consents_revoke_bulk', { body: { psu_identifier: 'x' } })
+    expect(res.ok).toBe(false)
+    expect((res as { error: { code: string } }).error.code).toBe('MALFORMED_APPROVAL')
   })
 
   it('returns the BFF error envelope on a 4xx (gateway enforces nothing itself)', async () => {

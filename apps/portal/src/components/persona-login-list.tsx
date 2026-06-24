@@ -52,6 +52,17 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
             ))}
           </ul>
         </div>
+        {/* New-to-Open-Finance route: the introductory guide, reachable before sign-in. */}
+        <a
+          href="/guide"
+          data-testid="welcome-guide-link"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-nav-elevated px-3 py-2 text-sm font-semibold text-white hover:bg-nav-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-nav-active"
+        >
+          <span className="font-symbols text-base text-nav-active" aria-hidden>
+            menu_book
+          </span>
+          New to Open Finance? Start with the guide
+        </a>
         <p className="mt-auto border-t border-nav-elevated pt-4 text-xs leading-relaxed text-on-nav opacity-80">
           Every privileged action is four-eyes-gated, scope hygiene is enforced per role, and the environment carries
           zero PII — all egress runs through the secure gateway.

@@ -11,12 +11,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "demo": "tsx src/demo-server.ts"
+    "demo": "tsx src/demo-server.ts",
+    "demo:registry": "tsx src/registry-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@ofbo/bff": "workspace:*",
-    "@ofbo/contracts": "workspace:*"
+    "@ofbo/contracts": "workspace:*",
+    "@ofbo/ports": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.2"

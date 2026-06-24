@@ -16,7 +16,7 @@ import {
 import { approvalRoutes } from './approvals/routes.js'
 import { consentRoutes } from './consents/routes.js'
 import { ConsentSearchService } from './consents/service.js'
-import { DemoConsentDirectory, type ConsentDirectory } from './consents/directory.js'
+import { DemoConsentDirectory, RevocableConsentDirectory, type ConsentDirectory } from './consents/directory.js'
 import {
   ConsentAuditTrailService,
   consentAuditTrailRoutes,
@@ -319,11 +319,13 @@ export interface AppDeps {
   lineageReader?: LineageReader
 }
 
-/** Built once per isolate, not per request — the deterministic demo dataset is
- *  immutable, so a Worker that handles many requests pays the (tiny) build once. */
-let demoConsentDirectory: ConsentDirectory | undefined
-function sharedDemoConsentDirectory(): ConsentDirectory {
-  return (demoConsentDirectory ??= new DemoConsentDirectory())
+/** The immutable synthetic seed, built once per isolate (the dataset is deterministic so a
+ *  Worker that handles many requests pays the tiny build once). Each createApp() wraps it in
+ *  a fresh per-app RevocableConsentDirectory overlay (DEMO fidelity) so a revoke reflects on
+ *  re-lookup within the running process WITHOUT mutating the shared seed (tests stay isolated). */
+let demoConsentSeed: ConsentDirectory | undefined
+function sharedDemoConsentSeed(): ConsentDirectory {
+  return (demoConsentSeed ??= new DemoConsentDirectory())
 }
 
 let demoPaymentDirectory: PaymentSource | undefined
@@ -343,7 +345,7 @@ export function createApp(deps: AppDeps = {}) {
   // auth audit when it exposes emit (PgAuditEmitter does), else in-memory.
   const highClassAudit: HighClassAuditSink =
     deps.highClassAudit ?? (hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
-  const consentDirectory = deps.consentDirectory ?? sharedDemoConsentDirectory()
+  const consentDirectory = deps.consentDirectory ?? new RevocableConsentDirectory(sharedDemoConsentSeed())
   const consentSearch = new ConsentSearchService({
     audit: highClassAudit,
     directory: consentDirectory
@@ -364,7 +366,7 @@ export function createApp(deps: AppDeps = {}) {
   const reportStore = deps.reportStore ?? new InMemoryReportStore()
   const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
-  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit })
+  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
   const queryPurposeRegistrar = deps.queryPurposeRegistrar ?? new InMemoryQueryPurposeRegistrar()
   const registerQueryPurposeOperation = makeRegisterQueryPurposeOperation({ registrar: queryPurposeRegistrar, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })

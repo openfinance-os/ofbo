@@ -10,7 +10,11 @@ import { PERSONA_GUIDE, SCOPE_DESCRIPTIONS, personaLabel } from '../lib/persona-
  */
 export function ProfileView({ principal }: { principal: ShellPrincipal }) {
   const guide = PERSONA_GUIDE[principal.persona]
-  const modules = visibleModules(principal.scopes, principal.superadmin).filter((m) => m.key !== 'dashboard' && m.key !== 'approvals')
+  // Exclude the always-on, non-scope-gated entries (dashboard, approvals) and the meta
+  // onboarding guide — this list is "the capabilities your scope grants", not help/nav chrome.
+  const modules = visibleModules(principal.scopes, principal.superadmin).filter(
+    (m) => m.key !== 'dashboard' && m.key !== 'approvals' && m.key !== 'guide'
+  )
   return (
     <div className="max-w-3xl space-y-6" data-testid="profile-view">
       <header className="flex items-center gap-4">

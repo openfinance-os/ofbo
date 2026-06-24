@@ -32,8 +32,14 @@ export const NAV_MODULES: NavModule[] = [
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: SCOPES.complianceRead },
   { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: SCOPES.riskRead },
   { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: SCOPES.operationsRead },
+  // BACKOFFICE-60 — agent registry (programmatic admin-scope access, ADR 0017); platform-admin persona.
+  { key: 'agents', label: 'Agent Registry', href: '/agents', icon: 'smart_toy', scope: SCOPES.agentsRead },
   // DEMO-01 — global audit log (cross-operator "who did X"); the Dashboard panel is self-scoped.
-  { key: 'audit', label: 'Audit Log', href: '/audit', icon: 'fact_check', scope: SCOPES.auditRead }
+  { key: 'audit', label: 'Audit Log', href: '/audit', icon: 'fact_check', scope: SCOPES.auditRead },
+  // The Open Finance onboarding guide — meta/help, NOT a scope-gated capability, so it sits
+  // outside the §2 matrix (scope: null = always visible) at the foot of the nav. It explains
+  // why each console exists from an Open Finance ecosystem perspective (see lib/screen-guide.ts).
+  { key: 'guide', label: 'Guide', href: '/guide', icon: 'menu_book', scope: null }
 ]
 
 /**

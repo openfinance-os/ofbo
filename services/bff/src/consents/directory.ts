@@ -43,6 +43,13 @@ export interface ConsentDirectory {
   /** DEMO-01 — resolve the owning PSU's bank_customer_id for a consent, or null.
    *  Lets the admin-revoke stamp target_psu_identifier so it surfaces in the PSU timeline. */
   psuByConsentId(consentId: string): string | null
+  /**
+   * DEMO fidelity — mark a consent revoked so the admin view + PSU search reflect it on
+   * re-lookup within the running process (a revoke an operator/agent just performed shows
+   * as Revoked). Optional: the enterprise adapter (M6) reflects status from the bank's
+   * consent store and does not implement it.
+   */
+  markRevoked?(consentId: string): void
 }
 
 export class DemoConsentDirectory implements ConsentDirectory {
@@ -96,5 +103,45 @@ export class DemoConsentDirectory implements ConsentDirectory {
           : this.byIban.get(identifier)
     if (!bankCustomerId) return null
     return this.byBankCustomerId.get(bankCustomerId) ?? null
+  }
+}
+
+/**
+ * DEMO fidelity — a per-process mutable overlay over an immutable base directory (the
+ * shared synthetic seed). A revoke (admin / bulk / fraud) calls `markRevoked`, and reads
+ * thereafter report that consent as `Revoked` — so a re-lookup in the same running process
+ * (the in-process MCP demo, or local dev where the app is built once) shows the change,
+ * while the shared seed is NEVER mutated (so each `createApp()` — every test — gets a fresh,
+ * isolated overlay). Reads return copies with the status overridden; the seed is untouched.
+ */
+export class RevocableConsentDirectory implements ConsentDirectory {
+  private readonly revoked = new Set<string>()
+  constructor(private readonly base: ConsentDirectory) {}
+
+  markRevoked(consentId: string): void {
+    this.revoked.add(consentId)
+  }
+
+  // Always returns a (shallow) COPY — never the base seed's stored object — so a caller
+  // that mutates a read result cannot reach back into the shared seed. Overrides status to
+  // Revoked for a marked consent.
+  private applied(view: ConsentAdminView): ConsentAdminView {
+    return this.revoked.has(view.consent_id) ? { ...view, status: 'Revoked' } : { ...view }
+  }
+
+  getByConsentId(consentId: string): ConsentAdminView | null {
+    const v = this.base.getByConsentId(consentId)
+    return v ? this.applied(v) : null
+  }
+
+  psuByConsentId(consentId: string): string | null {
+    return this.base.psuByConsentId(consentId)
+  }
+
+  search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null {
+    const r = this.base.search(identifierType, identifier)
+    if (!r) return null
+    // Copy the envelope + every consent (new array, fresh objects) — the seed is never aliased.
+    return { psu: { ...r.psu }, consents: r.consents.map((c) => this.applied(c)) }
   }
 }
