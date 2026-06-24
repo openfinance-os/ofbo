@@ -32,5 +32,10 @@ export default tseslint.config(
   {
     files: ['services/bff/src/**/*.ts', 'apps/portal/src/**/*.{ts,tsx}'],
     rules: { 'no-console': ['error', { allow: ['warn', 'error'] }] }
+  },
+  {
+    // Discovery gate validator is plain-JS Node tooling (CLI + tests) — grant Node globals.
+    files: ['discovery/gates/**/*.mjs'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly' } }
   }
 )
