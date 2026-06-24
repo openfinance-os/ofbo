@@ -30,9 +30,12 @@ export {
 } from './agent-personas.js'
 export {
   InMemoryAgentAnomalySink,
+  BffBackedAnomalySink,
   spendExhaustedEvent,
   type AgentAnomalyEvent,
-  type AgentAnomalySink
+  type AgentAnomalySink,
+  type AgentRiskSignalRecorder,
+  type AgentItsmRaiser
 } from './anomaly.js'
 export {
   fetchAgentRegistration,
