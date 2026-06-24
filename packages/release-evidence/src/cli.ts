@@ -12,6 +12,7 @@ import {
   type ScanOutput,
   type TestResults
 } from './bundle.js'
+import { EMPTY_PROVENANCE, type BuildProvenance } from './provenance.js'
 
 /**
  * BACKOFFICE-57 — assemble and write the per-release evidence bundle, git-anchored
@@ -42,6 +43,7 @@ async function main(): Promise<void> {
   const ref = arg('ref') ?? process.env.GITHUB_REF
   const outDir = arg('out') ?? 'releases'
   const inputPath = arg('input')
+  const provenancePath = arg('provenance')
 
   if (!tag || !commit) throw new Error('release evidence requires --tag and --commit (or GITHUB_REF_NAME / GITHUB_SHA)')
   if (!inputPath) throw new Error('release evidence requires --input <gate-results.json>')
@@ -52,12 +54,19 @@ async function main(): Promise<void> {
   const dbUrl = process.env.DATABASE_URL
   if (dbUrl) lineage_proof = await validateLineageCoverage(dbUrl)
 
+  // Agent build provenance for the release range (collect-provenance.mjs writes it). Absent
+  // file → empty record, a visible honest gap rather than a silent omission (as with lineage).
+  const provenance: BuildProvenance = provenancePath
+    ? (JSON.parse(readFileSync(provenancePath, 'utf8')) as BuildProvenance)
+    : EMPTY_PROVENANCE
+
   const bundleInput: EvidenceBundleInput = {
     release: { tag, commit, ...(ref ? { ref } : {}), committed_at: new Date().toISOString() },
     gates: input.gates,
     test_results: input.test_results ?? [],
     scan_outputs: input.scan_outputs ?? [],
-    lineage_proof
+    lineage_proof,
+    provenance
   }
 
   const bundle = buildEvidenceBundle(bundleInput)

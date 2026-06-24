@@ -15,4 +15,12 @@ export {
   type LineageProof,
   type GitAnchor
 } from './bundle.js'
+export {
+  parseProvenance,
+  parseGitLog,
+  EMPTY_PROVENANCE,
+  type BuildProvenance,
+  type ProvenanceEntry,
+  type RawCommit
+} from './provenance.js'
 export { CONTROL_MAPPINGS, QUALITY_GATES, type ControlMapping, type QualityGateId } from './control-mappings.js'
