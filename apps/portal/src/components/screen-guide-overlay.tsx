@@ -4,38 +4,25 @@ import { useEffect, useRef, useState } from 'react'
 import { screenGuideFor } from '../lib/screen-guide'
 
 /**
- * UX — the per-screen "why am I looking at this?" overlay. A help control in the app
- * shell header opens a dismissible panel that explains the active console in plain
- * language: what it is, what it helps you do, and WHY the UAE Open Finance ecosystem
- * (CBUAE · Al Tareq · Nebras) requires it. Content comes from lib/screen-guide.ts —
- * the same source the /guide page renders — so the in-app help and the page never drift.
+ * UX — the per-screen "why am I looking at this?" overlay. A clearly-labelled help
+ * control in the app shell header opens a dismissible panel that explains the active
+ * console in plain language: what it is, what it helps you do, and WHY the UAE Open
+ * Finance ecosystem (CBUAE · Al Tareq · Nebras) requires it. Content comes from
+ * lib/screen-guide.ts — the same source the /guide page renders — so the in-app help
+ * and the page never drift.
  *
- * First-run: for an operator who has never opened the overlay, it surfaces itself once
- * (a non-PII `seen` flag in localStorage — never customer data) so a newcomer gets the
- * "what is this?" answer without hunting for it. After that it's click-to-open.
+ * Click-to-open (no auto-surfacing modal): a blocking first-run dialog would intercept
+ * the page on every fresh entry — intrusive for operators and a pointer-events trap for
+ * automated flows. The strong introduction is the /guide page, prominently linked from
+ * the sign-in screen; this button puts the per-screen "why" one click away from anywhere.
  *
  * Token-only, zero PII. The button is always present (even on screens without a specific
- * entry) so the full guide is one click from anywhere.
+ * entry) so the full guide is reachable from any console.
  */
-
-const SEEN_KEY = 'ofbo-guide-seen-v1'
-
 export function ScreenGuideOverlay({ activeKey }: { activeKey?: string }) {
   const [open, setOpen] = useState(false)
   const closeRef = useRef<HTMLButtonElement>(null)
   const guide = screenGuideFor(activeKey)
-
-  // First-run surfacing — once per browser, and only when there's a screen to explain.
-  useEffect(() => {
-    if (!guide) return
-    try {
-      if (window.localStorage.getItem(SEEN_KEY)) return
-      window.localStorage.setItem(SEEN_KEY, '1')
-      setOpen(true)
-    } catch {
-      // localStorage unavailable (private mode / blocked) — silently skip first-run.
-    }
-  }, [guide])
 
   // Esc closes; move focus to the close button when opened (a11y).
   useEffect(() => {

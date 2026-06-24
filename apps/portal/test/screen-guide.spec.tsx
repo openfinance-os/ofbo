@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { SCREEN_GUIDE, ECOSYSTEM, GUARDRAILS, BANK_ROLES, screenGuideFor } from '../src/lib/screen-guide.js'
@@ -64,12 +64,14 @@ describe('GuideContent', () => {
 })
 
 describe('ScreenGuideOverlay', () => {
-  beforeEach(() => window.localStorage.clear())
+  it('does not auto-open — it is click-to-open (no blocking first-run modal)', () => {
+    render(<ScreenGuideOverlay activeKey="customer-care" />)
+    expect(screen.queryByTestId('screen-guide-dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('screen-guide-open')).toBeInTheDocument()
+  })
 
   it('opens the dialog for the active screen and links to the full guide', () => {
-    window.localStorage.setItem('ofbo-guide-seen-v1', '1') // suppress first-run auto-open
     render(<ScreenGuideOverlay activeKey="risk" />)
-    expect(screen.queryByTestId('screen-guide-dialog')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('screen-guide-open'))
     const dialog = screen.getByTestId('screen-guide-dialog')
     expect(dialog).toHaveTextContent('Risk')
@@ -78,7 +80,6 @@ describe('ScreenGuideOverlay', () => {
   })
 
   it('closes on the backdrop', () => {
-    window.localStorage.setItem('ofbo-guide-seen-v1', '1')
     render(<ScreenGuideOverlay activeKey="dashboard" />)
     fireEvent.click(screen.getByTestId('screen-guide-open'))
     expect(screen.getByTestId('screen-guide-dialog')).toBeInTheDocument()
@@ -86,20 +87,7 @@ describe('ScreenGuideOverlay', () => {
     expect(screen.queryByTestId('screen-guide-dialog')).not.toBeInTheDocument()
   })
 
-  it('first-run: surfaces itself once, then stays closed on the next visit', () => {
-    const first = render(<ScreenGuideOverlay activeKey="customer-care" />)
-    // auto-opened on first ever mount
-    expect(screen.getByTestId('screen-guide-dialog')).toBeInTheDocument()
-    expect(window.localStorage.getItem('ofbo-guide-seen-v1')).toBe('1')
-    first.unmount()
-    cleanup()
-    // a later visit does not auto-open
-    render(<ScreenGuideOverlay activeKey="customer-care" />)
-    expect(screen.queryByTestId('screen-guide-dialog')).not.toBeInTheDocument()
-  })
-
   it('falls back to a general OFBO explainer when the screen has no entry', () => {
-    window.localStorage.setItem('ofbo-guide-seen-v1', '1')
     render(<ScreenGuideOverlay activeKey="unknown" />)
     fireEvent.click(screen.getByTestId('screen-guide-open'))
     expect(screen.getByTestId('screen-guide-dialog')).toHaveTextContent('Open Finance Back Office')
