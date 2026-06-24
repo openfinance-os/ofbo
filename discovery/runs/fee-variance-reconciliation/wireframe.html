@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- discovery/brand/design.md@v1 -->
+<title>Fee-variance reconciliation</title>
+<style>
+  :root {
+    --brand:#1F4DB8; --on-brand:#FFFFFF;
+    --accent:#0E9F6E; --warn:#B8860B; --danger:#B42318;
+    --bg:#F7F8FA; --card:#FFFFFF;
+    --ink:#0B1221; --muted:#5A6473; --border:#E2E6EC;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Inter", "Helvetica Neue", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  .demo-banner { background:var(--warn); color:var(--on-brand); text-align:center;
+    font-size:13px; padding:6px; letter-spacing:.04em; }
+  .wordmark { color:var(--brand); font-weight:600; font-size:18px; }
+  a { color:var(--brand); }
+  
+    .wrap { max-width:960px; margin:0 auto; padding:24px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; }
+    h1 { font-size:22px; margin:16px 0 4px; } .intro { margin-bottom:24px; }
+    .sub { color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; }
+    .full { grid-column:1 / -1; }
+    .label { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; }
+    .metric { font-size:28px; font-weight:600; margin-top:8px; }
+    .pill { display:inline-block; font-size:13px; padding:2px 8px; border-radius:4px; color:var(--on-brand); }
+    table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
+    th { text-align:left; background:var(--brand); color:var(--on-brand); padding:6px 8px; }
+    td { padding:6px 8px; border-bottom:1px solid var(--border); }
+    .ghost { color:var(--muted); border:1px dashed var(--border); border-radius:4px; padding:10px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="demo-banner">DEMO — synthetic data, non-production</div>
+<div class="wrap">
+    <div class="topbar"><span class="wordmark">OFBO</span>
+      <span class="sub">Discovery prototype · fee-variance-reconciliation</span></div>
+    <h1>Fee-variance reconciliation</h1>
+    <div class="sub intro">Make fee variance against contracted tariffs observable — and reconciled — in near real time.</div>
+    <div class="grid"><div class="card"><div class="label">Open variances (this period)</div>
+      <div class="metric">38 <span class="pill" style="background:var(--danger)">unreconciled</span></div>
+      <div class="sub">3.8% of 1,000 invoiced fee lines diverge from tariff (S-001)</div></div>
+<div class="card"><div class="label">Systems agreeing on the total</div>
+      <div class="metric">0 of 3 <span class="pill" style="background:var(--warn)">inconsistent</span></div>
+      <div class="sub">Ledger vs Hub invoice vs contract (S-004)</div></div><div class="card full"><div class="label">Source comparison — variance by counterparty (S-004)</div>
+    <table><thead><tr><th>TPP (synthetic)</th><th>Contract tariff</th><th>Hub invoice</th><th>LFI ledger</th><th>Status</th></tr></thead>
+    <tbody><tr><td>tpp-demo-014</td><td>AED 12,500</td><td>AED 13,750</td><td>AED 12,500</td><td>variance — none fired</td></tr><tr><td>tpp-demo-022</td><td>AED 8,000</td><td>AED 8,000</td><td>AED 8,000</td><td>reconciled</td></tr><tr><td>tpp-demo-031</td><td>AED 20,000</td><td>AED 21,250</td><td>AED 20,000</td><td>variance — drifting</td></tr></tbody></table></div><div class="card full"><div class="label">Export</div>
+    <div class="ghost">[ Lineage: &quot;fee accuracy to source, this period&quot; ] — affordance only; behaviour authored in delivery.</div></div></div>
+  </div>
+</body>
+</html>

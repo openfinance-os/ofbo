@@ -1,0 +1,34 @@
+{
+  "title": "Fee-variance reconciliation",
+  "context": "Discovery prototype · fee-variance-reconciliation",
+  "intro": "Make fee variance against contracted tariffs observable — and reconciled — in near real time.",
+  "tiles": [
+    {
+      "label": "Open variances (this period)",
+      "value": "38",
+      "status": "danger",
+      "pill": "unreconciled",
+      "sub": "3.8% of 1,000 invoiced fee lines diverge from tariff (S-001)"
+    },
+    {
+      "label": "Systems agreeing on the total",
+      "value": "0 of 3",
+      "status": "warn",
+      "pill": "inconsistent",
+      "sub": "Ledger vs Hub invoice vs contract (S-004)"
+    }
+  ],
+  "table": {
+    "label": "Source comparison — variance by counterparty (S-004)",
+    "headers": ["TPP (synthetic)", "Contract tariff", "Hub invoice", "LFI ledger", "Status"],
+    "rows": [
+      ["tpp-demo-014", "AED 12,500", "AED 13,750", "AED 12,500", "variance — none fired"],
+      ["tpp-demo-022", "AED 8,000", "AED 8,000", "AED 8,000", "reconciled"],
+      ["tpp-demo-031", "AED 20,000", "AED 21,250", "AED 20,000", "variance — drifting"]
+    ]
+  },
+  "affordance": {
+    "label": "Export",
+    "text": "[ Lineage: \"fee accuracy to source, this period\" ] — affordance only; behaviour authored in delivery."
+  }
+}
