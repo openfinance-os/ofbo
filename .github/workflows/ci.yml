@@ -52,6 +52,32 @@ jobs:
           pipx install semgrep
           semgrep scan --config p/typescript --error --exclude '*.generated.ts'
 
+  q2b-docs-integrity:
+    name: Q2b — documentation integrity (anti-drift)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Deterministic, no install needed: fails if a current-state doc references a file that no
+      # longer exists, or if two ADRs share a number. The doc analogue of Q1's generated-artifact
+      # diff-check (HARNESS-05, ADR 0020).
+      - run: node scripts/doc-link-check.mjs
+
+  q2b-docs-integrity:
+    name: Q2b — documentation drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Pure node + git, no install: fails on a doc that references a file which no longer
+      # exists, or two ADRs sharing a number. The deterministic doc analogue of the Q1
+      # generated-artifact drift check (HARNESS-05, ADR 0020).
+      - run: node scripts/doc-link-check.mjs
+
   q3-integration-contract:
     name: Q3 — integration + contract
     runs-on: ubuntu-latest

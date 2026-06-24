@@ -1715,3 +1715,15 @@ Closes BACKOFFICE-33 (governed cross-fintech aggregation via `bank_internal_view
 - **Finance View accrual/margin — deferred.** A real partial roll-up, but the rest of finance is naturally per-counterparty; pursue only when a bank needs the cross-fintech finance aggregate.
 
 Milestone state: the backlog is now drained — every item is `done` or correctly `blocked` for bank adoption (BACKOFFICE-52 gateway mTLS, M6 enterprise port-swaps). BACKOFFICE-33 marked `done`.
+
+---
+
+## 2026-06-24 — HARNESS-05: documentation-drift gate (Q2b) — ADR 0020
+
+Follow-up to the HARNESS-01..03 set (ADR 0019, PR #250), raised when the user asked whether the harness could keep docs from drifting from the code. Prose docs (CLAUDE.md, PRD, ADRs, governance, the run-ofbo skill, control-mappings) duplicate facts that live in code and rot silently when files move — and the harness had no guard for it.
+
+`scripts/doc-link-check.mjs` + CI gate **Q2b** (`pnpm docs:check`) — the deterministic doc analogue of Q1's generated-artifact diff-check. Two checks: (1) every repo-relative file path cited in a current-state doc must exist; (2) no two ADRs share a number. Anchored to unambiguous repo-root dirs with a trailing extension boundary so prose slashes and cwd-relative command examples don't false-positive; **excludes docs/build-log.md** (historical journal — would punish accurate history). Validated: dry-run surfaced + fixed two checker bugs (ext-boundary `settings.js`, `**`-glob not expanding in git ls-files), then clean on main (35 docs, 18 ADRs); negative test confirms it catches a broken ref and a duplicate ADR number.
+
+The duplicate-ADR-number check directly closes the hole that bit PR #250: while it was open, `main` took ADR 0018 (agent-identity DCR, #252) and #250 also numbered its ADR 0018 — a collision git can't see (different filenames). #250's ADR was renumbered to 0019; this gate would have caught it mechanically. Also: `implement-story` DoD gains a line requiring cited docs to be updated when a file moves.
+
+Reviewers: pending PR. node --check clean; docs:check green on this branch.

@@ -200,6 +200,12 @@ milestones:
     items:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
 
+  # Build-harness improvements — machinery that governs the autonomous build loop itself.
+  # HARNESS-01..04 land via PR #250 (ADR 0019); HARNESS-05 here (ADR 0020).
+  - name: HARNESS
+    items:
+      - { id: HARNESS-05, title: "Documentation-drift gate: doc->file reference + ADR-number check", status: done, adr: docs/adrs/0020-documentation-drift-gate.md, note: "scripts/doc-link-check.mjs + CI Q2b (pnpm docs:check) fail on a current-state doc referencing a non-existent file, or two ADRs sharing a number (the 0018 collision). Excludes the historical build-log. implement-story DoD gains a 'update cited docs on file move' line." }
+
 deferred: # Could / Phase 2 — not in build scope until promoted by the user
   # BACKOFFICE-60 and BACKOFFICE-53 fleshed out under ADR 0017 (agent-first MCP gateway,
   # services/mcp-gateway). ADR 0017 ACCEPTED 2026-06-23 — step-1 groundwork landed:
