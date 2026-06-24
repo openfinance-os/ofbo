@@ -34,8 +34,9 @@ export default tseslint.config(
     rules: { 'no-console': ['error', { allow: ['warn', 'error'] }] }
   },
   {
-    // Discovery gate validator is plain-JS Node tooling (CLI + tests) — grant Node globals.
-    files: ['discovery/gates/**/*.mjs'],
+    // Discovery harness is plain-JS Node tooling (gate validator + renderer CLIs + tests) —
+    // grant Node globals.
+    files: ['discovery/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly' } }
   }
 )
