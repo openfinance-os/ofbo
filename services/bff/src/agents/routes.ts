@@ -39,7 +39,11 @@ export function agentRoutes(service: AgentRegistryService, idempotency: Idempote
     } catch {
       return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A JSON body is required.', 'Send { persona, display_name }.', DOCS_BASE), 400)
     }
-    const cacheKey = `agents:register|${c.get('principal').subject}|${key}`
+    // Fold the body into the key so reusing an Idempotency-Key with a DIFFERENT persona/name
+    // can't silently replay the first agent's approval (consent revoke scopes by id for the
+    // same reason). A genuine double-submit (same key + same body) still dedupes.
+    const bodyKey = `${String(body.persona ?? '')}|${String(body.display_name ?? '')}`
+    const cacheKey = `agents:register|${c.get('principal').subject}|${key}|${bodyKey}`
     return replayCached(c, idempotency, cacheKey, async () => {
       try {
         const record = await service.register(c.get('principal'), body, trace(c))

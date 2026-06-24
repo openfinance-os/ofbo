@@ -122,8 +122,11 @@ export class RevocableConsentDirectory implements ConsentDirectory {
     this.revoked.add(consentId)
   }
 
+  // Always returns a (shallow) COPY — never the base seed's stored object — so a caller
+  // that mutates a read result cannot reach back into the shared seed. Overrides status to
+  // Revoked for a marked consent.
   private applied(view: ConsentAdminView): ConsentAdminView {
-    return this.revoked.has(view.consent_id) ? { ...view, status: 'Revoked' } : view
+    return this.revoked.has(view.consent_id) ? { ...view, status: 'Revoked' } : { ...view }
   }
 
   getByConsentId(consentId: string): ConsentAdminView | null {
@@ -137,7 +140,8 @@ export class RevocableConsentDirectory implements ConsentDirectory {
 
   search(identifierType: IdentifierType, identifier: string): PsuConsentSearchResult | null {
     const r = this.base.search(identifierType, identifier)
-    if (!r || this.revoked.size === 0) return r
-    return { psu: r.psu, consents: r.consents.map((c) => this.applied(c)) }
+    if (!r) return null
+    // Copy the envelope + every consent (new array, fresh objects) — the seed is never aliased.
+    return { psu: { ...r.psu }, consents: r.consents.map((c) => this.applied(c)) }
   }
 }
