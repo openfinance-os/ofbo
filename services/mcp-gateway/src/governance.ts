@@ -34,12 +34,16 @@ export class SpendBudgetExceededError extends Error {
 /**
  * BACKOFFICE-53: a per-session blast-radius budget on consequential operations.
  * Mirrors the BACKOFFICE-80 per-session guardrail pattern. Four-eyes operations
- * count at INITIATION (the 202), not at approval. On exhaustion, callers should
- * raise a Risk signal (type agent_anomaly) + an informational ITSM ticket — the
- * same auto-raise the super-admin guardrails use.
+ * count at INITIATION (the 202), not at approval.
+ *
+ * Split into check (pre-flight gate — blocks the next op when exhausted, WITHOUT
+ * consuming) and commit (records a SUCCESSFUL consequential op). So a mutation the BFF
+ * rejects (4xx/5xx) never burns budget, and the anomaly auto-raise fires exactly once —
+ * on the commit that reaches the budget, not again on the blocked re-attempt.
  */
 export class SpendGuard {
   private used = 0
+  private notified = false
   constructor(
     private readonly budget: number,
     private readonly onExhausted?: (used: number, budget: number) => void
@@ -49,15 +53,20 @@ export class SpendGuard {
     return Math.max(0, this.budget - this.used)
   }
 
-  /** Reserve budget for a consequential op. Throws SpendBudgetExceededError when over. */
-  consume(route: Route): void {
+  /** Pre-flight gate for a consequential op. Throws SpendBudgetExceededError when no budget remains. Does NOT consume. */
+  check(route: Route): void {
     if (!isConsequential(route)) return
-    if (this.used >= this.budget) {
-      this.onExhausted?.(this.used, this.budget)
-      throw new SpendBudgetExceededError(this.used, this.budget)
-    }
+    if (this.used >= this.budget) throw new SpendBudgetExceededError(this.used, this.budget)
+  }
+
+  /** Record a SUCCESSFUL consequential op; raise the anomaly exactly once when the budget is reached. */
+  commit(route: Route): void {
+    if (!isConsequential(route)) return
     this.used += 1
-    if (this.used >= this.budget) this.onExhausted?.(this.used, this.budget)
+    if (this.used >= this.budget && !this.notified) {
+      this.notified = true
+      this.onExhausted?.(this.used, this.budget)
+    }
   }
 }
 
@@ -76,11 +85,17 @@ export interface PendingApproval {
   guidance: string
 }
 
-/** Shape a 202 `approval_request` envelope into an agent-facing pending result. */
-export function toPendingApproval(envelopeData: Record<string, unknown>): PendingApproval {
+/**
+ * Shape a 202 `approval_request` envelope into an agent-facing pending result, or `null`
+ * when the body carries no real `approval_request_id` — so the gateway can surface an
+ * explicit error rather than ever degrade a malformed four-eyes 202 into a success.
+ */
+export function toPendingApproval(envelopeData: Record<string, unknown>): PendingApproval | null {
+  const id = envelopeData.approval_request_id
+  if (typeof id !== 'string' || id.length === 0) return null
   return {
     status: 'pending_approval',
-    approval_request_id: String(envelopeData.approval_request_id ?? ''),
+    approval_request_id: id,
     operation_type: String(envelopeData.operation_type ?? ''),
     approver_required_scope: String(envelopeData.approver_required_scope ?? ''),
     expires_at: String(envelopeData.expires_at ?? ''),

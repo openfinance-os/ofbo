@@ -1,4 +1,5 @@
 import type { McpGateway } from './gateway.js'
+import { toMcpToolList, toMcpCallContent } from './mcp-shape.js'
 
 /**
  * Transport-agnostic MCP dispatcher (ADR 0017 spike).
@@ -42,24 +43,11 @@ export async function handleJsonRpc(gateway: McpGateway, req: JsonRpcRequest): P
         result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: SERVER_INFO }
       }
     case 'tools/list':
-      return {
-        ...base,
-        result: {
-          tools: gateway.listTools().map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
-        }
-      }
+      return { ...base, result: { tools: toMcpToolList(gateway) } }
     case 'tools/call': {
       const name = String(req.params?.name ?? '')
       const args = (req.params?.arguments as Record<string, unknown>) ?? {}
-      const result = await gateway.callTool(name, args)
-      // MCP tool results are returned as content; we serialise the structured result.
-      return {
-        ...base,
-        result: {
-          isError: result.ok === false,
-          content: [{ type: 'text', text: JSON.stringify(result) }]
-        }
-      }
+      return { ...base, result: toMcpCallContent(await gateway.callTool(name, args)) }
     }
     default:
       return { ...base, error: { code: -32601, message: `Method not found: ${req.method}` } }

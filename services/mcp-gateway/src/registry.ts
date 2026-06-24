@@ -1,3 +1,4 @@
+import type { components } from '@ofbo/contracts'
 import type { FetchLike, GatewaySession } from './gateway.js'
 
 /**
@@ -91,3 +92,11 @@ export function sessionFromRegistration(
     spendBudget: reg.spend_budget
   }
 }
+
+// Contract-drift guard — fails typecheck if the OpenAPI AgentRegistration renames or
+// removes any field this module reads (the local interface is a hand-maintained subset).
+type ConformsToContract<V> = keyof V extends keyof components['schemas']['AgentRegistration']
+  ? true
+  : ['CONTRACT DRIFT — registry.ts AgentRegistration has keys absent from the contract schema']
+const _agentRegistrationConformsToContract: ConformsToContract<AgentRegistration> = true
+void _agentRegistrationConformsToContract

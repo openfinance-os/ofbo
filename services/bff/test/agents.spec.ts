@@ -3,6 +3,7 @@ import { getAdapter } from '@ofbo/ports'
 import { createApp } from '../src/app.js'
 import { SCOPE_MATRIX } from '../src/auth.js'
 import { AGENT_PERSONAS, isLeastPrivilege, type AgentPersonaDef } from '../src/agents/personas.js'
+import { InMemoryAgentStore, type StoredAgent } from '../src/agents/service.js'
 import { FAPI_HEADERS } from './helpers.js'
 
 const idp = getAdapter('p2-identity-provider', 'demo')
@@ -140,5 +141,37 @@ describe('BACKOFFICE-60 — agent personas are least privilege', () => {
     expect(isLeastPrivilege(mirror)).toBe(false)
     const superish: AgentPersonaDef = { id: 's', derivedFrom: 'customer-care-agent', scopes: ['platform:superadmin'], allowMutations: false, spendBudget: 0 }
     expect(isLeastPrivilege(superish)).toBe(false)
+  })
+})
+
+describe('BACKOFFICE-60 — InMemoryAgentStore pagination (port parity with PgAgentStore)', () => {
+  const agent = (n: number): StoredAgent => ({
+    agent_id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+    client_id: `agent-${n}`,
+    display_name: `Bot ${n}`,
+    persona: 'care-readonly-agent',
+    derived_from: 'customer-care-agent',
+    scopes: ['consents:admin', 'audit:read'],
+    status: 'active',
+    allow_mutations: false,
+    spend_budget: 0,
+    registered_by: 'demo:platform-admin',
+    approved_by: 'demo:platform-super-admin',
+    created_at: `2026-06-24T00:00:0${n}.000Z`,
+    revoked_at: null,
+    revoke_reason: null
+  })
+
+  it('honours limit + cursor and emits next_cursor (not everything-in-one-page)', async () => {
+    const store = new InMemoryAgentStore()
+    for (let n = 1; n <= 3; n++) await store.create(agent(n), 'trace')
+
+    const page1 = await store.list({ limit: 2 })
+    expect(page1.rows.map((r) => r.client_id)).toEqual(['agent-1', 'agent-2'])
+    expect(page1.next_cursor).not.toBeNull()
+
+    const page2 = await store.list({ limit: 2, cursor: page1.next_cursor! })
+    expect(page2.rows.map((r) => r.client_id)).toEqual(['agent-3'])
+    expect(page2.next_cursor).toBeNull()
   })
 })

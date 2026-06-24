@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { McpGateway } from './gateway.js'
+import { toMcpToolList, toMcpCallContent } from './mcp-shape.js'
 
 /**
  * ADR 0017 — binds the governed gateway to a real MCP stdio transport. This is the
@@ -13,15 +14,11 @@ import type { McpGateway } from './gateway.js'
 export async function runStdioServer(gateway: McpGateway): Promise<void> {
   const server = new Server({ name: 'ofbo-mcp-gateway', version: '0.0.1' }, { capabilities: { tools: {} } })
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: gateway.listTools().map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
-  }))
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toMcpToolList(gateway) }))
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
-    const name = req.params.name
     const args = (req.params.arguments ?? {}) as Record<string, unknown>
-    const result = await gateway.callTool(name, args)
-    return { isError: result.ok === false, content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+    return toMcpCallContent(await gateway.callTool(req.params.name, args))
   })
 
   await server.connect(new StdioServerTransport())
