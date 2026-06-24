@@ -37,6 +37,14 @@ const idp: IdentityProviderPort = {
       default:
         throw new Error('unknown demo token')
     }
+  },
+  // ADR 0018 — the portal tests never exercise agent sessions; verify always falls through
+  // to the human path (null) and mint is unused.
+  async mintAgentSession() {
+    throw new Error('not used in portal tests')
+  },
+  async verifyAgentSession() {
+    return null
   }
 }
 

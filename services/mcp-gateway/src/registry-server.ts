@@ -1,7 +1,7 @@
 import { createApp } from '@ofbo/bff'
 import { McpGateway, type FetchLike } from './gateway.js'
 import { runStdioServer } from './stdio.js'
-import { fetchAgentRegistration, sessionFromRegistration } from './registry.js'
+import { fetchAgentRegistration, mintAgentSession, sessionFromRegistration } from './registry.js'
 import { InMemoryAgentAnomalySink } from './anomaly.js'
 
 /**
@@ -56,7 +56,15 @@ const agentId = await registerAndApprove()
 
 // Look the approved agent up in the registry and adopt its bound identity.
 const reg = await fetchAgentRegistration({ baseUrl: '', adminToken: ADMIN, agentId, fetchImpl: inProcessFetch })
-const { session, allowMutations, spendBudget } = sessionFromRegistration(reg, { sessionId: crypto.randomUUID() })
+// ADR 0018 — mint a short-lived, server-verified agent SESSION token (token-exchange). The
+// gateway presents THIS as its bearer (not a borrowed human token), so the BFF sees the real
+// (agent_id, session_id) and re-asserts spend-control. In production the agent presents its
+// DCR client credential (Option 1) instead — same seam.
+const minted = await mintAgentSession({ baseUrl: '', adminToken: ADMIN, agentId, fetchImpl: inProcessFetch })
+const { session, allowMutations, spendBudget } = sessionFromRegistration(reg, {
+  sessionId: minted.session_id,
+  agentToken: minted.session_token
+})
 
 const gateway = new McpGateway({
   baseUrl: '',

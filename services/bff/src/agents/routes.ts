@@ -73,9 +73,25 @@ export function agentRoutes(service: AgentRegistryService, idempotency: Idempote
     })
   }
 
+  // ADR 0018 — mint a short-lived agent session token (token-exchange). Mutating
+  // (Idempotency-Key required): a replay returns the original session; a fresh key a new one.
+  const mintSessionHandler: Handler = async (c, params) => {
+    const key = c.req.header('idempotency-key')
+    if (!key) return c.json(missingIdempotencyKey(), 400)
+    const cacheKey = `agents:mint-session|${params.agent_id}|${c.get('principal').subject}|${key}`
+    return replayCached(c, idempotency, cacheKey, async () => {
+      try {
+        return c.json(dataEnvelope(await service.mintSession(c.get('principal'), params.agent_id!, trace(c))), 200)
+      } catch (e) {
+        return fail(c, e)
+      }
+    })
+  }
+
   return {
     'post /back-office/agents:register': registerHandler,
     'post /back-office/agents/{agent_id}:revoke': revokeHandler,
+    'post /back-office/agents/{agent_id}:mint-session': mintSessionHandler,
 
     'get /back-office/agents': async (c) => {
       try {

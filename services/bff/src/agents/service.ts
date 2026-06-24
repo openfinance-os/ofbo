@@ -1,3 +1,4 @@
+import type { IdentityProviderPort } from '@ofbo/ports'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
@@ -17,6 +18,18 @@ import { AGENT_PERSONAS, type AgentPersonaDef } from './personas.js'
 export const AGENT_READ_SCOPE = 'platform:agents:read'
 export const AGENT_WRITE_SCOPE = 'platform:agents:write'
 export const AGENT_REGISTER_OPERATION = 'agents.register'
+
+/** ADR 0018 — the wire shape of a minted agent session token (mirrors the OpenAPI
+ *  AgentSessionToken schema). No PII — agent + session telemetry only. */
+export interface AgentSessionTokenWire {
+  session_token: string
+  agent_id: string
+  session_id: string
+  scopes: string[]
+  allow_mutations: boolean
+  spend_budget: number
+  expires_at: string
+}
 
 export type AgentStatus = 'pending' | 'active' | 'revoked'
 
@@ -183,8 +196,67 @@ export class AgentRegistryService {
   constructor(
     private readonly approvals: ApprovalsService,
     private readonly store: AgentStore,
-    private readonly audit: HighClassAuditSink
+    private readonly audit: HighClassAuditSink,
+    /** ADR 0018 — P2 mints the agent session token (sim in demo, bank auth service at M6). */
+    private readonly idp: Pick<IdentityProviderPort, 'mintAgentSession'>
   ) {}
+
+  /**
+   * ADR 0018 (Option 2) — mint a short-lived agent session token for an ACTIVE registration.
+   * platform:agents:read gated (the human admin/automation runner reads the registry to
+   * obtain a session); the token carries the registration's bound scopes + allow_mutations +
+   * spend_budget so the BFF re-asserts per-(agent_id, session_id) spend-control. NOT
+   * four-eyes (registration already was, and this grants no authority beyond the bound
+   * scopes). High-class audited (agent_session_minted), acting_principal = agent_id.
+   */
+  async mintSession(principal: Principal, agentId: string, traceId: string): Promise<AgentSessionTokenWire> {
+    assertScope(principal, AGENT_READ_SCOPE)
+    const agent = await this.store.get(agentId)
+    if (!agent) throw new AgentRegistryError('BACKOFFICE.AGENT_NOT_FOUND', 'No agent matches that id.', 404)
+    if (agent.status !== 'active') {
+      throw new AgentRegistryError(
+        'BACKOFFICE.AGENT_NOT_ACTIVE',
+        `Agent is ${agent.status}, not active — a session can be minted only for an active agent.`,
+        409
+      )
+    }
+    const minted = await this.idp.mintAgentSession(
+      {
+        agent_id: agent.agent_id,
+        persona: agent.persona,
+        scopes: [...agent.scopes],
+        allow_mutations: agent.allow_mutations,
+        spend_budget: agent.spend_budget
+      },
+      { trace_id: traceId }
+    )
+    await this.audit.emit({
+      event_type: 'agent_session_minted',
+      acting_principal: agent.agent_id,
+      acting_persona: agent.persona,
+      scope_used: AGENT_READ_SCOPE,
+      request_trace_id: traceId,
+      request_body: {
+        agent_id: agent.agent_id,
+        session_id: minted.session_id,
+        persona: agent.persona,
+        scopes: agent.scopes,
+        allow_mutations: agent.allow_mutations,
+        spend_budget: agent.spend_budget,
+        minted_by: principal.subject
+      },
+      response_status: 200
+    })
+    return {
+      session_token: minted.token,
+      agent_id: agent.agent_id,
+      session_id: minted.session_id,
+      scopes: [...agent.scopes],
+      allow_mutations: agent.allow_mutations,
+      spend_budget: agent.spend_budget,
+      expires_at: minted.expires_at
+    }
+  }
 
   /** Register an agent under a pre-defined persona — four-eyes (returns the approval_request). */
   async register(principal: Principal, input: { persona?: string; display_name?: string }, traceId: string): Promise<ApprovalRecord> {

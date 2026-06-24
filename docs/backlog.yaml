@@ -227,8 +227,11 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
       (scopes, allow_mutations, spend_budget) from GET /back-office/agents/{id}
       (fetchAgentRegistration + sessionFromRegistration; demo:registry server proves the
       loop end to end). DoD met: contract, RBAC, four-eyes, audit, lineage, portal surface,
-      agent-first loop. Only open thread: BACKOFFICE-53 to enable mutating agent tools in prod.
-    blocked_on: none (read-only agents only; mutating tools still gated on BACKOFFICE-53)
+      agent-first loop. Production identity story now landed too (ADR 0018 Option 2): the
+      gateway mints + presents a server-verified agent SESSION token (:mint-session), and the
+      BFF verifies it as a first-class agent Principal — replacing the demo's borrowed
+      derived_from human token. Full DCR client-credentials + mTLS (Option 1) is the M6 swap.
+    blocked_on: none
     note: >-
       Gives a model/automation the same operations a human persona performs today,
       via the MCP gateway (services/mcp-gateway) over the existing OpenAPI contract.
@@ -258,23 +261,24 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
     depends_on: [BACKOFFICE-44, BACKOFFICE-45, BACKOFFICE-80]
   - id: BACKOFFICE-53
     title: Agentic spend-control for admin-scope MCP tools
-    status: in-progress
+    status: done
     priority: Could
     adr: docs/adrs/0017-agent-first-mcp-gateway.md
     progress: >-
       Gateway-side spend-control complete: SpendGuard caps per-session consequential ops
       (four-eyes counts at INITIATION) and blocks further mutations on exhaustion; budgets
       are per-agent-persona config (AGENT_PERSONAS spend_budget, default read-only). On
-      threshold crossing BffBackedAnomalySink now raises a REAL agent_anomaly Risk signal +
-      P3 ITSM ticket — reusing the BACKOFFICE-80 auto-raise sinks, no PSU PII — wired into
-      the demo server (shared sinks with the BFF). Tested.
-    blocked_on: >-
-      The remaining acceptance criterion — re-assert the budget BFF-SIDE (defence in depth,
-      so the gateway is never the sole guard) — needs TRUSTED agent identity at the BFF (a
-      verified per-agent session) = DCR agent-token issuance. Proposed in ADR 0018
-      (docs/adrs/0018-agent-identity-dcr-token-issuance.md): generalise the ADR 0001
-      act/sub minting into an agent session token (Option 2) now, full DCR client-credentials
-      + mTLS at M6 (Option 1). Blocked on ADR 0018 acceptance (humans-decide auth path).
+      threshold crossing BffBackedAnomalySink raises a REAL agent_anomaly Risk signal +
+      P3 ITSM ticket — reusing the BACKOFFICE-80 auto-raise sinks, no PSU PII.
+      BFF-SIDE re-assertion now done (ADR 0018 Option 2 accepted + built): an agent presents
+      a server-verified session token (P2 mintAgentSession/verifyAgentSession), the BFF auth
+      middleware builds a first-class agent Principal (agent_id + session_id), and a BFF
+      spend-control middleware re-asserts allow_mutations (403) + per-(agent_id, session_id)
+      budget (429), raising agent_anomaly Risk + ITSM BFF-side on exhaustion. Defence in
+      depth holds: gateway pre-flight AND BFF re-assertion, the gateway never the sole guard.
+      All criteria met. Tested at every layer (port round-trip, BFF middleware + integration,
+      gateway loop incl. immediate revoke-kills-session).
+    blocked_on: none
     note: >-
       Per-session blast-radius budget on consequential agent operations, mirroring the
       BACKOFFICE-80 per-session guardrail pattern. Bounds damage from a confused or

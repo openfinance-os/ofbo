@@ -39,9 +39,11 @@ export {
 } from './anomaly.js'
 export {
   fetchAgentRegistration,
+  mintAgentSession,
   sessionFromRegistration,
   AgentRegistryLookupError,
   type AgentRegistration,
+  type MintedAgentSession,
   type FetchRegistrationOptions,
   type SessionFromRegistrationOptions
 } from './registry.js'

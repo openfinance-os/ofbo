@@ -51,7 +51,7 @@ describe('BACKOFFICE-80 — super-admin guardrails (code-enforced)', () => {
 
   it('rejects a service-account token carrying the super-admin persona (no automations, ever)', async () => {
     const svcIdp: IdentityProviderPort = {
-      personaLogins: () => idp.personaLogins(),
+      ...idp,
       verifyToken: async () => ({ subject: 'svc:nightly-batch', persona: 'platform-super-admin', mfa: true })
     }
     const { app, audit } = build({ idp: svcIdp })

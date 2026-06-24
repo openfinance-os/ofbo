@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   fetchAgentRegistration,
+  mintAgentSession,
   sessionFromRegistration,
   AgentRegistryLookupError,
   McpGateway,
@@ -69,6 +70,27 @@ describe('fetchAgentRegistration (reads the registry under an admin token)', () 
     ).rejects.toMatchObject({ code: 'not_found' })
     await expect(
       fetchAgentRegistration({ baseUrl: 'x', adminToken: 't', agentId: 'a', fetchImpl: async () => jsonResponse({ error: { message: 'boom' } }, 403) })
+    ).rejects.toMatchObject({ code: 'lookup_failed' })
+  })
+})
+
+describe('mintAgentSession (ADR 0018 — the gateway gets a server-verified session token)', () => {
+  it('POSTs :mint-session under the admin token with an Idempotency-Key and returns the token + session_id', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
+      expect(url).toBe('https://bff.example/back-office/agents/a-9:mint-session')
+      expect(init.method).toBe('POST')
+      const headers = init.headers as Record<string, string>
+      expect(headers.authorization).toBe('Bearer demo-token:platform-admin')
+      expect(headers['idempotency-key']).toBeTruthy()
+      return jsonResponse({ data: { session_token: 'agent-session.abc.def', session_id: 'sess-9' } })
+    })
+    const got = await mintAgentSession({ baseUrl: 'https://bff.example', adminToken: 'demo-token:platform-admin', agentId: 'a-9', fetchImpl })
+    expect(got).toEqual({ session_token: 'agent-session.abc.def', session_id: 'sess-9' })
+  })
+
+  it('throws lookup_failed when mint is refused (e.g. a non-active agent → 409)', async () => {
+    await expect(
+      mintAgentSession({ baseUrl: 'x', adminToken: 't', agentId: 'a', fetchImpl: async () => jsonResponse({ error: { message: 'not active' } }, 409) })
     ).rejects.toMatchObject({ code: 'lookup_failed' })
   })
 })

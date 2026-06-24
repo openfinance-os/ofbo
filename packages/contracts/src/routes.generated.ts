@@ -638,5 +638,12 @@ export const ROUTES: readonly Route[] = [
     "tag": "agents",
     "scope": "platform:agents:write",
     "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/agents/{agent_id}:mint-session",
+    "tag": "agents",
+    "scope": "platform:agents:read",
+    "fourEyes": false
   }
 ] as const
