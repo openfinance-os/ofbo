@@ -1,0 +1,22 @@
+{
+  "title": "Consent-lifecycle hygiene",
+  "context": "Discovery prototype · consent-lifecycle-hygiene",
+  "intro": "Make withdrawal timeliness and lifecycle drift observable — and provable.",
+  "tiles": [
+    { "label": "Revoke acknowledgement (p50)", "value": "9.4s", "status": "danger", "pill": "breaches 5s", "sub": "Target: within the 5s default · 74% of sampled revokes breach (S-001)" },
+    { "label": "Within-SLA revokes (last 200)", "value": "26%", "status": "warn", "pill": "below target", "sub": "Currently unobserved in operations" }
+  ],
+  "table": {
+    "label": "Lifecycle drift — Hub vs LFI mirror (S-003)",
+    "headers": ["PSU (synthetic)", "Hub state", "LFI mirror", "Drift", "Signal"],
+    "rows": [
+      ["psu-demo-0192", "revoked", "authorised", "14m 10s", "none fired"],
+      ["psu-demo-0244", "revoked", "revoked", "3.1s", "in tolerance"],
+      ["psu-demo-0311", "revoked", "authorised", "6m 02s", "drifting"]
+    ]
+  },
+  "affordance": {
+    "label": "Audit evidence (S-004)",
+    "text": "[ Export: \"withdrawals honoured within SLA, this period\" ] — affordance only; behaviour authored in delivery."
+  }
+}

@@ -39,11 +39,12 @@ Pick a slug. Create `discovery/runs/<slug>/` and copy each `discovery/templates/
 
 - `prototype.md`: the brief — which framing hypotheses the wireframe tests, scope, fidelity
   guardrails. `fidelity: low`.
-- `wireframe.html`: a **low-fidelity, disposable** wireframe rendered against
-  `discovery/brand/design.md`. Use **token values only** (every colour/font must be a design.md
-  token) and embed `<!-- brand-profile: discovery/brand/design.md@v1 -->`. Brand-real,
-  behaviour-hollow: synthetic data, no live reads, no component/data contracts. This is to test
-  *the problem and direction*, not to specify the solution (§4).
+- `wireframe.html`: a **low-fidelity, disposable** wireframe. Generate it with the
+  `brand-render` skill (`node discovery/render/render.mjs prototype specs/wireframe.prototype.json
+  wireframe.html`) — author the regions as structured JSON; the renderer applies `design.md`
+  tokens and embeds the marker, so it is brand-conformant by construction. Brand-real,
+  behaviour-hollow: synthetic data, no live reads, no component/data contracts. This tests
+  *the problem and direction*, not the solution (§4). **No external design tool is required.**
 
 > **Brand rule (D7).** Anything visual this harness emits — HTML, generated docs, decks,
 > spreadsheets, wireframes — renders against `design.md` with tokens only and carries the
@@ -58,7 +59,9 @@ Pick a slug. Create `discovery/runs/<slug>/` and copy each `discovery/templates/
    any FAIL.
 3. `handoff.md`: the boundary object — problem, success measures, out-of-scope, the
    data-governance verdict + inherited conditions, and the prototype as *direction, not
-   specification*. No delivery design in it.
+   specification*. No delivery design in it. Optionally render a stakeholder-facing
+   `handoff.document.html` (print-to-PDF) and `summary.deck.html` with the `brand-render` skill —
+   same content, on-brand, zero external tooling.
 
 ## Definition of done
 

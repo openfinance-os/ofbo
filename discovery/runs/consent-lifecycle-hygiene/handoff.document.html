@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- discovery/brand/design.md@v1 -->
+<title>Consent-lifecycle hygiene — delivery hand-off</title>
+<style>
+  :root {
+    --brand:#1F4DB8; --on-brand:#FFFFFF;
+    --accent:#0E9F6E; --warn:#B8860B; --danger:#B42318;
+    --bg:#F7F8FA; --card:#FFFFFF;
+    --ink:#0B1221; --muted:#5A6473; --border:#E2E6EC;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Inter", "Helvetica Neue", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  .demo-banner { background:var(--warn); color:var(--on-brand); text-align:center;
+    font-size:13px; padding:6px; letter-spacing:.04em; }
+  .wordmark { color:var(--brand); font-weight:600; font-size:18px; }
+  a { color:var(--brand); }
+  
+    .wrap { max-width:820px; margin:0 auto; padding:40px 24px; }
+    .cover { border-bottom:2px solid var(--brand); padding-bottom:16px; margin-bottom:24px; }
+    h1 { font-size:28px; margin:8px 0 4px; } h2 { font-size:22px; margin:24px 0 8px; }
+    .sub { color:var(--muted); font-size:13px; }
+    p, li { font-size:15px; line-height:1.5; }
+    .note { border-left:3px solid var(--brand); background:var(--card); padding:8px 12px; color:var(--muted); font-size:13px; }
+    table { width:100%; border-collapse:collapse; margin:8px 0; font-size:13px; }
+    th { background:var(--brand); color:var(--on-brand); text-align:left; padding:6px 8px; }
+    td { padding:6px 8px; border-bottom:1px solid var(--border); }
+    @media print { .demo-banner { position:fixed; top:0; left:0; right:0; } .wrap { padding-top:48px; } }
+</style>
+</head>
+<body>
+<div class="demo-banner">DEMO — synthetic data, non-production</div>
+<div class="wrap">
+    <header class="cover">
+      <span class="wordmark">OFBO</span>
+      <h1>Consent-lifecycle hygiene — delivery hand-off</h1>
+      <div class="sub">Discovery run · consent-lifecycle-hygiene · synthetic data, non-production</div>
+    </header>
+    <section><h2>Problem</h2><p>For a consent operations analyst who must ensure every PSU withdrawal is honoured and acknowledged within the bank's 5s default, revoke acknowledgement latency and lifecycle-state drift are invisible until a customer complains.</p>
+<p>This causes silent SLA breaches, stale-state errors in care handling, and no audit-ready proof of timely withdrawal.</p></section>
+<section><h2>Success measures</h2><table><thead><tr><th>Measure</th><th>Baseline</th><th>Target</th></tr></thead><tbody><tr><td>Revoke acks within SLA, visible</td><td>p50 9.4s, unobserved</td><td>within 5s and observable</td></tr><tr><td>Time-to-detect lifecycle drift</td><td>only on complaint</td><td>before the customer notices</td></tr><tr><td>Audit evidence of timely withdrawal</td><td>reconstructed manually</td><td>available on demand</td></tr></tbody></table></section>
+<section><h2>Data-governance position</h2><p>Residual risk Low — conditional on read-only observability over consent metadata (DR-2.1; CTRL-DP-001/002/003; PDPL-15.2, PDPL-6.2).</p>
+<ul><li>No consent content beyond lifecycle state and timestamps</li><li>INSERT-only audit of evidence</li><li>Hub-bound reads via the P6 egress port</li><li>PII redaction at emission</li></ul></section>
+<section><h2>Direction (not specification)</h2><p>A consent-lifecycle hygiene monitor makes timeliness and drift tangible. See wireframe.html — direction only; delivery authors the solution from scratch.</p>
+<div class="note">Explicitly out of scope: the withdrawal flow itself, the PSU banking app, and bulk consent migration.</div></section>
+  </div>
+</body>
+</html>

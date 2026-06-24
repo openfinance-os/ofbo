@@ -1,0 +1,42 @@
+{
+  "title": "Consent-lifecycle hygiene — delivery hand-off",
+  "subtitle": "Discovery run · consent-lifecycle-hygiene · synthetic data, non-production",
+  "sections": [
+    {
+      "heading": "Problem",
+      "blocks": [
+        { "p": "For a consent operations analyst who must ensure every PSU withdrawal is honoured and acknowledged within the bank's 5s default, revoke acknowledgement latency and lifecycle-state drift are invisible until a customer complains." },
+        { "p": "This causes silent SLA breaches, stale-state errors in care handling, and no audit-ready proof of timely withdrawal." }
+      ]
+    },
+    {
+      "heading": "Success measures",
+      "blocks": [
+        { "table": { "headers": ["Measure", "Baseline", "Target"], "rows": [
+          ["Revoke acks within SLA, visible", "p50 9.4s, unobserved", "within 5s and observable"],
+          ["Time-to-detect lifecycle drift", "only on complaint", "before the customer notices"],
+          ["Audit evidence of timely withdrawal", "reconstructed manually", "available on demand"]
+        ] } }
+      ]
+    },
+    {
+      "heading": "Data-governance position",
+      "blocks": [
+        { "p": "Residual risk Low — conditional on read-only observability over consent metadata (DR-2.1; CTRL-DP-001/002/003; PDPL-15.2, PDPL-6.2)." },
+        { "list": [
+          "No consent content beyond lifecycle state and timestamps",
+          "INSERT-only audit of evidence",
+          "Hub-bound reads via the P6 egress port",
+          "PII redaction at emission"
+        ] }
+      ]
+    },
+    {
+      "heading": "Direction (not specification)",
+      "blocks": [
+        { "p": "A consent-lifecycle hygiene monitor makes timeliness and drift tangible. See wireframe.html — direction only; delivery authors the solution from scratch." },
+        { "note": "Explicitly out of scope: the withdrawal flow itself, the PSU banking app, and bulk consent migration." }
+      ]
+    }
+  ]
+}

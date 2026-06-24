@@ -144,6 +144,15 @@ expressed as a portable file so any entity drops in their own brand and gets on-
 documents, decks, sheets, and wireframes for free. The OFBO instance of `design.md` carries
 the DEMO brand and remains token-only and DEMO-bannered.
 
+**Rendering is self-contained (zero external tooling).** `discovery/render/` is a pure-Node,
+zero-dependency renderer with three modes — `document`, `deck` (ppt-equivalent), `prototype` —
+that turns **structured content** (JSON the facilitator authors) into self-contained, brand-
+tokened HTML. There is **no dependency on Stitch, Magic Patterns, Gamma, or any external
+service**: content is data, presentation comes only from `design.md` tokens, and every output
+carries the D7 marker (so D7 verifies it automatically). Print a `document` to PDF; present a
+`deck` full-screen. The `brand-render` skill wraps this; the renderer owns all styling so a
+stray hex/font can't slip into authored content.
+
 ---
 
 ## 6. Hand-off contract (left diamond → right diamond)
@@ -171,9 +180,11 @@ discovery/
   DISCOVERY.md            ← this canon
   brand/
     design.md             ← brand-profile seam (D7)
+  render/                 ← zero-dep branded renderer: document · deck · prototype (+ tests)
   templates/              ← one template per artifact (carry design_profile front-matter)
   gates/                  ← pure-Node D1–D8 validator + tests
   runs/<slug>/            ← a discovery run's artifacts (problem-statement, prototype, …)
+    specs/                ← structured content (JSON) the renderer turns into branded HTML
 docs/governance/
   data-risk-register/     ← data-governance seam (D6)
   HG-0007…, HG-0008…      ← governance for this harness
