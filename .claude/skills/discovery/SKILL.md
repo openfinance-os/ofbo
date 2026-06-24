@@ -40,8 +40,8 @@ Pick a slug. Create `discovery/runs/<slug>/` and copy each `discovery/templates/
 - `prototype.md`: the brief — which framing hypotheses the wireframe tests, scope, fidelity
   guardrails. `fidelity: low`.
 - `wireframe.html`: a **low-fidelity, disposable** wireframe. Generate it with the
-  `brand-render` skill (`node discovery/render/render.mjs prototype specs/wireframe.prototype.json
-  wireframe.html`) — author the regions as structured JSON; the renderer applies `design.md`
+  `brand-render` skill (`node discovery/render/render.mjs prototype
+  discovery/runs/<slug>/specs/wireframe.prototype.json discovery/runs/<slug>/wireframe.html`) — author the regions as structured JSON; the renderer applies `design.md`
   tokens and embeds the marker, so it is brand-conformant by construction. Brand-real,
   behaviour-hollow: synthetic data, no live reads, no component/data contracts. This tests
   *the problem and direction*, not the solution (§4). **No external design tool is required.**

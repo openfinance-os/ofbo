@@ -29,11 +29,12 @@ checked by gate D7 automatically when it lands in a run directory.
 1. Write a spec JSON (see shapes below). Keep it under the run, e.g.
    `discovery/runs/<slug>/specs/<name>.<mode>.json`. **Synthetic content only; no raw hex/px/font
    in the content** — colours come from tokens, not from you.
-2. Render:
+2. Render (from the repo root):
    ```
-   node discovery/render/render.mjs document  specs/handoff.document.json  handoff.document.html
-   node discovery/render/render.mjs deck       specs/summary.deck.json      summary.deck.html
-   node discovery/render/render.mjs prototype  specs/wireframe.prototype.json wireframe.html
+   RUN=discovery/runs/<slug>
+   node discovery/render/render.mjs document   "$RUN/specs/handoff.document.json"    "$RUN/handoff.document.html"
+   node discovery/render/render.mjs deck       "$RUN/specs/summary.deck.json"        "$RUN/summary.deck.html"
+   node discovery/render/render.mjs prototype  "$RUN/specs/wireframe.prototype.json" "$RUN/wireframe.html"
    ```
 3. Validate: `node discovery/gates/validate.mjs discovery/runs/<slug>` — D7 must stay green
    (it scans every `.html` in the run). Never inline a colour to "fix" a layout; fix the token.
