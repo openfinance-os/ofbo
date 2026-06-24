@@ -5,6 +5,7 @@ import { visibleModules } from '../lib/nav'
 import { SCOPES } from '../lib/scopes'
 import { personaLabel } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
+import { ScreenGuideOverlay } from './screen-guide-overlay'
 
 /**
  * UI-01 — the design-system app shell (translated from the Stitch "OFBO Portal"
@@ -152,6 +153,9 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {/* UX — the per-screen "why this exists" overlay (Open Finance context for
+                operators new to the scheme). Always present; explains the active module. */}
+            <ScreenGuideOverlay activeKey={active} />
             {/* Signed-in identity — friendly "Signed in as <Role>", linking to the profile
                 where the persona's privileges are explained (the raw scopes live there, not here). */}
             <a
