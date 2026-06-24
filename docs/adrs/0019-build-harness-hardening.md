@@ -1,4 +1,4 @@
-# ADR 0018 — Build-harness hardening: anti-reward-hacking, contract self-correction, agent provenance (HARNESS-01..03)
+# ADR 0019 — Build-harness hardening: anti-reward-hacking, contract self-correction, agent provenance (HARNESS-01..03)
 
 - Status: **Accepted** — chosen by the user (2026-06-24)
 - Date: 2026-06-24

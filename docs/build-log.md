@@ -1718,9 +1718,9 @@ Milestone state: the backlog is now drained — every item is `done` or correctl
 
 ---
 
-## 2026-06-24 — HARNESS-01..03: build-harness hardening (anti-reward-hacking, contract self-correction, agent provenance) — ADR 0018
+## 2026-06-24 — HARNESS-01..03: build-harness hardening (anti-reward-hacking, contract self-correction, agent provenance) — ADR 0019
 
-Researched 2025-26 agentic-coding practice (Anthropic Claude Code guidance, Spec Kit/Specmatic, SWE-bench-style verification, the reward-hacking literature, EU AI Act traceability) against the existing harness and implemented the three gaps the user selected. Not product features — the loop's own machinery. ADR 0018 ACCEPTED.
+Researched 2025-26 agentic-coding practice (Anthropic Claude Code guidance, Spec Kit/Specmatic, SWE-bench-style verification, the reward-hacking literature, EU AI Act traceability) against the existing harness and implemented the three gaps the user selected. Not product features — the loop's own machinery. ADR 0019 ACCEPTED.
 
 **HARNESS-01 — anti-reward-hacking (test integrity).** Closes the loop's one cheat path: making a RED test green by weakening it instead of fixing the code. Two layers: `.claude/hooks/test-tripwire.sh` (PreToolUse advisory — denies `it.skip/.only/.todo/.fails`, `xit`, commented-out `expect`/`assert` on feature/claude branches; narrow, never blocks adding cases) and `scripts/test-integrity.mjs` + CI gate **Q1b** (deterministic, merge-blocking control of record — diffs the PR vs merge base, fails on added disabler markers or net assertion loss alongside an implementation change). Both exempt `*-testfix-*`/`*-spec-*`. Validated end-to-end (disabler + assertion-loss scenarios both fail correctly).
 
