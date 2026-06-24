@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "bundle": "tsx src/cli.ts"
+    "bundle": "tsx src/cli.ts",
+    "provenance": "tsx scripts/collect-provenance.ts"
   },
   "dependencies": {
     "@ofbo/db": "workspace:*"

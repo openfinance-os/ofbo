@@ -103,6 +103,17 @@ check "sim: clear faults -> 200" 200 "$clean"
 unfaulted_total="$(curl -s "$SIM/tpp-reports/2026-05" | python3 -c 'import sys,json;print(sum(r["fee"]["amount"] for r in json.load(sys.stdin)["rows"]))')"
 check "sim: fault perturbed report by +999 minor units" "$((unfaulted_total + 999))" "$faulted_total"
 
+# --- contract conformance: live BFF responses vs specs/backoffice-openapi.yaml ---
+# Body-schema validation (status codes alone are checked above). The agent can also run
+# this standalone each iteration via `pnpm verify:contract` (see the run-ofbo skill).
+if BASE_URL="$BFF" pnpm --dir "$ROOT" verify:contract >"$LOG_DIR/contract.log" 2>&1; then
+  echo "PASS  contract: live BFF responses conform to OpenAPI ($(grep -c '✓ CONFORMANT' "$LOG_DIR/contract.log") probes)"
+else
+  echo "FAIL  contract: live responses drift from OpenAPI — see $LOG_DIR/contract.log"
+  grep -E '✗ DRIFT|^      ' "$LOG_DIR/contract.log" || true
+  FAILS=$((FAILS+1))
+fi
+
 echo
 grep -h "listening" "$LOG_DIR"/sim.log "$LOG_DIR"/bff.log
 if [ "$FAILS" -gt 0 ]; then

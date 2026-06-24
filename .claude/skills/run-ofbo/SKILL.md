@@ -68,6 +68,23 @@ pnpm test:integration   # needs DATABASE_URL (real Postgres)
 pnpm test:smoke         # acceptance suite against the LIVE demo URLs, not localhost
 ```
 
+## Verify contract conformance (agent self-correction loop)
+
+When implementing or changing an endpoint, run this each iteration to catch live response
+drift from the OpenAPI **before** you open a PR — don't wait for CI or the contract-conformance
+reviewer to bounce it. It validates real BFF responses against `specs/backoffice-openapi.yaml`
+(spec is ground truth), auto-probing every implemented parameter-less GET plus the 400/401
+error envelopes. Deterministic CONFORMANT/DRIFT, exit 0/1 (exit 2 = BFF down).
+
+```bash
+.claude/skills/run-ofbo/smoke.sh --keep   # bring the stack up and leave it running
+pnpm verify:contract                       # validate localhost:8787 against the spec
+pnpm verify:contract --against-demo        # validate the deployed demo BFF instead
+```
+
+`smoke.sh` already runs this as its final check. If you see `✗ DRIFT`, fix the implementation
+to match the contract; if the *spec* is the defect, stop and use the spec-change skill first.
+
 ## Gotchas
 
 - **Every BFF request needs `x-fapi-interaction-id`** (any UUID) or you get 400 before auth even runs — easy to mistake for a routing problem.
