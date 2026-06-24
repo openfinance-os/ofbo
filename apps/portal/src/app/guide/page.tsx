@@ -38,6 +38,7 @@ export default async function GuidePage() {
   return (
     <AppShell
       principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
+      active="guide"
       badges={await shellBadges(token)}
     >
       <GuideContent />

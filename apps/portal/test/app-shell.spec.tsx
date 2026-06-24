@@ -31,8 +31,8 @@ describe('visibleModules (scope-gated nav)', () => {
     expect(visibleModules([], true)).toHaveLength(NAV_MODULES.length)
   })
 
-  it('the no-scope modules (dashboard + cross-cutting approvals) are always visible', () => {
-    expect(visibleModules([], false).map((m) => m.key)).toEqual(['dashboard', 'approvals'])
+  it('the no-scope modules (dashboard + cross-cutting approvals + the onboarding guide) are always visible', () => {
+    expect(visibleModules([], false).map((m) => m.key)).toEqual(['dashboard', 'approvals', 'guide'])
   })
 
   it('shows an any-of-scoped module (analytics) to either audience', () => {

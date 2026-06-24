@@ -16,9 +16,10 @@ afterEach(cleanup)
  */
 
 describe('screen-guide content (single source of truth)', () => {
-  it('explains every nav module the operator can reach', () => {
+  it('explains every console nav module the operator can reach', () => {
     const guideKeys = new Set(SCREEN_GUIDE.map((s) => s.key))
-    for (const m of NAV_MODULES) {
+    // The "guide" entry is the onboarding page itself — meta/help, not a console to tour.
+    for (const m of NAV_MODULES.filter((m) => m.key !== 'guide')) {
       expect(guideKeys.has(m.key), `nav module "${m.key}" has no guide entry`).toBe(true)
     }
   })

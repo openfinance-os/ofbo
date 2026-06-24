@@ -48,7 +48,7 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
 test.describe('scope-aware navigation (the §2 matrix, app-shell + page gates)', () => {
   test('super-admin sees every module', async ({ page }) => {
     await login(page, SUPER)
-    for (const key of ['dashboard', 'approvals', 'customer-care', 'finance', 'analytics', 'billing', 'compliance', 'risk', 'operations']) {
+    for (const key of ['dashboard', 'approvals', 'customer-care', 'finance', 'analytics', 'billing', 'compliance', 'risk', 'operations', 'guide']) {
       await expect(page.getByTestId(`nav-${key}`)).toBeVisible()
     }
   })
