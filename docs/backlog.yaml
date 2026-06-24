@@ -271,10 +271,10 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
     blocked_on: >-
       The remaining acceptance criterion — re-assert the budget BFF-SIDE (defence in depth,
       so the gateway is never the sole guard) — needs TRUSTED agent identity at the BFF (a
-      verified per-agent session), i.e. DCR agent-token issuance. That is a new auth path
-      (CLAUDE.md rule 6) and a humans-decide ADR/spec-change; until it lands the BFF cannot
-      distinguish an agent session from its human persona token, so it cannot enforce a
-      per-agent budget. Recommend an ADR for DCR client-credential issuance as the unblock.
+      verified per-agent session) = DCR agent-token issuance. Proposed in ADR 0018
+      (docs/adrs/0018-agent-identity-dcr-token-issuance.md): generalise the ADR 0001
+      act/sub minting into an agent session token (Option 2) now, full DCR client-credentials
+      + mTLS at M6 (Option 1). Blocked on ADR 0018 acceptance (humans-decide auth path).
     note: >-
       Per-session blast-radius budget on consequential agent operations, mirroring the
       BACKOFFICE-80 per-session guardrail pattern. Bounds damage from a confused or
