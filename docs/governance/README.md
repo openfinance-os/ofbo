@@ -19,5 +19,7 @@ ADRs replace that with enforced human accountability and an immutable control pl
 | HG-0004 | Broad agent credentials / secrets on disk | Least-privilege service identity + vaulted secrets |
 | HG-0005 | Auto-deploy, no promotion/rollback | dev→staging→prod promotion with a human prod gate + rollback |
 | HG-0006 | The agent is an ungoverned model | AI/model-risk governance (SR 11-7-equivalent) for the harness |
+| HG-0007 | Delivery built the wrong thing / no problem trace | Discovery precedes delivery — a gated left-diamond (D1–D8) feeds delivery via a hand-off |
+| HG-0008 | Domain content hard-coded into the harness | Solution-agnostic seams: the data-risk register (D6) and the `design.md` brand profile (D7) are mounted, not embedded |
 
 Status: all **Proposed** — for the bank's change/risk governance to decide. Human-approved; never auto-merged.

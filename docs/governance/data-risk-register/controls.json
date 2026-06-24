@@ -1,0 +1,1803 @@
+[
+  {
+    "control_id": "CTRL-DQ-001",
+    "control_name": "Data Entry Validation Rules",
+    "control_description": "Automated validation rules at point of data entry to verify format, range, and business rule compliance. Includes mandatory field checks, format validation, and cross-field logic.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.5-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Automated",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DQ-002",
+    "control_name": "Data Quality Profiling",
+    "control_description": "Systematic profiling of data assets to measure quality dimensions (accuracy, completeness, validity). Generates quality scores and identifies anomalies.",
+    "control_type": "Detective",
+    "control_frequency": "Weekly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.2-001",
+      "DR-1.4-001",
+      "DR-1.5-001",
+      "DR-1.6-001",
+      "DR-1.1-003"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Automated",
+      "Frequency:Periodic",
+      "Frequency:Weekly"
+    ],
+    "effectiveness_score": 83.5
+  },
+  {
+    "control_id": "CTRL-DQ-003",
+    "control_name": "Data Quality Dashboard & Monitoring",
+    "control_description": "Real-time dashboards displaying data quality metrics with threshold alerts. Enables proactive identification of quality degradation.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.2-001",
+      "DR-1.3-001",
+      "DR-1.4-001",
+      "DR-1.1-003"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DQ-004",
+    "control_name": "Data Correction Workflow",
+    "control_description": "Formal workflow for identifying, logging, and correcting data quality issues. Includes root cause analysis and remediation tracking.",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.2-001",
+      "DR-1.5-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Corrective",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DQ-005",
+    "control_name": "Master Data Governance",
+    "control_description": "Governance framework for master data including golden source designation, stewardship assignments, and change management procedures.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-015",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.4-001",
+      "DR-1.6-001",
+      "DR-1.4-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DQ-006",
+    "control_name": "Cross-System Data Reconciliation",
+    "control_description": "Automated reconciliation of data across systems to identify inconsistencies. Includes exception reporting and resolution tracking.",
+    "control_type": "Detective",
+    "control_frequency": "Daily",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-015",
+    "risk_ids": [
+      "DR-1.4-001",
+      "DR-1.4-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Periodic",
+      "Frequency:Daily"
+    ],
+    "effectiveness_score": 83.5
+  },
+  {
+    "control_id": "CTRL-DQ-007",
+    "control_name": "Duplicate Detection & Merge",
+    "control_description": "Automated detection of duplicate records using matching algorithms. Includes merge/purge procedures with audit trail.",
+    "control_type": "Detective",
+    "control_frequency": "Weekly",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-015",
+    "risk_ids": [
+      "DR-1.6-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Periodic",
+      "Frequency:Weekly",
+      "Capability:Audit"
+    ],
+    "effectiveness_score": 83.5
+  },
+  {
+    "control_id": "CTRL-DQ-008",
+    "control_name": "Data Refresh & Currency Monitoring",
+    "control_description": "Monitoring of data refresh cycles to ensure timeliness. Alerts when data exceeds staleness thresholds.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.3-001",
+      "DR-1.3-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DQ-009",
+    "control_name": "Model Input Data Validation",
+    "control_description": "Specific validation controls for data used in models and AI/ML systems. Includes completeness checks, distribution analysis, and drift detection.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Model Run",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-002",
+      "DR-1.2-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Automated",
+      "Frequency:Event-Driven",
+      "Regulation:MMS",
+      "Regulation:AI-GN"
+    ],
+    "effectiveness_score": 82
+  },
+  {
+    "control_id": "CTRL-DQ-010",
+    "control_name": "Data Quality Issue Escalation",
+    "control_description": "Defined escalation paths for data quality issues based on severity and business impact. Includes SLAs for resolution.",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-001",
+      "DR-1.1-002",
+      "DR-1.2-001",
+      "DR-1.2-002",
+      "DR-1.3-001",
+      "DR-1.1-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Corrective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:MMS",
+      "Regulation:AI-GN"
+    ],
+    "effectiveness_score": 40
+  },
+  {
+    "control_id": "CTRL-DP-001",
+    "control_name": "Consent Collection Mechanism",
+    "control_description": "Standardised consent collection process ensuring valid, informed, specific consent is obtained before data processing. Includes consent language review and approval.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Transaction",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.1-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DP-002",
+    "control_name": "Consent Repository & Tracking",
+    "control_description": "Central repository recording all consent grants with timestamp, scope, version, and channel. Enables consent verification and audit.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.1-001",
+      "DR-2.1-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Regulation:PDPL",
+      "Capability:Audit"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-003",
+    "control_name": "Consent Withdrawal Process",
+    "control_description": "Process enabling data subjects to withdraw consent easily. Includes propagation of withdrawal across systems and cessation of processing.",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.1-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Corrective",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DP-004",
+    "control_name": "Data Subject Rights Request Intake",
+    "control_description": "Formal intake process for DSR requests (access, rectification, erasure, portability). Includes identity verification and request logging.",
+    "control_type": "Preventive",
+    "control_frequency": "As Required",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.2-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DP-005",
+    "control_name": "DSR Fulfillment Workflow",
+    "control_description": "Workflow for processing DSR requests within regulatory timeframes. Includes data location identification, extraction/deletion, and response generation.",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.2-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Corrective",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DP-006",
+    "control_name": "DSR Response Time Monitoring",
+    "control_description": "Tracking and monitoring of DSR response times against regulatory deadlines. Alerts for approaching deadlines.",
+    "control_type": "Detective",
+    "control_frequency": "Daily",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.2-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Automated",
+      "Frequency:Periodic",
+      "Frequency:Daily",
+      "Regulation:PDPL",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 83.5
+  },
+  {
+    "control_id": "CTRL-DP-007",
+    "control_name": "Privacy Impact Assessment (PIA)",
+    "control_description": "Formal assessment of privacy risks for new initiatives, systems, or processing activities. Required before implementation.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Initiative",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.3-001",
+      "DR-2.4-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DP-008",
+    "control_name": "Data Classification & Labelling",
+    "control_description": "Classification of data assets by sensitivity level with appropriate labelling. Determines handling requirements.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Data Asset",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-012",
+    "risk_ids": [
+      "DR-2.3-001",
+      "DR-2.6-001",
+      "DR-2.7-001",
+      "DR-2.9-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DP-009",
+    "control_name": "Role-Based Access Control (RBAC)",
+    "control_description": "Access to data restricted based on job role and need-to-know principle. Includes role definitions and access matrices.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.6-001",
+      "DR-2.9-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Access-Control"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-010",
+    "control_name": "Access Review & Recertification",
+    "control_description": "Periodic review of user access rights to verify appropriateness. Managers certify continued need for access.",
+    "control_type": "Detective",
+    "control_frequency": "Quarterly",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.6-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:InfoSec",
+      "Automation:Semi-Auto",
+      "Frequency:Periodic",
+      "Frequency:Quarterly",
+      "Capability:Access-Control",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 67
+  },
+  {
+    "control_id": "CTRL-DP-011",
+    "control_name": "Privileged Access Management (PAM)",
+    "control_description": "Enhanced controls for privileged/administrative access including just-in-time access, session recording, and approval workflows.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.6-001",
+      "DR-2.9-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Access-Control"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-012",
+    "control_name": "Encryption at Rest",
+    "control_description": "Encryption of sensitive data stored in databases, file systems, and backups using approved encryption standards.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.3-002",
+      "DR-2.6-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Regulation:PDPL",
+      "Capability:Encryption"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-013",
+    "control_name": "Encryption in Transit",
+    "control_description": "Encryption of data during transmission using TLS/SSL. Includes certificate management and protocol version controls.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.3-002",
+      "DR-2.6-002",
+      "DR-2.7-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Regulation:PDPL",
+      "Capability:Encryption"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-014",
+    "control_name": "Cross-Border Transfer Assessment",
+    "control_description": "Assessment of data transfers outside UAE against PDPL requirements. Determines legal basis and required safeguards.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Transfer",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.4-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DP-015",
+    "control_name": "Standard Contractual Clauses",
+    "control_description": "Implementation of approved contractual clauses for international data transfers providing adequate safeguards.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Contract",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.4-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DP-016",
+    "control_name": "Data Transfer Inventory",
+    "control_description": "Registry of all cross-border data transfers including destination, legal basis, safeguards, and data categories.",
+    "control_type": "Detective",
+    "control_frequency": "Quarterly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.4-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Periodic",
+      "Frequency:Quarterly",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 56.5
+  },
+  {
+    "control_id": "CTRL-DP-017",
+    "control_name": "Security Event Monitoring (SIEM)",
+    "control_description": "Continuous monitoring of security events to detect potential breaches, unauthorized access, and anomalous activity.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-016",
+    "risk_ids": [
+      "DR-2.5-001",
+      "DR-2.6-002",
+      "DR-2.9-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Regulation:PDPL",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DP-018",
+    "control_name": "Data Breach Detection Rules",
+    "control_description": "Specific detection rules for data-related security events including mass data access, unusual export activity, and access from anomalous locations.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-016",
+    "risk_ids": [
+      "DR-2.5-001",
+      "DR-2.7-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DP-019",
+    "control_name": "Incident Response Procedures",
+    "control_description": "Documented procedures for responding to data incidents including containment, investigation, and remediation steps.",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-016",
+    "risk_ids": [
+      "DR-2.5-002",
+      "DR-2.6-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Corrective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 40
+  },
+  {
+    "control_id": "CTRL-DP-020",
+    "control_name": "Breach Notification Process",
+    "control_description": "Process for notifying regulators and affected individuals of data breaches within required timeframes (72 hours for regulator).",
+    "control_type": "Corrective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-016",
+    "risk_ids": [
+      "DR-2.5-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Corrective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL",
+      "Capability:Notification"
+    ],
+    "effectiveness_score": 40
+  },
+  {
+    "control_id": "CTRL-DP-021",
+    "control_name": "Breach Register & Tracking",
+    "control_description": "Central register of all data breaches and near-misses including root cause, impact assessment, and lessons learned.",
+    "control_type": "Detective",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-016",
+    "risk_ids": [
+      "DR-2.5-001",
+      "DR-2.5-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Continuous",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DP-022",
+    "control_name": "Data Loss Prevention (DLP)",
+    "control_description": "Technical controls to prevent unauthorized data exfiltration via email, web, removable media, and cloud services.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.7-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-023",
+    "control_name": "Endpoint Protection",
+    "control_description": "Security controls on endpoints (laptops, desktops, mobile) to prevent data leakage and unauthorized access.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "Information Security",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.6-002",
+      "DR-2.7-001"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:InfoSec",
+      "Automation:Automated",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DP-024",
+    "control_name": "Vendor Due Diligence",
+    "control_description": "Pre-contract assessment of vendor data protection capabilities including security controls, certifications, and privacy practices.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Vendor",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-006",
+    "risk_ids": [
+      "DR-2.8-001",
+      "DR-2.8-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Capability:Vendor-Management"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DP-025",
+    "control_name": "Data Processing Agreements",
+    "control_description": "Contractual agreements with vendors specifying data protection obligations, processing instructions, and liability provisions.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Contract",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-006",
+    "risk_ids": [
+      "DR-2.8-001",
+      "DR-2.8-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DP-026",
+    "control_name": "Vendor Compliance Monitoring",
+    "control_description": "Ongoing monitoring of vendor compliance with data protection requirements including periodic assessments and audit rights.",
+    "control_type": "Detective",
+    "control_frequency": "Annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-006",
+    "risk_ids": [
+      "DR-2.8-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Periodic",
+      "Frequency:Annual",
+      "Capability:Monitoring",
+      "Capability:Audit",
+      "Capability:Vendor-Management"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DP-027",
+    "control_name": "Vendor Incident Notification",
+    "control_description": "Contractual requirement for vendors to notify Bank of data incidents within specified timeframes.",
+    "control_type": "Detective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-006",
+    "risk_ids": [
+      "DR-2.8-001",
+      "DR-2.5-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL",
+      "Capability:Vendor-Management",
+      "Capability:Notification"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DP-028",
+    "control_name": "Purpose Limitation Controls",
+    "control_description": "Controls ensuring data is only used for specified, legitimate purposes. Includes usage logging and purpose verification.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.9-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DP-029",
+    "control_name": "Data Access Audit Logging",
+    "control_description": "Comprehensive logging of data access including who, what, when, and from where. Retained for audit and investigation purposes.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.6-001",
+      "DR-2.9-001",
+      "DR-2.9-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Access-Control",
+      "Capability:Audit"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DP-030",
+    "control_name": "Data Integrity Controls",
+    "control_description": "Technical controls to detect and prevent unauthorized modification of data including checksums, digital signatures, and change detection.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-2.9-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DP-031",
+    "control_name": "Synthetic Data Generation",
+    "control_description": "Use of synthetic/anonymised data for testing, development, and analytics to minimise exposure of real personal data.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Project",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-013",
+    "risk_ids": [
+      "DR-2.3-002",
+      "DR-2.6-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Protection",
+      "Type:Preventive",
+      "Owner:IT",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:PDPL"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DT-001",
+    "control_name": "Disclosure Template Management",
+    "control_description": "Centrally managed templates for all consumer disclosures ensuring consistency and regulatory compliance. Includes version control and approval workflow.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Template",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.1-001",
+      "DR-3.1-002",
+      "DR-3.1-003",
+      "DR-3.2-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Standardisation"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DT-002",
+    "control_name": "Disclosure Content Review",
+    "control_description": "Review process ensuring disclosure content is complete, accurate, and compliant before publication or distribution.",
+    "control_type": "Detective",
+    "control_frequency": "Per Disclosure",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.1-001",
+      "DR-3.2-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DT-003",
+    "control_name": "Fee & Charges Schedule Maintenance",
+    "control_description": "Process for maintaining accurate, complete fee schedules with change management and consumer notification procedures.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Change",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.1-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:CPS"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DT-004",
+    "control_name": "Risk Warning Templates",
+    "control_description": "Standardised risk warning templates for products with capital-at-risk, ensuring consistent and prominent disclosure.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Product",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.1-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Standardisation"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DT-005",
+    "control_name": "Misleading Content Review",
+    "control_description": "Review process specifically checking for potentially misleading statements, omissions, or implications in consumer communications.",
+    "control_type": "Detective",
+    "control_frequency": "Per Communication",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.2-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DT-006",
+    "control_name": "Arabic Translation & Localization",
+    "control_description": "Process ensuring all consumer disclosures are available in Arabic with accurate translation and cultural appropriateness.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Document",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.3-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DT-007",
+    "control_name": "Plain Language Review",
+    "control_description": "Review ensuring disclosures use plain, understandable language avoiding jargon and complex terminology.",
+    "control_type": "Detective",
+    "control_frequency": "Per Document",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.3-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DT-008",
+    "control_name": "Accessibility Compliance Review",
+    "control_description": "Review ensuring disclosures meet accessibility requirements for People of Determination including format, font size, and alternative formats.",
+    "control_type": "Detective",
+    "control_frequency": "Per Document",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.3-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Access-Control",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DT-009",
+    "control_name": "Multi-Channel Disclosure Consistency",
+    "control_description": "Controls ensuring disclosure content is consistent across all channels (branch, online, mobile, call centre).",
+    "control_type": "Detective",
+    "control_frequency": "Quarterly",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.3-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:1L",
+      "Automation:Manual",
+      "Frequency:Periodic",
+      "Frequency:Quarterly",
+      "Regulation:CPS"
+    ],
+    "effectiveness_score": 56.5
+  },
+  {
+    "control_id": "CTRL-DT-010",
+    "control_name": "Pre-Contract Disclosure Checklist",
+    "control_description": "Checklist ensuring all required disclosures are provided before contract execution with documented acknowledgment.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Transaction",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.4-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Standardisation"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DT-011",
+    "control_name": "Cooling-Off Period Management",
+    "control_description": "Process ensuring consumers are informed of and able to exercise cooling-off rights with proper disclosure timing.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Transaction",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.4-001"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Regulation:CPS"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DT-012",
+    "control_name": "Change Notification Scheduling",
+    "control_description": "System for scheduling and tracking consumer notifications for changes (rates, terms, renewals) within required notice periods.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Event",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.4-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Automated",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Notification"
+    ],
+    "effectiveness_score": 82
+  },
+  {
+    "control_id": "CTRL-DT-013",
+    "control_name": "Notification Delivery Confirmation",
+    "control_description": "Tracking of notification delivery with confirmation and retry mechanisms for failed deliveries.",
+    "control_type": "Detective",
+    "control_frequency": "Per Notification",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-3.4-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Disclosure",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Event-Driven",
+      "Regulation:CPS",
+      "Capability:Notification"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DG-001",
+    "control_name": "Regulatory Change Monitoring",
+    "control_description": "Systematic monitoring of regulatory developments (CBUAE, UAE Data Office) to identify changes affecting data management.",
+    "control_type": "Detective",
+    "control_frequency": "Weekly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.1-001",
+      "DR-4.1-002",
+      "DR-4.1-003"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Periodic",
+      "Frequency:Weekly",
+      "Regulation:PDPL",
+      "Regulation:CPS",
+      "Regulation:MMS",
+      "Regulation:AI-GN",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 73
+  },
+  {
+    "control_id": "CTRL-DG-002",
+    "control_name": "Compliance Self-Assessment",
+    "control_description": "Periodic self-assessment of compliance with data protection and consumer protection regulations.",
+    "control_type": "Detective",
+    "control_frequency": "Semi-annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.1-001",
+      "DR-4.1-002",
+      "DR-4.1-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Periodic",
+      "Frequency:Semi-annual",
+      "Regulation:PDPL",
+      "Regulation:CPS",
+      "Regulation:MMS",
+      "Regulation:AI-GN"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DG-003",
+    "control_name": "Policy Review Cycle",
+    "control_description": "Scheduled review and update of data management policies to ensure continued relevance and regulatory alignment.",
+    "control_type": "Detective",
+    "control_frequency": "Annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Periodic",
+      "Frequency:Annual",
+      "Capability:Review"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DG-004",
+    "control_name": "Policy Training & Awareness",
+    "control_description": "Training programs ensuring staff understand and can apply data management policies. Includes completion tracking.",
+    "control_type": "Preventive",
+    "control_frequency": "Annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-001",
+      "DR-4.2-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Periodic",
+      "Frequency:Annual",
+      "Capability:Training"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DG-005",
+    "control_name": "Policy Compliance Monitoring",
+    "control_description": "Ongoing monitoring of policy compliance through metrics, spot checks, and exception tracking.",
+    "control_type": "Detective",
+    "control_frequency": "Monthly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Periodic",
+      "Frequency:Monthly",
+      "Capability:Monitoring"
+    ],
+    "effectiveness_score": 67
+  },
+  {
+    "control_id": "CTRL-DG-006",
+    "control_name": "Policy Exception Management",
+    "control_description": "Process for requesting, approving, and tracking exceptions to data management policies with time limits and conditions.",
+    "control_type": "Detective",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DG-007",
+    "control_name": "Records Inventory & Classification",
+    "control_description": "Inventory of data records with classification for retention purposes. Maps records to retention schedules.",
+    "control_type": "Preventive",
+    "control_frequency": "Annual",
+    "control_owner": "1st Line",
+    "policy_reference": "POL-DMD-005",
+    "risk_ids": [
+      "DR-4.3-001",
+      "DR-4.3-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:1L",
+      "Automation:Semi-Auto",
+      "Frequency:Periodic",
+      "Frequency:Annual"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DG-008",
+    "control_name": "Retention Schedule Enforcement",
+    "control_description": "Automated enforcement of retention periods with alerts for records approaching end-of-life.",
+    "control_type": "Preventive",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-005",
+    "risk_ids": [
+      "DR-4.3-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "Capability:Records-Management"
+    ],
+    "effectiveness_score": 100
+  },
+  {
+    "control_id": "CTRL-DG-009",
+    "control_name": "Secure Destruction Procedures",
+    "control_description": "Procedures for secure destruction of data at end of retention period with certification and audit trail.",
+    "control_type": "Corrective",
+    "control_frequency": "Per Event",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-005",
+    "risk_ids": [
+      "DR-4.3-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Corrective",
+      "Owner:IT",
+      "Automation:Semi-Auto",
+      "Frequency:Event-Driven",
+      "Capability:Audit",
+      "Capability:Records-Management"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DG-010",
+    "control_name": "Legal Hold Management",
+    "control_description": "Process for placing and managing legal holds on data to prevent destruction during litigation or investigation.",
+    "control_type": "Preventive",
+    "control_frequency": "As Required",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-005",
+    "risk_ids": [
+      "DR-4.3-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DG-011",
+    "control_name": "Data Ownership Register",
+    "control_description": "Register documenting data owners for all critical data assets with accountability assignments.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-014",
+    "risk_ids": [
+      "DR-4.4-001"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DG-012",
+    "control_name": "Data Stewardship Program",
+    "control_description": "Formal program assigning data stewards with defined responsibilities for data quality and governance within their domain.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-014",
+    "risk_ids": [
+      "DR-4.4-001",
+      "DR-4.4-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DG-013",
+    "control_name": "DPO Appointment & Reporting",
+    "control_description": "Appointment of Data Protection Officer with direct reporting line to senior management as required by PDPL.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-002",
+    "risk_ids": [
+      "DR-4.4-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DG-014",
+    "control_name": "Governance Committee Oversight",
+    "control_description": "Data Steering Group oversight of data governance activities including review of metrics, issues, and strategic decisions.",
+    "control_type": "Detective",
+    "control_frequency": "Bi-monthly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.4-002",
+      "DR-4.2-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DG-015",
+    "control_name": "Data Catalogue Maintenance",
+    "control_description": "Maintenance of enterprise data catalogue documenting data assets, definitions, lineage, and ownership.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-014",
+    "risk_ids": [
+      "DR-4.3-001",
+      "DR-4.4-001",
+      "DR-1.4-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Semi-Auto",
+      "Frequency:Continuous"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DG-016",
+    "control_name": "Model Data Governance",
+    "control_description": "Specific governance controls for data used in models and AI/ML systems including lineage, quality certification, and usage tracking.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Model",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-4.1-003",
+      "DR-1.1-002",
+      "DR-1.2-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Event-Driven",
+      "Regulation:MMS",
+      "Regulation:AI-GN"
+    ],
+    "effectiveness_score": 61
+  },
+  {
+    "control_id": "CTRL-DQ-011",
+    "control_name": "End-User Computing (EUC) Inventory & Controls",
+    "control_description": "Maintain an inventory of all spreadsheets, desktop databases, and end-user computing applications used in risk data aggregation. Apply EUC policy controls including version control, access restrictions, change logging, and periodic accuracy validation. Flag critical EUC applications for prioritised automation.",
+    "control_type": "Detective",
+    "control_frequency": "Quarterly",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-003"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Semi-automated",
+      "Frequency:Quarterly",
+      "EUC",
+      "spreadsheet risk",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 67
+  },
+  {
+    "control_id": "CTRL-DQ-012",
+    "control_name": "Risk Data-to-Source Reconciliation",
+    "control_description": "Automated reconciliation of aggregated risk data against authoritative source systems and accounting data. Includes tolerance-based exception reporting, break investigation workflows, and escalation to data quality team for material discrepancies.",
+    "control_type": "Detective",
+    "control_frequency": "Daily",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.1-003"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Daily",
+      "reconciliation",
+      "accounting parity",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 83.5
+  },
+  {
+    "control_id": "CTRL-DQ-013",
+    "control_name": "Stress/Crisis Data Production Testing",
+    "control_description": "Periodic testing of the bank's ability to produce critical risk data aggregations and reports within established stress/crisis timeframes. Includes simulation of ad hoc supervisory data requests, verification of intraday position reporting capability, and documentation of gaps with remediation timelines.",
+    "control_type": "Detective",
+    "control_frequency": "Semi-annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.3-002"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Semi-annual",
+      "stress testing",
+      "crisis reporting",
+      "BCP",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 50.5
+  },
+  {
+    "control_id": "CTRL-DQ-014",
+    "control_name": "Critical Risk Data SLA Monitoring",
+    "control_description": "Automated monitoring of data production and aggregation timeliness against defined SLAs for all critical risk data feeds. Includes real-time alerting for SLA breaches, automated escalation for missed deadlines, and trend reporting to identify deteriorating data pipeline performance.",
+    "control_type": "Detective",
+    "control_frequency": "Continuous",
+    "control_owner": "IT",
+    "policy_reference": "POL-DMD-004",
+    "risk_ids": [
+      "DR-1.3-002"
+    ],
+    "automation_level": "Automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Detective",
+      "Owner:IT",
+      "Automation:Automated",
+      "Frequency:Continuous",
+      "SLA",
+      "timeliness",
+      "data pipeline",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 89.5
+  },
+  {
+    "control_id": "CTRL-DQ-015",
+    "control_name": "Enterprise Data Taxonomy & Dictionary Management",
+    "control_description": "Maintain an enterprise-wide data dictionary and taxonomy with unified naming conventions, single identifiers for legal entities, counterparties, customers, and accounts. Enforce consistent data definitions across the banking group through automated validation against the dictionary during data integration.",
+    "control_type": "Preventive",
+    "control_frequency": "Ongoing",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-014",
+    "risk_ids": [
+      "DR-1.4-002"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Quality",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Semi-automated",
+      "Frequency:Ongoing",
+      "data dictionary",
+      "data taxonomy",
+      "naming conventions",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 79
+  },
+  {
+    "control_id": "CTRL-DG-017",
+    "control_name": "Risk Report Validation & Sign-off",
+    "control_description": "Structured validation and sign-off process for risk management reports before distribution. Includes automated edit and reasonableness checks on quantitative data, manual review of qualitative interpretations, verification of forward-looking content, and formal sign-off by report owner.",
+    "control_type": "Preventive",
+    "control_frequency": "Per Report",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-003"
+    ],
+    "automation_level": "Semi-automated",
+    "tags": [
+      "Domain:Data-Governance",
+      "Type:Preventive",
+      "Owner:2L",
+      "Automation:Semi-automated",
+      "Frequency:Per-Report",
+      "report validation",
+      "sign-off",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 71.5
+  },
+  {
+    "control_id": "CTRL-DG-018",
+    "control_name": "Periodic Report Relevance Assessment",
+    "control_description": "Annual assessment with board and senior management to confirm that risk reports remain relevant, comprehensive, and appropriate for governance and decision-making. Includes review of report inventory against information needs, assessment of report clarity and usefulness, and identification of gaps in forward-looking and concentration risk content.",
+    "control_type": "Detective",
+    "control_frequency": "Annual",
+    "control_owner": "2nd Line",
+    "policy_reference": "POL-DMD-017",
+    "risk_ids": [
+      "DR-4.2-003"
+    ],
+    "automation_level": "Manual",
+    "tags": [
+      "Domain:Data-Governance",
+      "Type:Detective",
+      "Owner:2L",
+      "Automation:Manual",
+      "Frequency:Annual",
+      "report relevance",
+      "stakeholder confirmation",
+      "BCBS 239"
+    ],
+    "effectiveness_score": 50.5
+  }
+]

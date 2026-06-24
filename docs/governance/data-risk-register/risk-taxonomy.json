@@ -1,0 +1,163 @@
+[
+  {
+    "risk_category_id": "DR-1.1",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Accuracy Risk",
+    "risk_category_definition": "Risk that data values do not correctly represent the real-world facts they describe"
+  },
+  {
+    "risk_category_id": "DR-1.2",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Completeness Risk",
+    "risk_category_definition": "Risk that required data elements are missing or incomplete"
+  },
+  {
+    "risk_category_id": "DR-1.3",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Timeliness Risk",
+    "risk_category_definition": "Risk that data is not available when needed or does not reflect current state"
+  },
+  {
+    "risk_category_id": "DR-1.4",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Consistency Risk",
+    "risk_category_definition": "Risk that the same data differs across systems, reports, or time periods without valid reason"
+  },
+  {
+    "risk_category_id": "DR-1.5",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Validity Risk",
+    "risk_category_definition": "Risk that data does not conform to defined formats, ranges, or business rules"
+  },
+  {
+    "risk_category_id": "DR-1.6",
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Quality Risk",
+    "risk_category_name": "Uniqueness Risk",
+    "risk_category_definition": "Risk that duplicate records exist, leading to over-counting or conflicting information"
+  },
+  {
+    "risk_category_id": "DR-2.1",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Consent Management Risk",
+    "risk_category_definition": "Risk that personal data is processed without valid, informed consent or beyond consented purposes"
+  },
+  {
+    "risk_category_id": "DR-2.2",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Data Subject Rights Risk",
+    "risk_category_definition": "Risk that data subjects cannot exercise their rights (access, correction, erasure, portability, objection)"
+  },
+  {
+    "risk_category_id": "DR-2.3",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Processing Controls Risk",
+    "risk_category_definition": "Risk that data processing activities lack appropriate safeguards and controls"
+  },
+  {
+    "risk_category_id": "DR-2.4",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Cross-Border Transfer Risk",
+    "risk_category_definition": "Risk that personal data is transferred across borders without adequate protection"
+  },
+  {
+    "risk_category_id": "DR-2.5",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Breach Management Risk",
+    "risk_category_definition": "Risk that data breaches are not detected, contained, or reported as required"
+  },
+  {
+    "risk_category_id": "DR-2.6",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Unauthorized Access Risk",
+    "risk_category_definition": "Risk that data is accessed by individuals without legitimate need or authorization"
+  },
+  {
+    "risk_category_id": "DR-2.7",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Data Leakage Risk",
+    "risk_category_definition": "Risk that data is unintentionally exposed or transmitted outside authorized boundaries"
+  },
+  {
+    "risk_category_id": "DR-2.8",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Third-Party Data Risk",
+    "risk_category_definition": "Risk that third parties with access to data do not maintain adequate protection standards"
+  },
+  {
+    "risk_category_id": "DR-2.9",
+    "risk_domain_id": "DR-2",
+    "risk_domain_name": "Data Privacy, Protection & Security Risk",
+    "risk_category_name": "Data Misuse & Manipulation Risk",
+    "risk_category_definition": "Risk that data is used for unauthorized purposes or deliberately altered/tampered"
+  },
+  {
+    "risk_category_id": "DR-3.1",
+    "risk_domain_id": "DR-3",
+    "risk_domain_name": "Data Disclosure & Transparency Risk",
+    "risk_category_name": "Disclosure Completeness Risk",
+    "risk_category_definition": "Risk that required information is not fully disclosed to consumers"
+  },
+  {
+    "risk_category_id": "DR-3.2",
+    "risk_domain_id": "DR-3",
+    "risk_domain_name": "Data Disclosure & Transparency Risk",
+    "risk_category_name": "Disclosure Accuracy Risk",
+    "risk_category_definition": "Risk that disclosed information contains errors or is misleading"
+  },
+  {
+    "risk_category_id": "DR-3.3",
+    "risk_domain_id": "DR-3",
+    "risk_domain_name": "Data Disclosure & Transparency Risk",
+    "risk_category_name": "Disclosure Accessibility Risk",
+    "risk_category_definition": "Risk that disclosures are not accessible to all consumers (language, format, channels)"
+  },
+  {
+    "risk_category_id": "DR-3.4",
+    "risk_domain_id": "DR-3",
+    "risk_domain_name": "Data Disclosure & Transparency Risk",
+    "risk_category_name": "Disclosure Timeliness Risk",
+    "risk_category_definition": "Risk that disclosures are not provided at the required time or frequency"
+  },
+  {
+    "risk_category_id": "DR-4.1",
+    "risk_domain_id": "DR-4",
+    "risk_domain_name": "Data Governance & Compliance Risk",
+    "risk_category_name": "Regulatory Compliance Risk",
+    "risk_category_definition": "Risk of non-compliance with data-related regulatory requirements"
+  },
+  {
+    "risk_category_id": "DR-4.2",
+    "risk_domain_id": "DR-4",
+    "risk_domain_name": "Data Governance & Compliance Risk",
+    "risk_category_name": "Policy Adherence Risk",
+    "risk_category_definition": "Risk that internal data policies and standards are not followed"
+  },
+  {
+    "risk_category_id": "DR-4.3",
+    "risk_domain_id": "DR-4",
+    "risk_domain_name": "Data Governance & Compliance Risk",
+    "risk_category_name": "Records Management Risk",
+    "risk_category_definition": "Risk that data records are not retained, archived, or disposed of appropriately"
+  },
+  {
+    "risk_category_id": "DR-4.4",
+    "risk_domain_id": "DR-4",
+    "risk_domain_name": "Data Governance & Compliance Risk",
+    "risk_category_name": "Accountability Risk",
+    "risk_category_definition": "Risk that roles, responsibilities, and ownership for data are unclear or unassigned"
+  }
+]
