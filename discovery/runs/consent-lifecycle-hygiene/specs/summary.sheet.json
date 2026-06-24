@@ -1,0 +1,12 @@
+{
+  "title": "Consent-lifecycle hygiene — drift register",
+  "sheetName": "Lifecycle drift",
+  "columns": ["PSU (synthetic)", "Hub state", "LFI mirror", "Drift", "Status"],
+  "rows": [
+    ["psu-demo-0192", "revoked", "authorised", "14m 10s", { "v": "breach — none fired", "status": "danger" }],
+    ["psu-demo-0244", "revoked", "revoked", "3.1s", { "v": "in tolerance", "status": "ok" }],
+    ["psu-demo-0311", "revoked", "authorised", "6m 02s", { "v": "drifting", "status": "warn" }],
+    ["psu-demo-0356", "revoked", "revoked", "4.4s", { "v": "in tolerance", "status": "ok" }],
+    ["psu-demo-0401", "revoked", "authorised", "9m 12s", { "v": "drifting", "status": "warn" }]
+  ]
+}

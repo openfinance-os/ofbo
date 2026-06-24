@@ -145,13 +145,20 @@ documents, decks, sheets, and wireframes for free. The OFBO instance of `design.
 the DEMO brand and remains token-only and DEMO-bannered.
 
 **Rendering is self-contained (zero external tooling).** `discovery/render/` is a pure-Node,
-zero-dependency renderer with three modes — `document`, `deck` (ppt-equivalent), `prototype` —
-that turns **structured content** (JSON the facilitator authors) into self-contained, brand-
-tokened HTML. There is **no dependency on Stitch, Magic Patterns, Gamma, or any external
-service**: content is data, presentation comes only from `design.md` tokens, and every output
-carries the D7 marker (so D7 verifies it automatically). Print a `document` to PDF; present a
-`deck` full-screen. The `brand-render` skill wraps this; the renderer owns all styling so a
-stray hex/font can't slip into authored content.
+zero-dependency renderer that turns **structured content** (JSON the facilitator authors) into
+brand-tokened output — there is **no dependency on Stitch, Magic Patterns, Gamma, or any
+external service**. Content is data; presentation comes only from `design.md` tokens; every
+output carries the D7 marker (so D7 verifies it automatically). Two surfaces:
+
+- **HTML** (`render.mjs`): `document` (print-to-PDF), `deck` (full-screen), `prototype` (wireframe).
+- **Office binaries** (`render-office.mjs`): real `.xlsx`, `.docx`, `.pptx` — valid OOXML
+  packages, not HTML — built by a hand-rolled ZIP + OOXML writer (no `node:zlib` even). D7
+  inspects the package (`checkVisualOoxml`): marker present, and every colour in the *content*
+  parts is a design.md token. See `discovery/render/README.md`.
+
+The renderer owns all styling, so a stray hex/font can't slip into authored content, and a brand
+swap is just `--brand <other>/design.md` — see `discovery/brand/examples/` for the same run in a
+second brand across every format.
 
 ---
 

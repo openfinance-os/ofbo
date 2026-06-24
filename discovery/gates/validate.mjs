@@ -6,12 +6,14 @@
 // Exit 0 iff every applicable gate passes. Gates are mechanical: structure, references,
 // presence — not taste.
 import { join, basename } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import {
   read, frontMatter, section, filledRows, hasContent, signalIds, drIds, ctrlIds, listFiles, PLACEHOLDER,
 } from './lib.mjs';
 import { loadRegister } from './registers.mjs';
-import { parseBrand, checkVisualHtml, checkVisualMarkdown, MARKER } from './brand.mjs';
+import { parseBrand, checkVisualHtml, checkVisualMarkdown, checkVisualOoxml, MARKER } from './brand.mjs';
+
+const OOXML_EXTS = ['.xlsx', '.docx', '.pptx'];
 
 const ARTIFACTS = {
   research: 'research-log.md',
@@ -154,12 +156,14 @@ export function validateRun(runDir, opts = {}) {
   {
     const issues = [];
     const visualMd = ['research', 'synthesis', 'problem', 'dataGov', 'prototype', 'handoff'];
-    const haveVisuals = visualMd.some((k) => docs[k].exists) || listFiles(runDir, '.html').length > 0;
+    const ooxml = OOXML_EXTS.flatMap((ext) => listFiles(runDir, ext));
+    const haveVisuals = visualMd.some((k) => docs[k].exists) || listFiles(runDir, '.html').length > 0 || ooxml.length > 0;
     if (!brand.present && haveVisuals) {
       issues.push('brand profile design.md not mounted — cannot verify conformance');
     } else if (brand.present) {
       for (const k of visualMd) if (docs[k].exists) issues.push(...checkVisualMarkdown(docs[k].file, docs[k].fm));
       for (const html of listFiles(runDir, '.html')) issues.push(...checkVisualHtml(basename(html), read(html), brand));
+      for (const f of ooxml) issues.push(...checkVisualOoxml(basename(f), readFileSync(f), brand));
     }
     gates.push(gate('D7', 'Brand conformance', issues));
   }

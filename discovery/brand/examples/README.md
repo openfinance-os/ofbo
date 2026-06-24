@@ -12,7 +12,8 @@ This folder proves it.
   values.
 - **`rendered/`** — the **same** `consent-lifecycle-hygiene` run specs
   (`discovery/runs/consent-lifecycle-hygiene/specs/*.json`) rendered against Meridian:
-  `handoff.document.html`, `summary.deck.html`, `wireframe.html`.
+  HTML (`handoff.document.html`, `summary.deck.html`, `wireframe.html`) **and** real Office
+  binaries (`drift-register.xlsx`, `handoff.docx`, `summary.pptx`).
 
 Open `rendered/summary.deck.html` next to the OFBO `discovery/runs/consent-lifecycle-hygiene/
 summary.deck.html`: **identical content, different brand.**
@@ -25,6 +26,9 @@ BRAND=discovery/brand/examples/meridian-trust.design.md
 node discovery/render/render.mjs document  $RUN/specs/handoff.document.json   discovery/brand/examples/rendered/handoff.document.html  --brand $BRAND
 node discovery/render/render.mjs deck      $RUN/specs/summary.deck.json       discovery/brand/examples/rendered/summary.deck.html      --brand $BRAND
 node discovery/render/render.mjs prototype $RUN/specs/wireframe.prototype.json discovery/brand/examples/rendered/wireframe.html         --brand $BRAND
+node discovery/render/render-office.mjs xlsx $RUN/specs/summary.sheet.json     discovery/brand/examples/rendered/drift-register.xlsx   --brand $BRAND
+node discovery/render/render-office.mjs docx $RUN/specs/handoff.document.json  discovery/brand/examples/rendered/handoff.docx          --brand $BRAND
+node discovery/render/render-office.mjs pptx $RUN/specs/summary.deck.json      discovery/brand/examples/rendered/summary.pptx          --brand $BRAND
 ```
 
 The only thing that changed between OFBO and Meridian is the `--brand` file. The renderer,
