@@ -29,7 +29,11 @@ export default async function DashboardPage() {
   }
 
   const [events, kpis, charts, queue] = await Promise.all([
-    recentAudit(principal, {}, { excludeEventTypes: DASHBOARD_AUDIT_NOISE, limit: 15 }),
+    // Audit read is the only direct-store dependency on this page; degrade it like the
+    // BFF-backed panels below so a transient audit-store hiccup empties the AuditPanel
+    // instead of 500-ing the whole dashboard. (The fatal audit path stays at sign-in,
+    // where an unaudited session is a hard stop — never here, on render.)
+    recentAudit(principal, {}, { excludeEventTypes: DASHBOARD_AUDIT_NOISE, limit: 15 }).catch(() => []),
     getDashboardKpis(token, { subject: principal.subject, scopes: principal.scopes }).catch(() => []),
     getDashboardCharts(token).catch(() => ({ reconTrend: [], riskSeverity: [] })),
     listPendingApprovals(token, { limit: 6 }).catch(() => ({ approvals: [], next_cursor: null }))
