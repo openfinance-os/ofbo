@@ -11,7 +11,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "demo": "tsx src/demo-server.ts"
+    "demo": "tsx src/demo-server.ts",
+    "demo:registry": "tsx src/registry-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

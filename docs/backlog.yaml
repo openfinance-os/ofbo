@@ -222,10 +222,12 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
       with BCBS 239 lineage at write time (added to the Q4.5 gate table set), worker-wired.
       Gateway step-1 groundwork (#240). Hard-stop PASS + conformance CONFORMANT.
     remaining: >-
-      Portal Agent Registry screen landed (apps/portal /agents — platform-admin persona,
-      four-eyes register, single-actor revoke, token-only, hard-stop PASS). Left: wire the
-      @ofbo/mcp-gateway agent personas to read identity from the registry. (DoD met:
-      contract, RBAC, four-eyes, audit, lineage, portal surface.)
+      Portal Agent Registry screen + registry-driven gateway both landed: the
+      @ofbo/mcp-gateway now adopts a registered, four-eyes-APPROVED agent's bound identity
+      (scopes, allow_mutations, spend_budget) from GET /back-office/agents/{id}
+      (fetchAgentRegistration + sessionFromRegistration; demo:registry server proves the
+      loop end to end). DoD met: contract, RBAC, four-eyes, audit, lineage, portal surface,
+      agent-first loop. Only open thread: BACKOFFICE-53 to enable mutating agent tools in prod.
     blocked_on: none (read-only agents only; mutating tools still gated on BACKOFFICE-53)
     note: >-
       Gives a model/automation the same operations a human persona performs today,

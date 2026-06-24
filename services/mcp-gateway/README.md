@@ -108,6 +108,25 @@ want the agent to make changes.
 > (`demo-token:customer-care-agent`); the gateway restricts the catalogue to the
 > least-privilege `care-readonly-agent` subset. Never point this at real data.
 
+## Registry-driven mode (the agent-first loop)
+
+`pnpm --filter @ofbo/mcp-gateway run demo:registry` runs the gateway driven by the **agent
+registry** instead of a hardcoded persona — the closed loop:
+
+1. it registers an agent (`platform-admin`) → `202` + approval_request,
+2. a **different** principal (`platform-super-admin`) approves it → the credential is issued,
+3. the gateway looks the agent up in the registry (`GET /back-office/agents/{id}`) and adopts
+   **exactly** its bound `scopes`, `allow_mutations`, and `spend_budget`.
+
+So the agent you register + approve in the portal is the agent that drives the gateway — with
+precisely the authority it was granted (a non-`active` agent is refused). In production steps
+1–2 happen in the portal and the agent presents its DCR credential (`agentToken`); the demo
+runs it in-process. Pick the persona with `OFBO_AGENT_PERSONA` (default `care-readonly-agent`).
+
+The building blocks (`fetchAgentRegistration`, `sessionFromRegistration`) are exported for
+wiring a real DCR agent: read the registration under an admin token, then drive the gateway
+under the agent's own credential.
+
 ## Tests
 
 `pnpm test` (unit project) covers catalogue generation, scope filtering, the
