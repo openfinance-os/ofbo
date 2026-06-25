@@ -219,7 +219,7 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
   # human-approved spec-change PR first (CLAUDE.md rule 6), so both stay deferred.
   - id: BACKOFFICE-60
     title: Programmatic admin-scope access for internal automation (DCR-registered agents)
-    status: in-progress
+    status: done
     priority: Could
     adr: docs/adrs/0017-agent-first-mcp-gateway.md
     progress: >-
@@ -305,5 +305,36 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
         BFF (defence in depth) — the gateway is never the sole guard.
       - Four-eyes operations count against the budget at INITIATION (the 202), not at approval.
     depends_on: [BACKOFFICE-60]
-  - { id: BACKOFFICE-59, title: Training environment for Customer Care }
+  - id: BACKOFFICE-59
+    title: Training environment for Customer Care
+    status: in-progress
+    priority: Could
+    progress: >-
+      Modelled as a SEPARATE app composition (an environment, not a per-request flag) so audit
+      isolation is absolute — the training environment shares no sinks with production.
+      createApp({ training: true }) wires: (a) a distinct synthetic-PSU dataset (separate seed,
+      same generator → mirrors production shape, different records), (b) a TrainingHighClassAuditSink
+      that is NEVER the production audit_high_sensitivity writer and stamps training:true, and
+      (c) a sandbox Nebras egress so a practised revoke/dispute never propagates. The BFF marks
+      every training response x-ofbo-environment=training; a TRAINING Worker (OFBO_TRAINING=true)
+      short-circuits to the in-memory training app before any Pg store is built. Portal delivers
+      a persistent TRAINING pill (NEXT_PUBLIC_OFBO_TRAINING=true, token-only violet marker, the
+      portal twin of the Worker flag). Remaining: M6 wires a training_audit table behind the sink.
+    note: >-
+      Lets Customer Care agents rehearse the real workflows (PSU search, consent admin,
+      revoke, disputes) against synthetic data with zero production side-effects — for
+      onboarding/certification without risk to real PSUs or the production audit trail.
+    acceptance:
+      - The training environment serves a synthetic-PSU dataset that MIRRORS production's shape
+        (same generator) but is a SEPARATE set of records (distinct seed) — a trainee can never
+        act on a real operator's PSU.
+      - Training actions NEVER write to the production audit (audit_high_sensitivity): the
+        training High-class audit sink is structurally separate and is never the production
+        emitter, even when a production emitter is otherwise configured.
+      - Training mutations (revoke, dispute, refund) never propagate to the real scheme — a
+        sandbox egress acknowledges them locally so nothing real moves.
+      - Every training response is marked (x-ofbo-environment=training) so the portal can render
+        a persistent TRAINING banner, distinguishing it from production at a glance.
+      - The OpenAPI contract is unchanged — training is a deployment/composition variant over the
+        same Customer Care endpoints, so RBAC, four-eyes, and scope hygiene are identical.
   - { id: BACKOFFICE-63, title: AML GO portal submission for STR drafts }

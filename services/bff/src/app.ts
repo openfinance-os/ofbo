@@ -62,6 +62,14 @@ import {
 } from './agents/service.js'
 import { agentRoutes } from './agents/routes.js'
 import { AgentSpendLedger, createAgentSpendMiddleware } from './agents/spend.js'
+import {
+  TrainingHighClassAuditSink,
+  trainingConsentDirectory,
+  trainingPaymentSource,
+  sandboxTrainingEgress,
+  TRAINING_ENV_HEADER,
+  TRAINING_ENV_VALUE
+} from './training/environment.js'
 import { SchemeNotificationService, InMemorySchemeNotificationStore, type SchemeNotificationStore } from './scheme-notifications/service.js'
 import { schemeNotificationRoutes } from './scheme-notifications/routes.js'
 import { DemoPaymentDirectory, type PaymentSource } from './disputes/payments.js'
@@ -244,6 +252,10 @@ export const IMPLEMENTED_ROUTES = new Set([
  * port (P2) — MFA mandatory, scopes minted from the §2 persona matrix.
  */
 export interface AppDeps {
+  /** BACKOFFICE-59 — when true, compose the TRAINING environment: a separate synthetic-PSU
+   *  dataset, a training-only High-class audit sink (never the production audit_high_sensitivity
+   *  writer), and a sandbox Nebras egress. Defaults to the production composition (false). */
+  training?: boolean
   idp?: IdentityProviderPort
   audit?: AuthAuditSink
   approvals?: ApprovalsDeps
@@ -336,6 +348,10 @@ function sharedDemoPaymentDirectory(): PaymentSource {
 }
 
 export function createApp(deps: AppDeps = {}) {
+  // BACKOFFICE-59 — TRAINING environment composition. A separate environment (not a per-request
+  // flag) so it shares NO sinks with production: training actions can never reach the production
+  // audit trail or move a real consent.
+  const training = deps.training ?? false
   const idp = deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
   const audit = deps.audit ?? new InMemoryAuthAuditSink()
   // Shared P3 ITSM + Risk-signal sinks (BACKOFFICE-80). Reused by the super-admin guardrails
@@ -350,15 +366,25 @@ export function createApp(deps: AppDeps = {}) {
   })
   // High-class audit for story services: prefer an explicit sink, else reuse the
   // auth audit when it exposes emit (PgAuditEmitter does), else in-memory.
+  // BACKOFFICE-59 — in TRAINING we NEVER fall back to the production emitter: a dedicated
+  // training sink keeps practised actions out of audit_high_sensitivity (the load-bearing
+  // isolation). The worker wires a training_audit table here at adoption.
   const highClassAudit: HighClassAuditSink =
-    deps.highClassAudit ?? (hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
-  const consentDirectory = deps.consentDirectory ?? new RevocableConsentDirectory(sharedDemoConsentSeed())
+    deps.highClassAudit ??
+    (training ? new TrainingHighClassAuditSink() : hasHighClassEmit(audit) ? audit : new InMemoryHighClassAuditSink())
+  // BACKOFFICE-59 — training serves a SEPARATE synthetic-PSU dataset (distinct seed, same
+  // generator → mirrors production's shape) so a trainee can never act on a real operator's PSU.
+  const consentDirectory =
+    deps.consentDirectory ?? (training ? trainingConsentDirectory() : new RevocableConsentDirectory(sharedDemoConsentSeed()))
   const consentSearch = new ConsentSearchService({
     audit: highClassAudit,
     directory: consentDirectory
   })
   const auditTrail = new ConsentAuditTrailService(deps.consentEventSource ?? new InMemoryConsentEventSource())
-  const nebrasEgress = deps.nebrasEgress ?? getAdapter('p6-nebras-egress', profileFromConfig(process.env))
+  // BACKOFFICE-59 — training uses a sandbox egress so a practised revoke/dispute/refund is
+  // acknowledged locally and NEVER propagates to the real scheme (or the demo Nebras sim).
+  const nebrasEgress =
+    deps.nebrasEgress ?? (training ? sandboxTrainingEgress() : getAdapter('p6-nebras-egress', profileFromConfig(process.env)))
   const revokeService = new ConsentRevokeService({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
   const careSurface = deps.careSurface ?? getAdapter('p1-care-surface', profileFromConfig(process.env))
   const careSurfaceService = new CareSurfaceService({ careSurface, directory: consentDirectory, audit: highClassAudit })
@@ -409,7 +435,7 @@ export function createApp(deps: AppDeps = {}) {
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
-  const paymentSource = deps.paymentSource ?? sharedDemoPaymentDirectory()
+  const paymentSource = deps.paymentSource ?? (training ? trainingPaymentSource() : sharedDemoPaymentDirectory())
   const disputeService = new DisputeService({
     store: disputeStore,
     payments: paymentSource,
@@ -639,6 +665,15 @@ export function createApp(deps: AppDeps = {}) {
 
   // outermost: every request — including 400/401/404 — is spanned (BACKOFFICE-48)
   app.use('*', createTelemetryMiddleware(apm))
+
+  // BACKOFFICE-59 — mark every training response so the portal renders a persistent TRAINING
+  // banner (the same pattern as the DEMO banner), distinguishing it from production at a glance.
+  if (training) {
+    app.use('*', async (c, next) => {
+      c.header(TRAINING_ENV_HEADER, TRAINING_ENV_VALUE)
+      await next()
+    })
+  }
 
   app.use('*', async (c, next) => {
     const fapi = c.req.header('x-fapi-interaction-id')

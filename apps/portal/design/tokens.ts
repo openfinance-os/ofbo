@@ -86,6 +86,10 @@ export const ext = {
     reconciled: '#146c2e' // green — matched / healthy
   },
   demo: '#b54708',
+  // BACKOFFICE-59 — the persistent TRAINING-environment marker colour. A distinct violet,
+  // deliberately apart from the orange `demo`, amber `break`, red `breach` and navy nav, so a
+  // trainee can tell a training session from production/demo at a glance.
+  training: '#6d28d9',
   /**
    * UI-01 — the dark "institutional shell" navy chrome, codified from the Stitch
    * "OFBO - Operations Console (Synchronized)" screen (project 8050269076066130289):

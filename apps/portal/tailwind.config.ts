@@ -18,6 +18,7 @@ export default {
         break: ext.status.break,
         reconciled: ext.status.reconciled,
         demo: ext.demo,
+        training: ext.training,
         // UI-01 — dark "institutional shell" navy chrome (Stitch Operations Console (Synchronized)).
         nav: ext.nav.surface,
         'on-nav': ext.nav.on,

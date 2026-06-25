@@ -67,6 +67,11 @@ interface WorkerEnv {
   HYPERDRIVE?: { connectionString: string }
   BANK_ID?: string
   DEPLOY_PROFILE?: string
+  /** BACKOFFICE-59 — set to 'true' on a dedicated TRAINING Worker instance (no DB binding).
+   *  It serves the in-memory synthetic training environment: a separate dataset, a training-only
+   *  audit sink, and a sandbox egress — so a trainee's action never reaches production data,
+   *  the production audit trail, or the real scheme. */
+  OFBO_TRAINING?: string
 }
 
 interface WorkerContext {
@@ -88,6 +93,13 @@ const DAILY_RECON_CRON = '0 1 * * *'
 
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: WorkerContext): Promise<Response> {
+    // BACKOFFICE-59 — a TRAINING Worker short-circuits to the isolated, in-memory training
+    // environment BEFORE any production store (DB, audit emitter, egress) is constructed, so a
+    // training deployment shares nothing with production. Selected by deploy config, never per
+    // request — there is no header that flips a production Worker into training.
+    if (env.OFBO_TRAINING === 'true') {
+      return await createApp({ training: true }).fetch(request)
+    }
     const tenancy = {
       bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111',
       channel: 'internal_retail'
