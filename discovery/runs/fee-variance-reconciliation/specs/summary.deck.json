@@ -1,0 +1,45 @@
+{
+  "title": "Fee-variance reconciliation",
+  "subtitle": "Discovery readout · synthetic · non-production",
+  "slides": [
+    {
+      "kicker": "Problem",
+      "title": "Fee variances surface too late",
+      "bullets": [
+        "3.8% of invoiced fee lines diverge from the contracted tariff",
+        "Only visible at the month-end close — leakage compounds for weeks",
+        "Three systems report three different variance totals"
+      ],
+      "note": "Today the trigger is the close, not the event."
+    },
+    {
+      "kicker": "Who & why",
+      "title": "Reconciliation is done by hand",
+      "bullets": [
+        "Analyst rebuilds variance in an end-user spreadsheet (EUC)",
+        "Finance carries the leakage and the rework",
+        "Governance cannot evidence fee accuracy to source"
+      ]
+    },
+    {
+      "kicker": "Feasibility",
+      "title": "Governance says: observe and reconcile",
+      "bullets": [
+        "Maps to DR-1 Data Quality (DR-1.1-003 / DR-1.3-001 / DR-1.4-001)",
+        "Controls CTRL-DQ-003 / 006 / 012 take residual risk to Very Low",
+        "Commercial data only — no PSU PII; BCBS 239 lineage to source"
+      ],
+      "note": "Read-only observability + reconciliation, not a new processing purpose."
+    },
+    {
+      "kicker": "Direction",
+      "title": "A fee-variance reconciliation monitor",
+      "bullets": [
+        "Surface open variances per invoice line, not at month-end",
+        "One reconciled figure across ledger, invoice, and contract",
+        "Accuracy lineage available on demand"
+      ],
+      "note": "Prototype is direction, not specification — delivery authors the build."
+    }
+  ]
+}

@@ -1,0 +1,887 @@
+[
+  {
+    "risk_id": "DR-1.1-001",
+    "risk_name": "Consumer Data Accuracy Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 6,
+    "avg_control_effectiveness": 73.8,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.1-002",
+    "risk_name": "Model Input Data Accuracy Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 61,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 76,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.96,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.04,
+    "risk_reduction_pct": 76
+  },
+  {
+    "risk_id": "DR-1.2-001",
+    "risk_name": "Consumer Record Completeness Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 4,
+    "avg_control_effectiveness": 65.9,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.2-002",
+    "risk_name": "Model Data Completeness Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 3,
+    "avg_control_effectiveness": 61,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 76,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.72,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.28,
+    "risk_reduction_pct": 76
+  },
+  {
+    "risk_id": "DR-1.3-001",
+    "risk_name": "Data Currency Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 73,
+    "ownership_layers": [
+      "IT",
+      "2L"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.4-001",
+    "risk_name": "Data Consistency Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 4,
+    "avg_control_effectiveness": 83.9,
+    "ownership_layers": [
+      "IT",
+      "2L"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.5-001",
+    "risk_name": "Data Validity Risk",
+    "inherent_rating": "Low",
+    "inherent_score": 2,
+    "control_count": 3,
+    "avg_control_effectiveness": 78,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.5,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 1.5,
+    "risk_reduction_pct": 75
+  },
+  {
+    "risk_id": "DR-1.6-001",
+    "risk_name": "Data Uniqueness Risk",
+    "inherent_rating": "Low",
+    "inherent_score": 2,
+    "control_count": 3,
+    "avg_control_effectiveness": 82,
+    "ownership_layers": [
+      "IT",
+      "2L"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.5,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 1.5,
+    "risk_reduction_pct": 75
+  },
+  {
+    "risk_id": "DR-2.1-001",
+    "risk_name": "Consent Acquisition Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 2,
+    "avg_control_effectiveness": 85.8,
+    "ownership_layers": [
+      "1L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1,
+    "residual_rating": "Low",
+    "risk_reduction_points": 4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.1-002",
+    "risk_name": "Consent Scope & Withdrawal Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 75.2,
+    "ownership_layers": [
+      "1L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.2-001",
+    "risk_name": "Data Subject Rights Fulfillment Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 68.5,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.3-001",
+    "risk_name": "Data Protection Framework Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 66.2,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.3-002",
+    "risk_name": "Technical Processing Controls Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 3,
+    "avg_control_effectiveness": 90.5,
+    "ownership_layers": [
+      "IT",
+      "InfoSec"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1,
+    "residual_rating": "Low",
+    "risk_reduction_points": 4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.4-001",
+    "risk_name": "Cross-Border Data Transfer Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 4,
+    "avg_control_effectiveness": 59.9,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 69.9,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.5,
+    "residual_rating": "Low",
+    "risk_reduction_points": 3.5,
+    "risk_reduction_pct": 70
+  },
+  {
+    "risk_id": "DR-2.5-001",
+    "risk_name": "Breach Detection Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 4,
+    "avg_control_effectiveness": 77.1,
+    "ownership_layers": [
+      "InfoSec",
+      "2L"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.5-002",
+    "risk_name": "Breach Response & Notification Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 3,
+    "avg_control_effectiveness": 53,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 58,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 2.1,
+    "residual_rating": "Medium",
+    "risk_reduction_points": 2.9,
+    "risk_reduction_pct": 58
+  },
+  {
+    "risk_id": "DR-2.6-001",
+    "risk_name": "Unauthorized Internal Access Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 6,
+    "avg_control_effectiveness": 83.2,
+    "ownership_layers": [
+      "1L",
+      "IT",
+      "InfoSec"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.6-002",
+    "risk_name": "Unauthorized External Access Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 5,
+    "avg_control_effectiveness": 85.9,
+    "ownership_layers": [
+      "InfoSec",
+      "2L"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1,
+    "residual_rating": "Low",
+    "risk_reduction_points": 4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.7-001",
+    "risk_name": "Data Leakage Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 5,
+    "avg_control_effectiveness": 92.2,
+    "ownership_layers": [
+      "1L",
+      "InfoSec"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.8-001",
+    "risk_name": "Third-Party Data Sharing Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 3,
+    "avg_control_effectiveness": 57.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 62.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.88,
+    "residual_rating": "Low",
+    "risk_reduction_points": 3.12,
+    "risk_reduction_pct": 62
+  },
+  {
+    "risk_id": "DR-2.8-002",
+    "risk_name": "Third-Party Processor Compliance Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 57.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 62.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.5,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.5,
+    "risk_reduction_pct": 62
+  },
+  {
+    "risk_id": "DR-2.9-001",
+    "risk_name": "Internal Data Misuse Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 4,
+    "avg_control_effectiveness": 87.6,
+    "ownership_layers": [
+      "1L",
+      "IT",
+      "InfoSec"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-2.9-002",
+    "risk_name": "Data Manipulation & Tampering Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 4,
+    "avg_control_effectiveness": 92.1,
+    "ownership_layers": [
+      "IT",
+      "InfoSec"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-3.1-001",
+    "risk_name": "Product & Service Feature Disclosure Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 61,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 66,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.36,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.64,
+    "risk_reduction_pct": 66
+  },
+  {
+    "risk_id": "DR-3.1-002",
+    "risk_name": "Financial Terms Disclosure Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 2,
+    "avg_control_effectiveness": 71.5,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1,
+    "residual_rating": "Low",
+    "risk_reduction_points": 4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-3.1-003",
+    "risk_name": "Product Risk Warning Disclosure Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 66.2,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 71.2,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1.15,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.85,
+    "risk_reduction_pct": 71
+  },
+  {
+    "risk_id": "DR-3.2-001",
+    "risk_name": "Misleading Disclosure Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 3,
+    "avg_control_effectiveness": 57.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 62.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.88,
+    "residual_rating": "Low",
+    "risk_reduction_points": 3.12,
+    "risk_reduction_pct": 62
+  },
+  {
+    "risk_id": "DR-3.3-001",
+    "risk_name": "Language Accessibility Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 1,
+    "avg_control_effectiveness": 61,
+    "ownership_layers": [
+      "1L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 0,
+    "aggregate_effectiveness": 61,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.56,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.44,
+    "risk_reduction_pct": 61
+  },
+  {
+    "risk_id": "DR-3.3-002",
+    "risk_name": "Format & Readability Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 1,
+    "avg_control_effectiveness": 50.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 0,
+    "aggregate_effectiveness": 50.5,
+    "effectiveness_rating": "Moderate",
+    "residual_score": 1.48,
+    "residual_rating": "Low",
+    "risk_reduction_points": 1.52,
+    "risk_reduction_pct": 51
+  },
+  {
+    "risk_id": "DR-3.3-003",
+    "risk_name": "Channel & Vulnerable Consumer Accessibility Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 53.5,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 68.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.26,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.74,
+    "risk_reduction_pct": 68
+  },
+  {
+    "risk_id": "DR-3.4-001",
+    "risk_name": "Pre-Contractual Disclosure Timing Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 71.5,
+    "ownership_layers": [
+      "1L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 76.5,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.94,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.06,
+    "risk_reduction_pct": 76
+  },
+  {
+    "risk_id": "DR-3.4-002",
+    "risk_name": "Ongoing Notification Timing Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 2,
+    "avg_control_effectiveness": 76.8,
+    "ownership_layers": [
+      "1L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-4.1-001",
+    "risk_name": "Consumer Protection Regulatory Compliance Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 2,
+    "avg_control_effectiveness": 61.8,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 66.8,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.33,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.67,
+    "risk_reduction_pct": 67
+  },
+  {
+    "risk_id": "DR-4.1-002",
+    "risk_name": "Data Protection Law Compliance Risk",
+    "inherent_rating": "Critical",
+    "inherent_score": 5,
+    "control_count": 2,
+    "avg_control_effectiveness": 61.8,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 66.8,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.66,
+    "residual_rating": "Low",
+    "risk_reduction_points": 3.34,
+    "risk_reduction_pct": 67
+  },
+  {
+    "risk_id": "DR-4.1-003",
+    "risk_name": "Model & AI Regulatory Compliance Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 61.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 66.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.34,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.66,
+    "risk_reduction_pct": 66
+  },
+  {
+    "risk_id": "DR-4.2-001",
+    "risk_name": "Data Policy Implementation Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 2,
+    "avg_control_effectiveness": 61,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 66,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.02,
+    "residual_rating": "Low",
+    "risk_reduction_points": 1.98,
+    "risk_reduction_pct": 66
+  },
+  {
+    "risk_id": "DR-4.2-002",
+    "risk_name": "Policy Monitoring & Enforcement Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 3,
+    "avg_control_effectiveness": 66.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 71.5,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.86,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.14,
+    "risk_reduction_pct": 71
+  },
+  {
+    "risk_id": "DR-4.3-001",
+    "risk_name": "Documentation & Record Creation Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 2,
+    "avg_control_effectiveness": 80.5,
+    "ownership_layers": [
+      "1L",
+      "2L"
+    ],
+    "layering_bonus": 10,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-4.3-002",
+    "risk_name": "Record Retention & Disposal Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 4,
+    "avg_control_effectiveness": 70.8,
+    "ownership_layers": [
+      "1L",
+      "IT",
+      "2L"
+    ],
+    "layering_bonus": 15,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-4.4-001",
+    "risk_name": "Data Ownership & Accountability Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 3,
+    "avg_control_effectiveness": 82.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.6,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 2.4,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-4.4-002",
+    "risk_name": "Data Governance Structure Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 69.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 74.5,
+    "effectiveness_rating": "Strong",
+    "residual_score": 1.02,
+    "residual_rating": "Low",
+    "risk_reduction_points": 2.98,
+    "risk_reduction_pct": 74
+  },
+  {
+    "risk_id": "DR-1.1-003",
+    "risk_name": "Risk Data Aggregation Accuracy Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 5,
+    "avg_control_effectiveness": 72.7,
+    "ownership_layers": [
+      "2L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.3-002",
+    "risk_name": "Stress/Crisis Data Timeliness Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 3,
+    "avg_control_effectiveness": 76.5,
+    "ownership_layers": [
+      "2L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-1.4-002",
+    "risk_name": "Cross-Entity Risk Data Integration Risk",
+    "inherent_rating": "High",
+    "inherent_score": 4,
+    "control_count": 4,
+    "avg_control_effectiveness": 82.8,
+    "ownership_layers": [
+      "2L",
+      "IT"
+    ],
+    "layering_bonus": 5,
+    "coverage_bonus": 10,
+    "aggregate_effectiveness": 80,
+    "effectiveness_rating": "Strong",
+    "residual_score": 0.8,
+    "residual_rating": "Very Low",
+    "risk_reduction_points": 3.2,
+    "risk_reduction_pct": 80
+  },
+  {
+    "risk_id": "DR-4.2-003",
+    "risk_name": "Risk Report Adequacy Risk",
+    "inherent_rating": "Medium",
+    "inherent_score": 3,
+    "control_count": 3,
+    "avg_control_effectiveness": 57.5,
+    "ownership_layers": [
+      "2L"
+    ],
+    "layering_bonus": 0,
+    "coverage_bonus": 5,
+    "aggregate_effectiveness": 62.5,
+    "effectiveness_rating": "Adequate",
+    "residual_score": 1.12,
+    "residual_rating": "Low",
+    "risk_reduction_points": 1.88,
+    "risk_reduction_pct": 62
+  }
+]

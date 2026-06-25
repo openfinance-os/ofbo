@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- discovery/brand/design.md@v1 -->
+<title>Consent-lifecycle hygiene</title>
+<style>
+  :root {
+    --brand:#1F4DB8; --on-brand:#FFFFFF;
+    --accent:#0E9F6E; --warn:#B8860B; --danger:#B42318;
+    --bg:#F7F8FA; --card:#FFFFFF;
+    --ink:#0B1221; --muted:#5A6473; --border:#E2E6EC;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Inter", "Helvetica Neue", Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  .demo-banner { background:var(--warn); color:var(--on-brand); text-align:center;
+    font-size:13px; padding:6px; letter-spacing:.04em; }
+  .wordmark { color:var(--brand); font-weight:600; font-size:18px; }
+  a { color:var(--brand); }
+  
+    .slide { position:fixed; inset:28px 0 0 0; display:flex; flex-direction:column; justify-content:center;
+      padding:0 64px; background:var(--bg); }
+    .slide.cover { background:var(--card); }
+    h1 { font-size:40px; margin:8px 0; } h2 { font-size:30px; margin:0 0 16px; }
+    .kicker { color:var(--brand); font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:13px; }
+    li { font-size:20px; line-height:1.7; } .sub { color:var(--muted); }
+    .note { color:var(--muted); border-left:3px solid var(--brand); padding:8px 12px; font-size:15px; margin-top:16px; }
+    .pageno { position:absolute; bottom:24px; right:64px; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="demo-banner">DEMO — synthetic data, non-production</div>
+<section class="slide cover"><span class="wordmark">OFBO</span><h1>Consent-lifecycle hygiene</h1><div class="sub">Discovery readout · synthetic · non-production</div><div class="pageno">1 / 5</div></section>
+<section class="slide" hidden><div class="kicker">Problem</div><h2>Withdrawals breach SLA, silently</h2>
+         <ul><li>Revoke acknowledgement p50 is 9.4s against a 5s default</li><li>74% of sampled revokes breach — and no one sees it</li><li>Lifecycle state drifts Hub vs LFI for up to 14 minutes</li></ul>
+         <div class="note">Today the only trigger is a customer complaint.</div><div class="pageno">2 / 5</div></section>
+<section class="slide" hidden><div class="kicker">Who &amp; why</div><h2>Consent operations is flying blind</h2>
+         <ul><li>Analyst is accountable for honouring withdrawals in time</li><li>Care agents act on stale 'active' state</li><li>Compliance cannot prove SLA adherence on demand</li></ul>
+         <div class="pageno">3 / 5</div></section>
+<section class="slide" hidden><div class="kicker">Feasibility</div><h2>Governance says: observe, don't extend</h2>
+         <ul><li>Maps to DR-2.1 Consent Management (CTRL-DP-001/002/003)</li><li>Residual risk Low — conditional on read-only observability</li><li>PII redaction, INSERT-only audit, P6 egress carried to delivery</li></ul>
+         <div class="pageno">4 / 5</div></section>
+<section class="slide" hidden><div class="kicker">Direction</div><h2>A hygiene monitor — made tangible</h2>
+         <ul><li>Timeliness vs the 5s default, in real time</li><li>Drift indicator before the customer notices</li><li>On-demand audit evidence</li></ul>
+         <div class="note">Wireframe is direction, not specification — delivery authors the build.</div><div class="pageno">5 / 5</div></section><script>
+    var i=0,s=document.querySelectorAll('.slide');
+    function go(n){s[i].hidden=true;i=Math.max(0,Math.min(s.length-1,n));s[i].hidden=false;}
+    document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key===' ')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+    document.addEventListener('click',function(){go(i+1);});
+  </script>
+</body>
+</html>

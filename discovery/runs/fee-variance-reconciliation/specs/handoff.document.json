@@ -1,0 +1,45 @@
+{
+  "title": "Fee-variance reconciliation — delivery hand-off",
+  "subtitle": "Discovery run · fee-variance-reconciliation · synthetic data, non-production",
+  "sections": [
+    {
+      "heading": "Problem",
+      "blocks": [
+        { "p": "For a reconciliation analyst who must ensure invoiced TPP fees match the contracted tariffs, fee variances are invisible until the month-end close and inconsistent across the ledger, the Hub invoice, and the contract." },
+        { "p": "This causes financial leakage that compounds for weeks, manual end-user-spreadsheet rework, and no lineage to evidence fee accuracy." }
+      ]
+    },
+    {
+      "heading": "Success measures",
+      "blocks": [
+        { "table": {
+          "headers": ["Measure", "Baseline", "Target"],
+          "rows": [
+            ["Time to detect a fee variance", "month-end + 2 days", "within a day of the invoice line"],
+            ["Consistency across systems", "0 of 3 agree", "one reconciled figure"],
+            ["Fee-accuracy lineage", "manual reconstruction", "available on demand"]
+          ]
+        } }
+      ]
+    },
+    {
+      "heading": "Data-governance position (D6)",
+      "blocks": [
+        { "p": "Residual risk Very Low, Conditional on read-only observability + reconciliation over commercial fee metadata. Maps to DR-1.1-003, DR-1.3-001, DR-1.4-001 with CTRL-DQ-003 / 006 / 012." },
+        { "list": [
+          "Commercial data only — no PSU PII",
+          "INSERT-only audit of reconciliation evidence",
+          "BCBS 239 lineage emission to source",
+          "Hub-bound reads via P6 egress"
+        ] }
+      ]
+    },
+    {
+      "heading": "Direction (prototype, not specification)",
+      "blocks": [
+        { "p": "A fee-variance reconciliation monitor: open variances per invoice line, one reconciled figure across systems, and accuracy lineage on demand." },
+        { "note": "The right diamond authors the solution from scratch against the delivery contract. This brief informs; it does not design." }
+      ]
+    }
+  ]
+}

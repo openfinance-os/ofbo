@@ -1,0 +1,26 @@
+{
+  "title": "Consent-lifecycle hygiene",
+  "subtitle": "Discovery readout · synthetic · non-production",
+  "slides": [
+    { "kicker": "Problem", "title": "Withdrawals breach SLA, silently", "bullets": [
+      "Revoke acknowledgement p50 is 9.4s against a 5s default",
+      "74% of sampled revokes breach — and no one sees it",
+      "Lifecycle state drifts Hub vs LFI for up to 14 minutes"
+    ], "note": "Today the only trigger is a customer complaint." },
+    { "kicker": "Who & why", "title": "Consent operations is flying blind", "bullets": [
+      "Analyst is accountable for honouring withdrawals in time",
+      "Care agents act on stale 'active' state",
+      "Compliance cannot prove SLA adherence on demand"
+    ] },
+    { "kicker": "Feasibility", "title": "Governance says: observe, don't extend", "bullets": [
+      "Maps to DR-2.1 Consent Management (CTRL-DP-001/002/003)",
+      "Residual risk Low — conditional on read-only observability",
+      "PII redaction, INSERT-only audit, P6 egress carried to delivery"
+    ] },
+    { "kicker": "Direction", "title": "A hygiene monitor — made tangible", "bullets": [
+      "Timeliness vs the 5s default, in real time",
+      "Drift indicator before the customer notices",
+      "On-demand audit evidence"
+    ], "note": "Wireframe is direction, not specification — delivery authors the build." }
+  ]
+}

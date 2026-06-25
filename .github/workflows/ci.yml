@@ -52,6 +52,28 @@ jobs:
       # record behind the local .claude/hooks/test-tripwire.sh advisory tripwire.
       - run: node scripts/test-integrity.mjs
 
+  discovery-gates:
+    name: Discovery — D1–D8 gates + harness tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # The discovery harness is pure-Node and dependency-free — no install step needed.
+      - name: Harness unit tests (gates + renderers)
+        run: node --test 'discovery/**/*.test.mjs'
+      - name: Validate every discovery run (D1–D8)
+        run: |
+          status=0
+          shopt -s nullglob
+          for dir in discovery/runs/*/; do
+            echo "::group::$dir"
+            node discovery/gates/validate.mjs "$dir" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
   q2-static-sast:
     name: Q2 — static analysis + SAST
     runs-on: ubuntu-latest

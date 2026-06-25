@@ -1,0 +1,12 @@
+{
+  "title": "Fee-variance reconciliation — variance register",
+  "sheetName": "Fee variances",
+  "columns": ["TPP (synthetic)", "Contract tariff", "Hub invoice", "LFI ledger", "Variance", "Status"],
+  "rows": [
+    ["tpp-demo-014", "AED 12,500", "AED 13,750", "AED 12,500", "AED 1,250", { "v": "variance — none fired", "status": "danger" }],
+    ["tpp-demo-022", "AED 8,000", "AED 8,000", "AED 8,000", "AED 0", { "v": "reconciled", "status": "ok" }],
+    ["tpp-demo-031", "AED 20,000", "AED 21,250", "AED 20,000", "AED 1,250", { "v": "drifting", "status": "warn" }],
+    ["tpp-demo-047", "AED 5,500", "AED 5,500", "AED 5,500", "AED 0", { "v": "reconciled", "status": "ok" }],
+    ["tpp-demo-052", "AED 15,000", "AED 16,500", "AED 15,000", "AED 1,500", { "v": "variance — drifting", "status": "warn" }]
+  ]
+}

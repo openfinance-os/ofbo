@@ -32,5 +32,11 @@ export default tseslint.config(
   {
     files: ['services/bff/src/**/*.ts', 'apps/portal/src/**/*.{ts,tsx}'],
     rules: { 'no-console': ['error', { allow: ['warn', 'error'] }] }
+  },
+  {
+    // Discovery harness is plain-JS Node tooling (gate validator + renderer CLIs + tests) —
+    // grant Node globals.
+    files: ['discovery/**/*.mjs'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' } }
   }
 )
