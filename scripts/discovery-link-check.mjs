@@ -19,7 +19,6 @@ import { validateRun } from '../discovery/gates/validate.mjs';
 
 const BACKLOG = 'docs/backlog.yaml';
 const FEATURE = /^BACKOFFICE-\d+$/; // PRD §7 requirement = a feature-bearing item
-const GRANDFATHERED = new Set(['done', 'in-progress', 'blocked', 'deferred']);
 
 /** Indentation (leading spaces) of a line. */
 const indent = (line) => line.length - line.trimStart().length;
@@ -90,9 +89,9 @@ function check() {
 
 const findings = check();
 if (findings.length) {
-  console.error('\nDiscovery → delivery waist gate (HG-0007) — FAIL\n');
-  for (const f of findings) console.error(`  - ${f}`);
-  console.error('\nA feature backlog item must trace to a green discovery hand-off.\n');
+  process.stderr.write('\nDiscovery → delivery waist gate (HG-0007) — FAIL\n\n');
+  for (const f of findings) process.stderr.write(`  - ${f}\n`);
+  process.stderr.write('\nA feature backlog item must trace to a green discovery hand-off.\n');
   process.exit(1);
 }
-console.log('Discovery → delivery waist gate (HG-0007) — OK');
+process.stdout.write('Discovery → delivery waist gate (HG-0007) — OK\n');
