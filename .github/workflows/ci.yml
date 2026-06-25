@@ -53,7 +53,7 @@ jobs:
       - run: node scripts/test-integrity.mjs
 
   discovery-gates:
-    name: Discovery — D1–D8 gates + harness tests
+    name: Discovery — D1–D9 gates + waist + harness tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -63,7 +63,7 @@ jobs:
       # The discovery harness is pure-Node and dependency-free — no install step needed.
       - name: Harness unit tests (gates + renderers)
         run: node --test 'discovery/**/*.test.mjs'
-      - name: Validate every discovery run (D1–D8)
+      - name: Validate every discovery run (D1–D9)
         run: |
           status=0
           shopt -s nullglob
@@ -73,6 +73,10 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+      # The waist gate (HG-0007): a pending feature backlog item must trace to a green
+      # discovery hand-off. Closes the seam between the two diamonds.
+      - name: Discovery → delivery waist gate (backlog ↔ hand-off)
+        run: node scripts/discovery-link-check.mjs
 
   q2-static-sast:
     name: Q2 — static analysis + SAST

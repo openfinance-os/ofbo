@@ -21,6 +21,7 @@ const ARTIFACTS = {
   problem: 'problem-statement.md',
   dataGov: 'data-governance.md',
   prototype: 'prototype.md',
+  reaction: 'stakeholder-reaction.md',
   handoff: 'handoff.md',
 };
 
@@ -155,7 +156,7 @@ export function validateRun(runDir, opts = {}) {
   // ---- D7 Brand conformance ----------------------------------------------
   {
     const issues = [];
-    const visualMd = ['research', 'synthesis', 'problem', 'dataGov', 'prototype', 'handoff'];
+    const visualMd = ['research', 'synthesis', 'problem', 'dataGov', 'prototype', 'reaction', 'handoff'];
     const ooxml = OOXML_EXTS.flatMap((ext) => listFiles(runDir, ext));
     const haveVisuals = visualMd.some((k) => docs[k].exists) || listFiles(runDir, '.html').length > 0 || ooxml.length > 0;
     if (!brand.present && haveVisuals) {
@@ -180,6 +181,38 @@ export function validateRun(runDir, opts = {}) {
       issues.push(...scanSolutioning(`${ARTIFACTS.prototype} (over-specified)`, docs.prototype.body));
     }
     gates.push(gate('D8', 'Tangibility', issues));
+  }
+
+  // ---- D9 Validation loop (make-tangible closes) -------------------------
+  {
+    // The prototype exists to be *reacted to* — a stakeholder reaction is the evidence the
+    // make-tangible stage produces (canon §3/§4). D8 proves a prototype was built; D9 proves
+    // it did its job: it was shown, and the reactions are recorded as fresh signals (→ D2).
+    // Same trigger as D8 — only applies when a prototype exists.
+    if (!docs.prototype.exists) {
+      gates.push(gate('D9', 'Validation loop', ['no prototype — skipped'], 'skip'));
+    } else {
+      const issues = [];
+      if (!docs.reaction.exists) {
+        issues.push(`${ARTIFACTS.reaction} missing — prototype shown to no one (make-tangible loop left open)`);
+      } else {
+        const VERDICT = /\b(confirmed|refuted|uncertain|partially)\b/i;
+        const rows = filledRows(section(docs.reaction.body, 'Reactions'), ['hypothesis', 'verdict']);
+        if (rows.length === 0) issues.push('no stakeholder reactions recorded');
+        else if (!rows.some((r) => VERDICT.test(r.join(' '))))
+          issues.push('reactions record no verdict (confirmed/refuted/uncertain/partially)');
+        // Every framing hypothesis the prototype names must carry a recorded reaction.
+        const hyps = new Set((docs.prototype.body.match(/\bH\d+\b/g) || []));
+        const reacted = new Set((docs.reaction.body.match(/\bH\d+\b/g) || []));
+        for (const h of hyps) if (!reacted.has(h)) issues.push(`prototype hypothesis ${h} has no recorded reaction`);
+        // Reactions are evidence, not opinion: cited signals must resolve in the research log.
+        const defined = signalIds(section(docs.research.body, 'Signals'));
+        const cited = signalIds(docs.reaction.body);
+        if (cited.size === 0) issues.push('reactions cite no signal id — not logged as evidence (→ D2)');
+        for (const id of cited) if (!defined.has(id)) issues.push(`reaction cites ${id} not in research-log`);
+      }
+      gates.push(gate('D9', 'Validation loop', issues));
+    }
   }
 
   const ok = gates.every((g) => g.status !== 'fail');

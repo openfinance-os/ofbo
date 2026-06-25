@@ -9,6 +9,13 @@
 #   - Status changes ride the story PR (in-progress → done); blocker annotations may be
 #     committed straight to main.
 #   - id: BACKOFFICE-NN = PRD §7 requirement; M*-UPPER = infrastructure work item from §9.
+#   - Waist gate (HG-0007): a BACKOFFICE-NN (feature) item may only become `status: pending`
+#     once it carries `discovery: <slug>` pointing at a gate-green discovery/runs/<slug>/
+#     hand-off — the evidenced problem + data-governance verdict + tangible direction the
+#     feature traces to. Enforced by scripts/discovery-link-check.mjs (CI discovery-gates).
+#     Escape hatch: `discovery_exempt: true` with a `reason:` (e.g. a pre-HG-0007 legacy item).
+#     Infra (M*-) items are not waist-gated. The Develop phase (HG-0009 / develop skill) is
+#     what normally produces the chosen direction and appends the discovery-linked item.
 
 milestones:
   - name: M0

@@ -9,7 +9,11 @@ One invocation = one backlog item, end to end. The user is an auditor of `docs/b
 
 ## 1. Pick
 
-Read `docs/backlog.yaml`. Choose the FIRST item (file order, milestone order) with `status: pending` whose `depends_on` are all `done`. Skip `blocked`/`deferred`. If nothing is eligible:
+Read `docs/backlog.yaml`. Choose the FIRST item (file order, milestone order) with `status: pending` whose `depends_on` are all `done`. Skip `blocked`/`deferred`.
+
+**Waist gate (HG-0007).** A `BACKOFFICE-NN` feature item is only eligible if it carries a `discovery: <slug>` linking a gate-green `discovery/runs/<slug>/handoff.md` (or an explicit `discovery_exempt: true` + `reason:`). If the next pending feature has neither, do NOT build it: set it `blocked` with `reason: awaiting discovery hand-off (HG-0007)`, commit that to main, and move on — the feature needs the left diamond (discovery skill) and usually the Develop phase first. Infra (`M*-`) items are exempt. `scripts/discovery-link-check.mjs` enforces this in CI; honour it here so the loop never front-runs an unframed feature.
+
+If nothing is eligible:
 - if blocked items exist → send a push notification listing the human decisions needed, log it, and end the iteration;
 - if everything is done → notify milestone/backlog completion and end.
 

@@ -27,6 +27,9 @@ run: consent-lifecycle-hygiene
 | S-003 | sim Consent Manager `[synthetic]` | Lifecycle state drift: Hub reports `revoked`, LFI mirror still `authorised` for up to 14 min | pain | medium |
 | S-004 | compliance interview `[synthetic]` | No single evidence view proves "withdrawal honoured within SLA" for an audit | need | high |
 | S-005 | sim fault inject `[synthetic]` | Under injected consent-drift fault, no operator signal fires until a customer complains | constraint | medium |
+| S-006 | prototype review `[synthetic]` | Consent ops analyst, shown the monitor, called the revoke tile "the number I chase today, blind" — H1 reaction | reaction | high |
+| S-007 | prototype review `[synthetic]` | Care lead pointed at the amber drift window as "the thing to catch before the customer calls" — H2 reaction | reaction | high |
+| S-008 | prototype review `[synthetic]` | Compliance officer asked "can I export this slice for an audit?" — H3 reaction, wants a dated evidence export | reaction | high |
 
 ## Evidence index
 

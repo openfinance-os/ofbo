@@ -36,9 +36,8 @@ wireframe: wireframe.html
 
 ## Stakeholder reactions (evidence → D2)
 
-| Reaction | From | New signal id | Implication for framing |
-|---|---|---|---|
-| _to capture in a review session_ | | | |
+Captured after the walkthrough in `stakeholder-reaction.md` (D9) — H1/H2 confirmed, H3
+uncertain (lineage depth); reactions logged as signals `S-006`–`S-008`.
 
 ## Wireframe
 

@@ -23,7 +23,8 @@ const FILES = {
   'synthesis.md': `---\nartifact: synthesis\n${FM}\n---\n## Themes\n| T-1 | revoke latency erodes trust | S-001 | regulatory + trust risk |\n## Prioritisation\n- **Method:** impact × reach ÷ effort\n`,
   'problem-statement.md': `---\nartifact: problem-statement\n${FM}\n---\n## The problem (falsifiable)\nFor a care agent (synthetic) handling a revoke, today acknowledgement lags, per S-001.\n## Target user\nCare agent, synthetic persona, during a consent revoke.\n## Success measures\n| Measure | Baseline | Target | How |\n| Revoke ack | 12s | under 5s | sim metric |\n## Stakeholders & scope (D3)\n| Care lead | in | owns the queue |\n- Out of scope (explicit): bulk export tooling\n`,
   'data-governance.md': `---\nartifact: data-governance\n${FM}\n---\n## Risk mapping\n| consent record | ${DR} | High | PDPL Art. 5 | ${CTRL} |\n## Residual-risk verdict (D6)\n- **Acceptable for delivery?** Conditional — monitor fee variance\n`,
-  'prototype.md': `---\nartifact: prototype\n${FM}\nfidelity: low\nwireframe: wireframe.html\n---\n## What this prototype tests\nMakes the revoke-acknowledgement delay tangible for a care agent.\n`,
+  'prototype.md': `---\nartifact: prototype\n${FM}\nfidelity: low\nwireframe: wireframe.html\n---\n## What this prototype tests\n| Hypothesis | Region | Positive reaction |\n| H1 — revoke timeliness made visible | ack tile | "the number I chase blind" |\n`,
+  'stakeholder-reaction.md': `---\nartifact: stakeholder-reaction\n${FM}\n---\n## Reactions\n| Hypothesis | Stakeholder | Verdict | Reaction | Signal |\n| H1 | care agent (synthetic) | confirmed | "the number I chase blind" | S-001 |\n`,
   'wireframe.html': `<!doctype html><html><head><!-- brand-profile: discovery/brand/design.md@v1 -->\n<style>body{font-family:"Inter","Helvetica Neue",Arial,sans-serif;background:#F7F8FA;color:#0B1221}.primary{background:#1F4DB8;color:#FFFFFF}</style></head><body>wireframe</body></html>`,
   'handoff.md': `---\nartifact: handoff\n${FM}\n---\n## Problem\nRevoke acknowledgement lags.\n## What delivery owns now\nDelivery authors the solution from the validated brief.\n`,
 };
@@ -118,5 +119,32 @@ test('D8 fails when the wireframe asset is missing', () => {
 test('D8 fails when the prototype claims delivery fidelity', () => {
   const dir = makeRun({ 'prototype.md': FILES['prototype.md'].replace('fidelity: low', 'fidelity: high') });
   try { assert.equal(gateOf(validateRun(dir, OPTS), 'D8').status, 'fail'); }
+  finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D9 fails when the prototype was shown to no one (no reaction)', () => {
+  const dir = makeRun({ 'stakeholder-reaction.md': null });
+  try { assert.equal(gateOf(validateRun(dir, OPTS), 'D9').status, 'fail'); }
+  finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D9 fails when a framing hypothesis has no recorded reaction', () => {
+  // Prototype names H1 and H2, but only H1 was reacted to.
+  const dir = makeRun({
+    'prototype.md': FILES['prototype.md'].replace('| H1 — revoke timeliness made visible | ack tile | "the number I chase blind" |', '| H1 | ack tile | a |\n| H2 — drift indicator | drift row | b |'),
+  });
+  try { assert.equal(gateOf(validateRun(dir, OPTS), 'D9').status, 'fail'); }
+  finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D9 fails when a reaction cites a signal not in the research log', () => {
+  const dir = makeRun({ 'stakeholder-reaction.md': FILES['stakeholder-reaction.md'].replace('S-001', 'S-404') });
+  try { assert.equal(gateOf(validateRun(dir, OPTS), 'D9').status, 'fail'); }
+  finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('D9 skips when there is no prototype to react to', () => {
+  const dir = makeRun({ 'prototype.md': null });
+  try { assert.equal(gateOf(validateRun(dir, OPTS), 'D9').status, 'skip'); }
   finally { rmSync(dir, { recursive: true, force: true }); }
 });

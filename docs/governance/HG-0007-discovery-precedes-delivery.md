@@ -1,7 +1,8 @@
 # HG-0007 — Discovery precedes delivery (the left-diamond gate)
 
-- Status: **Proposed** — awaiting bank change-governance decision
-- Date: 2026-06-24
+- Status: **Accepted** (harness-owner direction, 2026-06-25) — bank change-governance
+  ratification still required before production branch protection (see Decision)
+- Date: 2026-06-24 (proposed) · 2026-06-25 (accepted)
 - Scope: harness / AI-SDLC governance — the discovery harness (`discovery/`)
 - Related: HG-0001 (human four-eyes — discovery hand-off is a human decision point);
   HG-0002 (immutable control plane — the gate validator lives in the protected surface);
@@ -52,13 +53,32 @@ they cannot be weakened by the build loop they govern.
 
 ## Decision
 
-_Pending._ Once accepted: feature backlog items reference their `discovery/runs/<slug>/handoff.md`;
-the discovery control surface is added to CODEOWNERS (HG-0002).
+**Accepted (harness-owner, 2026-06-25).** A green discovery hand-off is the entry condition for
+a feature-bearing backlog item. Mechanically enforced:
 
-**Implemented so far (mechanism, not the policy decision):** the `discovery-gates` job in
-`.github/workflows/ci.yml` runs the harness tests and validates every `discovery/runs/*` through
-D1–D8 on each PR — pure-Node, dependency-free. Making a green discovery hand-off a *required*
-entry condition for feature work (branch protection + CODEOWNERS) remains the human decision.
+- **The waist gate** — `scripts/discovery-link-check.mjs` (CI `discovery-gates` job). A
+  `BACKOFFICE-NN` item may only be `status: pending` if it carries `discovery: <slug>` resolving
+  to a `discovery/runs/<slug>/handoff.md` that passes **all** applicable gates (reuses the
+  D1–D9 validator). Escape hatch: `discovery_exempt: true` + `reason:` for pre-policy legacy
+  items. Infra (`M*-`) items are not gated. The `next-story` loop honours the same rule in its
+  Pick step, so the loop cannot front-run an unframed feature.
+- **Gate D9 (validation loop)** — the hand-off now inherits a *stakeholder-tested* direction,
+  not just a built prototype: D9 fails a run whose prototype was never reacted to (canon §3/§4).
+- **The Develop phase (HG-0009)** — the `develop` skill is what normally turns a hand-off into
+  the chosen solution direction and appends the discovery-linked backlog item, so the waist gate
+  is satisfied by construction rather than by hand.
+
+**Grandfathering.** The policy binds work that becomes `pending` after adoption; the ~135 items
+already shipped are not retro-linked (history is not rewritten). An un-statused stub trips the
+gate only when someone marks it `pending` to build it — which is exactly when a hand-off is due.
+
+**Remaining human step (bank change-governance).** Production branch protection on
+`docs/backlog.yaml` + adding the discovery/gate control surface to **CODEOWNERS** (HG-0002) — so
+the gate cannot be removed by the loop it governs — is the bank's ratification decision. No
+CODEOWNERS file exists yet; owners are not fabricated here.
+
+**Prior mechanism (now part of the above):** the `discovery-gates` job already validated every
+`discovery/runs/*` through the gate validator on each PR — pure-Node, dependency-free.
 
 ## Consequences
 

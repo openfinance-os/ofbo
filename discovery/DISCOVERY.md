@@ -25,11 +25,15 @@ the **Double Diamond** — *Discover* and *Define* — and hands a validated, ev
    problem space     problem worth solving  │
                      + make it tangible      │
         ◇──────────────◇                    │      ◇──────────────◇
-        this harness  ─┘                    │      delivery harness (existing)
-                          └── hand-off contract ──┘
+        this harness  ─┘                    │   develop skill   next-story loop
+                          └── hand-off contract ──┘   (HG-0009)    (existing)
 ```
 
-This harness owns the **left diamond**. It deliberately stops at the hand-off: it produces
+This harness owns the **left diamond**. The right diamond is now a diamond too: its *diverge*
+half is the **`develop` skill** (HG-0009) — it consumes a green hand-off, explores several
+solution directions, and converges on one before the **`next-story`** delivery loop builds it.
+The waist between them is enforced (HG-0007): a feature can't enter delivery without a green
+hand-off. It deliberately stops at the hand-off: it produces
 a problem worth solving and a low-fidelity prototype that makes the direction tangible — it
 does **not** design the production solution, write delivery stories, or touch
 `specs/backoffice-openapi.yaml`. That is the right diamond's job, and crossing the line is a
@@ -44,6 +48,7 @@ gate failure (D4).
 | 3 | **Define** | converge | Frame the single problem worth solving, with success measures and constraints | `problem-statement.md` |
 | 4 | **Define** | converge | **Data-governance feasibility** — classify the data the direction would touch, map to the register, assert acceptable residual risk | `data-governance.md` |
 | 5 | **Define** | *make tangible* | **Prototype** — a disposable low-fidelity wireframe that visualises how the solution *could* look, to test the framing before committing to delivery | `prototype.md` + wireframe asset |
+| 5b | **Define** | *validate* | **Stakeholder reaction** — show the prototype to the named roles; record their reaction per framing hypothesis as fresh signals. This *closes* the make-tangible loop (D9) | `stakeholder-reaction.md` |
 | 6 | **Hand-off** | converge | Package the validated problem + prototype as a delivery-ready brief | `handoff.md` |
 
 The **Prototype** stage (5) is new relative to a textbook Define: it satisfies the
@@ -69,9 +74,12 @@ Gates are *mechanical* — they check structure, references, and presence, not t
 | **D6** | Data-governance feasibility | `data-governance.md` doesn't cite ≥1 `DR-*` risk category **and** ≥1 regulatory driver; any cited `DR-*`/`CTRL-*` id fails to resolve against the register; no residual-risk verdict |
 | **D7** | Brand conformance | Any **visual** artifact (HTML, docs, PPT, Excel, wireframe) doesn't reference `discovery/brand/design.md`, or contains raw hex/px/font literals instead of design tokens |
 | **D8** | Tangibility | The Prototype stage didn't produce `prototype.md` **and** a brand-conformant wireframe asset, or the prototype claims delivery fidelity (over-specifies) |
+| **D9** | Validation loop | A prototype exists but `stakeholder-reaction.md` doesn't close the make-tangible loop — no recorded reaction/verdict per framing hypothesis, or reactions not logged as signals (→ D2) |
 
 D6 depends on the **data-risk register** seam; D7 depends on the **brand profile** seam. A
-run that mounts neither seam still runs D1–D5 and D8 (D8's brand check defers to D7).
+run that mounts neither seam still runs D1–D5, D8 and D9 (D8/D9's brand check defers to D7).
+D9 applies only when a prototype exists (same trigger as D8): the prototype is built to be
+*reacted to*, so the run isn't done until the reaction is captured as evidence.
 
 ---
 
@@ -82,8 +90,10 @@ run that mounts neither seam still runs D1–D5 and D8 (D8's brand check defers 
   (§4). If something feels genuinely uncovered, raise it in the hand-off — don't design it.
 - **Evidence over opinion (→ D2/D5).** Every theme and claim traces to a logged signal.
   Synthetic/illustrative evidence is allowed in demo runs but must be labelled as such.
-- **Visualise & make it tangible (→ D8).** A discovery isn't done until someone can *see*
-  the direction. The Prototype stage forces this.
+- **Visualise & make it tangible (→ D8/D9).** A discovery isn't done until someone can *see*
+  the direction (D8) **and has reacted to it** (D9). The Prototype stage produces the artifact;
+  the Stakeholder-reaction stage closes the loop by capturing the reaction as evidence — a
+  prototype no one reacted to tested nothing.
 - **Brand conformance (→ D7).** Everything an entity's stakeholders see must look like it
   belongs to that entity. All visual output renders against `design.md`; tokens only, never
   raw values. This holds for HTML, generated docs, slides, and spreadsheets alike.
@@ -175,7 +185,11 @@ second brand across every format.
 - it contains **no** delivery design — no endpoints, schemas, story breakdowns, or tech
   choices (those are the right diamond's to create).
 
-Delivery consumes this brief to open its first story. The two harnesses share governance
+The **Develop** phase (the `develop` skill, HG-0009) consumes this brief first: it explores
+several solution directions, converges on one, records a Solution Direction Record
+(`docs/develop/<slug>.md`), and appends the `discovery: <slug>`-linked backlog item the
+**delivery** loop then builds. The waist gate (HG-0007, `scripts/discovery-link-check.mjs`)
+makes a green hand-off the entry condition for that item. The harnesses share governance
 (zero PII, audit, brand) but never share authorship of the solution.
 
 ---
@@ -189,10 +203,15 @@ discovery/
     design.md             ← brand-profile seam (D7)
   render/                 ← zero-dep branded renderer: document · deck · prototype (+ tests)
   templates/              ← one template per artifact (carry design_profile front-matter)
-  gates/                  ← pure-Node D1–D8 validator + tests
-  runs/<slug>/            ← a discovery run's artifacts (problem-statement, prototype, …)
+  gates/                  ← pure-Node D1–D9 validator + tests
+  runs/<slug>/            ← a discovery run's artifacts (problem-statement, prototype, reaction, …)
     specs/                ← structured content (JSON) the renderer turns into branded HTML
-docs/governance/
-  data-risk-register/     ← data-governance seam (D6)
-  HG-0007…, HG-0008…      ← governance for this harness
+scripts/
+  discovery-link-check.mjs ← the waist gate (HG-0007): backlog feature item ↔ green hand-off
+docs/
+  develop/                ← Develop-phase Solution Direction Records (right-diamond diverge, HG-0009)
+  governance/
+    data-risk-register/   ← data-governance seam (D6)
+    HG-0007 (waist), HG-0008 (seams), HG-0009 (Develop)  ← governance for this harness
+.claude/skills/develop/   ← the Develop phase skill (consumes a hand-off, emits the backlog item)
 ```
