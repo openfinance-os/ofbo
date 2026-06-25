@@ -50,6 +50,15 @@ Pick a slug. Create `discovery/runs/<slug>/` and copy each `discovery/templates/
 > spreadsheets, wireframes — renders against `design.md` with tokens only and carries the
 > marker. Never inline a raw hex/px/font.
 
+## 3b. Validate — close the make-tangible loop (D9)
+
+- `stakeholder-reaction.md`: show `wireframe.html` to the roles the problem statement names and
+  record their reaction **per framing hypothesis** (`H1`, `H2`, …) with a verdict
+  (confirmed/refuted/uncertain/partially). Log **each reaction as a new signal** in
+  `research-log.md` (continue the `S-NNN` numbering) so it is evidence, not opinion — D9 fails a
+  run whose prototype was reacted to by no one. Demo runs use **synthetic stakeholders** tagged
+  `[synthetic]`; zero real PII. A prototype no one reacted to tested nothing.
+
 ## 4. Gate, review, hand off
 
 1. `node discovery/gates/validate.mjs discovery/runs/<slug>` — all applicable gates D1–D8 must
@@ -65,10 +74,13 @@ Pick a slug. Create `discovery/runs/<slug>/` and copy each `discovery/templates/
 
 ## Definition of done
 
-- All applicable D1–D8 gates green; both reviewers PASS.
+- All applicable D1–D9 gates green; both reviewers PASS.
 - Every artifact carries the `design_profile`; the wireframe is brand-conformant.
+- The prototype's framing hypotheses each have a recorded stakeholder reaction (D9), logged as signals.
 - `handoff.md` contains no endpoints, schemas, stories, or tech choices.
 - Synthetic data only; zero PII; DEMO banner on the wireframe.
 
-Delivery (the `next-story` loop) consumes `handoff.md` to open its first story. The two
-harnesses share governance — never authorship of the solution.
+The **Develop** phase (the `develop` skill, HG-0009) consumes `handoff.md` next — it explores
+solution directions, converges on one, and appends the `discovery: <slug>`-linked backlog item
+the `next-story` loop then builds. The waist gate (HG-0007) makes a green hand-off the entry
+condition. The harnesses share governance — never authorship of the solution.

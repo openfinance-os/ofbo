@@ -16,6 +16,7 @@
     "test:integrity": "node scripts/test-integrity.mjs",
     "verify:contract": "pnpm --filter @ofbo/bff verify:contract",
     "docs:check": "node scripts/doc-link-check.mjs",
+    "discovery:link": "node scripts/discovery-link-check.mjs",
     "test:mutation": "stryker run",
     "db:apply": "pnpm --filter @ofbo/db apply",
     "db:seed": "pnpm --filter @ofbo/db seed",

@@ -27,6 +27,9 @@ run: fee-variance-reconciliation
 | S-003 | sim fee-variance fault `[synthetic]` | Under injected fee-variance fault, no operator signal fires until the invoice is posted | constraint | medium |
 | S-004 | finance interview `[synthetic]` | Three systems (LFI ledger, Hub invoice, contract tariff) report three different variance figures | pain | high |
 | S-005 | governance review `[synthetic]` | No lineage proving the fee figures are accurate to source for a BCBS 239 review | need | high |
+| S-006 | prototype review `[synthetic]` | Reconciliation analyst, shown the monitor, called the open-variance tile "the leakage I find late today" — H1 reaction | reaction | high |
+| S-007 | prototype review `[synthetic]` | Analyst said the single reconciled figure "means I'd stop reaching for my spreadsheet" — H2 reaction (would retire the EUC) | reaction | high |
+| S-008 | prototype review `[synthetic]` | Data governance lead asked "can I evidence this to source for BCBS 239?" — H3 reaction, wants lineage on the figure | reaction | high |
 
 ## Evidence index
 
