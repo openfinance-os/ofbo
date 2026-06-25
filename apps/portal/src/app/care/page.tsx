@@ -1,11 +1,8 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { CareConsole } from '../../components/care-console'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { getPsuAuditTrail, searchConsents, CareApiError, type CareTimeline, type ConsentSearchResult, type IdentifierType } from '../../lib/care'
 import { createDisputeAction, revokeConsentAction, bulkRevokeAction } from './actions'
 
@@ -29,16 +26,9 @@ const FAILURE: Record<string, string> = {
 }
 
 export default async function CarePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.consentsAdmin)) redirect(`/access-denied?module=${encodeURIComponent('Customer Care')}&required=${encodeURIComponent(SCOPES.consentsAdmin)}`)
+  const { token, principal } = await requireSession({ scope: SCOPES.consentsAdmin, module: 'Customer Care' })
+  // Start the shell badge count immediately so it overlaps the PSU search round trip below.
+  const badgesPromise = shellBadges(token)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -80,11 +70,7 @@ export default async function CarePage({ searchParams }: { searchParams: Promise
   }
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="customer-care"
-    >
+    <AppShell badges={await badgesPromise} principal={principal}>
       <CareConsole
         query={{ identifier_type: identifierType, identifier }}
         result={result}

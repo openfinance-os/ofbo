@@ -1,11 +1,8 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { AnalyticsDashboard } from '../../components/analytics-dashboard'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { getExecutiveDashboard, getFinanceView, AnalyticsApiError, type AnalyticsView } from '../../lib/analytics'
 
 /**
@@ -21,23 +18,11 @@ const EXEC_SCOPE = SCOPES.analyticsRead
 const FINANCE_SCOPE = SCOPES.reconciliationRead
 
 export default async function AnalyticsPage() {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
+  const { token, principal } = await requireSession({ scope: [EXEC_SCOPE, FINANCE_SCOPE], module: 'Analytics & Insights' })
 
   const canExec = principal.superadmin || principal.scopes.includes(EXEC_SCOPE)
   const canFinance = principal.superadmin || principal.scopes.includes(FINANCE_SCOPE)
-  if (!canExec && !canFinance) redirect(`/access-denied?module=${encodeURIComponent('Analytics & Insights')}&required=${encodeURIComponent(`${EXEC_SCOPE} or ${FINANCE_SCOPE}`)}`)
 
-  let executive: AnalyticsView | null = null
-  let finance: AnalyticsView | null = null
-  let error: string | null = null
   let errorRemediation: string | null = null
   let errorDocsUrl: string | null = null
   // Capture the typed error's remediation/docs_url (first one wins) for the banner (UX-06).
@@ -47,30 +32,24 @@ export default async function AnalyticsPage() {
       errorDocsUrl = e.docsUrl ?? null
     }
   }
-  // Fetch each entitled view independently — one failing must not blank the other.
-  if (canExec) {
-    try {
-      executive = await getExecutiveDashboard(token)
-    } catch (e) {
-      error = 'The Executive Dashboard is temporarily unavailable.'
-      capture(e)
-    }
-  }
-  if (canFinance) {
-    try {
-      finance = await getFinanceView(token)
-    } catch (e) {
-      error = error ? `${error} The Finance View is temporarily unavailable.` : 'The Finance View is temporarily unavailable.'
-      capture(e)
-    }
-  }
+  // Fetch each entitled view (and the badge count) independently and in parallel — one
+  // failing must not blank the other, and the badge read no longer serialises after them.
+  let execFailed = false
+  let financeFailed = false
+  const [executive, finance, badges] = await Promise.all([
+    canExec
+      ? getExecutiveDashboard(token).catch((e): AnalyticsView | null => { execFailed = true; capture(e); return null })
+      : Promise.resolve<AnalyticsView | null>(null),
+    canFinance
+      ? getFinanceView(token).catch((e): AnalyticsView | null => { financeFailed = true; capture(e); return null })
+      : Promise.resolve<AnalyticsView | null>(null),
+    shellBadges(token)
+  ])
+  let error: string | null = execFailed ? 'The Executive Dashboard is temporarily unavailable.' : null
+  if (financeFailed) error = error ? `${error} The Finance View is temporarily unavailable.` : 'The Finance View is temporarily unavailable.'
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="analytics"
-    >
+    <AppShell badges={badges} principal={principal}>
       <AnalyticsDashboard executive={executive} finance={finance} error={error} errorRemediation={errorRemediation} errorDocsUrl={errorDocsUrl} />
     </AppShell>
   )

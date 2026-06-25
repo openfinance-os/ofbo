@@ -1,10 +1,7 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { ApprovalsPortal } from '../../components/approvals-portal'
-import { TOKEN_COOKIE } from '../../lib/cookies'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { listPendingApprovals, ApprovalApiError, type ApprovalRequest } from '../../lib/approvals'
 import { approveAction, rejectAction } from './actions'
 
@@ -27,15 +24,7 @@ const FAILURE: Record<string, string> = {
 }
 
 export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
+  const { token, principal } = await requireSession()
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -47,24 +36,24 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   let error: string | null = FAILURE[status] ?? null
   let errorRemediation: string | null = null
   let errorDocsUrl: string | null = null
-  try {
-    const page = await listPendingApprovals(token, { cursor })
+  const [page, badges] = await Promise.all([
+    listPendingApprovals(token, { cursor }).catch((e: unknown) => {
+      error = e instanceof ApprovalApiError ? e.message : 'Failed to load pending approvals.'
+      if (e instanceof ApprovalApiError) {
+        errorRemediation = e.remediation ?? null
+        errorDocsUrl = e.docsUrl ?? null
+      }
+      return null
+    }),
+    shellBadges(token)
+  ])
+  if (page) {
     approvals = page.approvals
     moreHref = page.next_cursor ? `/approvals?cursor=${encodeURIComponent(page.next_cursor)}` : null
-  } catch (e) {
-    error = e instanceof ApprovalApiError ? e.message : 'Failed to load pending approvals.'
-    if (e instanceof ApprovalApiError) {
-      errorRemediation = e.remediation ?? null
-      errorDocsUrl = e.docsUrl ?? null
-    }
   }
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="approvals"
-    >
+    <AppShell badges={badges} principal={principal}>
       <ApprovalsPortal
         approvals={approvals}
         subject={principal.subject}

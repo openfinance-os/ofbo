@@ -1,11 +1,8 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { ReconConsole } from '../../components/recon-console'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { listBreaks, listRuns, ReconApiError, type ReconciliationBreak, type ReconciliationRun } from '../../lib/reconciliation'
 import { getReconFinance, type ReconFinance } from '../../lib/recon-finance'
 import { claimBreakAction, resolveBreakAction, requestSignoffAction } from './actions'
@@ -30,16 +27,11 @@ const FAILURE: Record<string, string> = {
 }
 
 export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect(`/access-denied?module=${encodeURIComponent('Reconciliation')}&required=${encodeURIComponent(SCOPES.reconciliationRead)}`)
+  const { token, principal } = await requireSession({ scope: SCOPES.reconciliationRead, module: 'Reconciliation' })
+  // The finance-margin view and the shell badge count don't depend on the run/break reads,
+  // so kick them off now to overlap with the (dependent) runs → breaks chain below.
+  const financePromise = getReconFinance(token)
+  const badgesPromise = shellBadges(token)
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -81,14 +73,10 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
 
   // UIF-07b — TPP-aaS financial reconciliation (Finance View margin; same reconciliation:read
   // scope). Degrades to null on any error so the console renders without it.
-  const finance: ReconFinance | null = await getReconFinance(token)
+  const finance: ReconFinance | null = await financePromise
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="finance"
-    >
+    <AppShell badges={await badgesPromise} principal={principal}>
       <ReconConsole
         runs={runs}
         selectedRun={selectedRun}

@@ -1,9 +1,7 @@
-import { cookies } from 'next/headers'
 import { AppShell } from '../../components/app-shell'
 import { GuideContent } from '../../components/guide-content'
 import { shellBadges } from '../../lib/shell'
-import { TOKEN_COOKIE } from '../../lib/cookies'
-import { verifyAndMint } from '../../lib/portal'
+import { getSession } from '../../lib/session'
 
 /**
  * The introductory guide — "why this back office exists, and why each screen is here".
@@ -15,19 +13,10 @@ import { verifyAndMint } from '../../lib/portal'
 export const dynamic = 'force-dynamic'
 
 export default async function GuidePage() {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
+  const session = await getSession()
 
-  let principal
-  if (token) {
-    try {
-      principal = await verifyAndMint(token)
-    } catch {
-      principal = undefined
-    }
-  }
-
-  if (!principal || !token) {
-    // Newcomer at the front door — standalone, with a route back to sign-in.
+  if (!session) {
+    // Newcomer at the front door (or an expired session) — standalone, with a route back to sign-in.
     return (
       <main className="min-h-screen px-4 py-10">
         <GuideContent chromeless />
@@ -35,12 +24,9 @@ export default async function GuidePage() {
     )
   }
 
+  const badges = await shellBadges(session.token)
   return (
-    <AppShell
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="guide"
-      badges={await shellBadges(token)}
-    >
+    <AppShell principal={session.principal} badges={badges}>
       <GuideContent />
     </AppShell>
   )

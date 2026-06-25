@@ -1,11 +1,8 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { RiskDashboard } from '../../components/risk-dashboard'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { getLiabilityMonitor, getRiskView } from '../../lib/risk'
 import { AnalyticsApiError, type AnalyticsView } from '../../lib/analytics'
 
@@ -18,20 +15,8 @@ import { AnalyticsApiError, type AnalyticsView } from '../../lib/analytics'
 export const dynamic = 'force-dynamic'
 
 export default async function RiskPage() {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
+  const { token, principal } = await requireSession({ scope: SCOPES.riskRead, module: 'Risk Management' })
 
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.riskRead)) redirect(`/access-denied?module=${encodeURIComponent('Risk Management')}&required=${encodeURIComponent(SCOPES.riskRead)}`)
-
-  let riskView: AnalyticsView | null = null
-  let liabilityMonitor: AnalyticsView | null = null
-  let error: string | null = null
   let errorRemediation: string | null = null
   let errorDocsUrl: string | null = null
   const capture = (e: unknown) => {
@@ -40,26 +25,20 @@ export default async function RiskPage() {
       errorDocsUrl = e.docsUrl ?? null
     }
   }
-  // Fetch each view independently — one failing must not blank the other.
-  try {
-    riskView = await getRiskView(token)
-  } catch (e) {
-    error = 'The Risk View is temporarily unavailable.'
-    capture(e)
-  }
-  try {
-    liabilityMonitor = await getLiabilityMonitor(token)
-  } catch (e) {
-    error = error ? `${error} The liability monitor is temporarily unavailable.` : 'The liability monitor is temporarily unavailable.'
-    capture(e)
-  }
+  // Fetch each view (and the shell badge count) independently and in parallel — one
+  // failing must not blank the other, and the badge read no longer serialises after them.
+  let riskFailed = false
+  let liabilityFailed = false
+  const [riskView, liabilityMonitor, badges] = await Promise.all([
+    getRiskView(token).catch((e): AnalyticsView | null => { riskFailed = true; capture(e); return null }),
+    getLiabilityMonitor(token).catch((e): AnalyticsView | null => { liabilityFailed = true; capture(e); return null }),
+    shellBadges(token)
+  ])
+  let error: string | null = riskFailed ? 'The Risk View is temporarily unavailable.' : null
+  if (liabilityFailed) error = error ? `${error} The liability monitor is temporarily unavailable.` : 'The liability monitor is temporarily unavailable.'
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="risk"
-    >
+    <AppShell badges={badges} principal={principal}>
       <RiskDashboard riskView={riskView} liabilityMonitor={liabilityMonitor} error={error} errorRemediation={errorRemediation} errorDocsUrl={errorDocsUrl} />
     </AppShell>
   )
