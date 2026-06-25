@@ -34,13 +34,24 @@ describe('PgReadinessProfileStore (ADR 0022)', () => {
     expect(await store.get('rdy-nope')).toBeNull()
   })
 
-  it('readiness_profile carries no tenancy or PII columns (non-regulated table)', async () => {
+  it('carries no tenancy or PII columns, but IS governance-enrolled (classification)', async () => {
     const cols = await admin.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns WHERE table_name = 'readiness_profile'`
     )
     const names = cols.rows.map((r) => r.column_name).sort()
-    expect(names).toEqual(['created_at', 'input', 'name', 'slug'])
-    expect(names).not.toContain('bank_id')
+    expect(names).toEqual(['classification', 'created_at', 'input', 'name', 'slug'])
+    expect(names).not.toContain('bank_id') // non-tenanted
+  })
+
+  it('is enrolled in retention + classification registries like every writable table', async () => {
+    const ret = await admin.query<{ hot_months: number; immutable_months: number; deletion_allowed: boolean }>(
+      `SELECT hot_months, immutable_months, deletion_allowed FROM retention_policy WHERE table_name = 'readiness_profile'`
+    )
+    expect(ret.rows[0]).toMatchObject({ hot_months: 24, immutable_months: 60, deletion_allowed: false })
+    const cls = await admin.query<{ floor: string }>(
+      `SELECT floor FROM classification_policy WHERE table_name = 'readiness_profile'`
+    )
+    expect(cls.rows[0]!.floor).toBe('internal-confidential')
   })
 
   it('has RLS enabled + forced even though its policy is public', async () => {
