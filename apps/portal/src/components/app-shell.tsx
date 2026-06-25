@@ -199,6 +199,11 @@ export function AppShell({ principal, active, badges, children }: { principal: S
         >
           <span>DEMO profile · synthetic data only</span>
           <span className="font-mono">OFBO · non-prod</span>
+          {/* Re-entry to the evaluator funnel from inside the shell — once signed in, the
+              readiness/maturity views were otherwise only reachable from the sign-in screen. */}
+          <Link href="/readiness" data-testid="footer-readiness" className="ml-auto font-semibold text-secondary hover:underline">
+            Production readiness →
+          </Link>
         </footer>
       </div>
     </div>
