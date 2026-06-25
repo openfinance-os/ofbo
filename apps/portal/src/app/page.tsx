@@ -17,12 +17,20 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 py-10">
       <PersonaLoginList personas={personas} error={error} />
-      <p className="text-sm text-on-surface-variant" data-testid="readiness-teaser">
-        Evaluating OFBO for your bank?{' '}
-        <Link href="/readiness" className="font-semibold text-secondary hover:underline">
-          See how close you are to production →
-        </Link>
-      </p>
+      <div className="flex flex-col items-center gap-1 text-sm text-on-surface-variant" data-testid="readiness-teaser">
+        <p>
+          New here?{' '}
+          <Link href="/demo" className="font-semibold text-secondary hover:underline">
+            Watch the 10-minute guided walkthrough →
+          </Link>
+        </p>
+        <p>
+          Evaluating OFBO for your bank?{' '}
+          <Link href="/readiness" className="font-semibold text-secondary hover:underline">
+            See how close you are to production →
+          </Link>
+        </p>
+      </div>
     </main>
   )
 }
