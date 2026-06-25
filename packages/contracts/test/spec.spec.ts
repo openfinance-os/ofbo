@@ -1,21 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import { loadSpec, listRoutes } from '../src/spec.js'
 
+// ADR 0022 — the public, pre-login readiness routes are the ONE unauthenticated route class:
+// no admin scope, no x-fapi-interaction-id, no Idempotency-Key (a prospect's browser sends none).
+// The admin-contract canon below deliberately excludes them; they have their own carve-out checks.
+const isPublic = (path: string) => path.startsWith('/public/')
+
 describe('contract canon', () => {
-  it('has exactly 81 paths and 11 tags', () => {
+  it('has exactly 85 paths and 12 tags (incl. the 4 public readiness paths + readiness tag)', () => {
     const spec = loadSpec()
-    expect(Object.keys(spec.paths)).toHaveLength(81)
-    expect(spec.tags).toHaveLength(11)
+    expect(Object.keys(spec.paths)).toHaveLength(85)
+    expect(spec.tags).toHaveLength(12)
   })
 
-  it('every route requires x-fapi-interaction-id', () => {
-    for (const r of listRoutes()) {
+  it('every admin route requires x-fapi-interaction-id (public routes exempt — ADR 0022)', () => {
+    for (const r of listRoutes().filter((r) => !isPublic(r.path))) {
       expect(r.parameters, `${r.method} ${r.path}`).toContain('x-fapi-interaction-id')
     }
   })
 
-  it('every mutating route requires Idempotency-Key', () => {
-    const mutating = listRoutes().filter((r) => ['post', 'put', 'patch', 'delete'].includes(r.method))
+  it('the public carve-out is exactly /public/readiness/* and carries no admin scope', () => {
+    const publicRoutes = listRoutes().filter((r) => isPublic(r.path))
+    expect(publicRoutes.length).toBe(4)
+    for (const r of publicRoutes) {
+      expect(r.path.startsWith('/public/readiness'), r.path).toBe(true)
+      expect(r.scope, `${r.method} ${r.path}`).toBeNull()
+      expect(r.parameters, `${r.method} ${r.path}`).not.toContain('x-fapi-interaction-id')
+    }
+  })
+
+  it('every mutating admin route requires Idempotency-Key (public routes exempt — ADR 0022)', () => {
+    const mutating = listRoutes().filter(
+      (r) => ['post', 'put', 'patch', 'delete'].includes(r.method) && !isPublic(r.path)
+    )
     expect(mutating.length).toBeGreaterThan(0)
     for (const r of mutating) {
       expect(r.parameters, `${r.method} ${r.path}`).toContain('Idempotency-Key')

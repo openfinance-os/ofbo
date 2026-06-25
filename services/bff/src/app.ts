@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
 import type { ApmPort, CareSurfacePort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
@@ -62,6 +62,9 @@ import {
 } from './agents/service.js'
 import { agentRoutes } from './agents/routes.js'
 import { AgentSpendLedger, createAgentSpendMiddleware } from './agents/spend.js'
+import { ReadinessService } from './readiness/service.js'
+import { readinessRoutes } from './readiness/routes.js'
+import { InMemoryReadinessProfileStore, type ReadinessProfileStore } from './readiness/profile-store.js'
 import {
   TrainingHighClassAuditSink,
   trainingConsentDirectory,
@@ -152,6 +155,11 @@ import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 /** Route keys (`method path`) handled by real story services — used by the test
  *  suites to exclude them from the contract-pending it.fails layer. */
 export const IMPLEMENTED_ROUTES = new Set([
+  // ADR 0022 — public, pre-login readiness wizard
+  'get /public/readiness/catalog',
+  'post /public/readiness:assess',
+  'post /public/readiness/profiles',
+  'get /public/readiness/profiles/{slug}',
   'post /approvals',
   'get /approvals/pending',
   'get /approvals/{approval_id}',
@@ -331,6 +339,9 @@ export interface AppDeps {
   /** BACKOFFICE-49 — lineage reader for GET /lineage/{table_name} (defaults in-memory;
    *  the worker wires PgLineageReader). */
   lineageReader?: LineageReader
+  /** ADR 0022 — public Integration Readiness Wizard profile store (defaults in-memory;
+   *  the worker wires PgReadinessProfileStore for persistence). */
+  readinessProfileStore?: ReadinessProfileStore
 }
 
 /** The immutable synthetic seed, built once per isolate (the dataset is deterministic so a
@@ -659,9 +670,18 @@ export function createApp(deps: AppDeps = {}) {
     ...lfiReportRoutes(lfiReportService, idempotencyStore),
     ...trustFrameworkRoutes(trustFrameworkService, idempotencyStore),
     ...serviceDeskRoutes(serviceDeskService, idempotencyStore),
-    ...auditEventsRoutes(auditEventsService)
+    ...auditEventsRoutes(auditEventsService),
+    // ADR 0022 — public, pre-login readiness wizard (no scope; auth middlewares skip /public/*)
+    ...readinessRoutes(new ReadinessService(deps.readinessProfileStore ?? new InMemoryReadinessProfileStore()))
   }
   const app = new Hono()
+
+  // ADR 0022 — the ONE sanctioned unauthenticated route class. Wrap the auth-class middlewares so
+  // they no-op for /public/*, leaving telemetry (below) to still span every request. Any second
+  // public prefix needs its own ADR.
+  const isPublic = (c: Context) => new URL(c.req.url).pathname.startsWith('/public/')
+  const skipPublic = (mw: MiddlewareHandler): MiddlewareHandler => async (c, next) =>
+    isPublic(c) ? next() : mw(c, next)
 
   // outermost: every request — including 400/401/404 — is spanned (BACKOFFICE-48)
   app.use('*', createTelemetryMiddleware(apm))
@@ -676,6 +696,7 @@ export function createApp(deps: AppDeps = {}) {
   }
 
   app.use('*', async (c, next) => {
+    if (isPublic(c)) return next() // ADR 0022 — pre-login callers send no FAPI header
     const fapi = c.req.header('x-fapi-interaction-id')
     if (!fapi) {
       return c.json(
@@ -694,19 +715,21 @@ export function createApp(deps: AppDeps = {}) {
 
   app.use(
     '*',
-    createAuthMiddleware(idp, audit, {
-      isServiceAccountSubject,
-      onSuperAdminSession: (subject, tokenKey, traceId) => guardrails.onSession(subject, tokenKey, traceId),
-      // ADR 0018 — the registry is the source of truth for agent liveness: a single-actor
-      // revoke (BACKOFFICE-60) kills the session immediately, ahead of the short token TTL.
-      isAgentActive: async (agentId) => (await agentStore.get(agentId))?.status === 'active'
-    })
+    skipPublic(
+      createAuthMiddleware(idp, audit, {
+        isServiceAccountSubject,
+        onSuperAdminSession: (subject, tokenKey, traceId) => guardrails.onSession(subject, tokenKey, traceId),
+        // ADR 0018 — the registry is the source of truth for agent liveness: a single-actor
+        // revoke (BACKOFFICE-60) kills the session immediately, ahead of the short token TTL.
+        isAgentActive: async (agentId) => (await agentStore.get(agentId))?.status === 'active'
+      })
+    )
   )
-  app.use('*', createScopeMiddleware(audit))
-  app.use('*', createJustificationMiddleware(audit))
+  app.use('*', skipPublic(createScopeMiddleware(audit)))
+  app.use('*', skipPublic(createJustificationMiddleware(audit)))
   // ADR 0018 / BACKOFFICE-53 — BFF-side re-assertion of agentic spend-control. Runs after
   // auth (needs the verified agent principal) + scope; no-ops for human sessions.
-  app.use('*', createAgentSpendMiddleware({ ledger: new AgentSpendLedger(), riskSignals: riskSignalSink, itsm: itsmPort }))
+  app.use('*', skipPublic(createAgentSpendMiddleware({ ledger: new AgentSpendLedger(), riskSignals: riskSignalSink, itsm: itsmPort })))
 
   app.all('*', async (c) => {
     const url = new URL(c.req.url)
