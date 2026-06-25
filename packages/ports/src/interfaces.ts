@@ -150,6 +150,19 @@ export interface FinancialSystemPort {
   ): Promise<{ invoice_status: 'instructed' | 'issued' | 'settled' | 'overdue' | 'credit_noted' }>
 }
 
+/** P10 — the bank's existing STR (Suspicious Transaction Report) workflow (ADR 0022,
+ *  BACKOFFICE-63). The Back Office hands an APPROVED STR draft to this internal workflow,
+ *  which is the system of record that submits to the CBUAE AML GO portal. The Back Office
+ *  NEVER submits to AML GO directly — there is no AML GO client anywhere; the only call is
+ *  this handoff. Returns the workflow's own reference for the accepted draft. No PII — the
+ *  draft carries an internal consent ref + case context, never PSU identifiers. */
+export interface StrWorkflowPort {
+  handoffStrDraft(
+    input: { str_draft_id: string; source_consent_id: string; case_context: string },
+    trace: TraceContext
+  ): Promise<{ workflow_ref: string; accepted_at: string }>
+}
+
 export interface PortMap {
   'p1-care-surface': CareSurfacePort
   'p2-identity-provider': IdentityProviderPort
@@ -160,4 +173,5 @@ export interface PortMap {
   'p7-lineage': LineagePort
   'p8-onboarding-handover': OnboardingHandoverPort
   'p9-financial-system': FinancialSystemPort
+  'p10-str-workflow': StrWorkflowPort
 }

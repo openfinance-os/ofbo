@@ -32,11 +32,20 @@ export interface FraudRevokeApprovalRequester {
   ): Promise<ApprovalRecord>
 }
 
+/** BACKOFFICE-63 — persists the auto-created STR draft so Compliance can later hand it to the
+ *  bank's STR workflow (P10). Optional: when absent (older wiring / unit tests) the operation
+ *  keeps its prior behaviour and holds only a derived reference. */
+export interface StrDraftRecorder {
+  record(input: { source_consent_id: string; case_context: string; created_by: string }, traceId: string): Promise<{ str_draft_id: string }>
+}
+
 export function makeFraudRevokeOperation(deps: {
   egress: Pick<NebrasEgressPort, 'revokeConsent'>
   audit: HighClassAuditSink
   /** DEMO fidelity — reflect the revoke on re-lookup (no-op in enterprise). Optional. */
   directory?: Pick<ConsentDirectory, 'markRevoked'>
+  /** BACKOFFICE-63 — persist the auto-created STR draft (optional). */
+  strDrafts?: StrDraftRecorder
 }): GatedOperation {
   return {
     initiatorScope: FRAUD_REVOKE_SCOPE,
@@ -52,9 +61,11 @@ export function makeFraudRevokeOperation(deps: {
       const ack = await deps.egress.revokeConsent(consentId, 'FRAUD_SUSPECTED', { trace_id: traceId })
       // DEMO fidelity — reflect the new status so a re-lookup shows Revoked (no-op in enterprise).
       deps.directory?.markRevoked?.(consentId)
-      // STR draft auto-created in the bank's STR workflow; the Back Office holds
-      // only the reference (submission to AML GO is BACKOFFICE-63, Phase 2).
-      const strDraftRef = `str-draft-${consentId}`
+      // STR draft auto-created and persisted (BACKOFFICE-63) so Compliance can hand it to the
+      // bank's STR workflow; the Back Office never submits to AML GO directly. Falls back to a
+      // derived reference when no store is wired.
+      const recorded = await deps.strDrafts?.record({ source_consent_id: consentId, case_context: caseContext, created_by: initiatedBy }, traceId)
+      const strDraftRef = recorded?.str_draft_id ?? `str-draft-${consentId}`
 
       await deps.audit.emit({
         event_type: 'consent_revoked',

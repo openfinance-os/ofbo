@@ -61,6 +61,14 @@ import {
   type AgentStore
 } from './agents/service.js'
 import { agentRoutes } from './agents/routes.js'
+import {
+  StrDraftService,
+  InMemoryStrDraftStore,
+  makeStrHandoffOperation,
+  STR_HANDOFF_OPERATION,
+  type StrDraftStore
+} from './str/service.js'
+import { strDraftRoutes } from './str/routes.js'
 import { AgentSpendLedger, createAgentSpendMiddleware } from './agents/spend.js'
 import {
   TrainingHighClassAuditSink,
@@ -235,6 +243,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/reports/{report_id}/download',
   'post /back-office/reports/{report_id}:approve',
   'post /back-office/reports/{report_id}:submit',
+  'get /back-office/str-drafts',
+  'get /back-office/str-drafts/{str_draft_id}',
+  'post /back-office/str-drafts/{str_draft_id}:submit-to-workflow',
   'get /audit/events',
   'get /audit/events/{event_id}',
   'post /back-office/agents:register',
@@ -291,6 +302,9 @@ export interface AppDeps {
   /** BACKOFFICE-60 — agent DCR registry store (defaults in-memory; the worker wires the
    *  durable Pg store). */
   agentStore?: AgentStore
+  /** BACKOFFICE-63 — STR draft store (defaults in-memory, demo-seeded; the worker wires the
+   *  durable Pg store at the M-tier follow-up). */
+  strDraftStore?: StrDraftStore
   /** BACKOFFICE-78 — outbound scheme-notification store (defaults in-memory; the
    *  worker wires the durable PgSchemeNotificationStore). */
   schemeNotificationStore?: SchemeNotificationStore
@@ -399,7 +413,12 @@ export function createApp(deps: AppDeps = {}) {
   const reportStore = deps.reportStore ?? new InMemoryReportStore()
   const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
-  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
+  // BACKOFFICE-63 — STR draft store + P10 handoff. The fraud-revoke op persists the draft here;
+  // the four-eyes handoff op hands an approved draft to the bank's STR workflow (P10).
+  const strDraftStore: StrDraftStore = deps.strDraftStore ?? new InMemoryStrDraftStore({ seedDemo: true })
+  const strWorkflow = getAdapter('p10-str-workflow', profileFromConfig(process.env))
+  const strHandoffOperation = makeStrHandoffOperation({ store: strDraftStore, strWorkflow, audit: highClassAudit })
+  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory, strDrafts: strDraftStore })
   const queryPurposeRegistrar = deps.queryPurposeRegistrar ?? new InMemoryQueryPurposeRegistrar()
   const registerQueryPurposeOperation = makeRegisterQueryPurposeOperation({ registrar: queryPurposeRegistrar, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
@@ -428,10 +447,12 @@ export function createApp(deps: AppDeps = {}) {
       [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
       [REPORT_GENERATION_OPERATION]: reportGenerationOperation,
-      [AGENT_REGISTER_OPERATION]: agentRegisterOperation
+      [AGENT_REGISTER_OPERATION]: agentRegisterOperation,
+      [STR_HANDOFF_OPERATION]: strHandoffOperation
     }
   })
   const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit, idp)
+  const strDraftService = new StrDraftService(approvals, strDraftStore, highClassAudit)
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
@@ -639,6 +660,7 @@ export function createApp(deps: AppDeps = {}) {
     ...respondentDisputeRoutes(respondentDisputeService, idempotencyStore),
     ...fraudIncidentRoutes(fraudIncidentService, idempotencyStore),
     ...agentRoutes(agentRegistryService, idempotencyStore),
+    ...strDraftRoutes(strDraftService, idempotencyStore),
     ...schemeNotificationRoutes(schemeNotificationService, idempotencyStore),
     ...inquiryRoutes(inquiryService, idempotencyStore),
     ...reconciliationRoutes(reconciliationService, idempotencyStore),

@@ -1104,6 +1104,80 @@ paths:
         '200': { $ref: '#/components/responses/Report' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/str-drafts:
+    get:
+      tags: [reports]
+      summary: List Suspicious Transaction Report (STR) drafts (BACKOFFICE-63)
+      description: >
+        STR drafts are auto-created when a fraud-suspected revocation is approved
+        (BACKOFFICE-22) and held by the Back Office. Compliance reviews them before they are
+        handed to the bank's STR workflow. No PII — a draft carries an internal consent ref +
+        case context, never PSU identifiers.
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: status, in: query, schema: { type: string, enum: [draft, awaiting_handoff, handed_off] } }
+      responses:
+        '200':
+          description: Paginated STR drafts (cursor in meta.next_cursor).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/StrDraft' } }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/str-drafts/{str_draft_id}:
+    get:
+      tags: [reports]
+      summary: Get an STR draft (BACKOFFICE-63)
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: str_draft_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: A single STR draft.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StrDraft' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/str-drafts/{str_draft_id}:submit-to-workflow:
+    post:
+      tags: [reports]
+      summary: Hand an approved STR draft to the bank's STR workflow — four-eyes (BACKOFFICE-63)
+      description: >
+        Submits an STR draft to the bank's existing STR workflow (P10), which is the system of
+        record that files with the CBUAE AML GO portal. The Back Office NEVER submits to AML GO
+        directly — it only hands off. Four-eyes-gated: a Compliance officer
+        (compliance:reports:generate) initiates → 202 + approval_request; a Risk second-line
+        (risk:read, the persona that owns STR triggers) approves via the approvals path. Only on
+        that approval does the handoff to P10 run, recording the workflow reference. High-class
+        audited; no PII.
+      x-rate-limit-per-min: 10
+      x-required-scope: compliance:reports:generate
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - { name: str_draft_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/lfi-reports:
     get:
       tags: [reports]
@@ -2673,6 +2747,25 @@ components:
         allow_mutations: { type: boolean, description: Mirrors the registration; mutating tools stay disabled when false. }
         spend_budget: { type: integer, minimum: 0, description: Per-session consequential-operation budget re-asserted BFF-side (BACKOFFICE-53); 0 = read-only. }
         expires_at: { type: string, format: date-time, description: Short TTL; revoking the agent denylists the session before it expires. }
+    StrDraft:
+      type: object
+      description: >
+        A Suspicious Transaction Report draft (BACKOFFICE-63). Auto-created on a
+        fraud-suspected revocation (BACKOFFICE-22); handed to the bank's STR workflow (P10) on
+        four-eyes approval, which submits to AML GO — the Back Office never submits directly.
+        No PII — an internal consent ref + case context only, never PSU identifiers.
+      required: [str_draft_id, source_consent_id, case_context, status, created_by, created_at]
+      properties:
+        str_draft_id: { type: string, format: uuid }
+        source_consent_id: { type: string, description: Internal ref to the consent whose fraud-revoke raised this draft. No PII. }
+        case_context: { type: string, description: Free-text investigator context carried into the STR. Synthetic in non-prod; no PII. }
+        status: { type: string, enum: [draft, awaiting_handoff, handed_off], description: draft → awaiting_handoff (four-eyes initiated) → handed_off (accepted by the STR workflow). }
+        created_by: { type: string, description: IdP subject that raised the draft (the fraud-revoke initiator). }
+        approval_id: { type: string, nullable: true, description: The four-eyes approval request gating the handoff. }
+        workflow_ref: { type: string, nullable: true, description: The bank STR workflow's own reference once it accepts the handoff. }
+        approved_by: { type: string, nullable: true, description: IdP subject of the Risk second-line approver (different principal). }
+        handed_off_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
     Money:
       type: object
       required: [amount, currency]

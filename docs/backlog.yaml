@@ -337,4 +337,31 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
         a persistent TRAINING banner, distinguishing it from production at a glance.
       - The OpenAPI contract is unchanged — training is a deployment/composition variant over the
         same Customer Care endpoints, so RBAC, four-eyes, and scope hygiene are identical.
-  - { id: BACKOFFICE-63, title: AML GO portal submission for STR drafts }
+  - id: BACKOFFICE-63
+    title: AML GO portal submission for STR drafts
+    status: in-progress
+    priority: Should
+    adr: docs/adrs/0022-str-workflow-port-amlgo-handoff.md
+    progress: >-
+      Per ADR 0022 (maintainer-chosen): the bank's STR workflow is a new canonical port P10
+      (StrWorkflowPort) with a sim adapter (records the handoff, never calls AML GO) + an
+      enterprise stub; the port-contract suite binds it. STR drafts are persisted (fraud-revoke
+      BACKOFFICE-22 now writes the draft; demo-seeded too). list/get gate compliance:reports:read;
+      :submit-to-workflow is four-eyes — Compliance (compliance:reports:generate) initiates → 202,
+      a Risk second-line (risk:read) approves, and only then does the P10 handoff run, recording
+      the workflow ref + High-class audit (str_draft_handed_off). The "never submit to AML GO
+      directly" rule is structural — there is no AML GO client anywhere, only the port handoff.
+      Demo profile: in-memory store behind the StrDraftStore interface.
+    note: >-
+      Approved STR drafts flow to AML GO via the bank's existing STR workflow — the Back Office
+      never submits directly. Builds on the BACKOFFICE-22 fraud-revoke STR-draft auto-creation.
+    acceptance:
+      - The bank's STR workflow is a port (P10); the Back Office's only outbound STR call is the
+        handoff to that port — there is no AML GO client in the codebase (never submits directly).
+      - An STR draft can be handed off only via four-eyes: a Compliance initiator and a different
+        Risk second-line approver; on approval the draft is marked handed_off with the workflow ref.
+      - STR drafts are persisted on fraud-revoke (BACKOFFICE-22) and listable/gettable under
+        compliance:reports:read; the handoff is High-class audited (str_draft_handed_off); no PII.
+    remaining: >-
+      Durable Pg str_draft store (RLS + 24/60 retention + BCBS 239 lineage) + worker wiring;
+      a portal STR-queue surface. Demo path is complete behind the in-memory store.
