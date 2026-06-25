@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { PersonaLoginList } from '../components/persona-login-list'
 import { listPersonaLogins } from '../lib/portal'
 
@@ -14,8 +15,14 @@ export default async function LoginPage({
   const { error } = await searchParams
   // Login is the one surface outside the app shell — centre the branded card both axes.
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-4 py-10">
       <PersonaLoginList personas={personas} error={error} />
+      <p className="text-sm text-on-surface-variant" data-testid="readiness-teaser">
+        Evaluating OFBO for your bank?{' '}
+        <Link href="/readiness" className="font-semibold text-secondary hover:underline">
+          See how close you are to production →
+        </Link>
+      </p>
     </main>
   )
 }

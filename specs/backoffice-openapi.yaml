@@ -32,6 +32,7 @@ tags:
   - name: tpp-billing
   - name: governance
   - name: agents
+  - name: readiness
 
 paths:
   # ---------- 7.1 Reconciliation ----------
@@ -2315,6 +2316,113 @@ paths:
                       data: { $ref: '#/components/schemas/AgentSessionToken' }
         default: { $ref: '#/components/responses/Error' }
 
+  # ---------- 7.x Integration Readiness Wizard (public, pre-login — ADR 0022) ----------
+  # The ONLY unauthenticated route class. No PII, read-mostly, demo-profile only, edge
+  # rate-limited. security:[] marks these public; they omit x-required-scope (scope=null)
+  # and x-fapi-interaction-id. Inputs are bank SYSTEM METADATA, never PSU data.
+  /public/readiness/catalog:
+    get:
+      tags: [readiness]
+      summary: Port catalog + adopting-bank decision defaults for the readiness wizard
+      description: >
+        Serves the P1–P9 system-option catalog and the BD-01..16 decision defaults the
+        public wizard renders. Static, no auth, no PII.
+      security: []
+      x-rate-limit-per-min: 120
+      responses:
+        '200':
+          description: The readiness catalog
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReadinessCatalog' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/readiness:assess:
+    post:
+      tags: [readiness]
+      summary: Score an estate mapping into a readiness digest (stateless)
+      description: >
+        Deterministic: a port→system mapping and BD-01..16 answers in, a readiness digest
+        (score, per-port effort + contract-test gate, governance register, generated Bank
+        Profile, suggested port-swap sequencing) out. No persistence, no auth, no PII.
+      security: []
+      x-rate-limit-per-min: 60
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReadinessAssessmentInput' }
+      responses:
+        '200':
+          description: The computed readiness digest
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReadinessDigest' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/readiness/profiles:
+    post:
+      tags: [readiness]
+      summary: Save a named readiness profile, returns a shareable slug
+      description: >
+        Persists a named self-assessment (non-regulated bank system-metadata only — never
+        a regulated record, never PII) and returns an unguessable slug for sharing/reopening.
+      security: []
+      x-rate-limit-per-min: 20
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, input]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                input: { $ref: '#/components/schemas/ReadinessAssessmentInput' }
+      responses:
+        '201':
+          description: The saved profile (with its digest and slug)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReadinessProfile' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /public/readiness/profiles/{slug}:
+    get:
+      tags: [readiness]
+      summary: Reopen a saved readiness profile by slug
+      security: []
+      x-rate-limit-per-min: 120
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The saved profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReadinessProfile' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -3311,3 +3419,123 @@ components:
             opened_at: { type: string, format: date-time }
             resolved_at: { type: string, format: date-time, nullable: true }
             created_at: { type: string, format: date-time }
+
+    # ---------- Integration Readiness Wizard (ADR 0022) ----------
+    ReadinessEffortBand:
+      type: string
+      enum: [low, medium, scoping]
+      description: low = standard protocol/known adapter; medium = config-heavy (e.g. P6 mTLS); scoping = in-house/Other needs sizing
+    ReadinessCatalogPortOption:
+      type: object
+      required: [value, label, effort_band]
+      properties:
+        value: { type: string }
+        label: { type: string }
+        effort_band: { $ref: '#/components/schemas/ReadinessEffortBand' }
+    ReadinessCatalogPort:
+      type: object
+      required: [id, name, maps_to, options]
+      properties:
+        id: { type: string, description: Port id P1..P9 }
+        name: { type: string }
+        maps_to: { type: string, description: What the bank system behind this port does }
+        optional: { type: boolean, description: True for ports a bank may decline (e.g. P8) }
+        options:
+          type: array
+          items: { $ref: '#/components/schemas/ReadinessCatalogPortOption' }
+    ReadinessCatalogDecision:
+      type: object
+      required: [id, title, default, impact]
+      properties:
+        id: { type: string, description: Decision id BD-01..BD-16 }
+        title: { type: string }
+        default: { type: string, description: The product's pre-set default answer }
+        impact: { type: string }
+        blocks: { type: string, nullable: true, description: Milestone/story this decision blocks if unresolved }
+    ReadinessCatalog:
+      type: object
+      required: [ports, decisions]
+      properties:
+        ports:
+          type: array
+          items: { $ref: '#/components/schemas/ReadinessCatalogPort' }
+        decisions:
+          type: array
+          items: { $ref: '#/components/schemas/ReadinessCatalogDecision' }
+    ReadinessAssessmentInput:
+      type: object
+      required: [ports]
+      properties:
+        ports:
+          type: object
+          description: Map of port id (P1..P9) to the chosen option value
+          additionalProperties: { type: string }
+        decisions:
+          type: object
+          description: Map of decision id (BD-01..BD-16) to the chosen answer; omitted = default
+          additionalProperties: { type: string }
+    ReadinessPortResult:
+      type: object
+      required: [id, name, chosen_system, adapter_status, contract_test_gate, effort_band, config_keys]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        chosen_system: { type: string }
+        adapter_status: { type: string, enum: [sim_ready, enterprise_to_write], description: sim adapter ships today; enterprise adapter is the M6 work }
+        contract_test_gate: { type: string, description: The port-swap acceptance test suite this adapter must pass }
+        effort_band: { $ref: '#/components/schemas/ReadinessEffortBand' }
+        config_keys:
+          type: array
+          items: { type: string }
+    ReadinessGovernanceResult:
+      type: object
+      required: [id, title, answer, is_default]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        answer: { type: string }
+        is_default: { type: boolean }
+        blocker: { type: string, nullable: true }
+    ReadinessDigest:
+      type: object
+      required: [score, verdict, ports, governance, generated_profile, already_done, sequencing]
+      properties:
+        score: { type: integer, minimum: 0, maximum: 100, description: Deterministic readiness score }
+        verdict: { type: string }
+        ports:
+          type: array
+          items: { $ref: '#/components/schemas/ReadinessPortResult' }
+        governance:
+          type: array
+          items: { $ref: '#/components/schemas/ReadinessGovernanceResult' }
+        generated_profile:
+          type: object
+          description: A pre-populated enterprise Bank Profile skeleton (tfvars-shaped key/value)
+          additionalProperties: { type: string }
+        already_done:
+          type: object
+          description: What the product already ships, to frame the remaining work as bounded
+          properties:
+            sim_adapters_ready: { type: integer }
+            ports_total: { type: integer }
+            note: { type: string }
+        sequencing:
+          type: array
+          description: Suggested M6 port-swap order with the bank's specifics filled in
+          items:
+            type: object
+            required: [step, port, system, action]
+            properties:
+              step: { type: integer }
+              port: { type: string }
+              system: { type: string }
+              action: { type: string }
+    ReadinessProfile:
+      type: object
+      required: [slug, name, created_at, input, digest]
+      properties:
+        slug: { type: string, description: Unguessable share token }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        input: { $ref: '#/components/schemas/ReadinessAssessmentInput' }
+        digest: { $ref: '#/components/schemas/ReadinessDigest' }
