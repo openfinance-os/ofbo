@@ -19,6 +19,17 @@ describe('public readiness — carve-out', () => {
     expect(body.meta.request_id).toBeTruthy()
   })
 
+  it('the catalog does not leak internal scoring fields (contract: ReadinessCatalogPort)', async () => {
+    const res = await app().request('/public/readiness/catalog', { headers: PUBLIC })
+    const body = (await res.json()) as { data: { ports: Array<Record<string, unknown> & { options: Array<Record<string, unknown>> }> } }
+    const port = body.data.ports[0]!
+    expect(Object.keys(port).sort()).toEqual(['id', 'maps_to', 'name', 'options'])
+    expect(port).not.toHaveProperty('contract_test_gate')
+    expect(port).not.toHaveProperty('config_keys')
+    expect(Object.keys(port.options[0]!).sort()).toEqual(['effort_band', 'label', 'value'])
+    expect(port.options[0]).not.toHaveProperty('builtin')
+  })
+
   it('a NON-public route still 400s without a FAPI header (carve-out is not a hole)', async () => {
     const res = await app().request('/approvals', { headers: { authorization: 'Bearer demo-token:compliance-officer' } })
     expect(res.status).toBe(400)
@@ -57,6 +68,16 @@ describe('POST /public/readiness:assess', () => {
     expect(res.status).toBe(400)
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe('BACKOFFICE.INVALID_BODY')
   })
+
+  it('400s on an over-long decision answer (public free-text is length-capped)', async () => {
+    const res = await app().request('/public/readiness:assess', {
+      method: 'POST',
+      headers: PUBLIC,
+      body: JSON.stringify({ ports: { P2: 'okta' }, decisions: { 'BD-06': 'x'.repeat(201) } })
+    })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('BACKOFFICE.INVALID_READINESS_INPUT')
+  })
 })
 
 describe('readiness profiles — save & reopen', () => {
@@ -92,5 +113,15 @@ describe('readiness profiles — save & reopen', () => {
       body: JSON.stringify({ input: { ports: { P2: 'okta' } } })
     })
     expect(res.status).toBe(400)
+  })
+
+  it('400s saving an over-length name rather than silently truncating (spec maxLength 120)', async () => {
+    const res = await app().request('/public/readiness/profiles', {
+      method: 'POST',
+      headers: PUBLIC,
+      body: JSON.stringify({ name: 'N'.repeat(121), input: { ports: { P2: 'okta' } } })
+    })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe('BACKOFFICE.INVALID_READINESS_INPUT')
   })
 })

@@ -59,19 +59,23 @@ export function readinessRoutes(service: ReadinessService): Record<string, Handl
     },
 
     'get /public/readiness/profiles/{slug}': async (c, params) => {
-      const profile = await service.getProfile(params.slug ?? '')
-      if (!profile) {
-        return c.json(
-          errorEnvelope(
-            'BACKOFFICE.READINESS_PROFILE_NOT_FOUND',
-            `No readiness profile for slug "${params.slug}".`,
-            'Check the share link, or create a new profile via POST /public/readiness/profiles.',
-            READINESS_DOCS
-          ),
-          404
-        )
+      try {
+        const profile = await service.getProfile(params.slug ?? '')
+        if (!profile) {
+          return c.json(
+            errorEnvelope(
+              'BACKOFFICE.READINESS_PROFILE_NOT_FOUND',
+              `No readiness profile for slug "${params.slug}".`,
+              'Check the share link, or create a new profile via POST /public/readiness/profiles.',
+              READINESS_DOCS
+            ),
+            404
+          )
+        }
+        return c.json(dataEnvelope(profile), 200)
+      } catch (e) {
+        return fail(c, e)
       }
-      return c.json(dataEnvelope(profile), 200)
     }
   }
 }

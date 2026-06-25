@@ -76,8 +76,8 @@ export function ReadinessDigestView({
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${EFFORT_STYLE[p.effort_band]}`}>
-                      {EFFORT_LABEL[p.effort_band]}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${EFFORT_STYLE[p.effort_band] ?? 'bg-surface-container text-on-surface-variant'}`}>
+                      {EFFORT_LABEL[p.effort_band] ?? p.effort_band}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-xs text-on-surface-variant">{p.contract_test_gate}</td>
@@ -210,6 +210,7 @@ function SaveAndShare({
               value={name}
               onChange={(e) => setName(e.target.value)}
               data-testid="profile-name"
+              maxLength={120}
               placeholder="e.g. Bank A — Open Finance pilot"
               className="w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-secondary focus:outline-none"
             />

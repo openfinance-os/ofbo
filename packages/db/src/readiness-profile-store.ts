@@ -73,4 +73,9 @@ export class PgReadinessProfileStore {
     const row = rows[0]
     return row ? { slug: row.slug, name: row.name, created_at: row.created_at.toISOString(), input: row.input } : null
   }
+
+  /** Workers forbid reusing I/O across requests — the worker closes every store after the response. */
+  async close(): Promise<void> {
+    await this.pool.end()
+  }
 }

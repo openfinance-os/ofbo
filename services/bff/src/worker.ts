@@ -173,7 +173,7 @@ export default {
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

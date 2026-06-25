@@ -199,6 +199,34 @@ export function getCatalog(): ReadinessCatalog {
   return { ports: PORTS, decisions: DECISIONS }
 }
 
+// Public wire shape (ReadinessCatalog in the OpenAPI): only the fields the spec declares. The
+// internal scoring signals (contract_test_gate, config_keys, builtin) stay server-side — they
+// surface in the digest (ReadinessPortResult), never in the catalog.
+export interface PublicCatalogPort {
+  id: string
+  name: string
+  maps_to: string
+  optional?: boolean
+  options: Array<{ value: string; label: string; effort_band: EffortBand }>
+}
+export interface PublicCatalog {
+  ports: PublicCatalogPort[]
+  decisions: CatalogDecision[]
+}
+
+export function getCatalogView(): PublicCatalog {
+  return {
+    ports: PORTS.map((p) => ({
+      id: p.id,
+      name: p.name,
+      maps_to: p.maps_to,
+      ...(p.optional ? { optional: true } : {}),
+      options: p.options.map((o) => ({ value: o.value, label: o.label, effort_band: o.effort_band }))
+    })),
+    decisions: DECISIONS
+  }
+}
+
 export function findPort(id: string): CatalogPort | undefined {
   return PORTS.find((p) => p.id === id)
 }

@@ -198,7 +198,7 @@ function EstateStep({
               <option value="">Select a system…</option>
               {port.options.map((o) => (
                 <option key={o.value} value={o.value}>
-                  {o.label} · {EFFORT_LABEL[o.effort_band]}
+                  {o.label} · {EFFORT_LABEL[o.effort_band] ?? o.effort_band}
                 </option>
               ))}
             </select>
@@ -249,6 +249,7 @@ function GovernanceStep({
         <h2 className="text-xl font-semibold">Confirm the sixteen adopting-bank decisions</h2>
         <p className="text-sm text-on-surface-variant">
           Each carries the product’s pre-set default. Leave it to accept, or type your bank’s answer to override.
+          Short policy answers only — <strong>no personal data</strong>.
         </p>
       </header>
 
@@ -268,6 +269,7 @@ function GovernanceStep({
               aria-label={`${d.id} answer`}
               data-testid={`decision-input-${d.id}`}
               value={decisions[d.id] ?? ''}
+              maxLength={200}
               placeholder={`Default: ${d.default}`}
               onChange={(e) => onChange(d.id, e.target.value)}
               className="mt-2 w-full rounded-md border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant/70 focus:border-secondary focus:outline-none"
