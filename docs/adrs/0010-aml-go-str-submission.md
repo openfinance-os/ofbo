@@ -1,7 +1,13 @@
 # ADR 0010 — AML GO STR submission (close BACKOFFICE-63)
 
-- Status: **Proposed** — awaiting human decision (new external integration / port)
+- Status: **Superseded by [ADR 0022](0022-str-workflow-port-amlgo-handoff.md)** (2026-06-25)
 - Date: 2026-06-20
+- Superseded note: This ADR raised the question and recommended an AML-reporting port that
+  submits to AML GO **via P6 egress**. The maintainer chose, and ADR 0022 records, the
+  PRD-§7.2-faithful refinement: the Back Office **never submits to AML GO directly** — it
+  hands an approved STR draft to the **bank's existing STR workflow** (a new port, P10), which
+  is the system of record that files. The four-eyes + audit + status-tracking intent here is
+  preserved in 0022; only the destination changed (the bank's STR workflow, not AML GO direct).
 - Related: BACKOFFICE-22 (fraud revoke auto-creates STR drafts), BACKOFFICE-63 (deferred), P6 egress, P3 ITSM, the OF-UAE dual-role gap analysis (2026-06-20)
 
 ## Context

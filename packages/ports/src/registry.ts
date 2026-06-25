@@ -13,7 +13,8 @@ export const PORT_NAMES = [
   'p6-nebras-egress',
   'p7-lineage',
   'p8-onboarding-handover',
-  'p9-financial-system'
+  'p9-financial-system',
+  'p10-str-workflow'
 ] as const satisfies readonly PortName[]
 
 /**

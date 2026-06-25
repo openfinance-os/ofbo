@@ -1993,6 +1993,138 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/str-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Suspicious Transaction Report (STR) drafts (BACKOFFICE-63)
+         * @description STR drafts are auto-created when a fraud-suspected revocation is approved (BACKOFFICE-22) and held by the Back Office. Compliance reviews them before they are handed to the bank's STR workflow. No PII — a draft carries an internal consent ref + case context, never PSU identifiers.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: components["parameters"]["cursor"];
+                    limit?: components["parameters"]["limit"];
+                    status?: "draft" | "awaiting_handoff" | "handed_off";
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated STR drafts (cursor in meta.next_cursor). */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["StrDraft"][];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/str-drafts/{str_draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an STR draft (BACKOFFICE-63) */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path: {
+                    str_draft_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A single STR draft. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["StrDraft"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/str-drafts/{str_draft_id}:submit-to-workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand an approved STR draft to the bank's STR workflow — four-eyes (BACKOFFICE-63)
+         * @description Submits an STR draft to the bank's existing STR workflow (P10), which is the system of record that files with the CBUAE AML GO portal. The Back Office NEVER submits to AML GO directly — it only hands off. Four-eyes-gated: a Compliance officer (compliance:reports:generate) initiates → 202 + approval_request; a Risk second-line (risk:read, the persona that owns STR triggers) approves via the approvals path. Only on that approval does the handoff to P10 run, recording the workflow reference. High-class audited; no PII.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                };
+                path: {
+                    str_draft_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                202: components["responses"]["ApprovalPending"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/lfi-reports": {
         parameters: {
             query?: never;
@@ -4093,6 +4225,32 @@ export interface components {
              * @description Short TTL; revoking the agent denylists the session before it expires.
              */
             expires_at: string;
+        };
+        /** @description A Suspicious Transaction Report draft (BACKOFFICE-63). Auto-created on a fraud-suspected revocation (BACKOFFICE-22); handed to the bank's STR workflow (P10) on four-eyes approval, which submits to AML GO — the Back Office never submits directly. No PII — an internal consent ref + case context only, never PSU identifiers. */
+        StrDraft: {
+            /** Format: uuid */
+            str_draft_id: string;
+            /** @description Internal ref to the consent whose fraud-revoke raised this draft. No PII. */
+            source_consent_id: string;
+            /** @description Free-text investigator context carried into the STR. Synthetic in non-prod; no PII. */
+            case_context: string;
+            /**
+             * @description draft → awaiting_handoff (four-eyes initiated) → handed_off (accepted by the STR workflow).
+             * @enum {string}
+             */
+            status: "draft" | "awaiting_handoff" | "handed_off";
+            /** @description IdP subject that raised the draft (the fraud-revoke initiator). */
+            created_by: string;
+            /** @description The four-eyes approval request gating the handoff. */
+            approval_id?: string | null;
+            /** @description The bank STR workflow's own reference once it accepts the handoff. */
+            workflow_ref?: string | null;
+            /** @description IdP subject of the Risk second-line approver (different principal). */
+            approved_by?: string | null;
+            /** Format: date-time */
+            handed_off_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
         };
         /** @description Binding money convention (CLAUDE.md): integer minor units + ISO 4217 — never floating point. Example: { "amount": 150000, "currency": "AED" } = AED 1,500.00. */
         Money: {

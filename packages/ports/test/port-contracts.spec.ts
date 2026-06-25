@@ -156,6 +156,13 @@ function describePortContract(profile: 'demo') {
       const status = await p9.getSettlementStatus(reg.financial_system_ref, trace)
       expect(['instructed', 'issued', 'settled', 'overdue', 'credit_noted']).toContain(status.invoice_status)
     })
+
+    it('P10 hands an STR draft to the bank STR workflow and returns a workflow reference (never AML GO)', async () => {
+      const p10 = getAdapter('p10-str-workflow', profile)
+      const r = await p10.handoffStrDraft({ str_draft_id: 'str-001', source_consent_id: 'consent-001', case_context: 'velocity anomaly' }, trace)
+      expect(r.workflow_ref).toBeTruthy()
+      expect(typeof r.accepted_at).toBe('string')
+    })
   })
 }
 
