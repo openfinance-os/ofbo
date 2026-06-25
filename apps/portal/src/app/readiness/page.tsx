@@ -20,9 +20,13 @@ export default async function ReadinessPage({
   let catalog: ReadinessCatalog | null = null
   let saved: ReadinessProfile | null = null
   let error: string | null = null
+  let profileNotice: string | null = null
   try {
     catalog = await getReadinessCatalog()
-    if (slug) saved = await getReadinessProfile(slug).catch(() => null)
+    if (slug) {
+      saved = await getReadinessProfile(slug).catch(() => null)
+      if (!saved) profileNotice = `Couldn’t open the shared profile “${slug}”. Start a new assessment below.`
+    }
   } catch {
     error = 'The readiness service is temporarily unavailable. Please try again shortly.'
   }
@@ -47,7 +51,14 @@ export default async function ReadinessPage({
             {error ?? 'Catalog unavailable.'}
           </p>
         ) : (
-          <ReadinessWizard catalog={catalog} initialProfile={saved} />
+          <>
+            {profileNotice && (
+              <p className="mb-4 rounded-lg border border-break/30 bg-break/10 px-4 py-3 text-sm text-on-surface" data-testid="readiness-profile-notice">
+                {profileNotice}
+              </p>
+            )}
+            <ReadinessWizard catalog={catalog} initialProfile={saved} />
+          </>
         )}
       </main>
     </div>

@@ -81,9 +81,14 @@ function validate(input: AssessmentInput): void {
     }
   }
   if (input.decisions) {
-    for (const id of Object.keys(input.decisions)) {
+    for (const [id, value] of Object.entries(input.decisions)) {
       if (!DECISIONS.some((d) => d.id === id)) {
         throw new ReadinessInputError('BACKOFFICE.INVALID_READINESS_INPUT', `Unknown decision id "${id}".`)
+      }
+      // Public, persisted, no-PII-by-contract free-text sink — cap length to bound it (a policy
+      // answer is short; a long paste is more likely PII/abuse than a real decision).
+      if (typeof value === 'string' && value.length > 200) {
+        throw new ReadinessInputError('BACKOFFICE.INVALID_READINESS_INPUT', `Decision ${id} answer exceeds 200 characters; use a short policy answer (no personal data).`)
       }
     }
   }
@@ -117,8 +122,8 @@ function buildProfile(results: PortResult[], decisions: Record<string, string>):
     profile[`${r.id}_SYSTEM`] = r.chosen_system === NOT_SELECTED ? 'UNSET' : r.chosen_system
   }
   profile.BANK_RESIDENCY_REGION = decisions['BD-06']?.trim() ? slug(decisions['BD-06']) : 'me-central-1'
-  profile.BANK_ID_SCOPE = /group/i.test(decisions['BD-12'] ?? '') ? 'group' : 'single'
-  profile.FRAUD_REVOKE_FOUR_EYES = /single|narrow/i.test(decisions['BD-03'] ?? '') ? 'false' : 'true'
+  profile.BANK_ID_SCOPE = /\bgroup\b/i.test(decisions['BD-12'] ?? '') ? 'group' : 'single'
+  profile.FRAUD_REVOKE_FOUR_EYES = /\b(narrow|single)\b/i.test(decisions['BD-03'] ?? '') ? 'false' : 'true'
   return profile
 }
 
