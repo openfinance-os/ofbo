@@ -1,12 +1,10 @@
 import type { ReactNode } from 'react'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { TppBilling } from '../../components/tpp-billing'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { listCounterparties, listInvoiceRuns, TppBillingApiError, type InvoiceRun, type TppCounterparty } from '../../lib/tpp-billing'
 import { createInvoiceRunAction, registerFinancialSystemAction, syncDirectoryAction } from './actions'
 
@@ -31,16 +29,7 @@ const FAILURE: Record<string, string> = {
 }
 
 export default async function TppBillingPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.billingRead)) redirect(`/access-denied?module=${encodeURIComponent('TPP Billing & Registry')}&required=${encodeURIComponent(SCOPES.billingRead)}`)
+  const { token, principal } = await requireSession({ scope: SCOPES.billingRead, module: 'TPP Billing & Registry' })
 
   const sp = await searchParams
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -55,9 +44,9 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
       <>
         Invoice run submitted to four-eyes{ar ? <> — request <span className="font-mono">{ar}</span></> : null}. A second authorised principal approves before P9 dispatch.{' '}
         {/* UI-MOBILE-APPROVALS — deep-link straight to the focused approval detail when we know its id. */}
-        <a href={ar ? `/approvals/${encodeURIComponent(ar)}` : '/approvals'} className="underline font-semibold">
+        <Link href={ar ? `/approvals/${encodeURIComponent(ar)}` : '/approvals'} className="underline font-semibold">
           {ar ? 'Open this approval →' : 'Track in the approvals queue →'}
-        </a>
+        </Link>
       </>
     ) : (
       NOTICE[status] ?? null
@@ -75,42 +64,51 @@ export default async function TppBillingPage({ searchParams }: { searchParams: P
   let error: string | null = FAILURE[status] ?? null
   let errorRemediation: string | null = null
   let errorDocsUrl: string | null = null
-  try {
-    const page = await listCounterparties(token, {
+  // Registry + invoice-run reads (and the badge count) are independent — fetch in parallel.
+  let registryFailedMsg: string | null = null
+  let invoiceFailed = false
+  const [regPage, invPage, badges] = await Promise.all([
+    listCounterparties(token, {
       limit: 50,
       cursor: regCursor,
       ...(regState ? { registration_state: regState } : {}),
       ...(unbilledOnly ? { unbilled_traffic: true } : {})
-    })
-    counterparties = page.counterparties
-    if (page.next_cursor) {
+    }).catch((e: unknown) => {
+      registryFailedMsg = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
+      if (e instanceof TppBillingApiError) {
+        errorRemediation = e.remediation ?? null
+        errorDocsUrl = e.docsUrl ?? null
+      }
+      return null
+    }),
+    listInvoiceRuns(token, { limit: 20, cursor: invCursor }).catch(() => {
+      invoiceFailed = true
+      return null
+    }),
+    shellBadges(token)
+  ])
+  if (regPage) {
+    counterparties = regPage.counterparties
+    if (regPage.next_cursor) {
       const p = new URLSearchParams()
       if (regState) p.set('reg_state', regState)
       if (unbilledOnly) p.set('unbilled', '1')
-      p.set('reg_cursor', page.next_cursor)
+      p.set('reg_cursor', regPage.next_cursor)
       registryMoreHref = `/tpp-billing?${p.toString()}`
     }
-  } catch (e) {
-    error = e instanceof TppBillingApiError ? e.message : 'Failed to load the registry.'
-    if (e instanceof TppBillingApiError) {
-      errorRemediation = e.remediation ?? null
-      errorDocsUrl = e.docsUrl ?? null
-    }
+  } else {
+    // A registry failure takes the banner (mirrors the original sequential precedence).
+    error = registryFailedMsg
   }
-  try {
-    const page = await listInvoiceRuns(token, { limit: 20, cursor: invCursor })
-    invoiceRuns = page.runs
-    invoiceMoreHref = page.next_cursor ? `/tpp-billing?inv_cursor=${encodeURIComponent(page.next_cursor)}` : null
-  } catch {
+  if (invPage) {
+    invoiceRuns = invPage.runs
+    invoiceMoreHref = invPage.next_cursor ? `/tpp-billing?inv_cursor=${encodeURIComponent(invPage.next_cursor)}` : null
+  } else if (invoiceFailed) {
     error = error ?? 'Failed to load invoice runs.'
   }
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="billing"
-    >
+    <AppShell badges={badges} principal={principal}>
       <TppBilling
         counterparties={counterparties}
         invoiceRuns={invoiceRuns}

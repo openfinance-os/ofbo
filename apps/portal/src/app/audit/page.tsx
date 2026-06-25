@@ -1,10 +1,8 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { AuditLog } from '../../components/audit-log'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { getSession } from '../../lib/session'
 import { searchAuditEvents, AuditLogError, type AuditLogEvent } from '../../lib/audit-log'
 
 /**
@@ -16,15 +14,11 @@ import { searchAuditEvents, AuditLogError, type AuditLogEvent } from '../../lib/
 export const dynamic = 'force-dynamic'
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
+  // Audit deviates from the standard scope gate: a signed-in operator without audit:read is
+  // sent back to their dashboard (not the access-denied screen), so use getSession directly.
+  const session = await getSession()
+  if (!session) redirect('/')
+  const { token, principal } = session
   if (!principal.superadmin && !principal.scopes.includes(SCOPES.auditRead)) redirect('/dashboard')
 
   const sp = await searchParams
@@ -44,10 +38,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   }
 
   return (
-    <AppShell
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="audit"
-    >
+    <AppShell principal={principal}>
       <AuditLog events={events} filters={{ event_type: eventType, acting_principal: actingPrincipal }} error={error} />
     </AppShell>
   )

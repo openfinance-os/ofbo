@@ -1,11 +1,10 @@
-import { cookies } from 'next/headers'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AppShell } from '../../../../components/app-shell'
 import { shellBadges } from '../../../../lib/shell'
 import { InvestigationDetail } from '../../../../components/investigation-detail'
-import { TOKEN_COOKIE } from '../../../../lib/cookies'
 import { SCOPES } from '../../../../lib/scopes'
-import { verifyAndMint } from '../../../../lib/portal'
+import { getSession } from '../../../../lib/session'
 import { getBreak, ReconApiError, type ReconciliationBreak } from '../../../../lib/reconciliation'
 import { escalateNebrasAction } from './actions'
 
@@ -26,15 +25,11 @@ const FAILURE: Record<string, string> = {
 }
 
 export default async function InvestigationPage({ params, searchParams }: { params: Promise<{ break_id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
-
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
+  // Like the global audit screen, an in-scope-less but signed-in operator is sent to their
+  // dashboard (not the access-denied screen), so resolve the session directly.
+  const session = await getSession()
+  if (!session) redirect('/')
+  const { token, principal } = session
   if (!principal.superadmin && !principal.scopes.includes(SCOPES.reconciliationRead)) redirect('/dashboard')
 
   const { break_id } = await params
@@ -43,27 +38,24 @@ export default async function InvestigationPage({ params, searchParams }: { para
   const status = one(sp.status) ?? ''
   const canDispute = principal.superadmin || principal.scopes.includes(SCOPES.disputesWrite)
 
-  let break_: ReconciliationBreak | null = null
   let error: string | null = FAILURE[status] ?? null
-  try {
-    break_ = await getBreak(token, break_id)
-  } catch (e) {
-    error = e instanceof ReconApiError ? e.message : 'Failed to load the break.'
-  }
+  const [break_, badges] = await Promise.all([
+    getBreak(token, break_id).catch((e: unknown): ReconciliationBreak | null => {
+      error = e instanceof ReconApiError ? e.message : 'Failed to load the break.'
+      return null
+    }),
+    shellBadges(token)
+  ])
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="finance"
-    >
+    <AppShell badges={badges} principal={principal}>
       {break_ ? (
         <InvestigationDetail break_={break_} error={error} notice={NOTICE[status] ?? null} canDispute={canDispute} escalateAction={escalateNebrasAction} />
       ) : (
         <div className="space-y-4" data-testid="investigation-missing">
-          <a href="/reconciliation" className="text-xs text-secondary hover:underline">
+          <Link href="/reconciliation" className="text-xs text-secondary hover:underline">
             ← Back to Reconciliation Console
-          </a>
+          </Link>
           <p className="bg-error-container text-on-error-container text-sm px-4 py-3 rounded-lg">{error ?? 'Break not found.'}</p>
         </div>
       )}

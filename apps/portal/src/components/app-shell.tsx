@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { visibleModules } from '../lib/nav'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { visibleModules, activeModuleKey } from '../lib/nav'
 import { SCOPES } from '../lib/scopes'
 import { personaLabel } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
@@ -31,6 +33,10 @@ export function AppShell({ principal, active, badges, children }: { principal: S
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const modules = visibleModules(principal.scopes, principal.superadmin)
+  // Active module: an explicit `active` prop wins (kept for tests + any override); otherwise
+  // derive it from the URL so pages don't hand-maintain it and nested routes stay highlighted.
+  const pathname = usePathname()
+  const activeKey = active ?? (pathname ? activeModuleKey(pathname) : undefined)
   // UX-08 — the header search is a scope-aware PSU quick-lookup that routes to the Care
   // console (the primary operator entry point). Shown only to consents:admin personas;
   // hidden otherwise (no inert control for personas without a universal lookup).
@@ -81,14 +87,14 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             const count = badges?.[m.key] ?? 0
             const countLabel = count > 9 ? '9+' : String(count)
             return (
-            <a
+            <Link
               key={m.key}
               href={m.href}
               onClick={closeDrawer}
               data-testid={`nav-${m.key}`}
-              aria-current={active === m.key ? 'page' : undefined}
+              aria-current={activeKey === m.key ? 'page' : undefined}
               title={collapsed ? m.label : undefined}
-              className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm border ${active === m.key ? 'bg-secondary/20 border-secondary/30 text-nav-active font-semibold' : 'border-transparent text-on-nav hover:bg-nav-elevated hover:text-white'}`}
+              className={`relative flex items-center gap-3 px-4 py-3 rounded-xl text-sm border ${activeKey === m.key ? 'bg-secondary/20 border-secondary/30 text-nav-active font-semibold' : 'border-transparent text-on-nav hover:bg-nav-elevated hover:text-white'}`}
             >
               <span className="font-symbols text-base" aria-hidden>
                 {m.icon}
@@ -110,7 +116,7 @@ export function AppShell({ principal, active, badges, children }: { principal: S
                   ) : null}
                 </>
               ) : null}
-            </a>
+            </Link>
             )
           })}
         </nav>
@@ -155,7 +161,7 @@ export function AppShell({ principal, active, badges, children }: { principal: S
           <div className="flex flex-wrap items-center gap-3">
             {/* UX — the per-screen "why this exists" overlay (Open Finance context for
                 operators new to the scheme). Always present; explains the active module. */}
-            <ScreenGuideOverlay activeKey={active} />
+            <ScreenGuideOverlay activeKey={activeKey} />
             {/* Signed-in identity — friendly "Signed in as <Role>", linking to the profile
                 where the persona's privileges are explained (the raw scopes live there, not here). */}
             <a
@@ -193,6 +199,11 @@ export function AppShell({ principal, active, badges, children }: { principal: S
         >
           <span>DEMO profile · synthetic data only</span>
           <span className="font-mono">OFBO · non-prod</span>
+          {/* Re-entry to the evaluator funnel from inside the shell — once signed in, the
+              readiness/maturity views were otherwise only reachable from the sign-in screen. */}
+          <Link href="/readiness" data-testid="footer-readiness" className="ml-auto font-semibold text-secondary hover:underline">
+            Production readiness →
+          </Link>
         </footer>
       </div>
     </div>

@@ -1,11 +1,8 @@
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { AppShell } from '../../components/app-shell'
 import { shellBadges } from '../../lib/shell'
 import { OperationsConsole } from '../../components/operations-console'
-import { TOKEN_COOKIE } from '../../lib/cookies'
 import { SCOPES } from '../../lib/scopes'
-import { verifyAndMint } from '../../lib/portal'
+import { requireSession } from '../../lib/session'
 import { getOperationsConsole } from '../../lib/operations'
 import type { AnalyticsView } from '../../lib/analytics'
 
@@ -18,31 +15,19 @@ import type { AnalyticsView } from '../../lib/analytics'
 export const dynamic = 'force-dynamic'
 
 export default async function OperationsPage() {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value
-  if (!token) redirect('/')
+  const { token, principal } = await requireSession({ scope: SCOPES.operationsRead, module: 'Operations Console' })
 
-  let principal
-  try {
-    principal = await verifyAndMint(token)
-  } catch {
-    redirect('/')
-  }
-  if (!principal.superadmin && !principal.scopes.includes(SCOPES.operationsRead)) redirect(`/access-denied?module=${encodeURIComponent('Operations Console')}&required=${encodeURIComponent(SCOPES.operationsRead)}`)
-
-  let view: AnalyticsView | null = null
   let error: string | null = null
-  try {
-    view = await getOperationsConsole(token)
-  } catch {
-    error = 'The Operations Console is temporarily unavailable.'
-  }
+  const [view, badges] = await Promise.all([
+    getOperationsConsole(token).catch((): AnalyticsView | null => {
+      error = 'The Operations Console is temporarily unavailable.'
+      return null
+    }),
+    shellBadges(token)
+  ])
 
   return (
-    <AppShell
-      badges={token ? await shellBadges(token) : undefined}
-      principal={{ subject: principal.subject, persona: principal.persona, scopes: principal.scopes, superadmin: principal.superadmin }}
-      active="operations"
-    >
+    <AppShell badges={badges} principal={principal}>
       <OperationsConsole view={view} error={error} />
     </AppShell>
   )

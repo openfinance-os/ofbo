@@ -43,6 +43,21 @@ export const NAV_MODULES: NavModule[] = [
 ]
 
 /**
+ * The nav key for a pathname — so the shell highlights the active module from the URL
+ * (usePathname) instead of every page hand-passing an `active` string that can drift.
+ * A module matches its own route or any nested route (e.g. /reconciliation/breaks/x →
+ * `finance`, /approvals/:id → `approvals`). The longest matching href wins so a nested
+ * route prefers the most specific module. Returns undefined off the nav (e.g. /profile).
+ */
+export function activeModuleKey(pathname: string): string | undefined {
+  const path = ((pathname.split('?')[0] ?? pathname).replace(/\/+$/, '')) || '/'
+  const match = [...NAV_MODULES]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((m) => path === m.href || path.startsWith(`${m.href}/`))
+  return match?.key
+}
+
+/**
  * The modules visible to a principal: super-admin sees everything (the marker
  * satisfies any scope, BACKOFFICE-80); otherwise a module shows only when its
  * scope is held (or it has no scope requirement).
