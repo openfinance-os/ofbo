@@ -17,6 +17,7 @@ export type ReadinessPortResult = Schemas['ReadinessPortResult']
 export type ReadinessGovernanceResult = Schemas['ReadinessGovernanceResult']
 export type CatalogPort = Schemas['ReadinessCatalogPort']
 export type CatalogDecision = Schemas['ReadinessCatalogDecision']
+export type MaturitySummary = Schemas['MaturitySummary']
 
 export interface ReadinessApiDeps extends BffDeps {
   traceId?: string
@@ -54,6 +55,11 @@ async function unwrap<T>(res: Response): Promise<T> {
 export async function getReadinessCatalog(deps: ReadinessApiDeps = {}): Promise<ReadinessCatalog> {
   const { base, f, trace } = resolve(deps)
   return unwrap<ReadinessCatalog>(await f(`${base}/public/readiness/catalog`, { headers: publicHeaders(trace) }))
+}
+
+export async function getMaturity(deps: ReadinessApiDeps = {}): Promise<MaturitySummary> {
+  const { base, f, trace } = resolve(deps)
+  return unwrap<MaturitySummary>(await f(`${base}/public/readiness/maturity`, { headers: publicHeaders(trace) }))
 }
 
 export async function assessReadiness(input: ReadinessAssessmentInput, deps: ReadinessApiDeps = {}): Promise<ReadinessDigest> {

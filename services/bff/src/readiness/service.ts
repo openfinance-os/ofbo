@@ -2,6 +2,7 @@
 // profile store. No principal, no scope: these are PUBLIC, pre-login operations.
 
 import { getCatalogView, type PublicCatalog } from './catalog.js'
+import { getMaturity, type MaturitySummary } from './maturity.js'
 import { assess, ReadinessInputError, type AssessmentInput, type ReadinessDigest } from './scoring.js'
 import { InMemoryReadinessProfileStore, type ReadinessProfileStore } from './profile-store.js'
 
@@ -21,6 +22,10 @@ export class ReadinessService {
 
   catalog(): PublicCatalog {
     return getCatalogView()
+  }
+
+  maturity(): MaturitySummary {
+    return getMaturity()
   }
 
   /** Stateless scoring. Throws ReadinessInputError on bad input. */

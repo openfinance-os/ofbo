@@ -157,6 +157,7 @@ import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 export const IMPLEMENTED_ROUTES = new Set([
   // ADR 0022 — public, pre-login readiness wizard
   'get /public/readiness/catalog',
+  'get /public/readiness/maturity',
   'post /public/readiness:assess',
   'post /public/readiness/profiles',
   'get /public/readiness/profiles/{slug}',

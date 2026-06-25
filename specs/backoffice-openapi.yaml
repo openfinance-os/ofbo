@@ -2423,6 +2423,29 @@ paths:
                       data: { $ref: '#/components/schemas/ReadinessProfile' }
         default: { $ref: '#/components/responses/Error' }
 
+  /public/readiness/maturity:
+    get:
+      tags: [readiness]
+      summary: Product maturity — what's built vs. what remains (public, ADR 0022)
+      description: >
+        The companion to the readiness wizard: the wizard shows how close a given bank is; this
+        shows how complete the product is. Milestone roadmap (M0–M6) + per-port adapter status
+        (every sim adapter ships; the enterprise adapter is the M6 work). Static, no auth, no PII.
+      security: []
+      x-rate-limit-per-min: 120
+      responses:
+        '200':
+          description: The product maturity summary
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MaturitySummary' }
+        default: { $ref: '#/components/responses/Error' }
+
 
 components:
   securitySchemes:
@@ -3539,3 +3562,40 @@ components:
         created_at: { type: string, format: date-time }
         input: { $ref: '#/components/schemas/ReadinessAssessmentInput' }
         digest: { $ref: '#/components/schemas/ReadinessDigest' }
+    MaturityMilestone:
+      type: object
+      required: [id, title, status, detail]
+      properties:
+        id: { type: string, description: Milestone id M0..M6 }
+        title: { type: string }
+        status: { type: string, enum: [done, remaining] }
+        detail: { type: string }
+    MaturityPort:
+      type: object
+      required: [id, name, sim_status, enterprise_status, contract_test_gate]
+      properties:
+        id: { type: string, description: Port id P1..P9 }
+        name: { type: string }
+        sim_status: { type: string, enum: [ready], description: Demo-profile adapter — ships today }
+        enterprise_status: { type: string, enum: [stub, ready], description: Enterprise adapter — the M6 port-swap work }
+        contract_test_gate: { type: string, description: The acceptance suite both adapters must pass }
+    MaturitySummary:
+      type: object
+      required: [milestones, ports, summary]
+      properties:
+        milestones:
+          type: array
+          items: { $ref: '#/components/schemas/MaturityMilestone' }
+        ports:
+          type: array
+          items: { $ref: '#/components/schemas/MaturityPort' }
+        summary:
+          type: object
+          required: [milestones_total, milestones_done, ports_total, sim_adapters_ready, enterprise_adapters_remaining]
+          properties:
+            milestones_total: { type: integer }
+            milestones_done: { type: integer }
+            ports_total: { type: integer }
+            sim_adapters_ready: { type: integer }
+            enterprise_adapters_remaining: { type: integer }
+            note: { type: string }

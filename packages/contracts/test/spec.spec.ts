@@ -7,9 +7,9 @@ import { loadSpec, listRoutes } from '../src/spec.js'
 const isPublic = (path: string) => path.startsWith('/public/')
 
 describe('contract canon', () => {
-  it('has exactly 85 paths and 12 tags (incl. the 4 public readiness paths + readiness tag)', () => {
+  it('has exactly 86 paths and 12 tags (incl. the 5 public readiness paths + readiness tag)', () => {
     const spec = loadSpec()
-    expect(Object.keys(spec.paths)).toHaveLength(85)
+    expect(Object.keys(spec.paths)).toHaveLength(86)
     expect(spec.tags).toHaveLength(12)
   })
 
@@ -21,7 +21,7 @@ describe('contract canon', () => {
 
   it('the public carve-out is exactly /public/readiness/* and carries no admin scope', () => {
     const publicRoutes = listRoutes().filter((r) => isPublic(r.path))
-    expect(publicRoutes.length).toBe(4)
+    expect(publicRoutes.length).toBe(5)
     for (const r of publicRoutes) {
       expect(r.path.startsWith('/public/readiness'), r.path).toBe(true)
       expect(r.scope, `${r.method} ${r.path}`).toBeNull()

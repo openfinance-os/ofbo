@@ -143,8 +143,11 @@ function Hero({ onStart }: { onStart: () => void }) {
         >
           Start the assessment →
         </button>
-        <span className="text-xs text-on-surface-variant">9 ports · 16 decisions · synthetic-only</span>
+        <a href="/maturity" className="text-sm font-semibold text-secondary hover:underline" data-testid="hero-maturity-link">
+          Or see what’s already built →
+        </a>
       </div>
+      <p className="mt-3 text-xs text-on-surface-variant">9 ports · 16 decisions · synthetic-only</p>
     </section>
   )
 }
