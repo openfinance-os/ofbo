@@ -1,7 +1,8 @@
 # HG-0001 — Human four-eyes on merges and deploys (no agent self-merge)
 
-- Status: **Proposed** — awaiting bank change-governance decision
-- Date: 2026-06-20
+- Status: **Accepted** (Option 1; harness-owner direction, 2026-06-25) — production branch
+  protection + CODEOWNERS remain the bank's config step (see Decision)
+- Date: 2026-06-20 (proposed) · 2026-06-25 (accepted)
 - Scope: harness / AI-SDLC governance (not the OFBO product)
 - Related: HG-0002 (immutable control plane), HG-0005 (prod gate); the harness bank-readiness review (2026-06-20)
 
@@ -53,10 +54,22 @@ required gates, prod behind a human environment gate. AI review stays advisory.
 
 ## Decision
 
-_Pending._ Once accepted: configure org/repo **branch protection** (required reviewers
-from a human CODEOWNERS group, required checks, no self-approval), adjust the next-story
-skill so it stops at "PR opened, review requested" instead of self-merging, and wire the
-prod environment approval (HG-0005).
+**Accepted — Option 1 (harness-owner, 2026-06-25).** The loop authors and verifies; a **human**
+disposes. The agent never merges its own feature/infra work — AI reviewing AI is not four-eyes
+for a regulated production change.
+
+Implemented in the harness now:
+- **The `next-story` loop stops at "PR opened, gates green, both reviewers PASS, review
+  requested"** and notifies the user that the PR is ready for human merge — it does **not** merge
+  or delete the branch. The item stays `in-progress` until a human merges; dependents wait on it
+  (intended back-pressure). Spec PRs / ADRs / BD-decisions were already human-only.
+
+Remaining bank-config step (enforcement of record, outside the agent's write scope — HG-0002):
+- **Branch protection on `main`** — required human approval from a **CODEOWNERS** group the agent
+  is not in, required status checks (Q1–Q4.5 + the discovery/waist gate), no self-approval; prod
+  deploy behind a separate human environment gate (HG-0005). No CODEOWNERS file exists yet; the
+  human reviewer group is the bank's to name. The skill honours the policy so the loop doesn't
+  rely on the agent's own restraint, but native branch protection is what makes it non-bypassable.
 
 ## Consequences
 
