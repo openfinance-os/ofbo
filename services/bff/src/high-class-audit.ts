@@ -16,6 +16,9 @@ export interface HighClassAuditEvent {
   request_body?: unknown
   response_status: number
   superadmin_marker?: boolean
+  /** BACKOFFICE-59 — stamped by the training environment's sink; a training action is thereby
+   *  distinguishable and is NEVER written to the production audit_high_sensitivity trail. */
+  training?: boolean
 }
 
 export interface HighClassAuditSink {
