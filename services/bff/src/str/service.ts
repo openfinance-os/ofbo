@@ -201,7 +201,7 @@ export class InMemoryStrDraftStore implements StrDraftStore {
   private make(id: string, consentId: string, ctx: string, by: string, at: string): StrDraft {
     return { str_draft_id: id, source_consent_id: consentId, case_context: ctx, status: 'draft', created_by: by, approval_id: null, workflow_ref: null, approved_by: null, handed_off_at: null, created_at: at }
   }
-  async record(input: StrDraftRecordInput): Promise<StrDraft> {
+  async record(input: StrDraftRecordInput, _traceId?: string): Promise<StrDraft> {
     const draft: StrDraft = {
       str_draft_id: crypto.randomUUID(),
       source_consent_id: input.source_consent_id,
@@ -229,7 +229,7 @@ export class InMemoryStrDraftStore implements StrDraftStore {
     const hasMore = rows.length > limit
     return { rows: slice, next_cursor: hasMore && last ? encodeCursor(last.created_at, last.str_draft_id) : null }
   }
-  async markStatus(id: string, status: StrDraftStatus, patch: StrStatusPatch): Promise<StrDraft | null> {
+  async markStatus(id: string, status: StrDraftStatus, patch: StrStatusPatch, _traceId?: string): Promise<StrDraft | null> {
     const r = this.rows.find((x) => x.str_draft_id === id)
     if (!r) return null
     r.status = status
