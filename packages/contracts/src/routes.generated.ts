@@ -645,5 +645,33 @@ export const ROUTES: readonly Route[] = [
     "tag": "agents",
     "scope": "platform:agents:read",
     "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/public/readiness/catalog",
+    "tag": "readiness",
+    "scope": null,
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/public/readiness:assess",
+    "tag": "readiness",
+    "scope": null,
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/public/readiness/profiles",
+    "tag": "readiness",
+    "scope": null,
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/public/readiness/profiles/{slug}",
+    "tag": "readiness",
+    "scope": null,
+    "fourEyes": false
   }
 ] as const

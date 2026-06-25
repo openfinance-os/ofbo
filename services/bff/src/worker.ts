@@ -1,5 +1,6 @@
 import {
   PgApprovalStore,
+  PgReadinessProfileStore,
   PgAuditEmitter,
   PgAuditReader,
   PgComplianceReportStore,
@@ -134,6 +135,8 @@ export default {
     const queryPurposeRegistrar = url ? new PgQueryPurposeRegistrar(url, tenancy, lineage) : undefined
     const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
     const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
+    // ADR 0022 — persist public readiness-wizard profiles (non-regulated, no PII)
+    const readinessProfileStore = url ? new PgReadinessProfileStore(url, tenancy) : undefined
 
     const app = createApp({
       ...(audit ? { audit } : {}),
@@ -164,12 +167,13 @@ export default {
       ...(queryPurposeRegistrar ? { queryPurposeRegistrar } : {}),
       ...(lineageReaderStore ? { lineageReader: lineageReaderStore } : {}),
       ...(auditReader ? { auditEventReader: auditReader } : {}),
+      ...(readinessProfileStore ? { readinessProfileStore } : {}),
       ...(url ? { retentionReader: { retentionStatus: () => retentionStatus(url) } } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

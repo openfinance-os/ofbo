@@ -4012,6 +4012,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/readiness/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Port catalog + adopting-bank decision defaults for the readiness wizard
+         * @description Serves the P1–P9 system-option catalog and the BD-01..16 decision defaults the public wizard renders. Static, no auth, no PII.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The readiness catalog */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ReadinessCatalog"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/readiness:assess": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score an estate mapping into a readiness digest (stateless)
+         * @description Deterministic: a port→system mapping and BD-01..16 answers in, a readiness digest (score, per-port effort + contract-test gate, governance register, generated Bank Profile, suggested port-swap sequencing) out. No persistence, no auth, no PII.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ReadinessAssessmentInput"];
+                };
+            };
+            responses: {
+                /** @description The computed readiness digest */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ReadinessDigest"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/readiness/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save a named readiness profile, returns a shareable slug
+         * @description Persists a named self-assessment (non-regulated bank system-metadata only — never a regulated record, never PII) and returns an unguessable slug for sharing/reopening.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        input: components["schemas"]["ReadinessAssessmentInput"];
+                    };
+                };
+            };
+            responses: {
+                /** @description The saved profile (with its digest and slug) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ReadinessProfile"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/readiness/profiles/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reopen a saved readiness profile by slug */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    slug: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The saved profile */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["ReadinessProfile"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4819,6 +4997,104 @@ export interface components {
             resolved_at?: string | null;
             /** Format: date-time */
             created_at?: string;
+        };
+        /**
+         * @description low = standard protocol/known adapter; medium = config-heavy (e.g. P6 mTLS); scoping = in-house/Other needs sizing
+         * @enum {string}
+         */
+        ReadinessEffortBand: "low" | "medium" | "scoping";
+        ReadinessCatalogPortOption: {
+            value: string;
+            label: string;
+            effort_band: components["schemas"]["ReadinessEffortBand"];
+        };
+        ReadinessCatalogPort: {
+            /** @description Port id P1..P9 */
+            id: string;
+            name: string;
+            /** @description What the bank system behind this port does */
+            maps_to: string;
+            /** @description True for ports a bank may decline (e.g. P8) */
+            optional?: boolean;
+            options: components["schemas"]["ReadinessCatalogPortOption"][];
+        };
+        ReadinessCatalogDecision: {
+            /** @description Decision id BD-01..BD-16 */
+            id: string;
+            title: string;
+            /** @description The product's pre-set default answer */
+            default: string;
+            impact: string;
+            /** @description Milestone/story this decision blocks if unresolved */
+            blocks?: string | null;
+        };
+        ReadinessCatalog: {
+            ports: components["schemas"]["ReadinessCatalogPort"][];
+            decisions: components["schemas"]["ReadinessCatalogDecision"][];
+        };
+        ReadinessAssessmentInput: {
+            /** @description Map of port id (P1..P9) to the chosen option value */
+            ports: {
+                [key: string]: string;
+            };
+            /** @description Map of decision id (BD-01..BD-16) to the chosen answer; omitted = default */
+            decisions?: {
+                [key: string]: string;
+            };
+        };
+        ReadinessPortResult: {
+            id: string;
+            name: string;
+            chosen_system: string;
+            /**
+             * @description sim adapter ships today; enterprise adapter is the M6 work
+             * @enum {string}
+             */
+            adapter_status: "sim_ready" | "enterprise_to_write";
+            /** @description The port-swap acceptance test suite this adapter must pass */
+            contract_test_gate: string;
+            effort_band: components["schemas"]["ReadinessEffortBand"];
+            config_keys: string[];
+        };
+        ReadinessGovernanceResult: {
+            id: string;
+            title: string;
+            answer: string;
+            is_default: boolean;
+            blocker?: string | null;
+        };
+        ReadinessDigest: {
+            /** @description Deterministic readiness score */
+            score: number;
+            verdict: string;
+            ports: components["schemas"]["ReadinessPortResult"][];
+            governance: components["schemas"]["ReadinessGovernanceResult"][];
+            /** @description A pre-populated enterprise Bank Profile skeleton (tfvars-shaped key/value) */
+            generated_profile: {
+                [key: string]: string;
+            };
+            /** @description What the product already ships, to frame the remaining work as bounded */
+            already_done: {
+                sim_adapters_ready?: number;
+                ports_total?: number;
+                note?: string;
+            };
+            /** @description Suggested M6 port-swap order with the bank's specifics filled in */
+            sequencing: {
+                step: number;
+                port: string;
+                system: string;
+                action: string;
+            }[];
+        };
+        ReadinessProfile: {
+            /** @description Unguessable share token */
+            slug: string;
+            name: string;
+            /** Format: date-time */
+            created_at: string;
+            input: components["schemas"]["ReadinessAssessmentInput"];
+            digest: components["schemas"]["ReadinessDigest"];
         };
     };
     responses: {

@@ -2,6 +2,7 @@ export { applyMigrations } from './apply.js'
 export { seedDemoDataset } from './seed.js'
 export { seedDemoScenario } from './seed-demo.js'
 export { PgApprovalStore, type StoredApprovalRecord, type StoredApprovalState } from './approvals-store.js'
+export { PgReadinessProfileStore } from './readiness-profile-store.js'
 export {
   PgAuditEmitter,
   PgAuditReader,
