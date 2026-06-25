@@ -13,7 +13,7 @@ const ok = (data: unknown, status = 200) =>
 
 describe('readiness lib — public BFF calls (no auth)', () => {
   it('GETs the catalog with a trace id and NO authorization header', async () => {
-    const fetchImpl = vi.fn(async () => ok({ ports: [], decisions: [] }))
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ok({ ports: [], decisions: [] }))
     await getReadinessCatalog({ baseUrl: BASE, fetchImpl, traceId: 'trace-1' })
     const [url, init] = fetchImpl.mock.calls[0]!
     expect(url).toBe(`${BASE}/public/readiness/catalog`)
@@ -23,7 +23,7 @@ describe('readiness lib — public BFF calls (no auth)', () => {
   })
 
   it('POSTs an assessment input to :assess with no auth', async () => {
-    const fetchImpl = vi.fn(async () => ok({ score: 70 }))
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ok({ score: 70 }))
     await assessReadiness({ ports: { P2: 'okta' } }, { baseUrl: BASE, fetchImpl })
     const [url, init] = fetchImpl.mock.calls[0]!
     expect(url).toBe(`${BASE}/public/readiness:assess`)
@@ -33,17 +33,17 @@ describe('readiness lib — public BFF calls (no auth)', () => {
   })
 
   it('POSTs a named profile and GETs it back by slug', async () => {
-    const save = vi.fn(async () => ok({ slug: 'rdy-1', name: 'Bank A' }, 201))
+    const save = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ok({ slug: 'rdy-1', name: 'Bank A' }, 201))
     await saveReadinessProfile('Bank A', { ports: { P2: 'okta' } }, { baseUrl: BASE, fetchImpl: save })
     expect(JSON.parse(String(save.mock.calls[0]![1]?.body))).toEqual({ name: 'Bank A', input: { ports: { P2: 'okta' } } })
 
-    const get = vi.fn(async () => ok({ slug: 'rdy-1' }))
+    const get = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ok({ slug: 'rdy-1' }))
     await getReadinessProfile('rdy-1', { baseUrl: BASE, fetchImpl: get })
     expect(get.mock.calls[0]![0]).toBe(`${BASE}/public/readiness/profiles/rdy-1`)
   })
 
   it('throws ReadinessApiError carrying the BFF error code on a non-2xx', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
       new Response(JSON.stringify({ error: { code: 'BACKOFFICE.INVALID_READINESS_INPUT', message: 'bad' } }), { status: 400 })
     )
     await expect(assessReadiness({ ports: {} }, { baseUrl: BASE, fetchImpl })).rejects.toMatchObject({

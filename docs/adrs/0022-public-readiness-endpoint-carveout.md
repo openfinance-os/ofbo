@@ -65,7 +65,14 @@ they reuse `matchRoute`, the `{data, meta}`/error envelopes, and the dispatcher 
   `/public/` path needs no token").
 - The hard-stop-reviewer must treat `/public/*` as the *sole* sanctioned unauthenticated prefix;
   any second one needs its own ADR.
-- `readiness_profiles` is the first non-tenanted Back Office table. It still has RLS enabled and
+- `readiness_profile` is the first non-tenanted Back Office table. It still has RLS enabled and
   forced (CLAUDE.md "RLS from day one"), but with a documented public policy (`USING (true)`)
   because there is no tenant pre-sale — justified by its non-regulated, no-PII, public-by-design
   nature.
+- Even so, it is **fully enrolled in the governance registries** like every writable table
+  (BACKOFFICE-50/-54): a NOT NULL `classification` column at the lowest available floor
+  (`internal-confidential` — "which bank evaluates OFBO on which vendors" is commercially
+  sensitive) and a `retention_policy` row (24/60/no-deletion). No table escapes the
+  registry-coverage gate; the carve-out is from *auth*, not from *governance*. It is deliberately
+  absent from the BCBS 239 lineage scan (`validateLineageCoverage`) — it carries no regulated
+  figure whose provenance must be traced.
