@@ -30,21 +30,30 @@ This proposal turns those two assets into an interactive, personalized self-asse
 in a circulatable artifact — reframing the demo from *"look at the features"* to *"look how
 close **you** are to production."*
 
-Two surfaces, designed to be built and sold together:
-
-1. **Integration Readiness Wizard** (`/readiness`) — the interactive assessment + digest.
-2. **"How close are you?" landing surface** — the prospect-facing reframe that drives a visitor
-   from the demo into the wizard.
+One **public, pre-login** surface (per the resolved decisions below): the **Integration Readiness
+Wizard** at `/readiness` — opening with a prospect-facing hero ("how close are *you*?") that flows
+straight into the assessment + digest. The standalone landing page folds into the wizard's hero
+step rather than being a separate screen.
 
 ---
 
 ## Surface 1 — Integration Readiness Wizard
 
-A DEMO-bannered, no-PII portal surface a prospect's solution architect completes in 5–10 min.
-It writes **no regulated data** — its inputs are bank *system metadata* (e.g. "we use Okta"),
-not PSU data — so it lives wholly inside the demo profile and is safe to drive live on a call.
+A DEMO-bannered, no-PII, **public pre-login** surface a prospect's solution architect completes
+in 5–10 min — *no account, no sign-in*. It writes **no regulated data** — its inputs are bank
+*system metadata* (e.g. "we use Okta"), not PSU data — so it lives wholly inside the demo profile
+and is safe to drive live on a call or hand a cold prospect.
+
+> **Decisions locked (2026-06-25, user):** pre-login/public · no persona gate (open to anyone) ·
+> persistent named profiles in v1. The wizard *is* the prospect-facing hook; Surface 2 (landing
+> framing) folds into its hero step rather than being a separate gated screen.
 
 ### Flow
+
+**Step 0 — The hook (hero).** Public framing before any input: *"Running Open Finance as a UAE
+bank? You've passed CBUAE certification — but can you operationally run it yet? See how fast you
+could go live, and exactly what integration it takes on your estate."* One CTA → start the
+assessment.
 
 **Step 1 — Map your estate.** For each port, pick the bank's system from a curated dropdown
 (UAE-bank-common options + "Other / in-house"). Proposed catalog (the exact list is config, not
@@ -67,7 +76,9 @@ its product default pre-selected and its impact line, so the architect is *confi
 authoring. M1-blocking decisions (BD-01 IdP, BD-04 ITSM) and governance sign-offs (BD-13
 cross-fintech aggregation) are visually flagged.
 
-**Step 3 — Receive the digest** (below), on-screen and as a PDF export.
+**Step 3 — Receive the digest** (below), on-screen and as a PDF export. Optionally **name and
+save** the profile (v1) — returns a shareable link the architect can circulate internally and
+reopen later to revise.
 
 ### The digest (the deliverable)
 
@@ -97,40 +108,67 @@ inputs always produce the same digest:
 - BD answers that select a *non-default* or a known blocker (BD-13 without governance sign-off)
   add flags, not score penalties — they surface as "decisions to close," not failures.
 
-### Architecture (composes existing primitives — no new platform)
+### Architecture (composes existing primitives — but introduces one new auth pattern)
 
-- **Frontend:** new `/readiness` route + a multi-step wizard component, token-only (Stitch
-  reference — generate the screen in Stitch first if absent, per CLAUDE.md), DEMO-bannered.
-- **BFF:** `GET /back-office/readiness/port-catalog` (serves the dropdown catalog + BD defaults)
-  and `POST /back-office/readiness:assess` (stateless: answers in → digest out). Both new
-  OpenAPI paths, contract-tested.
+- **Frontend:** new **public, pre-login** `/readiness` route + a multi-step wizard component,
+  token-only (Stitch reference — generate the screen in Stitch first if absent, per CLAUDE.md),
+  DEMO-bannered. Reachable directly and linked from the sign-in screen; no auth gate.
+- **BFF — public endpoints (new pattern, see below):**
+  - `GET /public/readiness/port-catalog` — serves the dropdown catalog + BD defaults (static).
+  - `POST /public/readiness:assess` — answers in → digest out (deterministic, no auth).
+  - `POST /public/readiness/profiles` — create a named profile, returns an opaque shareable
+    slug/token. `GET /public/readiness/profiles/{slug}` — reopen it. (v1 persistence.)
+  - All under a clearly-separated `/public/*` namespace, contract-tested, rate-limited.
 - **Logic module:** the port catalog + scoring rules live in one deterministic, unit-tested
   module (BFF or `packages/`). The catalog is data, so adding a vendor is a config edit.
 - **PDF export:** reuse the existing analytics export pipeline (PDF/XLSX already supported).
-- **No DB writes required** — keep it stateless and no-PII. (Optional later: persist a named
-  profile as a synthetic record; not in v1.)
+- **Persistence (v1):** a new `readiness_profiles` table — *non-regulated bank system-metadata
+  only*, never `audit_high_sensitivity`, never a regulated record. Keyed by an unguessable slug;
+  no PII; demo-profile only. Updatable (revise & re-save), unlike the INSERT-only audit store.
+
+### The new auth pattern — flag for an ADR at build time
+
+Every existing BFF route is admin-scoped (enforced at BFF middleware **and** service layer —
+defence in depth, CLAUDE.md). A **public unauthenticated** route is therefore a genuinely new
+auth path, and CLAUDE.md rule 6 ("compose, don't invent — no new auth paths") says invent one
+only via an ADR that a human accepts. **So the build's first step is an ADR** proposing the
+`/public/*` carve-out, with these guardrails as the decision's terms:
+
+- Strictly **read-mostly + no-PII + no regulated tables**; the only write is a `readiness_profiles`
+  upsert of bank system-metadata.
+- **Rate-limited** at the edge (Cloudflare) and per-IP in the worker; abuse/spam-bounded since
+  anyone can POST.
+- **Demo-profile only** — not deployed in the enterprise profile (where a bank wouldn't expose a
+  public marketing endpoint inside its regulated estate anyway).
+- Never reachable from, and never able to reach, any admin-scoped handler or regulated store.
+
+If the reviewer prefers to avoid a public endpoint entirely, the fallback is a **fully client-side
+wizard** (catalog + scoring shipped as static data in the portal bundle; profiles saved to a
+shareable URL hash or a public KV namespace) — no BFF auth change at all. Noted as the alternative
+in the ADR.
 
 ### Hard-stop compliance
 
 - **No PII** — inputs are bank-system metadata only; nothing PSU-related touches it.
 - **DEMO banner** on every step; permanently non-prod.
-- **Scope-gated** — surface this to the OF Programme Manager persona (least-privilege; a new
-  read-only `readiness:read` scope, or reuse an existing programme scope — decide at build).
-- **Four-eyes:** not applicable (read-only self-assessment; writes nothing regulated).
+- **No persona gate** (per decision) — it's public; the access-control story is the `/public/*`
+  carve-out + rate-limiting above, not a scope. There is **no** new `readiness:read` admin scope.
+- **Four-eyes:** not applicable (no regulated write; profile save is non-regulated metadata).
 - **Token-only design**, OpenAPI-bound, no Stitch mock values (CLAUDE.md UI rule).
 
 ### Out of scope for v1
 
-- Persisting/comparing multiple saved profiles.
+- Comparing/diffing multiple saved profiles side by side (single named profile is in).
 - Auto-generating actual adapter code stubs (a tempting follow-up; keep v1 to the digest).
 - Any live connection test to a real bank system (that's M6 integration work, not a wizard).
 
 ---
 
-## Surface 2 — "How close are you?" landing surface
+## Surface 2 — the pre-login hero (folded into the wizard)
 
-A prospect-facing entry (extend the pre-sign-in screen or add a `/why` route) that reframes the
-demo around production-readiness and funnels into the wizard. Sections:
+With the wizard now public/pre-login, the separate "landing page" collapses into **Step 0 of the
+wizard itself** plus the demo's sign-in screen. The framing content still matters — it's just no
+longer a distinct gated route:
 
 1. **The problem** — "You passed CBUAE certification, but you can't *run* Open Finance yet:
    Nebras fees unverified, care has no tool, liability found only on the invoice."
@@ -138,29 +176,41 @@ demo around production-readiness and funnels into the wizard. Sections:
 3. **See it live** — links into the demo (the INC-2026-0042 thread traced across consoles).
 4. **The port-swap path** — the 9 ports, what's done (sim) vs. what you write (enterprise), and
    that each enterprise adapter passes the *same* contract tests.
-5. **CTA → the Readiness Wizard** — "Find out how close *your* bank is" → `/readiness`.
+5. **CTA → start the assessment** — "Find out how close *your* bank is."
 
-Token-only, Stitch-referenced, DEMO-bannered. No new backend; pure presentation + a link to
-Surface 1.
+Token-only, Stitch-referenced, DEMO-bannered. This is the wizard's hero (Step 0) and a teaser
+link from the sign-in screen — not a second backend or a second gated screen.
 
 ---
 
 ## Build sequencing (if approved)
 
-1. Generate both screens in Stitch (layout/tokens) — cite the screen ids in the PRs.
-2. Spec-first: add the two OpenAPI paths + acceptance criteria; contract tests fail first.
-3. BFF: port catalog + deterministic scoring module → `:assess` + `/port-catalog` to green.
-4. Portal: `/readiness` wizard + digest + PDF export; then the landing surface.
-5. Each as its own `BACKOFFICE-NN` story/branch/PR per the standard workflow; coverage ≥80%.
+1. **ADR first** — propose the `/public/*` unauthenticated carve-out (terms + the client-side
+   fallback alternative). Human accepts before any public route is built (CLAUDE.md rule 6).
+2. Generate the wizard screen(s) in Stitch (layout/tokens) — cite the screen ids in the PRs.
+3. Spec-first: add the OpenAPI paths (`/public/readiness/*`) + acceptance criteria; contract
+   tests fail first.
+4. BFF: port catalog + deterministic scoring module → `:assess` + `/port-catalog` to green;
+   then `readiness_profiles` upsert/read (persistence) + rate-limiting.
+5. Portal: public `/readiness` wizard (Step 0 hero → estate → BD-01..16 → digest) + PDF export +
+   save/share; sign-in-screen teaser link.
+6. Each as its own `BACKOFFICE-NN` story/branch/PR per the standard workflow; coverage ≥80%.
 
-Estimated as two small stories (landing) + one medium (wizard). All composes existing
-primitives — no ADR required unless the new `readiness:read` scope is judged a platform
-primitive (CLAUDE.md rule 6), in which case raise one and stop.
+Estimated as one ADR + ~one medium wizard story + one small persistence story. No new admin
+scope; the only invented primitive is the public auth path, which the ADR governs.
 
-## Open questions for the reviewer
+## Decisions — resolved (2026-06-25, user)
 
-1. **Surface the wizard pre- or post-sign-in?** Pre-sign-in maximizes prospect reach but means a
-   public unauthenticated route; post-sign-in keeps it inside the persona model. (Lean:
-   post-sign-in under the Programme Manager persona, linked from a public landing teaser.)
-2. **New `readiness:read` scope vs. reuse an existing programme scope?**
-3. **Persist named profiles in v1, or keep stateless?** (Lean: stateless v1.)
+1. **Pre- or post-sign-in?** → **Pre-login / public.** The wizard is the prospect hook itself;
+   maximizes reach. Cost: a public unauthenticated route → governed by the ADR above.
+2. **New `readiness:read` scope vs. reuse?** → **Neither.** It's public; no persona gate, no new
+   admin scope. Access control is the `/public/*` carve-out + rate-limiting.
+3. **Persist named profiles in v1?** → **Yes.** `readiness_profiles` table (non-regulated bank
+   metadata, no PII, shareable slug, demo-only, updatable).
+
+## Open questions remaining for the reviewer
+
+1. **Public BFF endpoint vs. fully client-side wizard?** Both deliver the pre-login experience;
+   the ADR will put both on the table. (Lean: public `/public/*` BFF endpoints — keeps the
+   catalog/scoring server-authoritative and testable; client-side is the lighter fallback.)
+2. **Green light to start the build** (ADR → spec → BFF → portal), or revise the plan further?
