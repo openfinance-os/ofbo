@@ -673,5 +673,12 @@ export const ROUTES: readonly Route[] = [
     "tag": "readiness",
     "scope": null,
     "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/public/readiness/maturity",
+    "tag": "readiness",
+    "scope": null,
+    "fourEyes": false
   }
 ] as const

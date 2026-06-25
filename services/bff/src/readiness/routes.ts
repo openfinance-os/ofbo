@@ -36,6 +36,10 @@ export function readinessRoutes(service: ReadinessService): Record<string, Handl
       return c.json(dataEnvelope(service.catalog()), 200)
     },
 
+    'get /public/readiness/maturity': async (c) => {
+      return c.json(dataEnvelope(service.maturity()), 200)
+    },
+
     'post /public/readiness:assess': async (c) => {
       try {
         const body = await jsonBody(c)

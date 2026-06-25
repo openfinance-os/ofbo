@@ -4190,6 +4190,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/readiness/maturity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Product maturity — what's built vs. what remains (public, ADR 0022)
+         * @description The companion to the readiness wizard: the wizard shows how close a given bank is; this shows how complete the product is. Milestone roadmap (M0–M6) + per-port adapter status (every sim adapter ships; the enterprise adapter is the M6 work). Static, no auth, no PII.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The product maturity summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["MaturitySummary"];
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5095,6 +5137,43 @@ export interface components {
             created_at: string;
             input: components["schemas"]["ReadinessAssessmentInput"];
             digest: components["schemas"]["ReadinessDigest"];
+        };
+        MaturityMilestone: {
+            /** @description Milestone id M0..M6 */
+            id: string;
+            title: string;
+            /** @enum {string} */
+            status: "done" | "remaining";
+            detail: string;
+        };
+        MaturityPort: {
+            /** @description Port id P1..P9 */
+            id: string;
+            name: string;
+            /**
+             * @description Demo-profile adapter — ships today
+             * @enum {string}
+             */
+            sim_status: "ready";
+            /**
+             * @description Enterprise adapter — the M6 port-swap work
+             * @enum {string}
+             */
+            enterprise_status: "stub" | "ready";
+            /** @description The acceptance suite both adapters must pass */
+            contract_test_gate: string;
+        };
+        MaturitySummary: {
+            milestones: components["schemas"]["MaturityMilestone"][];
+            ports: components["schemas"]["MaturityPort"][];
+            summary: {
+                milestones_total: number;
+                milestones_done: number;
+                ports_total: number;
+                sim_adapters_ready: number;
+                enterprise_adapters_remaining: number;
+                note?: string;
+            };
         };
     };
     responses: {

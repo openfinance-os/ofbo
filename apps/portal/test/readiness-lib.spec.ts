@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   getReadinessCatalog,
+  getMaturity,
   assessReadiness,
   saveReadinessProfile,
   getReadinessProfile,
@@ -20,6 +21,14 @@ describe('readiness lib — public BFF calls (no auth)', () => {
     const headers = (init?.headers ?? {}) as Record<string, string>
     expect(headers['x-fapi-interaction-id']).toBe('trace-1')
     expect(headers.authorization).toBeUndefined()
+  })
+
+  it('GETs the maturity summary publicly', async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ok({ milestones: [], ports: [], summary: {} }))
+    await getMaturity({ baseUrl: BASE, fetchImpl })
+    const [url, init] = fetchImpl.mock.calls[0]!
+    expect(url).toBe(`${BASE}/public/readiness/maturity`)
+    expect((init?.headers as Record<string, string>).authorization).toBeUndefined()
   })
 
   it('POSTs an assessment input to :assess with no auth', async () => {
