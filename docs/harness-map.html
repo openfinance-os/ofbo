@@ -25,7 +25,9 @@
       radial-gradient(1000px 600px at -10% 110%, rgba(51,214,166,.10), transparent 55%),
       var(--bg);
     color:var(--ink); -webkit-font-smoothing:antialiased; overflow:hidden;
+    display:flex; flex-direction:column; height:100vh;
   }
+  .demo-banner,header.top,nav.tabs{flex:0 0 auto}
   .demo-banner{
     background:repeating-linear-gradient(45deg,#1a2547,#1a2547 12px,#16203f 12px,#16203f 24px);
     color:var(--amber); font-size:11px; letter-spacing:.18em; font-weight:700;
@@ -59,8 +61,8 @@
   nav.tabs button.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
   nav.tabs .count{font-size:11px;color:var(--ink-faint);margin-left:6px;font-weight:500}
 
-  .stage{position:absolute;inset:0;top:0;display:flex;overflow:hidden}
-  main{flex:1;overflow:auto;padding:24px 26px 80px;position:relative}
+  .stage{position:relative;flex:1 1 auto;min-height:0;display:flex;overflow:hidden}
+  main{flex:1;min-height:0;overflow:auto;padding:24px 26px 80px;position:relative}
   .view{display:none;animation:fade .25s ease}
   .view.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
