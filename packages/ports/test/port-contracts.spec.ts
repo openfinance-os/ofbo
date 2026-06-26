@@ -164,7 +164,7 @@ describePortContract('demo')
 describe('enterprise adapters land port-by-port (M6)', () => {
   // Reference enterprise adapters (own suites: p2-entra.spec.ts, p3-servicenow.spec.ts) — these
   // resolve to a configured adapter instead of throwing NotImplemented. The rest remain stubs.
-  const WIRED = new Set<PortName>(['p1-care-surface', 'p2-identity-provider', 'p3-itsm', 'p5-apm', 'p9-financial-system'])
+  const WIRED = new Set<PortName>(['p1-care-surface', 'p2-identity-provider', 'p3-itsm', 'p5-apm', 'p7-lineage', 'p9-financial-system'])
   const STILL_STUB = PORT_NAMES.filter((p) => !WIRED.has(p))
 
   it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
@@ -232,6 +232,21 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       process.env.P9_KONNECT_BASE_URL = 'https://billing.konnect.example'
       process.env.P9_KONNECT_AUTH = 'Bearer k'
       expect(typeof getAdapter('p9-financial-system', 'enterprise').registerCounterparty).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p7-lineage (data catalogue) is WIRED for enterprise', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P7_CATALOGUE_BASE_URL
+      delete process.env.P7_CATALOGUE_AUTH
+      expect(() => getAdapter('p7-lineage', 'enterprise')).toThrow(/P7 data-catalogue adapter misconfigured/)
+
+      process.env.P7_CATALOGUE_BASE_URL = 'https://purview.example'
+      process.env.P7_CATALOGUE_AUTH = 'Bearer pv'
+      expect(typeof getAdapter('p7-lineage', 'enterprise').emitLineage).toBe('function')
     } finally {
       process.env = saved
     }

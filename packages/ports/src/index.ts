@@ -45,3 +45,12 @@ export {
   type KongKonnectConfig,
   type KongBillingHttp
 } from './adapters/enterprise/p9-kong-konnect.js'
+export {
+  CatalogueLineageAdapter,
+  catalogueLineageFromEnv,
+  fetchCatalogueHttp,
+  CatalogueConfigError,
+  type CatalogueConfig,
+  type CatalogueHttp,
+  type CatalogueVendor
+} from './adapters/enterprise/p7-catalogue.js'
