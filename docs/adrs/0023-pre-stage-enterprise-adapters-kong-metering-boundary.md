@@ -1,6 +1,6 @@
 # ADR 0023 — Pre-stage enterprise port adapters ahead of M6; Kong Konnect metering-vs-invoicing boundary
 
-- Status: **Proposed** — awaiting human decision (a build-order deviation from M6, plus a vendor-platform boundary that touches P6/P9 and the reconcile-before-invoice control)
+- Status: **Accepted** — chosen by the user (2026-06-26). Adopts Option 1: pre-staging enterprise adapters to fidelity rung ③ under the four guardrails, and the Kong metering-input / P9-invoicing boundary.
 - Date: 2026-06-26
 - Related: PRD §3 (ports model) + §3.1 (deployment profiles & adapters); `packages/ports/src/interfaces.ts` (the nine port contracts); `packages/ports/src/registry.ts` (`getAdapter` — the single profile-selection point); `packages/ports/test/port-contracts.spec.ts` (the M6 port-swap acceptance gate); ADR 0007 (TPP-of-record payables / net settlement — same P9/reconciliation surface); ADR 0017 (agent-first MCP gateway — prior "compose, don't invent a platform" precedent); BACKOFFICE-72 (P9 counterparty registration), BACKOFFICE-73 (monthly TPP invoicing — **reconcile before invoice**); CLAUDE.md "Ports", "Deployment profiles & adapters", and rule 6 (compose, don't invent)
 
@@ -180,12 +180,18 @@ and the reconcile-before-invoice control — inside OFBO.
 
 ## Decision
 
-_Pending._ Once chosen: (a) add a backlog item recording the **build-order deviation**
-(pre-M6 adapter work) so the PRD §9 milestone order has the exception on record;
-(b) pick the first 1–2 pre-stage candidates (P3 ServiceNow / P1 Salesforce); (c) if Kong is
-in scope, raise a requirement for a Kong-metering reconciliation feed (extends BACKOFFICE-73
-step 2) and/or a Kong `NebrasEgressPort` (P6) adapter — both tests-first against
-`port-contracts.spec.ts`.
+**Accepted (2026-06-26) — Option 1.** Enterprise adapters may be pre-staged to fidelity
+rung ③ (sandbox-validated) under the four guardrails; Kong Konnect is admitted as a
+metering / P6 *input* only, with P9 invoicing and the reconcile-before-invoice control
+retained inside OFBO.
+
+Follow-ups (tracked separately, not part of this docs change):
+(a) add a backlog item recording the **build-order deviation** (pre-M6 adapter work) so the
+PRD §9 milestone order has the exception on record;
+(b) pick the first 1–2 pre-stage candidates (P3 ServiceNow / P1 Salesforce);
+(c) if Kong is in scope, raise a requirement for a Kong-metering reconciliation feed
+(extends BACKOFFICE-73 step 2) and/or a Kong `NebrasEgressPort` (P6) adapter — both
+tests-first against `port-contracts.spec.ts`.
 
 ## Consequences
 
