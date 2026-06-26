@@ -37,6 +37,23 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
     await expect(page.getByTestId('persona-login-list')).toBeVisible()
   })
 
+  test('the "how this was built" colophon opens the embedded harness map', async ({ page }) => {
+    await page.goto('/')
+    // the served map is reachable (the iframe + full-screen link target)
+    const map = await page.request.get('/harness-map.html')
+    expect(map.status()).toBe(200)
+    expect(await map.text()).toContain('Double Diamond')
+    // pre-sign-in colophon → dialog embedding the map
+    await page.getByTestId('built-with-open').click()
+    await expect(page.getByTestId('built-with-dialog')).toBeVisible()
+    await expect(page.getByTestId('harness-map-frame')).toHaveAttribute('src', '/harness-map.html')
+    await expect(page.getByTestId('built-with-full-link')).toHaveAttribute('href', '/harness-map.html')
+    // the embedded map actually renders its pipeline inside the iframe
+    await expect(page.frameLocator('[data-testid="harness-map-frame"]').locator('.pcard').first()).toBeVisible()
+    await page.getByTestId('built-with-close').click()
+    await expect(page.getByTestId('built-with-dialog')).toHaveCount(0)
+  })
+
   test('switch persona clears the session (api/logout)', async ({ page }) => {
     await login(page, 'finance-analyst')
     await page.getByTestId('switch-persona').click()
