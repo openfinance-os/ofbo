@@ -1,5 +1,6 @@
 import type { PortMap } from './interfaces.js'
 import { SIM_ADAPTERS } from './adapters/sim.js'
+import { ENTERPRISE_ADAPTERS } from './adapters/enterprise/index.js'
 import { EnterpriseAdapterNotImplementedError, type DeployProfile } from './types.js'
 
 export type PortName = keyof PortMap
@@ -19,11 +20,16 @@ export const PORT_NAMES = [
 /**
  * The ONLY place profile selection happens. Application core code calls
  * getAdapter(port, profileFromConfig()) — it never branches on the profile itself.
- * Enterprise adapters are written port-by-port at bank adoption (M6); each must
- * pass exactly the contract suite the simulator passes.
+ * Enterprise adapters are written port-by-port at bank adoption (M6), or pre-staged
+ * ahead of it per ADR 0023; either way each must pass exactly the contract suite the
+ * simulator passes. Ports with no enterprise adapter yet still throw NotImplemented.
  */
 export function getAdapter<K extends PortName>(port: K, profile: DeployProfile): PortMap[K] {
-  if (profile === 'enterprise') throw new EnterpriseAdapterNotImplementedError(port)
+  if (profile === 'enterprise') {
+    const adapter = ENTERPRISE_ADAPTERS[port]
+    if (!adapter) throw new EnterpriseAdapterNotImplementedError(port)
+    return adapter
+  }
   return SIM_ADAPTERS[port]
 }
 

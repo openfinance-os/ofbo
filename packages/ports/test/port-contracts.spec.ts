@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { PORT_NAMES, getAdapter, type PortName } from '../src/registry.js'
-import { EnterpriseAdapterNotImplementedError } from '../src/types.js'
+import { EnterpriseAdapterNotImplementedError, type DeployProfile } from '../src/types.js'
 
 const trace = { trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
+
+/** The P3 contract, factored out so the SAME assertions bind both the demo sim and the
+ *  pre-staged ServiceNow enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
+async function assertP3Contract(profile: DeployProfile) {
+  const p3 = getAdapter('p3-itsm', profile)
+  const t = await p3.createTicket(
+    { type: 'liability_threshold', severity: 'high', team: 'risk_compliance', summary: 'test' },
+    trace
+  )
+  expect(t.ticket_id).toBeTruthy()
+}
 
 /**
  * Port contract suite — binds ANY adapter behind the interface. Sim adapters run
@@ -73,12 +84,7 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P3 creates ITSM tickets with team routing', async () => {
-      const p3 = getAdapter('p3-itsm', profile)
-      const t = await p3.createTicket(
-        { type: 'liability_threshold', severity: 'high', team: 'risk_compliance', summary: 'test' },
-        trace
-      )
-      expect(t.ticket_id).toBeTruthy()
+      await assertP3Contract(profile)
     })
 
     it('P4 reads balances as binding Money', async () => {
@@ -161,12 +167,23 @@ function describePortContract(profile: 'demo') {
 
 describePortContract('demo')
 
-describe('enterprise adapters are stubs until M6', () => {
-  it.each(PORT_NAMES.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
+// Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
+// must pass EXACTLY the same port contract the sim passes.
+const PRE_STAGED: PortName[] = ['p3-itsm']
+const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
+
+describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
+  it.each(STILL_STUBBED.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
     expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
   })
-})
 
-// M6 port-swap acceptance gate: when an enterprise adapter lands, it must pass
-// EXACTLY the demo-profile suite above. Re-enable per port by calling
-// describePortContract('enterprise') once getAdapter(port, 'enterprise') resolves.
+  it('p3-itsm enterprise adapter is pre-staged and resolves (no real tenant configured)', () => {
+    expect(() => getAdapter('p3-itsm', 'enterprise')).not.toThrow()
+  })
+
+  // The port-swap acceptance gate: the pre-staged ServiceNow adapter passes the SAME P3
+  // contract the sim passes. When a port is added to PRE_STAGED, bind its contract here too.
+  it('P3 (ServiceNow enterprise) creates ITSM tickets with team routing', async () => {
+    await assertP3Contract('enterprise')
+  })
+})
