@@ -26,3 +26,8 @@ export {
   OpenLineageError,
   type OpenLineageConfig
 } from './adapters/enterprise/openlineage.js'
+export {
+  createNebrasEgressAdapter,
+  nebrasEgressFromEnv,
+  type NebrasEgressConfig
+} from './adapters/enterprise/nebras-egress.js'

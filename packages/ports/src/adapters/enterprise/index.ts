@@ -3,6 +3,7 @@ import { serviceNowItsmFromEnv } from './servicenow-itsm.js'
 import { salesforceCareSurfaceFromEnv } from './salesforce-care-surface.js'
 import { otlpApmFromEnv } from './otlp-apm.js'
 import { openLineageFromEnv } from './openlineage.js'
+import { nebrasEgressFromEnv } from './nebras-egress.js'
 
 /**
  * Pre-staged enterprise adapters (ADR 0023). Only ports written ahead of their M6 swap
@@ -18,5 +19,6 @@ export const ENTERPRISE_ADAPTERS: Partial<PortMap> = {
   'p1-care-surface': salesforceCareSurfaceFromEnv(),
   'p3-itsm': serviceNowItsmFromEnv(),
   'p5-apm': otlpApmFromEnv(),
+  'p6-nebras-egress': nebrasEgressFromEnv(),
   'p7-lineage': openLineageFromEnv()
 }

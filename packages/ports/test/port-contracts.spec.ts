@@ -35,6 +35,31 @@ async function assertP7Contract(profile: DeployProfile) {
   ).resolves.toBeUndefined()
 }
 
+/** The P6 contract (revoke SLA, dispute + deterministic directory, Ozone refund IPP status,
+ *  consent-status for drift), factored out so the SAME assertions bind both the demo sim and
+ *  the pre-staged egress-gateway adapter (ADR 0023 — the port-swap acceptance gate). */
+async function assertP6Contract(profile: DeployProfile) {
+  const p6 = getAdapter('p6-nebras-egress', profile)
+
+  const revoke = await p6.revokeConsent('consent-001', 'CLIENT_INSTRUCTION', trace)
+  expect(revoke.acknowledged_in_ms).toBeLessThan(5000) // 5s scheme SLA
+
+  const dispute = await p6.createDisputeCase({ summary: 'fee variance' }, trace)
+  expect(dispute.nebras_case_id).toBeTruthy()
+  const dir1 = await p6.syncDirectory(trace)
+  const dir2 = await p6.syncDirectory(trace)
+  expect(dir1.participants.length).toBeGreaterThan(0)
+  expect(dir1).toEqual(dir2) // deterministic for repeatable demos
+
+  const refund = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
+  expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(refund.ipp_status) // BACKOFFICE-62
+
+  const status = await p6.getConsentStatus('consent-001', trace)
+  expect(status.consent_id).toBe('consent-001')
+  expect(typeof status.status).toBe('string')
+  expect(status.status.length).toBeGreaterThan(0)
+}
+
 /** The P5 contract, factored out so the SAME assertion binds both the demo sim and the
  *  pre-staged OTLP/HTTP APM enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
 async function assertP5Contract(profile: DeployProfile) {
@@ -132,34 +157,8 @@ function describePortContract(profile: 'demo') {
       await assertP5Contract(profile)
     })
 
-    it('P6 acknowledges consent revocation within the 5s scheme SLA', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
-      const r = await p6.revokeConsent('consent-001', 'CLIENT_INSTRUCTION', trace)
-      expect(r.acknowledged_in_ms).toBeLessThan(5000)
-    })
-
-    it('P6 creates dispute cases and syncs the directory deterministically', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
-      const d = await p6.createDisputeCase({ summary: 'fee variance' }, trace)
-      expect(d.nebras_case_id).toBeTruthy()
-      const dir1 = await p6.syncDirectory(trace)
-      const dir2 = await p6.syncDirectory(trace)
-      expect(dir1.participants.length).toBeGreaterThan(0)
-      expect(dir1).toEqual(dir2) // deterministic for repeatable demos
-    })
-
-    it('P6 dispatches a refund via the Ozone Connect flow, returning an IPP status (BACKOFFICE-62)', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
-      const r = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
-      expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(r.ipp_status)
-    })
-
-    it('P6 reports a consent status for drift checks (DEMO-01)', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
-      const r = await p6.getConsentStatus('consent-001', trace)
-      expect(r.consent_id).toBe('consent-001')
-      expect(typeof r.status).toBe('string')
-      expect(r.status.length).toBeGreaterThan(0)
+    it('P6 egress: revoke SLA, dispute + deterministic directory, Ozone refund, consent status', async () => {
+      await assertP6Contract(profile)
     })
 
     it('P7 accepts column-level lineage emission', async () => {
@@ -187,7 +186,7 @@ describePortContract('demo')
 
 // Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
 // must pass EXACTLY the same port contract the sim passes.
-const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm', 'p7-lineage']
+const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm', 'p6-nebras-egress', 'p7-lineage']
 const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
 
 describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
@@ -215,5 +214,9 @@ describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', (
 
   it('P7 (OpenLineage enterprise) accepts column-level lineage emission', async () => {
     await assertP7Contract('enterprise')
+  })
+
+  it('P6 (egress-gateway enterprise) honours the full egress contract', async () => {
+    await assertP6Contract('enterprise')
   })
 })
