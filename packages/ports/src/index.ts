@@ -54,3 +54,11 @@ export {
   type CatalogueHttp,
   type CatalogueVendor
 } from './adapters/enterprise/p7-catalogue.js'
+export {
+  OnboardingHandoverAdapter,
+  onboardingHandoverFromEnv,
+  fetchOnboardingHttp,
+  OnboardingConfigError,
+  type OnboardingConfig,
+  type OnboardingHttp
+} from './adapters/enterprise/p8-onboarding.js'

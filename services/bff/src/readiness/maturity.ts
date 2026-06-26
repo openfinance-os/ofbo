@@ -47,9 +47,9 @@ const MILESTONES: MaturityMilestone[] = [
 
 // Ports that already ship a reference enterprise adapter (passes the port-swap contract suite).
 // Reference enterprise adapters that ship today: P1 CRM care (Salesforce/Dynamics), P2 Entra ID
-// (ADR 0023), P3 ServiceNow ITSM, P5 OTLP/APM, P7 data catalogue (Purview/Collibra), P9 Kong
-// Konnect billing. Grows as adapters land.
-const ENTERPRISE_READY = new Set<string>(['P1', 'P2', 'P3', 'P5', 'P7', 'P9'])
+// (ADR 0023), P3 ServiceNow ITSM, P5 OTLP/APM, P7 data catalogue (Purview/Collibra), P8 onboarding
+// handover, P9 Kong Konnect billing. Grows as adapters land.
+const ENTERPRISE_READY = new Set<string>(['P1', 'P2', 'P3', 'P5', 'P7', 'P8', 'P9'])
 
 export function getMaturity(): MaturitySummary {
   const ports: MaturityPort[] = PORTS.map((p) => ({

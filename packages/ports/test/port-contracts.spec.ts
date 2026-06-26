@@ -164,7 +164,7 @@ describePortContract('demo')
 describe('enterprise adapters land port-by-port (M6)', () => {
   // Reference enterprise adapters (own suites: p2-entra.spec.ts, p3-servicenow.spec.ts) — these
   // resolve to a configured adapter instead of throwing NotImplemented. The rest remain stubs.
-  const WIRED = new Set<PortName>(['p1-care-surface', 'p2-identity-provider', 'p3-itsm', 'p5-apm', 'p7-lineage', 'p9-financial-system'])
+  const WIRED = new Set<PortName>(['p1-care-surface', 'p2-identity-provider', 'p3-itsm', 'p5-apm', 'p7-lineage', 'p8-onboarding-handover', 'p9-financial-system'])
   const STILL_STUB = PORT_NAMES.filter((p) => !WIRED.has(p))
 
   it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
@@ -247,6 +247,21 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       process.env.P7_CATALOGUE_BASE_URL = 'https://purview.example'
       process.env.P7_CATALOGUE_AUTH = 'Bearer pv'
       expect(typeof getAdapter('p7-lineage', 'enterprise').emitLineage).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p8-onboarding-handover is WIRED for enterprise', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P8_ONBOARDING_BASE_URL
+      delete process.env.P8_ONBOARDING_AUTH
+      expect(() => getAdapter('p8-onboarding-handover', 'enterprise')).toThrow(/P8 onboarding-handover adapter misconfigured/)
+
+      process.env.P8_ONBOARDING_BASE_URL = 'https://onboarding.example'
+      process.env.P8_ONBOARDING_AUTH = 'Bearer ob'
+      expect(typeof getAdapter('p8-onboarding-handover', 'enterprise').getFunnelEvents).toBe('function')
     } finally {
       process.env = saved
     }

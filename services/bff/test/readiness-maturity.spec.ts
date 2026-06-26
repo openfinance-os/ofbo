@@ -19,8 +19,8 @@ describe('product maturity', () => {
     expect(m.ports.map((p) => p.id)).toEqual(PORTS.map((p) => p.id))
     expect(m.ports.every((p) => p.sim_status === 'ready')).toBe(true)
     expect(m.summary.sim_adapters_ready).toBe(PORTS.length)
-    // P1 CRM, P2 Entra (ADR 0023), P3 ServiceNow, P5 OTLP, P7 catalogue, P9 Kong Konnect ship adapters.
-    const ready = ['P1', 'P2', 'P3', 'P5', 'P7', 'P9']
+    // P1 CRM, P2 Entra (ADR 0023), P3 ServiceNow, P5 OTLP, P7 catalogue, P8 onboarding, P9 Kong Konnect.
+    const ready = ['P1', 'P2', 'P3', 'P5', 'P7', 'P8', 'P9']
     for (const id of ready) expect(m.ports.find((p) => p.id === id)!.enterprise_status).toBe('ready')
     expect(m.ports.filter((p) => p.enterprise_status === 'stub')).toHaveLength(PORTS.length - ready.length)
     expect(m.summary.enterprise_adapters_remaining).toBe(PORTS.length - ready.length)
@@ -40,7 +40,7 @@ describe('GET /public/readiness/maturity', () => {
     const body = (await res.json()) as { data: ReturnType<typeof getMaturity>; meta: { request_id: string } }
     expect(body.data.milestones).toHaveLength(7)
     expect(body.data.ports).toHaveLength(9)
-    expect(body.data.summary.enterprise_adapters_remaining).toBe(3) // 6 reference adapters ship (P1/P2/P3/P5/P7/P9)
+    expect(body.data.summary.enterprise_adapters_remaining).toBe(2) // 7 reference adapters ship (P1/P2/P3/P5/P7/P8/P9)
     expect(body.meta.request_id).toBeTruthy()
   })
 })

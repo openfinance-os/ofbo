@@ -6,6 +6,7 @@ import { otlpApmFromEnv } from './adapters/enterprise/p5-otlp.js'
 import { crmCareFromEnv } from './adapters/enterprise/p1-crm.js'
 import { kongKonnectFromEnv } from './adapters/enterprise/p9-kong-konnect.js'
 import { catalogueLineageFromEnv } from './adapters/enterprise/p7-catalogue.js'
+import { onboardingHandoverFromEnv } from './adapters/enterprise/p8-onboarding.js'
 import { EnterpriseAdapterNotImplementedError, type DeployProfile } from './types.js'
 
 export type PortName = keyof PortMap
@@ -34,6 +35,7 @@ const ENTERPRISE_FACTORIES: Partial<{ [K in PortName]: () => PortMap[K] }> = {
   'p3-itsm': () => serviceNowItsmFromEnv(process.env),
   'p5-apm': () => otlpApmFromEnv(process.env),
   'p7-lineage': () => catalogueLineageFromEnv(process.env),
+  'p8-onboarding-handover': () => onboardingHandoverFromEnv(process.env),
   'p9-financial-system': () => kongKonnectFromEnv(process.env)
 }
 const enterpriseCache = new Map<PortName, unknown>()
