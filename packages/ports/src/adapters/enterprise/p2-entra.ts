@@ -77,11 +77,22 @@ function hasMfa(claims: EntraClaims): boolean {
 
 function mapPersona(raw: unknown, mapping: Record<string, string>): string | null {
   const values = Array.isArray(raw) ? raw : raw == null ? [] : [raw]
+  const matched = new Set<string>()
   for (const v of values) {
-    const hit = mapping[String(v)]
-    if (hit) return hit
+    const key = String(v)
+    // OWN-property + string check: a token role named `constructor`/`toString`/… must NOT resolve
+    // to an inherited Object.prototype member (which is truthy) and bypass the reject-if-unmapped
+    // hard stop. Only an explicitly-configured string mapping counts.
+    const hit = Object.prototype.hasOwnProperty.call(mapping, key) ? mapping[key] : undefined
+    if (typeof hit === 'string' && hit) matched.add(hit)
   }
-  return null
+  if (matched.size === 0) return null
+  // Fail closed on ambiguity: if a token carries roles mapping to DIFFERENT personas, the chosen
+  // privilege would depend on claim ordering. An auth boundary must be deterministic — reject.
+  if (matched.size > 1) {
+    throw new Error(`P2: token maps to multiple OFBO personas (${[...matched].sort().join(', ')}) — ambiguous, refusing`)
+  }
+  return [...matched][0]!
 }
 
 export class EntraIdentityProviderAdapter implements IdentityProviderPort {
@@ -202,7 +213,10 @@ export class EntraIdpConfigError extends Error {
 }
 
 /** Lazily build a JWKS-backed RS256 verifier (jose) — imported only when actually used, so the
- *  demo profile (which never constructs this adapter) carries no extra weight. */
+ *  demo profile (which never constructs this adapter) carries no extra weight. `issuer` is matched
+ *  exactly (correct + stricter for a single-tenant app registration). A multi-tenant deployment,
+ *  whose tokens carry a per-tenant `{tenantid}` issuer, must instead pass a verifier that validates
+ *  the issuer against the tenant pattern — wire that as the injected verifyJwt rather than this one. */
 function joseJwksVerifier(issuer: string, clientId: string): JwtVerifier {
   let jwks: unknown
   return async (token: string) => {
@@ -222,18 +236,37 @@ export function entraIdpFromEnv(env: Record<string, string | undefined>): EntraI
   if (!issuer) throw new EntraIdpConfigError('P2_OIDC_ISSUER is required (e.g. https://login.microsoftonline.com/<tenant>/v2.0)')
   if (!clientId) throw new EntraIdpConfigError('P2_OIDC_CLIENT_ID is required (the app registration / audience)')
 
-  let personaMapping: Record<string, string>
+  let parsed: unknown
   try {
-    personaMapping = JSON.parse(env.P2_PERSONA_MAPPING ?? '') as Record<string, string>
+    parsed = JSON.parse(env.P2_PERSONA_MAPPING ?? '')
   } catch {
     throw new EntraIdpConfigError('P2_PERSONA_MAPPING must be a JSON object mapping Entra role/group → OFBO persona')
   }
-  if (!personaMapping || typeof personaMapping !== 'object' || Object.keys(personaMapping).length === 0) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new EntraIdpConfigError('P2_PERSONA_MAPPING must be a JSON object mapping Entra role/group → OFBO persona')
+  }
+  // Null-prototype, validated string→string — no inherited members, no prototype-pollution surface.
+  const personaMapping: Record<string, string> = Object.create(null)
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof v !== 'string' || !v) {
+      throw new EntraIdpConfigError('P2_PERSONA_MAPPING values must be non-empty OFBO persona strings')
+    }
+    personaMapping[k] = v
+  }
+  if (Object.keys(personaMapping).length === 0) {
     throw new EntraIdpConfigError('P2_PERSONA_MAPPING must contain at least one Entra role/group → OFBO persona entry')
   }
 
   const signingKey = env.P2_AGENT_SIGNING_KEY
   if (!signingKey) throw new EntraIdpConfigError('P2_AGENT_SIGNING_KEY is required (the agent-session signing key / bank token-service stand-in)')
+  if (signingKey.length < 32) {
+    throw new EntraIdpConfigError('P2_AGENT_SIGNING_KEY must be ≥32 chars of high-entropy secret')
+  }
+  // Reject the well-known demo key verbatim — pasting it would make enterprise agent tokens forgeable
+  // by anyone who can read the open-source simulator.
+  if (signingKey === 'ofbo-demo-agent-session-signing-key-synthetic-non-prod') {
+    throw new EntraIdpConfigError('P2_AGENT_SIGNING_KEY must not be the demo simulator key — use a unique production secret')
+  }
 
   return new EntraIdentityProviderAdapter({
     issuer,

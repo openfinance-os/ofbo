@@ -55,6 +55,23 @@ describe('P2 Entra adapter — verifyToken (human OIDC)', () => {
     await expect(valid({ ...VALID, roles: ['SomeOtherApp.User'] }).verifyToken('jwt')).rejects.toThrow(/persona/)
   })
 
+  it('rejects a reserved-key role (constructor/toString) — no inherited-property bypass', async () => {
+    for (const role of ['constructor', 'toString', 'hasOwnProperty', '__proto__']) {
+      await expect(valid({ ...VALID, roles: [role] }).verifyToken('jwt')).rejects.toThrow(/persona/)
+    }
+  })
+
+  it('fails closed when a token maps to MULTIPLE distinct personas (ambiguous privilege)', async () => {
+    await expect(valid({ ...VALID, roles: ['OFBO.Compliance', 'OFBO.SuperAdmin'] }).verifyToken('jwt')).rejects.toThrow(/ambiguous|multiple/)
+  })
+
+  it('resolves when several roles map to the SAME persona', async () => {
+    const a = adapter(async () => ({ ...VALID, roles: ['OFBO.Compliance', 'OFBO.Compliance.ReadOnly'] }), {
+      personaMapping: { 'OFBO.Compliance': 'compliance-officer', 'OFBO.Compliance.ReadOnly': 'compliance-officer' }
+    })
+    expect((await a.verifyToken('jwt')).persona).toBe('compliance-officer')
+  })
+
   it('rejects a token with no subject claim (oid/sub)', async () => {
     await expect(valid(withoutOid(VALID)).verifyToken('jwt')).rejects.toThrow(/subject/)
   })
@@ -122,19 +139,27 @@ describe('P2 Entra adapter — personaLogins + config', () => {
     expect(logins.find((l) => l.persona === 'compliance-officer')!.display_name).toBe('OF Compliance Officer')
   })
 
-  it('entraIdpFromEnv throws a clear config error when required env is missing', () => {
+  const GOOD_KEY = 'synthetic-test-signing-key-0123456789abcd' // ≥32 chars, not the demo key
+  const baseEnv = {
+    P2_OIDC_ISSUER: 'https://login.microsoftonline.com/tenant/v2.0',
+    P2_OIDC_CLIENT_ID: 'client-123',
+    P2_PERSONA_MAPPING: JSON.stringify({ 'OFBO.Compliance': 'compliance-officer' }),
+    P2_AGENT_SIGNING_KEY: GOOD_KEY
+  }
+
+  it('entraIdpFromEnv throws a clear config error when required env is missing/invalid', () => {
     expect(() => entraIdpFromEnv({})).toThrow(EntraIdpConfigError)
     expect(() => entraIdpFromEnv({ P2_OIDC_ISSUER: 'https://x/v2.0' })).toThrow(/CLIENT_ID/)
-    expect(() => entraIdpFromEnv({ P2_OIDC_ISSUER: 'https://x/v2.0', P2_OIDC_CLIENT_ID: 'c', P2_PERSONA_MAPPING: 'not json' })).toThrow(/PERSONA_MAPPING/)
+    expect(() => entraIdpFromEnv({ ...baseEnv, P2_PERSONA_MAPPING: 'not json' })).toThrow(/PERSONA_MAPPING/)
+    expect(() => entraIdpFromEnv({ ...baseEnv, P2_PERSONA_MAPPING: JSON.stringify({ 'OFBO.X': 123 }) })).toThrow(/PERSONA_MAPPING/)
+  })
+
+  it('entraIdpFromEnv rejects a weak or demo signing key (forgeability guard)', () => {
+    expect(() => entraIdpFromEnv({ ...baseEnv, P2_AGENT_SIGNING_KEY: 'too-short' })).toThrow(/32/)
+    expect(() => entraIdpFromEnv({ ...baseEnv, P2_AGENT_SIGNING_KEY: 'ofbo-demo-agent-session-signing-key-synthetic-non-prod' })).toThrow(/demo/)
   })
 
   it('entraIdpFromEnv constructs from a complete config', () => {
-    const a = entraIdpFromEnv({
-      P2_OIDC_ISSUER: 'https://login.microsoftonline.com/tenant/v2.0',
-      P2_OIDC_CLIENT_ID: 'client-123',
-      P2_PERSONA_MAPPING: JSON.stringify({ 'OFBO.Compliance': 'compliance-officer' }),
-      P2_AGENT_SIGNING_KEY: 'synthetic-test-key'
-    })
-    expect(a).toBeInstanceOf(EntraIdentityProviderAdapter)
+    expect(entraIdpFromEnv(baseEnv)).toBeInstanceOf(EntraIdentityProviderAdapter)
   })
 })

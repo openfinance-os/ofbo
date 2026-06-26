@@ -181,7 +181,7 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       process.env.P2_OIDC_ISSUER = 'https://login.microsoftonline.com/tenant/v2.0'
       process.env.P2_OIDC_CLIENT_ID = 'client-123'
       process.env.P2_PERSONA_MAPPING = JSON.stringify({ 'OFBO.Compliance': 'compliance-officer' })
-      process.env.P2_AGENT_SIGNING_KEY = 'synthetic-test-key'
+      process.env.P2_AGENT_SIGNING_KEY = 'synthetic-test-signing-key-0123456789abcd'
       const p2 = getAdapter('p2-identity-provider', 'enterprise')
       expect(typeof p2.verifyToken).toBe('function')
       expect(typeof p2.mintAgentSession).toBe('function')
