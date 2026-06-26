@@ -83,13 +83,13 @@ async function assertP5Contract(profile: DeployProfile) {
  * Port contract suite — binds ANY adapter behind the interface. Sim adapters run
  * now; the same expectations gate enterprise adapters at M6 (port-swap acceptance).
  */
-function describePortContract(profile: 'demo') {
+function describePortContract(profile: DeployProfile) {
   describe(`port contracts (${profile} profile)`, () => {
     it('P1 mints care tokens with act+sub claims and ≤15 min expiry', async () => {
       await assertP1Contract(profile)
     })
 
-    it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
+    it('P2 verifies tokens with MFA and exposes the 9 personas', async () => {
       const p2 = getAdapter('p2-identity-provider', profile)
       const personas = await p2.personaLogins()
       expect(personas).toHaveLength(9)
@@ -182,41 +182,18 @@ function describePortContract(profile: 'demo') {
   })
 }
 
+// All nine ports are now pre-staged ahead of M6 (ADR 0023), so the FULL contract suite runs
+// under the enterprise profile too — each enterprise adapter must pass EXACTLY the same
+// contract the sim passes (the port-swap acceptance gate). The fakes bind with no tenant.
 describePortContract('demo')
+describePortContract('enterprise')
 
-// Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
-// must pass EXACTLY the same port contract the sim passes.
-const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm', 'p6-nebras-egress', 'p7-lineage']
-const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
-
-describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
-  it.each(STILL_STUBBED.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
-    expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
-  })
-
-  it.each(PRE_STAGED.map((p) => [p] as const))('%s enterprise adapter is pre-staged and resolves (no real tenant configured)', (port: PortName) => {
+describe('enterprise adapters (ADR 0023 — all 9 pre-staged)', () => {
+  it.each(PORT_NAMES.map((p) => [p] as const))('%s enterprise adapter resolves (no real tenant configured)', (port: PortName) => {
     expect(() => getAdapter(port, 'enterprise')).not.toThrow()
   })
 
-  // The port-swap acceptance gate: each pre-staged adapter passes the SAME contract the
-  // sim passes. When a port joins PRE_STAGED, bind its contract assertion here too.
-  it('P1 (Salesforce enterprise) mints care tokens with act+sub claims and ≤15 min expiry', async () => {
-    await assertP1Contract('enterprise')
-  })
-
-  it('P3 (ServiceNow enterprise) creates ITSM tickets with team routing', async () => {
-    await assertP3Contract('enterprise')
-  })
-
-  it('P5 (OTLP/HTTP APM enterprise) accepts an OTel span batch', async () => {
-    await assertP5Contract('enterprise')
-  })
-
-  it('P7 (OpenLineage enterprise) accepts column-level lineage emission', async () => {
-    await assertP7Contract('enterprise')
-  })
-
-  it('P6 (egress-gateway enterprise) honours the full egress contract', async () => {
-    await assertP6Contract('enterprise')
+  it('still throws NotImplemented for a port with no enterprise adapter (mechanism retained for future ports)', () => {
+    expect(() => getAdapter('p99-future' as PortName, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
   })
 })

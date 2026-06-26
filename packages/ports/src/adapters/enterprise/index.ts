@@ -4,6 +4,10 @@ import { salesforceCareSurfaceFromEnv } from './salesforce-care-surface.js'
 import { otlpApmFromEnv } from './otlp-apm.js'
 import { openLineageFromEnv } from './openlineage.js'
 import { nebrasEgressFromEnv } from './nebras-egress.js'
+import { oidcIdentityFromEnv } from './oidc-identity.js'
+import { coreBankingFromEnv } from './core-banking.js'
+import { onboardingHandoverFromEnv } from './onboarding-handover.js'
+import { financialSystemFromEnv } from './financial-system.js'
 
 /**
  * Pre-staged enterprise adapters (ADR 0023). Only ports written ahead of their M6 swap
@@ -17,8 +21,12 @@ import { nebrasEgressFromEnv } from './nebras-egress.js'
  */
 export const ENTERPRISE_ADAPTERS: Partial<PortMap> = {
   'p1-care-surface': salesforceCareSurfaceFromEnv(),
+  'p2-identity-provider': oidcIdentityFromEnv(),
   'p3-itsm': serviceNowItsmFromEnv(),
+  'p4-core-banking': coreBankingFromEnv(),
   'p5-apm': otlpApmFromEnv(),
   'p6-nebras-egress': nebrasEgressFromEnv(),
-  'p7-lineage': openLineageFromEnv()
+  'p7-lineage': openLineageFromEnv(),
+  'p8-onboarding-handover': onboardingHandoverFromEnv(),
+  'p9-financial-system': financialSystemFromEnv()
 }

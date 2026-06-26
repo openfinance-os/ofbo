@@ -208,7 +208,7 @@ milestones:
       - { id: M6-PORT-SWAPS, title: Enterprise adapter swaps per port (bank adoption), status: blocked, reason: per-bank engagement - enterprise systems and credentials required }
       - id: M6-PRESTAGE-ADAPTERS
         title: Pre-stage enterprise port adapters ahead of M6 (ADR 0023)
-        status: in-progress
+        status: done
         adr: docs/adrs/0023-pre-stage-enterprise-adapters-kong-metering-boundary.md
         pr: 265
         note: >-
@@ -216,14 +216,15 @@ milestones:
           exception): author enterprise adapters to fidelity rung ③ (sandbox-validated against
           an in-memory fake, no tenant) AHEAD of their M6 swap, under the four guardrails —
           port-interface-only surface, the SAME port-contract suite the sim passes, all
-          bank-specifics in config/Bank Profile, never a real tenant in demo. Landed: P3
-          ServiceNow ITSM (ItsmPort), P1 Salesforce Service Cloud care surface (CareSurfacePort),
-          P5 enterprise APM via OTLP/HTTP (ApmPort), P7 data-catalogue lineage via
-          OpenLineage (LineagePort) — both vendor-neutral — and P6 Nebras egress (via the
-          bank's egress gateway, never direct; gateway holds FAPI mTLS) in
-          packages/ports/src/adapters/enterprise. Ports not yet pre-staged stay stubbed
-          (registry throws NotImplemented). Does NOT advance M6-PORT-SWAPS — the
-          tenant/OAuth/residency final mile remains the per-bank engagement.
+          bank-specifics in config/Bank Profile, never a real tenant in demo. ALL NINE ports
+          now pre-staged at rung ③ in packages/ports/src/adapters/enterprise: P1 Salesforce
+          care surface, P2 OIDC IdP, P3 ServiceNow ITSM, P4 core banking (REST), P5 enterprise
+          APM (OTLP/HTTP), P6 Nebras egress (via the bank's egress gateway, never direct —
+          gateway holds FAPI mTLS), P7 lineage (OpenLineage), P8 onboarding handover (REST),
+          P9 financial system (invoice-EXECUTION transport only — the reconcile-before-invoice
+          gate stays in OFBO). The FULL port-contract suite now runs under DEPLOY_PROFILE=
+          enterprise as well as demo. Does NOT close M6-PORT-SWAPS — the tenant/OAuth/
+          residency final mile (rung ④) remains the per-bank engagement; this is rung ③.
       - id: M6-KONG-METERING
         title: Kong Konnect metering reconciliation feed (+ optional P6 adapter) — ADR 0023 boundary
         status: blocked

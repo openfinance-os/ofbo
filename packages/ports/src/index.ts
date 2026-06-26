@@ -31,3 +31,27 @@ export {
   nebrasEgressFromEnv,
   type NebrasEgressConfig
 } from './adapters/enterprise/nebras-egress.js'
+export {
+  createOidcIdentityAdapter,
+  oidcIdentityFromEnv,
+  OidcIdentityError,
+  type OidcIdentityConfig
+} from './adapters/enterprise/oidc-identity.js'
+export {
+  createCoreBankingAdapter,
+  coreBankingFromEnv,
+  CoreBankingError,
+  type CoreBankingConfig
+} from './adapters/enterprise/core-banking.js'
+export {
+  createOnboardingHandoverAdapter,
+  onboardingHandoverFromEnv,
+  OnboardingHandoverError,
+  type OnboardingHandoverConfig
+} from './adapters/enterprise/onboarding-handover.js'
+export {
+  createFinancialSystemAdapter,
+  financialSystemFromEnv,
+  FinancialSystemError,
+  type FinancialSystemConfig
+} from './adapters/enterprise/financial-system.js'
