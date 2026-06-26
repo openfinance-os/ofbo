@@ -20,3 +20,11 @@ export {
   type ServiceNowConfig,
   type ServiceNowHttp
 } from './adapters/enterprise/p3-servicenow.js'
+export {
+  OtlpApmAdapter,
+  otlpApmFromEnv,
+  fetchOtlpHttp,
+  OtlpConfigError,
+  type OtlpConfig,
+  type OtlpHttp
+} from './adapters/enterprise/p5-otlp.js'

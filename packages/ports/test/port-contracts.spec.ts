@@ -164,7 +164,7 @@ describePortContract('demo')
 describe('enterprise adapters land port-by-port (M6)', () => {
   // Reference enterprise adapters (own suites: p2-entra.spec.ts, p3-servicenow.spec.ts) — these
   // resolve to a configured adapter instead of throwing NotImplemented. The rest remain stubs.
-  const WIRED = new Set<PortName>(['p2-identity-provider', 'p3-itsm'])
+  const WIRED = new Set<PortName>(['p2-identity-provider', 'p3-itsm', 'p5-apm'])
   const STILL_STUB = PORT_NAMES.filter((p) => !WIRED.has(p))
 
   it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
@@ -203,6 +203,20 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       process.env.P3_ASSIGNMENT_GROUP_MAP = JSON.stringify({ risk_compliance: 'grp-risk' })
       const p3 = getAdapter('p3-itsm', 'enterprise')
       expect(typeof p3.createTicket).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p5-apm is WIRED for enterprise — resolves with config, errors clearly without', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P5_OTLP_ENDPOINT
+      expect(() => getAdapter('p5-apm', 'enterprise')).toThrow(/P5 OTLP APM adapter misconfigured/)
+
+      process.env.P5_OTLP_ENDPOINT = 'https://otlp.vendor.example'
+      const p5 = getAdapter('p5-apm', 'enterprise')
+      expect(typeof p5.exportSpans).toBe('function')
     } finally {
       process.env = saved
     }
