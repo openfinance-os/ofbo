@@ -12,3 +12,11 @@ export {
   type JwtVerifier,
   type AgentTokenService
 } from './adapters/enterprise/p2-entra.js'
+export {
+  ServiceNowItsmAdapter,
+  serviceNowItsmFromEnv,
+  fetchServiceNowHttp,
+  ServiceNowConfigError,
+  type ServiceNowConfig,
+  type ServiceNowHttp
+} from './adapters/enterprise/p3-servicenow.js'

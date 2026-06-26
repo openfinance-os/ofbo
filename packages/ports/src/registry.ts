@@ -1,6 +1,7 @@
 import type { PortMap } from './interfaces.js'
 import { SIM_ADAPTERS } from './adapters/sim.js'
 import { entraIdpFromEnv } from './adapters/enterprise/p2-entra.js'
+import { serviceNowItsmFromEnv } from './adapters/enterprise/p3-servicenow.js'
 import { EnterpriseAdapterNotImplementedError, type DeployProfile } from './types.js'
 
 export type PortName = keyof PortMap
@@ -24,7 +25,8 @@ export const PORT_NAMES = [
  * memoized; a configuration error is never cached, so a fixed env retries cleanly.
  */
 const ENTERPRISE_FACTORIES: Partial<{ [K in PortName]: () => PortMap[K] }> = {
-  'p2-identity-provider': () => entraIdpFromEnv(process.env)
+  'p2-identity-provider': () => entraIdpFromEnv(process.env),
+  'p3-itsm': () => serviceNowItsmFromEnv(process.env)
 }
 const enterpriseCache = new Map<PortName, unknown>()
 

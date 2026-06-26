@@ -162,9 +162,10 @@ function describePortContract(profile: 'demo') {
 describePortContract('demo')
 
 describe('enterprise adapters land port-by-port (M6)', () => {
-  // P2 (Entra ID) is the first real enterprise adapter (ADR 0023) — it no longer throws
-  // NotImplemented; it resolves to a configured adapter (its own contract suite is p2-entra.spec.ts).
-  const STILL_STUB = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')
+  // Reference enterprise adapters (own suites: p2-entra.spec.ts, p3-servicenow.spec.ts) — these
+  // resolve to a configured adapter instead of throwing NotImplemented. The rest remain stubs.
+  const WIRED = new Set<PortName>(['p2-identity-provider', 'p3-itsm'])
+  const STILL_STUB = PORT_NAMES.filter((p) => !WIRED.has(p))
 
   it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
     expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
@@ -185,6 +186,23 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       const p2 = getAdapter('p2-identity-provider', 'enterprise')
       expect(typeof p2.verifyToken).toBe('function')
       expect(typeof p2.mintAgentSession).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p3-itsm is WIRED for enterprise — resolves with config, errors clearly without', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P3_SERVICENOW_INSTANCE_URL
+      delete process.env.P3_SERVICENOW_AUTH
+      expect(() => getAdapter('p3-itsm', 'enterprise')).toThrow(/P3 ServiceNow adapter misconfigured/)
+
+      process.env.P3_SERVICENOW_INSTANCE_URL = 'https://acme.service-now.com'
+      process.env.P3_SERVICENOW_AUTH = 'Bearer test-token'
+      process.env.P3_ASSIGNMENT_GROUP_MAP = JSON.stringify({ risk_compliance: 'grp-risk' })
+      const p3 = getAdapter('p3-itsm', 'enterprise')
+      expect(typeof p3.createTicket).toBe('function')
     } finally {
       process.env = saved
     }

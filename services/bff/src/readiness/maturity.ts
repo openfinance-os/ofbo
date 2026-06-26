@@ -46,8 +46,8 @@ const MILESTONES: MaturityMilestone[] = [
 ]
 
 // Ports that already ship a reference enterprise adapter (passes the port-swap contract suite).
-// P2 — Microsoft Entra ID — is the first (ADR 0023). Grows as reference adapters land.
-const ENTERPRISE_READY = new Set<string>(['P2'])
+// P2 — Microsoft Entra ID (ADR 0023) and P3 — ServiceNow ITSM. Grows as reference adapters land.
+const ENTERPRISE_READY = new Set<string>(['P2', 'P3'])
 
 export function getMaturity(): MaturitySummary {
   const ports: MaturityPort[] = PORTS.map((p) => ({
