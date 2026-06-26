@@ -8,5 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "jose": "^5.0.0"
   }
 }

@@ -161,9 +161,33 @@ function describePortContract(profile: 'demo') {
 
 describePortContract('demo')
 
-describe('enterprise adapters are stubs until M6', () => {
-  it.each(PORT_NAMES.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
+describe('enterprise adapters land port-by-port (M6)', () => {
+  // P2 (Entra ID) is the first real enterprise adapter (ADR 0023) — it no longer throws
+  // NotImplemented; it resolves to a configured adapter (its own contract suite is p2-entra.spec.ts).
+  const STILL_STUB = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')
+
+  it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
     expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
+  })
+
+  it('p2-identity-provider is WIRED for enterprise — resolves with config, errors clearly without', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P2_OIDC_ISSUER
+      delete process.env.P2_OIDC_CLIENT_ID
+      // Wired (not NotImplemented), but unconfigured → a clear config error, never the demo sim.
+      expect(() => getAdapter('p2-identity-provider', 'enterprise')).toThrow(/P2 Entra adapter misconfigured/)
+
+      process.env.P2_OIDC_ISSUER = 'https://login.microsoftonline.com/tenant/v2.0'
+      process.env.P2_OIDC_CLIENT_ID = 'client-123'
+      process.env.P2_PERSONA_MAPPING = JSON.stringify({ 'OFBO.Compliance': 'compliance-officer' })
+      process.env.P2_AGENT_SIGNING_KEY = 'synthetic-test-signing-key-0123456789abcd'
+      const p2 = getAdapter('p2-identity-provider', 'enterprise')
+      expect(typeof p2.verifyToken).toBe('function')
+      expect(typeof p2.mintAgentSession).toBe('function')
+    } finally {
+      process.env = saved
+    }
   })
 })
 
