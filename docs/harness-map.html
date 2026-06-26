@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OFBO Harness Map — AI-SDLC Double Diamond</title>
+<style>
+  :root{
+    --bg:#0b1020; --bg2:#0f1730; --panel:#131c38; --panel2:#1a2547;
+    --line:#26335f; --line2:#33457d;
+    --ink:#e8edfb; --ink-dim:#9aa6c9; --ink-faint:#677199;
+    --accent:#5b8cff; --accent2:#7c5bff;
+    --green:#33d6a6; --amber:#f5b14c; --red:#ff6b7d; --slate:#8aa0d8;
+    --discover:#5b8cff; --define:#7c5bff; --develop:#c45bff; --deliver:#33d6a6;
+    --gov:#f5b14c; --human:#ff8a5b;
+    --radius:14px; --shadow:0 10px 40px rgba(0,0,0,.45);
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:var(--sans); background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(124,91,255,.12), transparent 60%),
+      radial-gradient(1000px 600px at -10% 110%, rgba(51,214,166,.10), transparent 55%),
+      var(--bg);
+    color:var(--ink); -webkit-font-smoothing:antialiased; overflow:hidden;
+  }
+  .demo-banner{
+    background:repeating-linear-gradient(45deg,#1a2547,#1a2547 12px,#16203f 12px,#16203f 24px);
+    color:var(--amber); font-size:11px; letter-spacing:.18em; font-weight:700;
+    text-align:center; padding:5px; border-bottom:1px solid var(--line); text-transform:uppercase;
+  }
+  header.top{
+    display:flex; align-items:center; gap:18px; padding:16px 26px 14px;
+    border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--bg2),transparent);
+  }
+  .logo{display:flex; align-items:center; gap:13px}
+  .logo .mark{
+    width:42px;height:42px;border-radius:11px;flex:0 0 auto;
+    background:conic-gradient(from 200deg,var(--discover),var(--define),var(--develop),var(--deliver),var(--discover));
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 8px 22px rgba(91,140,255,.35);
+    position:relative;
+  }
+  .logo .mark::after{content:"";position:absolute;inset:9px;border-radius:6px;background:var(--bg);}
+  .logo h1{font-size:18px;margin:0;letter-spacing:.2px}
+  .logo .sub{font-size:12px;color:var(--ink-dim);margin-top:2px}
+  .top .spacer{flex:1}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--ink-dim)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+
+  nav.tabs{display:flex;gap:4px;padding:10px 22px 0;border-bottom:1px solid var(--line);background:var(--bg2);flex-wrap:wrap}
+  nav.tabs button{
+    background:transparent;border:0;color:var(--ink-dim);font:inherit;font-size:13.5px;font-weight:600;
+    padding:10px 16px;border-radius:10px 10px 0 0;cursor:pointer;position:relative;transition:.15s;
+  }
+  nav.tabs button:hover{color:var(--ink);background:rgba(255,255,255,.03)}
+  nav.tabs button.active{color:var(--ink);background:var(--panel)}
+  nav.tabs button.active::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px}
+  nav.tabs .count{font-size:11px;color:var(--ink-faint);margin-left:6px;font-weight:500}
+
+  .stage{position:absolute;inset:0;top:0;display:flex;overflow:hidden}
+  main{flex:1;overflow:auto;padding:24px 26px 80px;position:relative}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ---- pipeline / diamond ---- */
+  .pipe-wrap{max-width:1180px;margin:0 auto}
+  .pipe-intro{color:var(--ink-dim);font-size:13.5px;line-height:1.6;margin:0 0 18px;max-width:880px}
+  .diamond-svg{width:100%;height:auto;display:block;margin:6px 0 8px}
+  .phase-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:6px}
+  @media(max-width:900px){.phase-cards{grid-template-columns:1fr 1fr}}
+  .pcard{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:15px 15px 13px;cursor:pointer;transition:.16s;position:relative;overflow:hidden;
+  }
+  .pcard:hover{transform:translateY(-3px);border-color:var(--line2);box-shadow:var(--shadow)}
+  .pcard .bar{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .pcard h3{margin:0 0 3px;font-size:15px}
+  .pcard .kic{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-faint);font-weight:700;margin-bottom:8px}
+  .pcard p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+  .pcard .chips{margin-top:10px;display:flex;flex-wrap:wrap;gap:5px}
+  .gchip{font-size:10.5px;font-family:var(--mono);padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--slate)}
+
+  .flowline{display:flex;align-items:center;gap:10px;justify-content:center;margin:20px 0 8px;flex-wrap:wrap}
+  .gate-pill{
+    display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--gov);
+    color:var(--gov);font-size:12px;font-weight:600;padding:7px 13px;border-radius:999px;cursor:pointer;transition:.15s;
+  }
+  .gate-pill:hover{background:rgba(245,177,76,.12)}
+  .gate-pill.human{border-color:var(--human);color:var(--human)}
+  .gate-pill.human:hover{background:rgba(255,138,91,.12)}
+  .arrow{color:var(--ink-faint);font-size:18px}
+
+  /* ---- generic card grid ---- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;max-width:1180px;margin:0 auto}
+  .vhead{max-width:1180px;margin:0 auto 16px}
+  .vhead h2{margin:0 0 6px;font-size:19px}
+  .vhead p{margin:0;color:var(--ink-dim);font-size:13.5px;line-height:1.6;max-width:880px}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:15px;cursor:pointer;transition:.16s;position:relative;overflow:hidden;
+  }
+  .card:hover{transform:translateY(-3px);border-color:var(--line2);box-shadow:var(--shadow)}
+  .card .bar{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .card .id{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.04em}
+  .card h3{margin:5px 0 7px;font-size:14.5px;line-height:1.3;padding-left:8px}
+  .card p{margin:0;font-size:12.5px;color:var(--ink-dim);line-height:1.5;padding-left:8px}
+  .card .meta{margin-top:11px;display:flex;gap:6px;flex-wrap:wrap;padding-left:8px}
+  .badge{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 9px;border-radius:999px;text-transform:uppercase}
+  .b-accepted{background:rgba(51,214,166,.14);color:var(--green);border:1px solid rgba(51,214,166,.3)}
+  .b-proposed{background:rgba(245,177,76,.13);color:var(--amber);border:1px solid rgba(245,177,76,.3)}
+  .b-human{background:rgba(255,138,91,.13);color:var(--human);border:1px solid rgba(255,138,91,.3)}
+  .b-ci{background:rgba(91,140,255,.14);color:var(--accent);border:1px solid rgba(91,140,255,.3)}
+  .b-disc{background:rgba(124,91,255,.14);color:#a98bff;border:1px solid rgba(124,91,255,.3)}
+  .b-skip{background:rgba(138,160,216,.12);color:var(--slate);border:1px solid var(--line2)}
+  .section-label{max-width:1180px;margin:26px auto 12px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);font-weight:700;display:flex;align-items:center;gap:10px}
+  .section-label::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  /* ---- stats strip ---- */
+  .stats{display:flex;gap:12px;flex-wrap:wrap;max-width:1180px;margin:0 auto 22px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 16px;min-width:120px}
+  .stat .n{font-size:22px;font-weight:700;font-family:var(--mono)}
+  .stat .l{font-size:11px;color:var(--ink-dim);margin-top:2px}
+
+  /* ---- detail drawer ---- */
+  .drawer-scrim{position:absolute;inset:0;background:rgba(4,8,20,.55);backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:.2s;z-index:40}
+  .drawer-scrim.open{opacity:1;pointer-events:auto}
+  aside.drawer{
+    position:absolute;top:0;right:0;bottom:0;width:min(480px,92vw);background:var(--bg2);
+    border-left:1px solid var(--line2);box-shadow:-20px 0 60px rgba(0,0,0,.5);
+    transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);z-index:41;
+    display:flex;flex-direction:column;
+  }
+  aside.drawer.open{transform:none}
+  .drawer-head{padding:20px 22px 16px;border-bottom:1px solid var(--line);position:relative}
+  .drawer-head .kic{font-size:11px;text-transform:uppercase;letter-spacing:.16em;font-weight:700;margin-bottom:7px}
+  .drawer-head h2{margin:0;font-size:19px;line-height:1.25}
+  .drawer-head .x{position:absolute;top:16px;right:16px;width:30px;height:30px;border:1px solid var(--line2);background:var(--panel);
+    border-radius:8px;color:var(--ink-dim);cursor:pointer;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .drawer-head .x:hover{color:var(--ink);background:var(--panel2)}
+  .drawer-body{padding:18px 22px 40px;overflow:auto;font-size:13.5px;line-height:1.65;color:var(--ink-dim)}
+  .drawer-body h4{color:var(--ink);font-size:12px;text-transform:uppercase;letter-spacing:.12em;margin:20px 0 8px}
+  .drawer-body h4:first-child{margin-top:0}
+  .drawer-body p{margin:0 0 11px}
+  .drawer-body code{font-family:var(--mono);font-size:12px;background:var(--panel);padding:1.5px 6px;border-radius:5px;color:var(--slate);border:1px solid var(--line)}
+  .drawer-body ul{margin:0 0 12px;padding-left:18px}
+  .drawer-body li{margin:4px 0}
+  .drawer-body .pathline{font-family:var(--mono);font-size:11.5px;color:var(--accent);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 11px;margin:4px 0 14px;word-break:break-all}
+  .kv{display:flex;gap:10px;margin:6px 0;font-size:12.5px}
+  .kv .k{color:var(--ink-faint);min-width:88px;font-weight:600}
+  .kv .v{color:var(--ink)}
+  .rel{display:inline-block;font-size:11px;font-family:var(--mono);background:var(--panel);border:1px solid var(--line2);border-radius:6px;padding:3px 8px;margin:3px 5px 3px 0;cursor:pointer;color:var(--slate)}
+  .rel:hover{color:var(--ink);border-color:var(--accent)}
+  .hint{font-size:11.5px;color:var(--ink-faint);text-align:center;padding:14px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="demo-banner">Demo · Synthetic data only · Harness governance map — not OFBO product data</div>
+<header class="top">
+  <div class="logo">
+    <div class="mark"></div>
+    <div>
+      <h1>OFBO Harness Map</h1>
+      <div class="sub">The AI-SDLC Double Diamond — discovery → develop → deliver, with its gates &amp; governance</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="legend">
+    <span><i style="background:var(--discover)"></i>Discover</span>
+    <span><i style="background:var(--define)"></i>Define</span>
+    <span><i style="background:var(--develop)"></i>Develop</span>
+    <span><i style="background:var(--deliver)"></i>Deliver</span>
+    <span><i style="background:var(--gov)"></i>Gate</span>
+    <span><i style="background:var(--human)"></i>Human</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs"></nav>
+
+<div class="stage">
+  <main id="main"></main>
+  <div class="drawer-scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head">
+      <div class="kic" id="dKic"></div>
+      <h2 id="dTitle"></h2>
+      <div class="x" id="dClose">✕</div>
+    </div>
+    <div class="drawer-body" id="dBody"></div>
+  </aside>
+</div>
+
+<script>
+/* ============================================================= DATA ===
+   Every node below is sourced from the live repo:
+   .claude/skills/*, .claude/agents/*, scripts/*.mjs (D-gates),
+   .github/workflows/ci.yml (Q-gates), docs/governance/HG-*.md, CLAUDE.md
+   ===================================================================== */
+const C={discover:'var(--discover)',define:'var(--define)',develop:'var(--develop)',deliver:'var(--deliver)',gov:'var(--gov)',human:'var(--human)',ci:'var(--accent)'};
+
+const PHASES=[
+  {id:'discover',color:C.discover,kicker:'Left diamond · diverge',title:'Discover',skill:'discovery',
+   blurb:'Frame the problem and gather evidence before any solution exists. Widen the aperture: signals, stakeholders, lived friction — no fixes yet.',
+   gates:['D1','D2','D3','D4'],
+   body:`<h4>What runs</h4><p>The <code>discovery</code> skill walks Discover → Define → Prototype → hand-off, emitting gate-clean, brand-conformant artifacts under <code>discovery/runs/&lt;slug&gt;/</code>.</p>
+   <h4>Diverge discipline</h4><p>This half deliberately resists solutioning. <code>D4</code> is the tripwire — naming a fix here fails the gate. The output is a sharpened <em>problem</em>, not a plan.</p>
+   <h4>Artifacts</h4><div class="pathline">problem-statement.md · research-log.md · evidence/ · synthesis.md</div>
+   <h4>Gates on this phase</h4>`,
+   rels:[['gate','D1'],['gate','D2'],['gate','D3'],['gate','D4'],['skill','discovery']]},
+  {id:'define',color:C.define,kicker:'Left diamond · converge',title:'Define',skill:'discovery',
+   blurb:'Converge the evidence into a feasible, governed, tangible frame — then hand off. A low-fi prototype is shown to real stakeholders and their reactions are logged.',
+   gates:['D5','D6','D7','D8','D9'],
+   body:`<h4>What runs</h4><p>Still the <code>discovery</code> skill: synthesis integrity, data-governance feasibility against the mounted data-risk register, brand conformance, a tangible prototype, and the validation loop.</p>
+   <h4>The make-tangible loop (D9)</h4><p>A prototype shown to no one fails. <code>stakeholder-reaction.md</code> logs a verdict per framing hypothesis; each reaction becomes a signal feeding <code>D2</code> on the next pass.</p>
+   <h4>Output</h4><div class="pathline">handoff.md (+ .docx / .html) → consumed by the waist gate</div>
+   <h4>Gates on this phase</h4>`,
+   rels:[['gate','D5'],['gate','D6'],['gate','D7'],['gate','D8'],['gate','D9'],['gate','WAIST'],['skill','discovery'],['skill','brand-render']]},
+  {id:'develop',color:C.develop,kicker:'Right diamond · diverge',title:'Develop',skill:'develop',
+   blurb:'Explore several solution DIRECTIONS in parallel, judge them against the success measures and inherited data-governance conditions, then converge on one. No code, no spec edits.',
+   gates:['WAIST'],
+   body:`<h4>What runs</h4><p>The <code>develop</code> skill (HG-0009) takes a gate-green hand-off, fans out 3–4 solution directions via AI, scores them against success measures + inherited D6 conditions + hard-stops, and converges.</p>
+   <h4>Why it exists</h4><p>Before this, the right diamond was a straight line — discovery handed straight to delivery with no solution exploration. Develop restores the diverge.</p>
+   <h4>Output</h4><div class="pathline">docs/develop/&lt;slug&gt;.md (Solution Direction Record) + a discovery-linked backlog item</div>
+   <h4>Boundary</h4><p>Authors no code; never touches <code>specs/backoffice-openapi.yaml</code>.</p>`,
+   rels:[['gov','HG-0009'],['skill','develop'],['gate','WAIST']]},
+  {id:'deliver',color:C.deliver,kicker:'Right diamond · converge',title:'Deliver',skill:'next-story',
+   blurb:'The autonomous build loop: pick the next eligible backlog item, build it spec-first to green gates, open a PR — and stop for a human to merge.',
+   gates:['Q1','Q1b','Q2','Q2b','Q3i','Q3e','Q4','Q45'],
+   body:`<h4>What runs</h4><p>The <code>next-story</code> loop (or <code>implement-story</code> for a named requirement). One backlog item per session/branch, contract-tests-first, implement to green, ≥80% coverage.</p>
+   <h4>Pre-merge screen</h4><p>Two reviewer subagents — <code>hard-stop-reviewer</code> and <code>contract-conformance-reviewer</code> — must PASS. They are an aid, never the control of record.</p>
+   <h4>The stop (HG-0001)</h4><p>On green CI + both reviewers clean, the loop pushes, opens the PR, requests review, and <strong>stops</strong>. It never self-merges — a human disposes.</p>
+   <h4>Quality gates</h4>`,
+   rels:[['gov','HG-0001'],['skill','next-story'],['skill','implement-story'],['skill','spec-change'],['agent','hard-stop-reviewer'],['agent','contract-conformance-reviewer'],['gate','HUMAN']]},
+];
+
+const GATES={
+  // discovery gates
+  D1:{kind:'disc',name:'Problem framing',phase:'Discover',blurb:'A discovery run must declare a success measure — what "better" means, before any fix.',fail:'Fails without a success measure.',src:'scripts discovery validator'},
+  D2:{kind:'disc',name:'Evidence',phase:'Discover',blurb:'Every cited signal must resolve to a defined evidence entry. Stakeholder reactions (D9) re-enter here.',fail:'Fails when a cited signal is undefined.'},
+  D3:{kind:'disc',name:'Scope & stakeholders',phase:'Discover',blurb:'The run must name its stakeholders and scope boundaries.',fail:'Fails without stakeholders.'},
+  D4:{kind:'disc',name:'No-solutioning boundary',phase:'Discover',blurb:'The diverge guard: discovery frames problems, it does not prescribe solutions. Partly enforced by keyword matching, backstopped by the discovery-boundary-reviewer.',fail:'Fails when a solution is prescribed in the problem space.',rels:[['agent','discovery-boundary-reviewer']]},
+  D5:{kind:'disc',name:'Synthesis integrity',phase:'Define',blurb:'Synthesis must trace cleanly back to evidence — no conclusions invented at the converge step.'},
+  D6:{kind:'disc',name:'Data-governance feasibility',phase:'Define',blurb:'Referential integrity of data-governance.md against the mounted data-risk register. Degrades to skip on a seam-less run.',skip:true,rels:[['agent','data-governance-reviewer'],['gov','HG-0008']]},
+  D7:{kind:'disc',name:'Brand conformance',phase:'Define',blurb:'Every visual/markdown artifact declares its design_profile and uses only brand tokens — no raw hex/font literals.',rels:[['skill','brand-render']]},
+  D8:{kind:'disc',name:'Tangibility (prototype)',phase:'Define',blurb:'A prototype must exist — the frame is made tangible, not left abstract.',skip:true},
+  D9:{kind:'disc',name:'Validation loop',phase:'Define',blurb:'Make-tangible closes: D8 proves a prototype was built; D9 proves someone reacted to it. Reactions feed D2. A prototype shown to no one fails.',skip:true,rels:[['gov','HG-0007']]},
+  WAIST:{kind:'gov',name:'Discovery → delivery waist gate',phase:'Hand-off',blurb:'A pending feature item must carry discovery: <slug> resolving to a gate-green hand-off (escape hatch: discovery_exempt:true + reason). Makes a green hand-off the entry condition for delivery.',rels:[['gov','HG-0007'],['skill','next-story']]},
+  // CI quality gates
+  Q1:{kind:'ci',name:'Q1 — build + unit',phase:'CI',blurb:'Build and unit tests; also verifies generated artifacts are committed and current.'},
+  Q1b:{kind:'ci',name:'Q1b — test integrity',phase:'CI',blurb:'Anti-reward-hacking: blocks reaching green by weakening or deleting tests.'},
+  Q2:{kind:'ci',name:'Q2 — static analysis + SAST',phase:'CI',blurb:'Lint/static analysis plus semgrep SAST.'},
+  Q2b:{kind:'ci',name:'Q2b — documentation integrity',phase:'CI',blurb:'Anti-drift: doc references, ADR numbering, no broken links.'},
+  Q3i:{kind:'ci',name:'Q3 — integration + contract',phase:'CI',blurb:'Integration tests against real stores + OpenAPI contract conformance.'},
+  Q3e:{kind:'ci',name:'Q3 — portal E2E (Playwright)',phase:'CI',blurb:'End-to-end portal tests; boots the Nebras sim + BFF + portal.'},
+  Q4:{kind:'ci',name:'Q4 — security + dependency scan',phase:'CI',blurb:'Security review, production dependency scan, secrets scan.'},
+  Q45:{kind:'ci',name:'Q4.5 — BCBS 239 lineage',phase:'CI',blurb:'Data-lineage validation — every story emits lineage as part of its Definition of Done.'},
+  DISC:{kind:'ci',name:'Discovery — D1–D9 + waist',phase:'CI',blurb:'Runs the harness unit tests, validates every discovery run through D1–D9, and enforces the backlog↔hand-off waist gate.'},
+  Q5:{kind:'human',name:'Q5 — manual prod approval',phase:'Deploy',blurb:'Human production-release approval — the deploy-side four-eyes. Pairs with HG-0005 (promotion + prod gate + rollback).',rels:[['gov','HG-0005'],['gov','HG-0001']]},
+  HUMAN:{kind:'human',name:'Human merge gate',phase:'Merge',blurb:'HG-0001: the loop opens a PR and stops. A human — not the agent, not its AI reviewers — merges. Enforcement of record is native branch protection + CODEOWNERS on main (the bank\'s config step).',rels:[['gov','HG-0001'],['gov','HG-0002']]},
+};
+
+const GOV={
+  'HG-0001':{status:'accepted',title:'Human four-eyes on merges & deploys',gap:'Self-merge / no human four-eyes',
+    decision:'The loop authors and verifies; a human disposes. The agent never merges its own feature/infra work — AI reviewing AI is not four-eyes for a regulated production change. next-story stops at "PR opened, gates green, reviewers PASS." Branch protection + CODEOWNERS remain the bank\'s config step.',
+    rels:[['gate','HUMAN'],['skill','next-story'],['gov','HG-0002'],['gov','HG-0005']]},
+  'HG-0002':{status:'proposed',title:'Immutable control plane',gap:'Agent can edit its own guardrails',
+    decision:'CODEOWNERS + managed settings + protected CI so the agent cannot relax the controls that govern it, including supply-chain integrity. The enforcement substrate the other HG records rely on.',
+    rels:[['gov','HG-0001'],['gate','WAIST'],['gate','HUMAN']]},
+  'HG-0003':{status:'proposed',title:'Externally-anchored traceability',gap:'Self-attested change records',
+    decision:'Tamper-evident change records anchored outside the agent\'s reach — a self-written audit trail is not a control.',rels:[]},
+  'HG-0004':{status:'proposed',title:'Least-privilege agent identity + vaulted secrets',gap:'Broad agent credentials / secrets on disk',
+    decision:'Scoped service identity and vaulted secrets in place of broad credentials sitting on disk.',rels:[]},
+  'HG-0005':{status:'proposed',title:'Promotion + human prod gate + rollback',gap:'Auto-deploy, no promotion/rollback',
+    decision:'dev → staging → prod promotion with a separate human production gate and a rollback path.',rels:[['gate','Q5'],['gov','HG-0001']]},
+  'HG-0006':{status:'proposed',title:'AI/model-risk governance (SR 11-7-equivalent)',gap:'The agent is an ungoverned model',
+    decision:'Model-risk governance for the harness itself — the agent is a model under management, not an unmanaged actor.',rels:[]},
+  'HG-0007':{status:'accepted',title:'Discovery precedes delivery (the waist gate)',gap:'Delivery built the wrong thing / no problem trace',
+    decision:'A gated left-diamond (D1–D9) feeds delivery via a hand-off. A waist gate makes a green hand-off the entry condition for a pending feature item. Triggers on explicit status:pending only — shipped items are grandfathered.',
+    rels:[['gate','WAIST'],['gate','D9'],['skill','discovery'],['gov','HG-0009']]},
+  'HG-0008':{status:'proposed',title:'Solution-agnostic seams',gap:'Domain content hard-coded into the harness',
+    decision:'The data-risk register (D6) and the design.md brand profile (D7) are mounted, not embedded — the harness stays domain-neutral.',rels:[['gate','D6'],['gate','D7'],['skill','brand-render']]},
+  'HG-0009':{status:'accepted',title:'Develop diverges before delivery converges',gap:'Right diamond was a straight line',
+    decision:'Develop diverges before delivery converges — explore N solution directions, judge, converge to a Solution Direction Record + the discovery-linked backlog item.',
+    rels:[['skill','develop'],['gov','HG-0007'],['gate','WAIST']]},
+};
+
+const SKILLS={
+  discovery:{role:'phase',title:'discovery',blurb:'Left half of the Double Diamond — Discover → Define → Prototype → hand-off. Produces gate-clean artifacts under discovery/runs/<slug>/.',rels:[['phase','discover'],['phase','define'],['gate','D1'],['gate','D9']]},
+  develop:{role:'phase',title:'develop',blurb:'Right-diamond diverge. Explores solution directions in parallel, judges, converges to an SDR + a discovery-linked backlog item. No code, no spec edits.',rels:[['phase','develop'],['gov','HG-0009']]},
+  'next-story':{role:'loop',title:'next-story',blurb:'Body of the autonomous build loop. Picks the next eligible backlog item, builds to green, opens a PR for human merge — never self-merges (HG-0001).',rels:[['phase','deliver'],['gov','HG-0001'],['gate','WAIST']]},
+  'implement-story':{role:'loop',title:'implement-story',blurb:'Single named BACKOFFICE-NN requirement — one story, one branch, spec-first.',rels:[['phase','deliver']]},
+  'spec-change':{role:'support',title:'spec-change',blurb:'For when specs/backoffice-openapi.yaml is wrong or conflicts with conventions — change the spec via PR first, then tests, then code.',rels:[['phase','deliver']]},
+  'run-ofbo':{role:'support',title:'run-ofbo',blurb:'Build, run and drive the demo-profile services locally — BFF (8787) + Nebras simulator (8788). Inject faults, smoke-test, verify contract.',rels:[]},
+  'brand-render':{role:'support',title:'brand-render',blurb:'On-brand docs, decks and static wireframes rendered entirely against discovery/brand/design.md — zero external design-tool dependency.',rels:[['gate','D7'],['gov','HG-0008']]},
+};
+
+const AGENTS={
+  'hard-stop-reviewer':{title:'hard-stop-reviewer',blurb:'Reviews a diff/branch for OFBO regulatory hard-stop violations before a PR — scope-matrix breaches, audit mutability, PII, egress, four-eyes, profile branching.',rels:[['phase','deliver']]},
+  'contract-conformance-reviewer':{title:'contract-conformance-reviewer',blurb:'Reviews endpoints against specs/backoffice-openapi.yaml and the binding API conventions — catches spec drift contract tests never covered.',rels:[['phase','deliver']]},
+  'discovery-boundary-reviewer':{title:'discovery-boundary-reviewer',blurb:'Reviews a discovery run for the two boundaries gates only partly enforce — the no-solutioning line (D4) and prototype fidelity (D8/D9).',rels:[['gate','D4'],['phase','discover']]},
+  'data-governance-reviewer':{title:'data-governance-reviewer',blurb:'Reviews a run\'s data-governance.md against the data-risk register for control coverage and residual-risk soundness — coverage judgement D6 can\'t make mechanically.',rels:[['gate','D6'],['phase','define']]},
+};
+
+const PORTS=[
+  ['P1','Customer-care surface'],['P2','Enterprise IdP (OIDC)'],['P3','ITSM / alerting'],
+  ['P4','Core banking adapter'],['P5','Enterprise APM'],['P6','Enterprise egress gateway (all Nebras-bound traffic)'],
+  ['P7','Data catalogue (lineage)'],['P8','Onboarding handover'],['P9','Financial management system (TPP registration + invoicing)'],
+];
+const MILES=[
+  ['M0','Foundation'],['M1','Substrate + demo deployment live'],['M2','Customer Care (E2) — first feature'],
+  ['M3','Reconciliation (E1)'],['M4','Analytics (E3)'],['M5','Hardening'],['M6','Enterprise port-swaps'],
+];
+const BACKLOG=[['135','done'],['2','pending'],['1','in-progress'],['2','blocked'],['1','superseded']];
+
+/* ===================================================== RENDER ======== */
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const TABS=[['pipeline','Pipeline'],['gates','Gates'],['governance','Governance'],['skills','Skills & agents'],['platform','Ports & milestones']];
+let cur='pipeline';
+
+function buildTabs(){
+  const counts={pipeline:'4 phases',gates:Object.keys(GATES).length+' gates',governance:Object.keys(GOV).length+' records',skills:Object.keys(SKILLS).length+' / '+Object.keys(AGENTS).length,platform:'9 / 7'};
+  const n=$('#tabs');
+  TABS.forEach(([id,label])=>{
+    const b=el('button',id===cur?'active':'',label+`<span class="count">${counts[id]||''}</span>`);
+    b.onclick=()=>{cur=id;closeDrawer();render();};
+    n.appendChild(b);
+  });
+}
+function setTab(){document.querySelectorAll('#tabs button').forEach((b,i)=>b.classList.toggle('active',TABS[i][0]===cur));}
+
+function render(){
+  setTab();
+  const m=$('#main'); m.innerHTML='';
+  if(cur==='pipeline')renderPipeline(m);
+  else if(cur==='gates')renderGates(m);
+  else if(cur==='governance')renderGov(m);
+  else if(cur==='skills')renderSkills(m);
+  else renderPlatform(m);
+}
+
+/* ---- pipeline ---- */
+function renderPipeline(m){
+  const w=el('div','pipe-wrap');
+  w.appendChild(el('p','pipe-intro','The harness runs problems through a full <b>Double Diamond</b>. The left diamond (Discover ▸ Define) widens then narrows on the <i>problem</i>; the right diamond (Develop ▸ Deliver) widens then narrows on the <i>solution</i>. Two human-anchored gates sit on the joints: the <b style="color:var(--gov)">waist gate</b> guards entry to delivery, the <b style="color:var(--human)">human merge gate</b> guards entry to main. Click any phase, gate, or pill.'));
+  w.insertAdjacentHTML('beforeend', diamondSVG());
+
+  // flow of gates between phases
+  const fl=el('div','flowline');
+  fl.appendChild(gatePill('WAIST','◇ waist gate · HG-0007',false));
+  fl.appendChild(el('span','arrow','→'));
+  fl.appendChild(gatePill('HUMAN','✋ human merge · HG-0001',true));
+  fl.appendChild(el('span','arrow','→'));
+  fl.appendChild(gatePill('Q5','✋ prod approval · HG-0005',true));
+  w.appendChild(fl);
+
+  const pc=el('div','phase-cards');
+  PHASES.forEach(p=>{
+    const card=el('div','pcard');
+    card.appendChild(el('div','bar','')).style.background=p.color;
+    card.appendChild(el('div','kic',p.kicker)).style.color=p.color;
+    card.appendChild(el('h3',null,p.title));
+    card.appendChild(el('p',null,p.blurb));
+    const chips=el('div','chips');
+    p.gates.forEach(g=>{const c=el('span','gchip',g==='WAIST'?'◇ waist':(GATES[g]?(g):g));chips.appendChild(c);});
+    chips.appendChild(Object.assign(el('span','gchip'),{innerHTML:'⚙ '+p.skill}));
+    card.appendChild(chips);
+    card.onclick=()=>openPhase(p.id);
+    pc.appendChild(card);
+  });
+  w.appendChild(pc);
+  m.appendChild(w);
+}
+function gatePill(gid,label,human){const p=el('div','gate-pill'+(human?' human':''),label);p.onclick=()=>openGate(gid);return p;}
+
+function diamondSVG(){
+  // two diamonds side by side
+  return `<svg class="diamond-svg" viewBox="0 0 1160 240" role="img" aria-label="Double Diamond">
+   <defs>
+     <linearGradient id="gL" x1="0" x2="1"><stop offset="0" stop-color="#5b8cff"/><stop offset="1" stop-color="#7c5bff"/></linearGradient>
+     <linearGradient id="gR" x1="0" x2="1"><stop offset="0" stop-color="#c45bff"/><stop offset="1" stop-color="#33d6a6"/></linearGradient>
+   </defs>
+   <!-- left diamond -->
+   <polygon points="40,120 300,30 560,120 300,210" fill="none" stroke="url(#gL)" stroke-width="2.2" opacity=".9"/>
+   <!-- right diamond -->
+   <polygon points="600,120 860,30 1120,120 860,210" fill="none" stroke="url(#gR)" stroke-width="2.2" opacity=".9"/>
+   <!-- waist connector -->
+   <line x1="560" y1="120" x2="600" y2="120" stroke="#f5b14c" stroke-width="3" stroke-dasharray="2 4"/>
+   <circle cx="580" cy="120" r="7" fill="#0b1020" stroke="#f5b14c" stroke-width="2"/>
+   <text x="580" y="148" text-anchor="middle" fill="#f5b14c" font-size="11" font-family="monospace">waist</text>
+   <!-- end gate -->
+   <circle cx="1120" cy="120" r="7" fill="#0b1020" stroke="#ff8a5b" stroke-width="2"/>
+   <text x="1120" y="148" text-anchor="middle" fill="#ff8a5b" font-size="11" font-family="monospace">merge</text>
+   <!-- labels -->
+   <text x="170" y="118" text-anchor="middle" fill="#9aa6c9" font-size="13" font-family="sans-serif">Discover</text>
+   <text x="430" y="118" text-anchor="middle" fill="#9aa6c9" font-size="13" font-family="sans-serif">Define</text>
+   <text x="730" y="118" text-anchor="middle" fill="#9aa6c9" font-size="13" font-family="sans-serif">Develop</text>
+   <text x="990" y="118" text-anchor="middle" fill="#9aa6c9" font-size="13" font-family="sans-serif">Deliver</text>
+   <text x="300" y="22" text-anchor="middle" fill="#67719a" font-size="10.5" font-family="monospace">PROBLEM SPACE</text>
+   <text x="860" y="22" text-anchor="middle" fill="#67719a" font-size="10.5" font-family="monospace">SOLUTION SPACE</text>
+   <text x="300" y="230" text-anchor="middle" fill="#67719a" font-size="10" font-family="monospace">D1·D2·D3·D4 → D5·D6·D7·D8·D9</text>
+   <text x="860" y="230" text-anchor="middle" fill="#67719a" font-size="10" font-family="monospace">SDR + backlog item → Q1–Q4.5 → PR</text>
+  </svg>`;
+}
+
+/* ---- gates ---- */
+function renderGates(m){
+  m.appendChild(vhead('Gates','Two gate families guard the pipeline. <b>Discovery gates (D1–D9)</b> validate each discovery run; the <b>waist gate</b> joins the diamonds; <b>CI quality gates (Q1–Q4.5)</b> guard delivery; and two <b>human gates</b> guard merge and prod. A failed gate blocks merge.'));
+  m.appendChild(statRow([['9','Discovery (D1–D9)'],['9','CI quality (Q*)'],['2','Human gates'],['1','Waist gate']]));
+  section(m,'Discovery gates · D1–D9 (left diamond)');
+  grid(m,['D1','D2','D3','D4','D5','D6','D7','D8','D9'].map(id=>gateCard(id)));
+  section(m,'The waist · discovery → delivery');
+  grid(m,[gateCard('WAIST')]);
+  section(m,'CI quality gates · per release');
+  grid(m,['Q1','Q1b','DISC','Q2','Q2b','Q3i','Q3e','Q4','Q45'].map(id=>gateCard(id)));
+  section(m,'Human gates · disposition');
+  grid(m,['HUMAN','Q5'].map(id=>gateCard(id)));
+}
+function gateCard(id){
+  const g=GATES[id]; const c=el('div','card');
+  const col=g.kind==='disc'?C.define:g.kind==='ci'?C.ci:g.kind==='gov'?C.gov:C.human;
+  c.appendChild(el('div','bar')).style.background=col;
+  c.appendChild(el('div','id',id));
+  c.appendChild(el('h3',null,g.name));
+  c.appendChild(el('p',null,g.blurb));
+  const meta=el('div','meta');
+  meta.appendChild(el('span','badge '+(g.kind==='disc'?'b-disc':g.kind==='ci'?'b-ci':g.kind==='human'?'b-human':'b-proposed'),g.phase));
+  if(g.skip)meta.appendChild(el('span','badge b-skip','can skip'));
+  c.appendChild(meta);
+  c.onclick=()=>openGate(id);
+  return c;
+}
+
+/* ---- governance ---- */
+function renderGov(m){
+  m.appendChild(vhead('Harness governance (HG-*)','Decision records for how the AI-driven build/deploy harness <i>itself</i> is governed — change management, separation of duties, model risk. Unifying principle: <b>AI proposes; humans and a protected control plane dispose.</b> Prompted by the 2026-06-20 bank-readiness review.'));
+  const acc=Object.entries(GOV).filter(([,g])=>g.status==='accepted');
+  const prop=Object.entries(GOV).filter(([,g])=>g.status==='proposed');
+  m.appendChild(statRow([[acc.length+'','Accepted (wired in-repo)'],[prop.length+'','Proposed (bank decision)'],['9','Total records']]));
+  section(m,'Accepted · mechanism wired in the repo');
+  grid(m,acc.map(([id])=>govCard(id)));
+  section(m,'Proposed · awaiting bank change / risk governance');
+  grid(m,prop.map(([id])=>govCard(id)));
+}
+function govCard(id){
+  const g=GOV[id]; const c=el('div','card');
+  c.appendChild(el('div','bar')).style.background=g.status==='accepted'?C.deliver:C.gov;
+  c.appendChild(el('div','id',id));
+  c.appendChild(el('h3',null,g.title));
+  c.appendChild(el('p',null,'<b style="color:var(--ink-dim)">Gap:</b> '+g.gap));
+  const meta=el('div','meta');
+  meta.appendChild(el('span','badge '+(g.status==='accepted'?'b-accepted':'b-proposed'),g.status));
+  c.appendChild(meta);
+  c.onclick=()=>openGov(id);
+  return c;
+}
+
+/* ---- skills & agents ---- */
+function renderSkills(m){
+  m.appendChild(vhead('Skills &amp; reviewer agents','<b>Skills</b> are the harness\'s executable phases and loops. <b>Reviewer subagents</b> are the pre-merge / pre-hand-off screens — aids, never the control of record.'));
+  section(m,'Phase & loop skills');
+  grid(m,['discovery','develop','next-story','implement-story'].map(id=>skillCard(id)));
+  section(m,'Support skills');
+  grid(m,['spec-change','run-ofbo','brand-render'].map(id=>skillCard(id)));
+  section(m,'Reviewer subagents');
+  grid(m,Object.keys(AGENTS).map(id=>agentCard(id)));
+}
+function skillCard(id){
+  const s=SKILLS[id]; const c=el('div','card');
+  c.appendChild(el('div','bar')).style.background=s.role==='phase'?C.develop:s.role==='loop'?C.deliver:C.slate;
+  c.appendChild(el('div','id','/'+id));
+  c.appendChild(el('h3',null,s.title));
+  c.appendChild(el('p',null,s.blurb));
+  const meta=el('div','meta'); meta.appendChild(el('span','badge b-disc',s.role));
+  c.appendChild(meta);
+  c.onclick=()=>openEntity('skill',id);
+  return c;
+}
+function agentCard(id){
+  const a=AGENTS[id]; const c=el('div','card');
+  c.appendChild(el('div','bar')).style.background=C.amber;
+  c.appendChild(el('div','id','@'+id));
+  c.appendChild(el('h3',null,a.title));
+  c.appendChild(el('p',null,a.blurb));
+  const meta=el('div','meta'); meta.appendChild(el('span','badge b-proposed','reviewer'));
+  c.appendChild(meta);
+  c.onclick=()=>openEntity('agent',id);
+  return c;
+}
+
+/* ---- platform ---- */
+function renderPlatform(m){
+  m.appendChild(vhead('Ports &amp; milestones','The OFBO product is bank-neutral: institution-specific systems are <b>ports</b> (code against the interface, the bank\'s mapping is config). The harness builds the product along a fixed <b>milestone</b> order.'));
+  section(m,'Backlog state');
+  m.appendChild(statRow(BACKLOG.map(([n,l])=>[n,l])));
+  section(m,'Ports · P1–P9 (PRD §3) — two adapters each: sim + enterprise');
+  const pg=el('div','grid');
+  PORTS.forEach(([id,name])=>{
+    const c=el('div','card');c.style.cursor='default';
+    c.appendChild(el('div','bar')).style.background=C.slate;
+    c.appendChild(el('div','id',id));
+    c.appendChild(el('h3',null,name));
+    pg.appendChild(c);
+  });
+  m.appendChild(pg);
+  section(m,'Build order · M0 → M6');
+  const mg=el('div','grid');
+  MILES.forEach(([id,name],i)=>{
+    const c=el('div','card');c.style.cursor='default';
+    c.appendChild(el('div','bar')).style.background=`hsl(${210+i*22} 70% 60%)`;
+    c.appendChild(el('div','id',id));
+    c.appendChild(el('h3',null,name));
+    mg.appendChild(c);
+  });
+  m.appendChild(mg);
+}
+
+/* ---- shared layout helpers ---- */
+function vhead(t,p){const h=el('div','vhead');h.appendChild(el('h2',null,t));h.appendChild(el('p',null,p));return h;}
+function section(m,label){m.appendChild(el('div','section-label',label));}
+function grid(m,cards){const g=el('div','grid');cards.forEach(c=>g.appendChild(c));m.appendChild(g);}
+function statRow(items){const s=el('div','stats');items.forEach(([n,l])=>{const st=el('div','stat');st.appendChild(el('div','n',n));st.appendChild(el('div','l',l));s.appendChild(st);});return s;}
+
+/* ===================================================== DRAWER ======= */
+function relChip(kind,id){
+  const labelMap={gate:id,gov:id,skill:'/'+id,agent:'@'+id,phase:(PHASES.find(p=>p.id===id)||{}).title||id};
+  const r=el('span','rel',(kind==='skill'?'⚙ ':kind==='agent'?'👁 ':kind==='gov'?'§ ':kind==='phase'?'◆ ':'◇ ')+labelMap[kind]);
+  r.onclick=()=>{ if(kind==='gate')openGate(id); else if(kind==='gov')openGov(id); else if(kind==='phase')openPhase(id); else openEntity(kind,id); };
+  return r;
+}
+function relsBlock(rels){
+  if(!rels||!rels.length)return '';
+  const box=el('div'); box.appendChild(el('h4',null,'Connected to'));
+  rels.forEach(([k,i])=>box.appendChild(relChip(k,i)));
+  return box.outerHTML;
+}
+function openDrawer(kicker,kicColor,title,bodyHTML){
+  $('#dKic').textContent=kicker; $('#dKic').style.color=kicColor;
+  $('#dTitle').textContent=title; $('#dBody').innerHTML=bodyHTML;
+  // rebind rel chips (innerHTML lost handlers)
+  $('#dBody').querySelectorAll('.rel').forEach(el=>{});
+  $('#drawer').classList.add('open'); $('#scrim').classList.add('open');
+}
+function closeDrawer(){$('#drawer').classList.remove('open');$('#scrim').classList.remove('open');}
+
+function openPhase(id){
+  const p=PHASES.find(x=>x.id===id);
+  let html=`<p style="color:var(--ink);font-size:14.5px">${p.blurb}</p>`+p.body;
+  p.gates.forEach(g=>{ if(GATES[g]){ const nm=GATES[g].name; const lbl=/^[QD]\d/.test(nm)?nm:(g+' — '+nm); html+=`<div style="margin:6px 0"><span class="rel" data-gate="${g}">◇ ${lbl}</span></div>`; } });
+  html+=relsBlock(p.rels);
+  openDrawer(p.kicker,p.color,p.title+' phase',html);
+  bind();
+}
+function openGate(id){
+  const g=GATES[id];
+  let html=`<p style="color:var(--ink);font-size:14.5px">${g.blurb}</p>`;
+  html+=`<div class="kv"><span class="k">Gate id</span><span class="v">${id}</span></div>`;
+  html+=`<div class="kv"><span class="k">Family</span><span class="v">${g.kind==='disc'?'Discovery gate':g.kind==='ci'?'CI quality gate':g.kind==='human'?'Human gate':'Governance / waist'}</span></div>`;
+  html+=`<div class="kv"><span class="k">Stage</span><span class="v">${g.phase}</span></div>`;
+  if(g.fail)html+=`<div class="kv"><span class="k">Fails when</span><span class="v">${g.fail}</span></div>`;
+  if(g.skip)html+=`<div class="kv"><span class="k">Skips</span><span class="v">Degrades to a skip when its input isn\'t present</span></div>`;
+  html+=relsBlock(g.rels);
+  openDrawer(g.kind==='ci'?'CI quality gate':g.kind==='disc'?'Discovery gate':'Gate',g.kind==='ci'?C.ci:g.kind==='human'?C.human:C.define,g.name,html);
+  bind();
+}
+function openGov(id){
+  const g=GOV[id];
+  let html=`<div class="kv"><span class="k">Status</span><span class="v"><span class="badge ${g.status==='accepted'?'b-accepted':'b-proposed'}">${g.status}</span></span></div>`;
+  html+=`<h4>The gap</h4><p>${g.gap}</p><h4>The decision</h4><p>${g.decision}</p>`;
+  html+=relsBlock(g.rels);
+  openDrawer('Harness governance · '+id,g.status==='accepted'?C.deliver:C.gov,g.title,html);
+  bind();
+}
+function openEntity(kind,id){
+  const e=(kind==='skill'?SKILLS:AGENTS)[id];
+  let html=`<p style="color:var(--ink);font-size:14.5px">${e.blurb}</p>`;
+  html+=`<div class="kv"><span class="k">Invoke</span><span class="v"><code>${kind==='skill'?'/'+id:'Task → '+id}</code></span></div>`;
+  html+=relsBlock(e.rels);
+  openDrawer(kind==='skill'?'Skill':'Reviewer subagent',kind==='skill'?C.develop:C.amber,e.title,html);
+  bind();
+}
+function bind(){
+  $('#dBody').querySelectorAll('[data-gate]').forEach(s=>s.onclick=()=>openGate(s.getAttribute('data-gate')));
+  $('#dBody').querySelectorAll('.rel').forEach(s=>{
+    if(s.dataset.bound)return; s.dataset.bound=1;
+  });
+  // re-derive rel handlers from text prefix
+  $('#dBody').querySelectorAll('.rel').forEach(s=>{
+    if(s.hasAttribute('data-gate'))return;
+    s.onclick=()=>{
+      const t=s.textContent.trim();
+      const id=t.replace(/^[^A-Za-z0-9]+/,'').replace(/^\/|^@/,'').split(' ')[0];
+      if(t.startsWith('⚙'))openEntity('skill',id);
+      else if(t.startsWith('👁'))openEntity('agent',id);
+      else if(t.startsWith('§'))openGov(id);
+      else if(t.startsWith('◆'))openPhase(PHASES.find(p=>p.title===id)?.id||id.toLowerCase());
+      else if(t.startsWith('◇'))openGate(id);
+    };
+  });
+}
+
+$('#dClose').onclick=closeDrawer;
+$('#scrim').onclick=closeDrawer;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+
+buildTabs(); render();
+</script>
+</body>
+</html>
