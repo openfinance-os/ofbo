@@ -91,24 +91,17 @@ describe('Salesforce P1 adapter — resolveCallRecording (link, never copy — A
   })
 })
 
-describe('Salesforce P1 adapter — fake path (no tenant / contract context)', () => {
-  it('mints a care token end-to-end against the in-memory fake token endpoint', async () => {
-    const adapter = createSalesforceCareSurfaceAdapter() // no token/instance URL → fake path
-    const t = await adapter.mintCareToken({ agent_id: 'agent-x', psu_id: 'psu-y' }, trace)
-    expect(t).toMatchObject({ act: 'agent-x', sub: 'psu-y' })
-    expect(t.token).toContain('agent-x')
+describe('Salesforce P1 adapter — fail-closed (no silent fake under enterprise)', () => {
+  it('each method requires its config (no fake fallback)', async () => {
+    const noToken = createSalesforceCareSurfaceAdapter({})
+    await expect(noToken.mintCareToken({ agent_id: 'a', psu_id: 'p' }, trace)).rejects.toBeInstanceOf(SalesforceCareError)
+    await expect(noToken.resolveCallRecording({ call_id: 'CA1' }, trace)).rejects.toBeInstanceOf(SalesforceCareError)
+    // ...but an empty call id is still a clean null (non-voice channel), never an error.
+    expect(await noToken.resolveCallRecording({ call_id: '' }, trace)).toBeNull()
   })
 
-  it('resolves / yields null against the in-memory fake Voice lookup', async () => {
-    const adapter = createSalesforceCareSurfaceAdapter()
-    expect(await adapter.resolveCallRecording({ call_id: 'missing' }, trace)).toBeNull()
-    const r = await adapter.resolveCallRecording({ call_id: 'CA9' }, trace)
-    expect(r!.recording_ref).toBe('0LQCA9')
-  })
-
-  it('salesforceCareSurfaceFromEnv binds the fake path when no Salesforce env is set', async () => {
-    const adapter = salesforceCareSurfaceFromEnv({})
-    const t = await adapter.mintCareToken({ agent_id: 'a', psu_id: 'p' }, trace)
-    expect(t.act).toBe('a')
+  it('salesforceCareSurfaceFromEnv throws when the Salesforce env is unset', () => {
+    expect(() => salesforceCareSurfaceFromEnv({})).toThrow(/misconfigured/)
+    expect(() => salesforceCareSurfaceFromEnv({ SALESFORCE_INSTANCE_URL: 'https://acme.my.salesforce.com' })).toThrow(/misconfigured/)
   })
 })

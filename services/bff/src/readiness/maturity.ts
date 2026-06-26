@@ -45,13 +45,17 @@ const MILESTONES: MaturityMilestone[] = [
   { id: 'M6', title: 'Enterprise port-swaps', status: 'remaining', detail: 'Per-bank: write the 9 enterprise adapters, each passing the contract suite its simulator passes.' }
 ]
 
+// Ports that already ship a reference enterprise adapter (passes the port-swap contract suite).
+// P2 — Microsoft Entra ID — is the first (ADR 0023). Grows as reference adapters land.
+const ENTERPRISE_READY = new Set<string>(['P2'])
+
 export function getMaturity(): MaturitySummary {
   const ports: MaturityPort[] = PORTS.map((p) => ({
     id: p.id,
     name: p.name,
     sim_status: 'ready',
-    // Every enterprise adapter is a stub today — that's the M6 work the wizard sizes per bank.
-    enterprise_status: 'stub',
+    // 'ready' = a reference enterprise adapter ships (config + swap); 'stub' = M6 work per bank.
+    enterprise_status: ENTERPRISE_READY.has(p.id) ? 'ready' : 'stub',
     contract_test_gate: p.contract_test_gate
   }))
   const milestonesDone = MILESTONES.filter((m) => m.status === 'done').length

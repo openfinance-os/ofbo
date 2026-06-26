@@ -1,95 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { PORT_NAMES, getAdapter, type PortName } from '../src/registry.js'
-import { EnterpriseAdapterNotImplementedError, type DeployProfile } from '../src/types.js'
+import { EnterpriseAdapterNotImplementedError } from '../src/types.js'
 
 const trace = { trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
-
-/** The P1 mint-care-token contract, factored out so the SAME assertions bind both the demo
- *  sim and the pre-staged Salesforce enterprise adapter (ADR 0023 — port-swap acceptance). */
-async function assertP1Contract(profile: DeployProfile) {
-  const p1 = getAdapter('p1-care-surface', profile)
-  const t = await p1.mintCareToken({ agent_id: 'agent-001', psu_id: 'psu-001' }, trace)
-  expect(t.act).toBe('agent-001')
-  expect(t.sub).toBe('psu-001')
-  expect(t.token).toBeTruthy()
-  expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
-}
-
-/** The P3 contract, factored out so the SAME assertions bind both the demo sim and the
- *  pre-staged ServiceNow enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
-async function assertP3Contract(profile: DeployProfile) {
-  const p3 = getAdapter('p3-itsm', profile)
-  const t = await p3.createTicket(
-    { type: 'liability_threshold', severity: 'high', team: 'risk_compliance', summary: 'test' },
-    trace
-  )
-  expect(t.ticket_id).toBeTruthy()
-}
-
-/** The P7 contract, factored out so the SAME assertion binds both the demo sim and the
- *  pre-staged OpenLineage enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
-async function assertP7Contract(profile: DeployProfile) {
-  const p7 = getAdapter('p7-lineage', profile)
-  await expect(
-    p7.emitLineage({ table: 'reconciliation_break', columns: ['variance_amount'], source: 'recon-engine', trace_id: trace.trace_id })
-  ).resolves.toBeUndefined()
-}
-
-/** The P6 contract (revoke SLA, dispute + deterministic directory, Ozone refund IPP status,
- *  consent-status for drift), factored out so the SAME assertions bind both the demo sim and
- *  the pre-staged egress-gateway adapter (ADR 0023 — the port-swap acceptance gate). */
-async function assertP6Contract(profile: DeployProfile) {
-  const p6 = getAdapter('p6-nebras-egress', profile)
-
-  const revoke = await p6.revokeConsent('consent-001', 'CLIENT_INSTRUCTION', trace)
-  expect(revoke.acknowledged_in_ms).toBeLessThan(5000) // 5s scheme SLA
-
-  const dispute = await p6.createDisputeCase({ summary: 'fee variance' }, trace)
-  expect(dispute.nebras_case_id).toBeTruthy()
-  const dir1 = await p6.syncDirectory(trace)
-  const dir2 = await p6.syncDirectory(trace)
-  expect(dir1.participants.length).toBeGreaterThan(0)
-  expect(dir1).toEqual(dir2) // deterministic for repeatable demos
-
-  const refund = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
-  expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(refund.ipp_status) // BACKOFFICE-62
-
-  const status = await p6.getConsentStatus('consent-001', trace)
-  expect(status.consent_id).toBe('consent-001')
-  expect(typeof status.status).toBe('string')
-  expect(status.status.length).toBeGreaterThan(0)
-}
-
-/** The P5 contract, factored out so the SAME assertion binds both the demo sim and the
- *  pre-staged OTLP/HTTP APM enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
-async function assertP5Contract(profile: DeployProfile) {
-  const p5 = getAdapter('p5-apm', profile)
-  await expect(
-    p5.exportSpans([
-      {
-        name: 'test-span',
-        trace_id: trace.trace_id,
-        span_id: 'span-001',
-        start_time: 0,
-        end_time: 1,
-        status_code: 'ok',
-        attributes: { 'http.route': '/test' }
-      }
-    ])
-  ).resolves.toBeUndefined()
-}
 
 /**
  * Port contract suite — binds ANY adapter behind the interface. Sim adapters run
  * now; the same expectations gate enterprise adapters at M6 (port-swap acceptance).
  */
-function describePortContract(profile: DeployProfile) {
+function describePortContract(profile: 'demo') {
   describe(`port contracts (${profile} profile)`, () => {
     it('P1 mints care tokens with act+sub claims and ≤15 min expiry', async () => {
-      await assertP1Contract(profile)
+      const p1 = getAdapter('p1-care-surface', profile)
+      const t = await p1.mintCareToken({ agent_id: 'agent-001', psu_id: 'psu-001' }, trace)
+      expect(t.act).toBe('agent-001')
+      expect(t.sub).toBe('psu-001')
+      expect(t.token).toBeTruthy()
+      expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
     })
 
-    it('P2 verifies tokens with MFA and exposes the 9 personas', async () => {
+    it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
       const p2 = getAdapter('p2-identity-provider', profile)
       const personas = await p2.personaLogins()
       expect(personas).toHaveLength(9)
@@ -143,7 +73,12 @@ function describePortContract(profile: DeployProfile) {
     })
 
     it('P3 creates ITSM tickets with team routing', async () => {
-      await assertP3Contract(profile)
+      const p3 = getAdapter('p3-itsm', profile)
+      const t = await p3.createTicket(
+        { type: 'liability_threshold', severity: 'high', team: 'risk_compliance', summary: 'test' },
+        trace
+      )
+      expect(t.ticket_id).toBeTruthy()
     })
 
     it('P4 reads balances as binding Money', async () => {
@@ -154,15 +89,57 @@ function describePortContract(profile: DeployProfile) {
     })
 
     it('P5 accepts an OTel span batch', async () => {
-      await assertP5Contract(profile)
+      const p5 = getAdapter('p5-apm', profile)
+      await expect(
+        p5.exportSpans([
+          {
+            name: 'test-span',
+            trace_id: trace.trace_id,
+            span_id: 'span-001',
+            start_time: 0,
+            end_time: 1,
+            status_code: 'ok',
+            attributes: { 'http.route': '/test' }
+          }
+        ])
+      ).resolves.toBeUndefined()
     })
 
-    it('P6 egress: revoke SLA, dispute + deterministic directory, Ozone refund, consent status', async () => {
-      await assertP6Contract(profile)
+    it('P6 acknowledges consent revocation within the 5s scheme SLA', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const r = await p6.revokeConsent('consent-001', 'CLIENT_INSTRUCTION', trace)
+      expect(r.acknowledged_in_ms).toBeLessThan(5000)
+    })
+
+    it('P6 creates dispute cases and syncs the directory deterministically', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const d = await p6.createDisputeCase({ summary: 'fee variance' }, trace)
+      expect(d.nebras_case_id).toBeTruthy()
+      const dir1 = await p6.syncDirectory(trace)
+      const dir2 = await p6.syncDirectory(trace)
+      expect(dir1.participants.length).toBeGreaterThan(0)
+      expect(dir1).toEqual(dir2) // deterministic for repeatable demos
+    })
+
+    it('P6 dispatches a refund via the Ozone Connect flow, returning an IPP status (BACKOFFICE-62)', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const r = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
+      expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(r.ipp_status)
+    })
+
+    it('P6 reports a consent status for drift checks (DEMO-01)', async () => {
+      const p6 = getAdapter('p6-nebras-egress', profile)
+      const r = await p6.getConsentStatus('consent-001', trace)
+      expect(r.consent_id).toBe('consent-001')
+      expect(typeof r.status).toBe('string')
+      expect(r.status.length).toBeGreaterThan(0)
     })
 
     it('P7 accepts column-level lineage emission', async () => {
-      await assertP7Contract(profile)
+      const p7 = getAdapter('p7-lineage', profile)
+      await expect(
+        p7.emitLineage({ table: 'reconciliation_break', columns: ['variance_amount'], source: 'recon-engine', trace_id: trace.trace_id })
+      ).resolves.toBeUndefined()
     })
 
     it('P8 yields funnel events with entry-path dimension', async () => {
@@ -182,18 +159,55 @@ function describePortContract(profile: DeployProfile) {
   })
 }
 
-// All nine ports are now pre-staged ahead of M6 (ADR 0023), so the FULL contract suite runs
-// under the enterprise profile too — each enterprise adapter must pass EXACTLY the same
-// contract the sim passes (the port-swap acceptance gate). The fakes bind with no tenant.
 describePortContract('demo')
-describePortContract('enterprise')
 
-describe('enterprise adapters (ADR 0023 — all 9 pre-staged)', () => {
-  it.each(PORT_NAMES.map((p) => [p] as const))('%s enterprise adapter resolves (no real tenant configured)', (port: PortName) => {
-    expect(() => getAdapter(port, 'enterprise')).not.toThrow()
+describe('enterprise adapters land port-by-port (M6)', () => {
+  // ADR 0024: P2 (Entra ID) is the reference template; the other eight ports are pre-staged at
+  // rung ③. ALL nine are now WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
+  // unconfigured enterprise adapter throws a clear config error, never a silent demo/fake (their
+  // own contract suites are the per-adapter *.spec.ts files, which inject fakes).
+  const PRESTAGED = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')
+
+  it.each(PRESTAGED.map((p) => [p] as const))('%s is WIRED and FAIL-CLOSED when unconfigured (never NotImplemented, never a fake)', (port: PortName) => {
+    const saved = process.env
+    process.env = {} as NodeJS.ProcessEnv // no vendor config → must throw a config error, not bind a fake
+    let err: unknown
+    try {
+      getAdapter(port, 'enterprise')
+    } catch (e) {
+      err = e
+    } finally {
+      process.env = saved
+    }
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(EnterpriseAdapterNotImplementedError) // it IS wired
   })
 
-  it('still throws NotImplemented for a port with no enterprise adapter (mechanism retained for future ports)', () => {
+  it('still throws NotImplemented for a port with no enterprise factory (mechanism retained for future ports)', () => {
     expect(() => getAdapter('p99-future' as PortName, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
   })
+
+  it('p2-identity-provider is WIRED for enterprise — resolves with config, errors clearly without', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P2_OIDC_ISSUER
+      delete process.env.P2_OIDC_CLIENT_ID
+      // Wired (not NotImplemented), but unconfigured → a clear config error, never the demo sim.
+      expect(() => getAdapter('p2-identity-provider', 'enterprise')).toThrow(/P2 Entra adapter misconfigured/)
+
+      process.env.P2_OIDC_ISSUER = 'https://login.microsoftonline.com/tenant/v2.0'
+      process.env.P2_OIDC_CLIENT_ID = 'client-123'
+      process.env.P2_PERSONA_MAPPING = JSON.stringify({ 'OFBO.Compliance': 'compliance-officer' })
+      process.env.P2_AGENT_SIGNING_KEY = 'synthetic-test-signing-key-0123456789abcd'
+      const p2 = getAdapter('p2-identity-provider', 'enterprise')
+      expect(typeof p2.verifyToken).toBe('function')
+      expect(typeof p2.mintAgentSession).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
 })
+
+// M6 port-swap acceptance gate: when an enterprise adapter lands, it must pass
+// EXACTLY the demo-profile suite above. Re-enable per port by calling
+// describePortContract('enterprise') once getAdapter(port, 'enterprise') resolves.

@@ -42,15 +42,12 @@ describe('P9 financial-system adapter (invoice EXECUTION transport only)', () =>
     await expect(bad.getSettlementStatus('fms-1', trace)).rejects.toBeInstanceOf(FinancialSystemError)
   })
 
-  it('throws retryable on 5xx and requires a token when baseUrl is set', async () => {
+  it('throws retryable on 5xx', async () => {
     await expect(createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl: fakeTransport({ '/counterparties': { status: 502 } }).fetchImpl }).registerCounterparty({ organisation_id: 'o', legal_name: 'L' }, trace)).rejects.toMatchObject({ retryable: true, status: 502 })
-    await expect(createFinancialSystemAdapter({ baseUrl: BASE }).registerCounterparty({ organisation_id: 'o', legal_name: 'L' }, trace)).rejects.toBeInstanceOf(FinancialSystemError)
   })
 
-  it('fake path / fromEnv: registers + reports an allowed settlement status', async () => {
-    const adapter = financialSystemFromEnv({})
-    const reg = await adapter.registerCounterparty({ organisation_id: 'org-001', legal_name: 'Fictional Fintech FZ-LLC' }, trace)
-    expect(reg.financial_system_ref).toBeTruthy()
-    expect(['instructed', 'issued', 'settled', 'overdue', 'credit_noted']).toContain((await adapter.getSettlementStatus(reg.financial_system_ref, trace)).invoice_status)
+  it('fail-closed: requires baseUrl + token, and fromEnv throws when unset', () => {
+    expect(() => createFinancialSystemAdapter({ baseUrl: BASE })).toThrow(FinancialSystemError)
+    expect(() => financialSystemFromEnv({})).toThrow(/misconfigured/)
   })
 })

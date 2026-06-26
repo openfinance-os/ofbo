@@ -2,19 +2,19 @@ import type { ItsmPort } from '../../interfaces.js'
 import type { TraceContext } from '../../types.js'
 
 /**
- * P3 — ServiceNow ITSM enterprise adapter (pre-staged per ADR 0023, fidelity rung ③).
+ * P3 — ServiceNow ITSM enterprise adapter (pre-staged per ADR 0024, fidelity rung ③).
  *
  * Implements EXACTLY the P3 port contract (`ItsmPort.createTicket`) — nothing more.
  * ServiceNow exposes hundreds of tables and APIs; the adapter surface is the port,
- * full stop (ADR 0023 guardrail 1). Everything bank-specific — instance URL, OAuth,
+ * full stop (ADR 0024 guardrail 1). Everything bank-specific — instance URL, OAuth,
  * the incident table, team→assignment-group routing — is configuration (guardrail 3),
  * supplied via the Bank Profile / environment, never hardcoded.
  *
- * Transport is injectable (`fetchImpl`) so the port-contract suite and unit tests bind
- * a fake ServiceNow with no tenant (guardrail 4 / rung ②). When no instance URL is
- * configured the adapter routes to an in-memory fake Table API that runs the SAME
- * request-build → POST → response-parse path — so the contract exercises real adapter
- * logic, not a shortcut. The final tenant/OAuth/residency mile is the M6 swap (rung ④).
+ * FAIL-CLOSED: a configured `instanceUrl` is mandatory — an unconfigured enterprise adapter
+ * throws, it never silently becomes a fake (a fake ITSM under DEPLOY_PROFILE=enterprise would
+ * swallow real signals). Transport is injectable (`fetchImpl`) so unit tests bind a fake
+ * ServiceNow with no tenant (guardrail 4 / rung ②), exercising the real request-build → POST →
+ * response-parse path. The final tenant/OAuth/residency mile is the M6 swap (rung ④).
  */
 
 /** OFBO's port-level severity, mapped to ServiceNow urgency+impact (1=High,2=Medium,3=Low),
@@ -30,14 +30,14 @@ const SEVERITY_MATRIX: Record<
 }
 
 export interface ServiceNowConfig {
-  /** Bank Profile — instance base, e.g. `https://acme.service-now.com`. When unset the
-   *  adapter binds the in-memory fake Table API (contract/unit context, no tenant). */
+  /** Bank Profile — instance base, e.g. `https://acme.service-now.com`. Mandatory (the
+   *  adapter is fail-closed; tests inject a fake `fetchImpl` against this base). */
   instanceUrl?: string
   /** Bank Profile — table to create records in (default `incident`). */
   table?: string
   /** Bank Profile — OAuth bearer provider. The adapter never holds static credentials:
-   *  the bank wires its connected-app / client-credentials flow here. Required once
-   *  `instanceUrl` is set; unused on the fake path. trace lets the provider correlate. */
+   *  the bank wires its connected-app / client-credentials flow here. Required. trace lets
+   *  the provider correlate. */
   getToken?: (trace: TraceContext) => Promise<string>
   /** Bank Profile — OFBO team key → ServiceNow `assignment_group` (sys_id or name).
    *  Teams per PRD §3 P3: `risk_compliance`, `it_support`, `payment_operations`.
@@ -61,31 +61,13 @@ export class ServiceNowItsmError extends Error {
   }
 }
 
-const FAKE_BASE = 'https://fake.service-now.invalid'
-
-/** Deterministic in-memory ServiceNow Table API — used when no `instanceUrl` is
- *  configured. Validates the request shape and returns a canned `result` exactly as
- *  ServiceNow's REST Table API does, so the adapter's real mapping + parsing run in
- *  tests without a tenant. Deterministic incident numbers (counter) for repeatable runs. */
-let fakeSeq = 0
-const fakeServiceNowFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-  const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
-  if (!/\/api\/now\/table\//.test(url) || (init?.method ?? 'GET') !== 'POST' || !body.short_description) {
-    return new Response(JSON.stringify({ error: { message: 'bad request' } }), { status: 400 })
-  }
-  const number = `INC${String(++fakeSeq).padStart(7, '0')}`
-  return new Response(JSON.stringify({ result: { ...body, number, sys_id: `sys-${number}` } }), {
-    status: 201,
-    headers: { 'content-type': 'application/json' }
-  })
-}
-
 export function createServiceNowItsmAdapter(config: ServiceNowConfig = {}): ItsmPort {
-  const real = Boolean(config.instanceUrl)
-  const base = config.instanceUrl ?? FAKE_BASE
+  if (!config.instanceUrl) throw new ServiceNowItsmError(0, false, 'ServiceNow instanceUrl is required (fail-closed — no fake fallback under the enterprise profile)')
+  if (!config.getToken) throw new ServiceNowItsmError(0, false, 'ServiceNow getToken (OAuth provider) is required')
+  const getToken = config.getToken
+  const base = config.instanceUrl
   const table = config.table ?? 'incident'
-  const doFetch = config.fetchImpl ?? (real ? globalThis.fetch : fakeServiceNowFetch)
+  const doFetch = config.fetchImpl ?? globalThis.fetch
 
   const resolveGroup = (team: string): string => config.assignmentGroups?.[team] ?? team
 
@@ -104,13 +86,8 @@ export function createServiceNowItsmAdapter(config: ServiceNowConfig = {}): Itsm
         'content-type': 'application/json',
         accept: 'application/json',
         // CLAUDE.md: x-fapi-interaction-id propagated end-to-end for trace correlation.
-        'x-fapi-interaction-id': trace.trace_id
-      }
-      if (real) {
-        if (!config.getToken) {
-          throw new ServiceNowItsmError(0, false, 'ServiceNow getToken (OAuth provider) is required when instanceUrl is set')
-        }
-        headers.authorization = `Bearer ${await config.getToken(trace)}`
+        'x-fapi-interaction-id': trace.trace_id,
+        authorization: `Bearer ${await getToken(trace)}`
       }
 
       const res = await doFetch(`${base}/api/now/table/${encodeURIComponent(table)}`, {
@@ -129,11 +106,14 @@ export function createServiceNowItsmAdapter(config: ServiceNowConfig = {}): Itsm
   }
 }
 
-/** Build the adapter from the Bank Profile in the environment. With no
- *  SERVICENOW_INSTANCE_URL this binds the fake Table API (contract/test context).
- *  The real OAuth client-credentials / connected-app flow is wired at the M6 sandbox
- *  swap; SERVICENOW_BEARER_TOKEN is a rung-② stand-in for that provider. */
+/** Build the adapter from the Bank Profile in the environment. FAIL-CLOSED: throws if
+ *  SERVICENOW_INSTANCE_URL / SERVICENOW_BEARER_TOKEN are absent (never a silent fake under
+ *  the enterprise profile). The real OAuth client-credentials / connected-app flow is wired
+ *  at the M6 sandbox swap; SERVICENOW_BEARER_TOKEN is a rung-② stand-in for that provider. */
 export function serviceNowItsmFromEnv(env: NodeJS.ProcessEnv = process.env): ItsmPort {
+  if (!env.SERVICENOW_INSTANCE_URL || !env.SERVICENOW_BEARER_TOKEN) {
+    throw new ServiceNowItsmError(0, false, 'ServiceNow adapter misconfigured: set SERVICENOW_INSTANCE_URL and SERVICENOW_BEARER_TOKEN')
+  }
   let assignmentGroups: Record<string, string> | undefined
   if (env.SERVICENOW_ASSIGNMENT_GROUPS) {
     assignmentGroups = JSON.parse(env.SERVICENOW_ASSIGNMENT_GROUPS) as Record<string, string>
@@ -143,6 +123,6 @@ export function serviceNowItsmFromEnv(env: NodeJS.ProcessEnv = process.env): Its
     instanceUrl: env.SERVICENOW_INSTANCE_URL,
     table: env.SERVICENOW_TABLE,
     assignmentGroups,
-    getToken: bearer ? async () => bearer : undefined
+    getToken: async () => bearer
   })
 }

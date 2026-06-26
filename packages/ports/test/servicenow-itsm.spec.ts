@@ -78,29 +78,24 @@ describe('ServiceNow P3 adapter — request mapping (real path, faked transport)
     await expect(adapter4.createTicket({ type: 't', severity: 'high', team: 'it_support', summary: 's' }, trace)).rejects.toMatchObject({ name: 'ServiceNowItsmError', retryable: false, status: 400 })
   })
 
-  it('requires an OAuth token provider once an instance URL is set (no anonymous writes)', async () => {
-    const adapter = createServiceNowItsmAdapter({ instanceUrl: 'https://x.service-now.com' })
-    await expect(adapter.createTicket({ type: 't', severity: 'high', team: 'it_support', summary: 's' }, trace)).rejects.toBeInstanceOf(ServiceNowItsmError)
+  it('requires an OAuth token provider (no anonymous writes) — throws at construction', () => {
+    expect(() => createServiceNowItsmAdapter({ instanceUrl: 'https://x.service-now.com' })).toThrow(ServiceNowItsmError)
   })
 })
 
-describe('ServiceNow P3 adapter — fake Table API (no tenant / contract context)', () => {
-  it('runs the full build→POST→parse path against the in-memory fake and returns an incident number', async () => {
-    const adapter = createServiceNowItsmAdapter() // no instanceUrl → fake transport
-    const r = await adapter.createTicket({ type: 'liability_threshold', severity: 'medium', team: 'payment_operations', summary: 'fee variance' }, trace)
-    expect(r.ticket_id).toMatch(/^INC\d{7}$/)
+describe('ServiceNow P3 adapter — fail-closed (no silent fake under enterprise)', () => {
+  it('createServiceNowItsmAdapter() throws without an instanceUrl', () => {
+    expect(() => createServiceNowItsmAdapter()).toThrow(ServiceNowItsmError)
   })
 
-  it('serviceNowItsmFromEnv binds the fake path when SERVICENOW_INSTANCE_URL is unset', async () => {
-    const adapter = serviceNowItsmFromEnv({})
-    const r = await adapter.createTicket({ type: 't', severity: 'high', team: 'risk_compliance', summary: 's' }, trace)
-    expect(r.ticket_id).toMatch(/^INC\d{7}$/)
+  it('serviceNowItsmFromEnv throws when SERVICENOW_INSTANCE_URL / BEARER are unset', () => {
+    expect(() => serviceNowItsmFromEnv({})).toThrow(/misconfigured/)
+    expect(() => serviceNowItsmFromEnv({ SERVICENOW_INSTANCE_URL: 'https://x.service-now.com' })).toThrow(/misconfigured/)
   })
 
+  const ENV = { SERVICENOW_INSTANCE_URL: 'https://x.service-now.com', SERVICENOW_BEARER_TOKEN: 't' }
   it('serviceNowItsmFromEnv parses the assignment-group routing map from env (surfaces malformed JSON)', () => {
-    // Valid JSON constructs cleanly...
-    expect(() => serviceNowItsmFromEnv({ SERVICENOW_ASSIGNMENT_GROUPS: JSON.stringify({ risk_compliance: 'grp-9' }) })).not.toThrow()
-    // ...malformed routing config fails fast at construction rather than at first ticket.
-    expect(() => serviceNowItsmFromEnv({ SERVICENOW_ASSIGNMENT_GROUPS: '{not-json' })).toThrow()
+    expect(() => serviceNowItsmFromEnv({ ...ENV, SERVICENOW_ASSIGNMENT_GROUPS: JSON.stringify({ risk_compliance: 'grp-9' }) })).not.toThrow()
+    expect(() => serviceNowItsmFromEnv({ ...ENV, SERVICENOW_ASSIGNMENT_GROUPS: '{not-json' })).toThrow()
   })
 })

@@ -1,8 +1,9 @@
-# ADR 0023 — Pre-stage enterprise port adapters ahead of M6; Kong Konnect metering-vs-invoicing boundary
+# ADR 0024 — Pre-stage enterprise port adapters ahead of M6; Kong Konnect metering-vs-invoicing boundary
 
 - Status: **Accepted** — chosen by the user (2026-06-26). Adopts Option 1: pre-staging enterprise adapters to fidelity rung ③ under the four guardrails, and the Kong metering-input / P9-invoicing boundary.
 - Date: 2026-06-26
-- Related: PRD §3 (ports model) + §3.1 (deployment profiles & adapters); `packages/ports/src/interfaces.ts` (the nine port contracts); `packages/ports/src/registry.ts` (`getAdapter` — the single profile-selection point); `packages/ports/test/port-contracts.spec.ts` (the M6 port-swap acceptance gate); ADR 0007 (TPP-of-record payables / net settlement — same P9/reconciliation surface); ADR 0017 (agent-first MCP gateway — prior "compose, don't invent a platform" precedent); BACKOFFICE-72 (P9 counterparty registration), BACKOFFICE-73 (monthly TPP invoicing — **reconcile before invoice**); CLAUDE.md "Ports", "Deployment profiles & adapters", and rule 6 (compose, don't invent)
+- Supersedes/extends: **ADR 0023** (first enterprise adapter — P2 Microsoft Entra ID) established the reference-adapter pattern and the **fail-closed** posture (an unconfigured enterprise adapter throws; it never falls back to a demo/fake). This ADR generalises that to the other eight ports. The eight pre-staged adapters follow ADR 0023's fail-closed rule (fakes live only in tests via injected transport), and the lazy memoized `ENTERPRISE_FACTORIES` registry it introduced.
+- Related: PRD §3 (ports model) + §3.1 (deployment profiles & adapters); `packages/ports/src/interfaces.ts` (the nine port contracts); `packages/ports/src/registry.ts` (`getAdapter` — the single profile-selection point); `packages/ports/test/port-contracts.spec.ts` (the M6 port-swap acceptance gate); ADR 0023 (P2 Entra reference adapter + fail-closed posture); ADR 0007 (TPP-of-record payables / net settlement — same P9/reconciliation surface); ADR 0017 (agent-first MCP gateway — prior "compose, don't invent a platform" precedent); BACKOFFICE-72 (P9 counterparty registration), BACKOFFICE-73 (monthly TPP invoicing — **reconcile before invoice**); CLAUDE.md "Ports", "Deployment profiles & adapters", and rule 6 (compose, don't invent)
 
 ## Context
 
@@ -18,18 +19,26 @@ Two related questions came up about getting ahead of the M6 enterprise port-swap
 
 The architecture already anticipates (1): every port is one interface with two adapter
 implementations (`sim` / `enterprise`), and `registry.ts::getAdapter` is the **only**
-place profile selection happens — core code never branches on profile. Today the
-enterprise branch is a hard stub:
+place profile selection happens — core code never branches on profile. ADR 0023 (P2
+Microsoft Entra ID) replaced the original hard-stub with a **lazy, memoized
+`ENTERPRISE_FACTORIES` registry** — each enterprise port resolves through a fail-closed
+factory, and a port with no factory still throws `EnterpriseAdapterNotImplementedError`:
 
 ```ts
-// packages/ports/src/registry.ts
+// packages/ports/src/registry.ts (ADR 0023 pattern)
 export function getAdapter<K extends PortName>(port: K, profile: DeployProfile): PortMap[K] {
-  if (profile === 'enterprise') throw new EnterpriseAdapterNotImplementedError(port)
+  if (profile === 'enterprise') {
+    const factory = ENTERPRISE_FACTORIES[port]
+    if (!factory) throw new EnterpriseAdapterNotImplementedError(port)
+    if (!enterpriseCache.has(port)) enterpriseCache.set(port, factory()) // a config throw is not cached
+    return enterpriseCache.get(port) as PortMap[K]
+  }
   return SIM_ADAPTERS[port]
 }
 ```
 
-So pre-staging an enterprise adapter is **adapter replacement, not a new primitive** —
+This ADR adds the other eight ports to that registry. So pre-staging an enterprise
+adapter is **adapter replacement, not a new primitive** —
 it does not, on its own, need an ADR on architectural grounds. What *does* need a human
 decision is the **timing** (pulling M6 work forward, ahead of the PRD §9 build order) and
 the **Kong boundary**, where "use Kong for billing" can quietly cross from "a metering
@@ -67,7 +76,7 @@ activity, **bounded by a fidelity ladder and four guardrails**.
 
 ```mermaid
 flowchart LR
-  S0["① Stub<br/>throws NotImplemented<br/>(today)"] --> S1["② Contract-green<br/>passes port-contracts.spec.ts<br/>against a mock/fixture"]
+  S0["① Stub<br/>throws NotImplemented"] --> S1["② Contract-green<br/>per-adapter spec passes<br/>against an injected fake"]
   S1 --> S2["③ Sandbox-validated<br/>run against vendor<br/>dev/sandbox org"]
   S2 --> S3["④ Production<br/>@ bank adoption (M6)<br/>Bank Profile + real tenant"]
 

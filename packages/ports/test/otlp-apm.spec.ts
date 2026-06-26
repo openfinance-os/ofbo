@@ -100,9 +100,13 @@ describe('OTLP P5 APM adapter — span → OTLP/HTTP mapping (faked collector)',
   })
 })
 
-describe('OTLP P5 APM adapter — fake collector + env wiring', () => {
-  it('runs the full serialize→POST path against the in-memory fake when no endpoint is set', async () => {
-    await expect(createOtlpApmAdapter().exportSpans([span])).resolves.toBeUndefined()
+describe('OTLP P5 APM adapter — fail-closed + env wiring', () => {
+  it('exportSpans on an empty batch is a no-op even without an endpoint', async () => {
+    await expect(createOtlpApmAdapter().exportSpans([])).resolves.toBeUndefined()
+  })
+
+  it('exportSpans throws (no silent fake) when no endpoint is configured', async () => {
+    await expect(createOtlpApmAdapter().exportSpans([span])).rejects.toMatchObject({ name: 'OtlpApmError' })
   })
 
   it('otlpApmFromEnv derives /v1/traces from OTEL_EXPORTER_OTLP_ENDPOINT and parses OTEL_EXPORTER_OTLP_HEADERS', async () => {
@@ -120,7 +124,7 @@ describe('OTLP P5 APM adapter — fake collector + env wiring', () => {
     }
   })
 
-  it('otlpApmFromEnv binds the fake path when no OTEL endpoint is set', async () => {
-    await expect(otlpApmFromEnv({}).exportSpans([span])).resolves.toBeUndefined()
+  it('otlpApmFromEnv throws when no OTEL endpoint is set', () => {
+    expect(() => otlpApmFromEnv({})).toThrow(/misconfigured/)
   })
 })

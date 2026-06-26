@@ -70,25 +70,18 @@ describe('Nebras egress P6 adapter — routes through the egress gateway (no dir
     await expect(a400.syncDirectory(trace)).rejects.toMatchObject({ retryable: false, status: 400 })
   })
 
-  it('requires a gateway token provider once the gateway URL is set (no anonymous egress)', async () => {
-    const adapter = createNebrasEgressAdapter({ egressGatewayUrl: GW })
-    await expect(adapter.getConsentStatus('c1', trace)).rejects.toBeInstanceOf(NebrasEgressError)
+  it('requires a gateway token provider (no anonymous egress) — throws at construction', () => {
+    expect(() => createNebrasEgressAdapter({ egressGatewayUrl: GW })).toThrow(NebrasEgressError)
   })
 })
 
-describe('Nebras egress P6 adapter — fake gateway (no backend / contract context)', () => {
-  it('runs the full P6 contract against the in-memory fake gateway deterministically', async () => {
-    const adapter = createNebrasEgressAdapter() // no gateway URL → fake
-    expect((await adapter.revokeConsent('c1', 'CLIENT_INSTRUCTION', trace)).acknowledged_in_ms).toBeLessThan(5000)
-    expect((await adapter.dispatchRefund('c1', { amount: 1, currency: 'AED' }, trace)).ipp_status).toBe('ACSP')
-    const dir1 = await adapter.syncDirectory(trace)
-    const dir2 = await adapter.syncDirectory(trace)
-    expect(dir1).toEqual(dir2)
-    expect((await adapter.getConsentStatus('c9', trace)).consent_id).toBe('c9')
+describe('Nebras egress P6 adapter — fail-closed (no fake gateway under enterprise)', () => {
+  it('createNebrasEgressAdapter() throws without a gateway URL', () => {
+    expect(() => createNebrasEgressAdapter()).toThrow(NebrasEgressError)
   })
 
-  it('nebrasEgressFromEnv binds the fake path when EGRESS_GATEWAY_URL is unset', async () => {
-    const adapter = nebrasEgressFromEnv({})
-    expect((await adapter.createDisputeCase({ summary: 's' }, trace)).nebras_case_id).toBeTruthy()
+  it('nebrasEgressFromEnv throws when EGRESS_GATEWAY_URL / TOKEN are unset', () => {
+    expect(() => nebrasEgressFromEnv({})).toThrow(/misconfigured/)
+    expect(() => nebrasEgressFromEnv({ EGRESS_GATEWAY_URL: 'https://egress.bank.example' })).toThrow(/misconfigured/)
   })
 })

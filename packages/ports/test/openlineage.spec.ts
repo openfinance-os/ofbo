@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createOpenLineageAdapter, openLineageFromEnv } from '../src/adapters/enterprise/openlineage.js'
+import { createOpenLineageAdapter, openLineageFromEnv, OpenLineageError } from '../src/adapters/enterprise/openlineage.js'
 
 const event = { table: 'reconciliation_break', columns: ['variance_amount', 'currency'], source: 'recon-engine', trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
 
@@ -68,9 +68,9 @@ describe('OpenLineage P7 adapter — event → RunEvent mapping (faked catalogue
   })
 })
 
-describe('OpenLineage P7 adapter — fake catalogue + env wiring', () => {
-  it('runs the full serialize→POST path against the in-memory fake when no endpoint is set', async () => {
-    await expect(createOpenLineageAdapter().emitLineage(event)).resolves.toBeUndefined()
+describe('OpenLineage P7 adapter — fail-closed + env wiring', () => {
+  it('createOpenLineageAdapter() throws without an endpoint (no silent fake)', () => {
+    expect(() => createOpenLineageAdapter()).toThrow(OpenLineageError)
   })
 
   it('openLineageFromEnv targets OPENLINEAGE_URL and bearers OPENLINEAGE_API_KEY', async () => {
@@ -87,7 +87,7 @@ describe('OpenLineage P7 adapter — fake catalogue + env wiring', () => {
     }
   })
 
-  it('openLineageFromEnv binds the fake path when no OPENLINEAGE_URL is set', async () => {
-    await expect(openLineageFromEnv({}).emitLineage(event)).resolves.toBeUndefined()
+  it('openLineageFromEnv throws when no OPENLINEAGE_URL is set', () => {
+    expect(() => openLineageFromEnv({})).toThrow(/misconfigured/)
   })
 })

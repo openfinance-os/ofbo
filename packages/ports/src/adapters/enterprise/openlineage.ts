@@ -1,17 +1,17 @@
 import type { LineagePort } from '../../interfaces.js'
 
 /**
- * P7 — Enterprise data-catalogue lineage adapter via OpenLineage (pre-staged per ADR 0023,
+ * P7 — Enterprise data-catalogue lineage adapter via OpenLineage (pre-staged per ADR 0024,
  * fidelity rung ③).
  *
  * Emits the column-level BCBS 239 write-time lineage (the Q4.5 obligation) to the bank's
  * data catalogue using OpenLineage — the de-facto open standard ingested by Marquez,
- * DataHub, Collibra, Atlan and Microsoft Purview. Vendor-neutral by construction (ADR 0023
+ * DataHub, Collibra, Atlan and Microsoft Purview. Vendor-neutral by construction (ADR 0024
  * guardrail 3): the endpoint + namespace + auth are configuration / Bank Profile, so the
  * contract is "speak OpenLineage", not "speak <catalogue>".
  *
  * Implements EXACTLY the P7 port contract (`emitLineage`) — nothing more (guardrail 1).
- * Transport is injectable; with no endpoint configured it binds an in-memory fake catalogue
+ * Transport is injectable; fail-closed when unconfigured — tests inject a fake catalogue
  * that validates the RunEvent shape, so the contract exercises the real map→serialize→POST
  * path with no backend (guardrail 4 / rung ②). The bank's real catalogue/credentials/
  * residency are the M6 swap (rung ④).
@@ -22,7 +22,7 @@ const DEFAULT_PRODUCER = 'https://github.com/openfinance-os/ofbo'
 
 export interface OpenLineageConfig {
   /** Bank Profile — OpenLineage HTTP endpoint base, e.g. `https://marquez.bank.example`
-   *  (the adapter POSTs to `<endpoint>/api/v1/lineage`). When unset, the in-memory fake
+   *  (the adapter POSTs to `<endpoint>/api/v1/lineage`). Fail-closed; tests inject a fake transport
    *  catalogue is used (contract/test context). */
   endpoint?: string
   /** Job namespace (the producing system), default `ofbo`. */
@@ -52,7 +52,6 @@ export class OpenLineageError extends Error {
   }
 }
 
-const FAKE_ENDPOINT = 'https://fake.openlineage.invalid'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** OpenLineage `run.runId` must be a UUID. trace_id IS the x-fapi-interaction-id (a UUID);
@@ -64,25 +63,15 @@ function toRunId(traceId: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
-/** Deterministic in-memory OpenLineage catalogue — validates the RunEvent is well-formed
- *  and returns 201, so the adapter's real serialize+POST path runs with no backend (rung ②). */
-const fakeOpenLineageFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-  const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
-  const okShape = body.eventType && body.run && Array.isArray(body.outputs) && body.producer
-  if (!/\/api\/v1\/lineage$/.test(url) || (init?.method ?? 'GET') !== 'POST' || !okShape) {
-    return new Response(JSON.stringify({ error: 'malformed OpenLineage RunEvent' }), { status: 400 })
-  }
-  return new Response(null, { status: 201 })
-}
-
 export function createOpenLineageAdapter(config: OpenLineageConfig = {}): LineagePort {
-  const real = Boolean(config.endpoint)
-  const endpoint = config.endpoint ?? FAKE_ENDPOINT
+  // FAIL-CLOSED: no silent fake catalogue — a configured endpoint is mandatory (the
+  // fail-closed env gate is openLineageFromEnv). Transport is injectable for tests.
+  if (!config.endpoint) throw new OpenLineageError(0, false, 'OpenLineage endpoint is required (fail-closed)')
+  const endpoint = config.endpoint
   const namespace = config.namespace ?? 'ofbo'
   const datasetNamespace = config.datasetNamespace ?? 'ofbo-postgres'
   const producer = config.producer ?? DEFAULT_PRODUCER
-  const doFetch = config.fetchImpl ?? (real ? globalThis.fetch : fakeOpenLineageFetch)
+  const doFetch = config.fetchImpl ?? globalThis.fetch
 
   return {
     async emitLineage({ table, columns, source, trace_id }) {
@@ -124,9 +113,12 @@ export function createOpenLineageAdapter(config: OpenLineageConfig = {}): Lineag
   }
 }
 
-/** Build from the Bank Profile in the environment. With no OPENLINEAGE_URL set, binds the
- *  fake catalogue (contract/test context). Honours the standard OPENLINEAGE_* vars. */
+/** Build from the Bank Profile in the environment. FAIL-CLOSED: throws when no OPENLINEAGE_URL
+ *  is set (never a silent fake catalogue under the enterprise profile). Honours OPENLINEAGE_*. */
 export function openLineageFromEnv(env: NodeJS.ProcessEnv = process.env): LineagePort {
+  if (!env.OPENLINEAGE_URL) {
+    throw new OpenLineageError(0, false, 'OpenLineage adapter misconfigured: set OPENLINEAGE_URL')
+  }
   let headers: Record<string, string> | undefined
   if (env.OPENLINEAGE_API_KEY) headers = { authorization: `Bearer ${env.OPENLINEAGE_API_KEY}` }
   return createOpenLineageAdapter({

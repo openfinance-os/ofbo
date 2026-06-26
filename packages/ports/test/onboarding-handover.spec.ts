@@ -30,14 +30,12 @@ describe('P8 onboarding-handover adapter', () => {
     expect(calls[0]!.url).toBe(`${BASE}/onboarding-cases?from=2026-01-01&to=2026-12-31`)
   })
 
-  it('throws retryable on 5xx and requires a token when baseUrl is set', async () => {
+  it('throws retryable on 5xx', async () => {
     await expect(createOnboardingHandoverAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl: fakeTransport([], 500).fetchImpl }).getFunnelEvents(window)).rejects.toMatchObject({ retryable: true, status: 500 })
-    await expect(createOnboardingHandoverAdapter({ baseUrl: BASE }).getFunnelEvents(window)).rejects.toBeInstanceOf(OnboardingHandoverError)
   })
 
-  it('fake path / fromEnv: deterministic funnel events with both entry paths', async () => {
-    const events = await onboardingHandoverFromEnv({}).getFunnelEvents(window)
-    expect(events.length).toBeGreaterThan(0)
-    for (const e of events) expect(['DIRECT_SIGNUP', 'ONBOARDING_HANDOVER']).toContain(e.entry_path)
+  it('fail-closed: requires baseUrl + token, and fromEnv throws when unset', () => {
+    expect(() => createOnboardingHandoverAdapter({ baseUrl: BASE })).toThrow(OnboardingHandoverError)
+    expect(() => onboardingHandoverFromEnv({})).toThrow(/misconfigured/)
   })
 })

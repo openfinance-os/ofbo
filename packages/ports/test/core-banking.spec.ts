@@ -39,14 +39,13 @@ describe('P4 core-banking adapter (read-only, integer minor units)', () => {
     await expect(adapter.getBalance('acc-001', trace)).rejects.toBeInstanceOf(CoreBankingError)
   })
 
-  it('throws retryable on 5xx and requires a token when baseUrl is set', async () => {
+  it('throws retryable on 5xx', async () => {
     await expect(createCoreBankingAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl: fakeTransport({}, 503).fetchImpl }).getBalance('a', trace)).rejects.toMatchObject({ retryable: true, status: 503 })
-    await expect(createCoreBankingAdapter({ baseUrl: BASE }).getBalance('a', trace)).rejects.toBeInstanceOf(CoreBankingError)
   })
 
-  it('fake path / fromEnv: deterministic synthetic balance with integer Money', async () => {
-    const b = await coreBankingFromEnv({}).getBalance('acc-001', trace)
-    expect(Number.isInteger(b.balance.amount)).toBe(true)
-    expect(b.balance.currency).toMatch(/^[A-Z]{3}$/)
+  it('fail-closed: requires baseUrl + token at construction, and fromEnv throws when unset', () => {
+    expect(() => createCoreBankingAdapter({ baseUrl: BASE })).toThrow(CoreBankingError) // no token
+    expect(() => createCoreBankingAdapter({})).toThrow(CoreBankingError) // no baseUrl
+    expect(() => coreBankingFromEnv({})).toThrow(/misconfigured/)
   })
 })

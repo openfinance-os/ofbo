@@ -1,9 +1,9 @@
 import type { FinancialSystemPort } from '../../interfaces.js'
 
 /**
- * P9 — Financial management system enterprise adapter (pre-staged per ADR 0023, rung ③).
+ * P9 — Financial management system enterprise adapter (pre-staged per ADR 0024, rung ③).
  *
- * BOUNDARY (ADR 0023 Decision B): this adapter is invoice-EXECUTION transport only. It hands
+ * BOUNDARY (ADR 0024 Decision B): this adapter is invoice-EXECUTION transport only. It hands
  * the bank's ERP/AR system counterparty registrations + ALREADY-RECONCILED invoice
  * instructions and reads settlement status back. The regulated reconcile-before-invoice
  * pipeline — variance breaks, the 30-day Nebras dispute window, four-eyes invoice runs,
@@ -11,13 +11,13 @@ import type { FinancialSystemPort } from '../../interfaces.js'
  * here. (This is exactly why Kong Konnect billing must not replace P9.)
  *
  * Implements EXACTLY the P9 port contract (`registerCounterparty`, `issueInvoiceInstructions`,
- * `getSettlementStatus`) — nothing more. Transport injectable; with no base URL it binds an
- * in-memory fake ERP, so the contract runs the real call→parse path with no backend
+ * `getSettlementStatus`) — nothing more. Transport injectable; fail-closed when unconfigured — tests inject a fake transport, exercising
+ * the real call→parse path with no backend
  * (guardrail 4 / rung ②).
  */
 
 export interface FinancialSystemConfig {
-  /** Bank Profile — ERP / AR REST base URL. When unset, the in-memory fake is used. */
+  /** Bank Profile — ERP / AR REST base URL. Mandatory — fail-closed (tests inject a fake `fetchImpl`). */
   baseUrl?: string
   /** Bank Profile — bearer provider. Required once baseUrl is set. */
   getToken?: (trace: { trace_id: string }) => Promise<string>
@@ -36,37 +36,23 @@ export class FinancialSystemError extends Error {
   }
 }
 
-const FAKE_BASE = 'https://fake.financial-system.invalid'
 const SETTLEMENT_STATUSES = ['instructed', 'issued', 'settled', 'overdue', 'credit_noted'] as const
 type SettlementStatus = (typeof SETTLEMENT_STATUSES)[number]
 
-const fakeErpFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-  const method = init?.method ?? 'GET'
-  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
-  if (/\/counterparties$/.test(url) && method === 'POST') {
-    const body = init?.body ? (JSON.parse(String(init.body)) as { organisation_id?: string }) : {}
-    return json({ financial_system_ref: `fms-${body.organisation_id ?? 'unknown'}` })
-  }
-  if (/\/invoice-runs$/.test(url) && method === 'POST') return json({ accepted: true })
-  if (/\/invoice-runs\/[^/]+\/status$/.test(url)) return json({ invoice_status: 'instructed' })
-  return json({ error: 'unhandled' }, 404)
-}
-
 export function createFinancialSystemAdapter(config: FinancialSystemConfig = {}): FinancialSystemPort {
-  const real = Boolean(config.baseUrl)
-  const base = config.baseUrl ?? FAKE_BASE
-  const doFetch = config.fetchImpl ?? (real ? globalThis.fetch : fakeErpFetch)
+  // FAIL-CLOSED: no silent fake under the enterprise profile — base URL + token are mandatory.
+  if (!config.baseUrl) throw new FinancialSystemError(0, false, 'financial-system baseUrl is required (fail-closed)')
+  if (!config.getToken) throw new FinancialSystemError(0, false, 'financial-system getToken is required')
+  const getToken = config.getToken
+  const base = config.baseUrl
+  const doFetch = config.fetchImpl ?? globalThis.fetch
 
   async function call(path: string, trace: { trace_id: string }, init?: RequestInit): Promise<Response> {
     const headers: Record<string, string> = {
       accept: 'application/json',
       'x-fapi-interaction-id': trace.trace_id,
+      authorization: `Bearer ${await getToken(trace)}`,
       ...((init?.headers as Record<string, string> | undefined) ?? {})
-    }
-    if (real) {
-      if (!config.getToken) throw new FinancialSystemError(0, false, 'financial-system getToken is required when baseUrl is set')
-      headers.authorization = `Bearer ${await config.getToken(trace)}`
     }
     const res = await doFetch(`${base}${path}`, { ...init, headers })
     if (!res.ok) throw new FinancialSystemError(res.status, res.status === 429 || res.status >= 500, `financial-system ${path} → ${res.status}`)
@@ -97,5 +83,8 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
 
 export function financialSystemFromEnv(env: NodeJS.ProcessEnv = process.env): FinancialSystemPort {
   const token = env.FINANCIAL_SYSTEM_TOKEN
-  return createFinancialSystemAdapter({ baseUrl: env.FINANCIAL_SYSTEM_URL, getToken: token ? async () => token : undefined })
+  if (!env.FINANCIAL_SYSTEM_URL || !token) {
+    throw new FinancialSystemError(0, false, 'financial-system adapter misconfigured: set FINANCIAL_SYSTEM_URL and FINANCIAL_SYSTEM_TOKEN')
+  }
+  return createFinancialSystemAdapter({ baseUrl: env.FINANCIAL_SYSTEM_URL, getToken: async () => token })
 }

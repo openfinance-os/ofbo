@@ -1,17 +1,17 @@
 import type { ApmPort, OtelSpan } from '../../interfaces.js'
 
 /**
- * P5 — Enterprise APM adapter via OTLP/HTTP (pre-staged per ADR 0023, fidelity rung ③).
+ * P5 — Enterprise APM adapter via OTLP/HTTP (pre-staged per ADR 0024, fidelity rung ③).
  *
  * CLAUDE.md: "Enterprise APM is a bridge off the OTel stream, never a second
  * instrumentation path." This adapter IS that bridge — it forwards already-captured
  * spans to the bank's APM over OTLP/HTTP (the universal protocol ingested by Datadog,
  * Grafana/Tempo, Dynatrace, New Relic, Honeycomb, …). Vendor-neutral by construction:
- * the endpoint + auth headers are configuration / Bank Profile (ADR 0023 guardrail 3),
+ * the endpoint + auth headers are configuration / Bank Profile (ADR 0024 guardrail 3),
  * so no vendor is hardcoded — the contract is "speak OTLP", not "speak Datadog".
  *
  * Implements EXACTLY the P5 port contract (`exportSpans`) — nothing more (guardrail 1).
- * Transport is injectable; with no endpoint configured it binds an in-memory fake OTLP
+ * Transport is injectable; fail-closed when unconfigured — tests inject a fake OTLP
  * collector that validates the payload shape, so the contract exercises the real
  * map→serialize→POST path with no backend (guardrail 4 / rung ②). The bank's real
  * endpoint/credentials/residency are the M6 swap (rung ④).
@@ -19,7 +19,7 @@ import type { ApmPort, OtelSpan } from '../../interfaces.js'
 
 export interface OtlpApmConfig {
   /** Bank Profile — OTLP/HTTP traces endpoint, e.g. `https://otlp.bank.example/v1/traces`.
-   *  When unset, the in-memory fake collector is used (contract/test context). */
+   *  Mandatory — fail-closed (tests inject a fake `fetchImpl`). */
   endpoint?: string
   /** resource `service.name` (default `ofbo`). */
   serviceName?: string
@@ -44,7 +44,6 @@ export class OtlpApmError extends Error {
   }
 }
 
-const FAKE_ENDPOINT = 'https://fake.otlp.invalid/v1/traces'
 
 /** FNV-1a 32-bit — deterministic, dependency-free, only used to derive valid hex ids
  *  when an inbound id isn't already hex (never for security). */
@@ -88,27 +87,16 @@ function toOtlpSpan(s: OtelSpan): Record<string, unknown> {
   return span
 }
 
-/** Deterministic in-memory OTLP collector — validates the payload is well-formed
- *  resourceSpans and returns 200, so the adapter's real serialize+POST path runs with
- *  no backend (rung ②). */
-const fakeOtlpFetch: typeof fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
-  const body = init?.body ? (JSON.parse(String(init.body)) as { resourceSpans?: unknown[] }) : {}
-  if (!/\/v1\/traces$/.test(url) || (init?.method ?? 'GET') !== 'POST' || !Array.isArray(body.resourceSpans)) {
-    return new Response(JSON.stringify({ error: 'malformed OTLP export' }), { status: 400 })
-  }
-  return new Response(JSON.stringify({ partialSuccess: {} }), { status: 200, headers: { 'content-type': 'application/json' } })
-}
-
 export function createOtlpApmAdapter(config: OtlpApmConfig = {}): ApmPort {
-  const real = Boolean(config.endpoint)
-  const endpoint = config.endpoint ?? FAKE_ENDPOINT
+  // FAIL-CLOSED: no silent fake collector — exportSpans requires a configured endpoint
+  // (the fail-closed env gate is otlpApmFromEnv). Transport is injectable for tests.
   const serviceName = config.serviceName ?? 'ofbo'
-  const doFetch = config.fetchImpl ?? (real ? globalThis.fetch : fakeOtlpFetch)
+  const doFetch = config.fetchImpl ?? globalThis.fetch
 
   return {
     async exportSpans(spans) {
       if (spans.length === 0) return // nothing to bridge
+      if (!config.endpoint) throw new OtlpApmError(0, false, 'OTLP endpoint is required (fail-closed — no fake collector under the enterprise profile)')
       const payload = {
         resourceSpans: [
           {
@@ -122,7 +110,7 @@ export function createOtlpApmAdapter(config: OtlpApmConfig = {}): ApmPort {
         ...config.headers,
         ...(config.getHeaders ? await config.getHeaders() : {})
       }
-      const res = await doFetch(endpoint, { method: 'POST', headers, body: JSON.stringify(payload) })
+      const res = await doFetch(config.endpoint, { method: 'POST', headers, body: JSON.stringify(payload) })
       if (!res.ok) {
         throw new OtlpApmError(res.status, res.status === 429 || res.status >= 500, `OTLP export → ${res.status}`)
       }
@@ -131,9 +119,10 @@ export function createOtlpApmAdapter(config: OtlpApmConfig = {}): ApmPort {
 }
 
 /** Build from the Bank Profile in the environment, honouring the standard OTEL_* vars.
- *  With no endpoint set, binds the fake collector (contract/test context). */
+ *  FAIL-CLOSED: throws when no OTLP endpoint is configured (never a silent fake collector). */
 export function otlpApmFromEnv(env: NodeJS.ProcessEnv = process.env): ApmPort {
   const base = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? (env.OTEL_EXPORTER_OTLP_ENDPOINT ? `${env.OTEL_EXPORTER_OTLP_ENDPOINT.replace(/\/$/, '')}/v1/traces` : undefined)
+  if (!base) throw new OtlpApmError(0, false, 'OTLP APM adapter misconfigured: set OTEL_EXPORTER_OTLP_ENDPOINT (or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)')
   let headers: Record<string, string> | undefined
   if (env.OTEL_EXPORTER_OTLP_HEADERS) {
     // Standard format: comma-separated key=value pairs.
