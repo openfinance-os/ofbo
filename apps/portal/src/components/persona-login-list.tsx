@@ -1,6 +1,7 @@
 import type { PersonaLogin } from '../lib/portal'
 import { PERSONA_GUIDE, CAPABILITIES } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
+import { BuiltWithHarness } from './built-with-harness'
 
 /**
  * Welcome / persona-selector — the one surface outside the app shell. A two-panel card:
@@ -63,10 +64,14 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
           </span>
           New to Open Finance? Start with the guide
         </a>
-        <p className="mt-auto border-t border-nav-elevated pt-4 text-xs leading-relaxed text-on-nav opacity-80">
-          Every privileged action is four-eyes-gated, scope hygiene is enforced per role, and the environment carries
-          zero PII — all egress runs through the secure gateway.
-        </p>
+        <div className="mt-auto flex flex-col gap-3 border-t border-nav-elevated pt-4">
+          <p className="text-xs leading-relaxed text-on-nav opacity-80">
+            Every privileged action is four-eyes-gated, scope hygiene is enforced per role, and the environment carries
+            zero PII — all egress runs through the secure gateway.
+          </p>
+          {/* Build provenance — how this back office was produced (the AI build harness). */}
+          <BuiltWithHarness />
+        </div>
       </div>
 
       {/* Right — choose a role */}
