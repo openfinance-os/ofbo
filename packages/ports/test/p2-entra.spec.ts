@@ -33,6 +33,11 @@ function adapter(verifyJwt: EntraIdpConfig['verifyJwt'], over: Partial<EntraIdpC
   })
 }
 const valid = (claims: EntraClaims = VALID) => adapter(async () => claims)
+const withoutOid = (c: EntraClaims): EntraClaims => {
+  const copy = { ...c }
+  delete copy.oid
+  return copy
+}
 
 describe('P2 Entra adapter — verifyToken (human OIDC)', () => {
   it('maps an MFA-satisfied Entra token to subject + OFBO persona', async () => {
@@ -51,8 +56,7 @@ describe('P2 Entra adapter — verifyToken (human OIDC)', () => {
   })
 
   it('rejects a token with no subject claim (oid/sub)', async () => {
-    const { oid: _oid, ...noSubject } = VALID
-    await expect(valid(noSubject).verifyToken('jwt')).rejects.toThrow(/subject/)
+    await expect(valid(withoutOid(VALID)).verifyToken('jwt')).rejects.toThrow(/subject/)
   })
 
   it('propagates a cryptographic verification failure (bad signature / issuer / audience)', async () => {
@@ -63,8 +67,7 @@ describe('P2 Entra adapter — verifyToken (human OIDC)', () => {
   })
 
   it('falls back to sub when oid is absent', async () => {
-    const { oid: _oid, ...withSub } = VALID
-    const r = await valid({ ...withSub, sub: 'entra-sub-xyz' }).verifyToken('jwt')
+    const r = await valid({ ...withoutOid(VALID), sub: 'entra-sub-xyz' }).verifyToken('jwt')
     expect(r.subject).toBe('entra-sub-xyz')
   })
 })
