@@ -48,8 +48,8 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
     await expect(page.getByTestId('built-with-dialog')).toBeVisible()
     await expect(page.getByTestId('harness-map-frame')).toHaveAttribute('src', '/harness-map.html')
     await expect(page.getByTestId('built-with-full-link')).toHaveAttribute('href', '/harness-map.html')
-    // the embedded map actually renders its pipeline inside the iframe
-    await expect(page.frameLocator('[data-testid="harness-map-frame"]').locator('.pcard').first()).toBeVisible()
+    // the embedded map actually renders its Double Diamond phase cards inside the iframe
+    await expect(page.frameLocator('[data-testid="harness-map-frame"]').locator('.fc').first()).toBeVisible()
     await page.getByTestId('built-with-close').click()
     await expect(page.getByTestId('built-with-dialog')).toHaveCount(0)
   })
