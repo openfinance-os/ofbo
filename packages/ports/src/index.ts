@@ -14,3 +14,9 @@ export {
   SalesforceCareError,
   type SalesforceCareConfig
 } from './adapters/enterprise/salesforce-care-surface.js'
+export {
+  createOtlpApmAdapter,
+  otlpApmFromEnv,
+  OtlpApmError,
+  type OtlpApmConfig
+} from './adapters/enterprise/otlp-apm.js'

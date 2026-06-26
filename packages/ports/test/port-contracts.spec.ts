@@ -26,6 +26,25 @@ async function assertP3Contract(profile: DeployProfile) {
   expect(t.ticket_id).toBeTruthy()
 }
 
+/** The P5 contract, factored out so the SAME assertion binds both the demo sim and the
+ *  pre-staged OTLP/HTTP APM enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
+async function assertP5Contract(profile: DeployProfile) {
+  const p5 = getAdapter('p5-apm', profile)
+  await expect(
+    p5.exportSpans([
+      {
+        name: 'test-span',
+        trace_id: trace.trace_id,
+        span_id: 'span-001',
+        start_time: 0,
+        end_time: 1,
+        status_code: 'ok',
+        attributes: { 'http.route': '/test' }
+      }
+    ])
+  ).resolves.toBeUndefined()
+}
+
 /**
  * Port contract suite — binds ANY adapter behind the interface. Sim adapters run
  * now; the same expectations gate enterprise adapters at M6 (port-swap acceptance).
@@ -101,20 +120,7 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P5 accepts an OTel span batch', async () => {
-      const p5 = getAdapter('p5-apm', profile)
-      await expect(
-        p5.exportSpans([
-          {
-            name: 'test-span',
-            trace_id: trace.trace_id,
-            span_id: 'span-001',
-            start_time: 0,
-            end_time: 1,
-            status_code: 'ok',
-            attributes: { 'http.route': '/test' }
-          }
-        ])
-      ).resolves.toBeUndefined()
+      await assertP5Contract(profile)
     })
 
     it('P6 acknowledges consent revocation within the 5s scheme SLA', async () => {
@@ -175,7 +181,7 @@ describePortContract('demo')
 
 // Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
 // must pass EXACTLY the same port contract the sim passes.
-const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm']
+const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm']
 const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
 
 describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
@@ -195,5 +201,9 @@ describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', (
 
   it('P3 (ServiceNow enterprise) creates ITSM tickets with team routing', async () => {
     await assertP3Contract('enterprise')
+  })
+
+  it('P5 (OTLP/HTTP APM enterprise) accepts an OTel span batch', async () => {
+    await assertP5Contract('enterprise')
   })
 })

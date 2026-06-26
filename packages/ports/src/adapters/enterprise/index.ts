@@ -1,6 +1,7 @@
 import type { PortMap } from '../../interfaces.js'
 import { serviceNowItsmFromEnv } from './servicenow-itsm.js'
 import { salesforceCareSurfaceFromEnv } from './salesforce-care-surface.js'
+import { otlpApmFromEnv } from './otlp-apm.js'
 
 /**
  * Pre-staged enterprise adapters (ADR 0023). Only ports written ahead of their M6 swap
@@ -14,5 +15,6 @@ import { salesforceCareSurfaceFromEnv } from './salesforce-care-surface.js'
  */
 export const ENTERPRISE_ADAPTERS: Partial<PortMap> = {
   'p1-care-surface': salesforceCareSurfaceFromEnv(),
-  'p3-itsm': serviceNowItsmFromEnv()
+  'p3-itsm': serviceNowItsmFromEnv(),
+  'p5-apm': otlpApmFromEnv()
 }
