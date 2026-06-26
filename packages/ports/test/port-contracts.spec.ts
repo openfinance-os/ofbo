@@ -4,6 +4,17 @@ import { EnterpriseAdapterNotImplementedError, type DeployProfile } from '../src
 
 const trace = { trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
 
+/** The P1 mint-care-token contract, factored out so the SAME assertions bind both the demo
+ *  sim and the pre-staged Salesforce enterprise adapter (ADR 0023 — port-swap acceptance). */
+async function assertP1Contract(profile: DeployProfile) {
+  const p1 = getAdapter('p1-care-surface', profile)
+  const t = await p1.mintCareToken({ agent_id: 'agent-001', psu_id: 'psu-001' }, trace)
+  expect(t.act).toBe('agent-001')
+  expect(t.sub).toBe('psu-001')
+  expect(t.token).toBeTruthy()
+  expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
+}
+
 /** The P3 contract, factored out so the SAME assertions bind both the demo sim and the
  *  pre-staged ServiceNow enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
 async function assertP3Contract(profile: DeployProfile) {
@@ -22,12 +33,7 @@ async function assertP3Contract(profile: DeployProfile) {
 function describePortContract(profile: 'demo') {
   describe(`port contracts (${profile} profile)`, () => {
     it('P1 mints care tokens with act+sub claims and ≤15 min expiry', async () => {
-      const p1 = getAdapter('p1-care-surface', profile)
-      const t = await p1.mintCareToken({ agent_id: 'agent-001', psu_id: 'psu-001' }, trace)
-      expect(t.act).toBe('agent-001')
-      expect(t.sub).toBe('psu-001')
-      expect(t.token).toBeTruthy()
-      expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
+      await assertP1Contract(profile)
     })
 
     it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
@@ -169,7 +175,7 @@ describePortContract('demo')
 
 // Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
 // must pass EXACTLY the same port contract the sim passes.
-const PRE_STAGED: PortName[] = ['p3-itsm']
+const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm']
 const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
 
 describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
@@ -177,12 +183,16 @@ describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', (
     expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
   })
 
-  it('p3-itsm enterprise adapter is pre-staged and resolves (no real tenant configured)', () => {
-    expect(() => getAdapter('p3-itsm', 'enterprise')).not.toThrow()
+  it.each(PRE_STAGED.map((p) => [p] as const))('%s enterprise adapter is pre-staged and resolves (no real tenant configured)', (port: PortName) => {
+    expect(() => getAdapter(port, 'enterprise')).not.toThrow()
   })
 
-  // The port-swap acceptance gate: the pre-staged ServiceNow adapter passes the SAME P3
-  // contract the sim passes. When a port is added to PRE_STAGED, bind its contract here too.
+  // The port-swap acceptance gate: each pre-staged adapter passes the SAME contract the
+  // sim passes. When a port joins PRE_STAGED, bind its contract assertion here too.
+  it('P1 (Salesforce enterprise) mints care tokens with act+sub claims and ≤15 min expiry', async () => {
+    await assertP1Contract('enterprise')
+  })
+
   it('P3 (ServiceNow enterprise) creates ITSM tickets with team routing', async () => {
     await assertP3Contract('enterprise')
   })

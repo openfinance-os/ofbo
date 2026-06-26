@@ -8,3 +8,9 @@ export {
   ServiceNowItsmError,
   type ServiceNowConfig
 } from './adapters/enterprise/servicenow-itsm.js'
+export {
+  createSalesforceCareSurfaceAdapter,
+  salesforceCareSurfaceFromEnv,
+  SalesforceCareError,
+  type SalesforceCareConfig
+} from './adapters/enterprise/salesforce-care-surface.js'

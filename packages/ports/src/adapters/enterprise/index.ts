@@ -1,5 +1,6 @@
 import type { PortMap } from '../../interfaces.js'
 import { serviceNowItsmFromEnv } from './servicenow-itsm.js'
+import { salesforceCareSurfaceFromEnv } from './salesforce-care-surface.js'
 
 /**
  * Pre-staged enterprise adapters (ADR 0023). Only ports written ahead of their M6 swap
@@ -12,5 +13,6 @@ import { serviceNowItsmFromEnv } from './servicenow-itsm.js'
  * into the demo profile (ADR 0023 guardrail 4); demo selects the sim adapters, not these.
  */
 export const ENTERPRISE_ADAPTERS: Partial<PortMap> = {
+  'p1-care-surface': salesforceCareSurfaceFromEnv(),
   'p3-itsm': serviceNowItsmFromEnv()
 }
