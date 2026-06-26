@@ -164,7 +164,7 @@ describePortContract('demo')
 describe('enterprise adapters land port-by-port (M6)', () => {
   // Reference enterprise adapters (own suites: p2-entra.spec.ts, p3-servicenow.spec.ts) — these
   // resolve to a configured adapter instead of throwing NotImplemented. The rest remain stubs.
-  const WIRED = new Set<PortName>(['p2-identity-provider', 'p3-itsm', 'p5-apm'])
+  const WIRED = new Set<PortName>(['p1-care-surface', 'p2-identity-provider', 'p3-itsm', 'p5-apm', 'p9-financial-system'])
   const STILL_STUB = PORT_NAMES.filter((p) => !WIRED.has(p))
 
   it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
@@ -217,6 +217,37 @@ describe('enterprise adapters land port-by-port (M6)', () => {
       process.env.P5_OTLP_ENDPOINT = 'https://otlp.vendor.example'
       const p5 = getAdapter('p5-apm', 'enterprise')
       expect(typeof p5.exportSpans).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p9-financial-system (Kong Konnect) is WIRED for enterprise', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P9_KONNECT_BASE_URL
+      delete process.env.P9_KONNECT_AUTH
+      expect(() => getAdapter('p9-financial-system', 'enterprise')).toThrow(/P9 Kong Konnect adapter misconfigured/)
+
+      process.env.P9_KONNECT_BASE_URL = 'https://billing.konnect.example'
+      process.env.P9_KONNECT_AUTH = 'Bearer k'
+      expect(typeof getAdapter('p9-financial-system', 'enterprise').registerCounterparty).toBe('function')
+    } finally {
+      process.env = saved
+    }
+  })
+
+  it('p1-care-surface (CRM) is WIRED for enterprise', () => {
+    const saved = { ...process.env }
+    try {
+      delete process.env.P1_CRM_BASE_URL
+      delete process.env.P1_CARE_TOKEN_SIGNING_KEY
+      expect(() => getAdapter('p1-care-surface', 'enterprise')).toThrow(/P1 CRM care-surface adapter misconfigured/)
+
+      process.env.P1_CRM_BASE_URL = 'https://acme.my.salesforce.com'
+      process.env.P1_CRM_AUTH = 'Bearer sf'
+      process.env.P1_CARE_TOKEN_SIGNING_KEY = 'synthetic-care-signing-key-0123456789abcd'
+      expect(typeof getAdapter('p1-care-surface', 'enterprise').mintCareToken).toBe('function')
     } finally {
       process.env = saved
     }

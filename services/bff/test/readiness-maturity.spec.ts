@@ -13,16 +13,17 @@ describe('product maturity', () => {
     expect(m.summary.milestones_total).toBe(7)
   })
 
-  it('derives one port row per catalog port — every sim ready; P2/P3/P5 enterprise ready, the rest stubs', () => {
+  it('derives one port row per catalog port — every sim ready; the 5 reference adapters ready, rest stubs', () => {
     const m = getMaturity()
     expect(m.ports).toHaveLength(PORTS.length)
     expect(m.ports.map((p) => p.id)).toEqual(PORTS.map((p) => p.id))
     expect(m.ports.every((p) => p.sim_status === 'ready')).toBe(true)
     expect(m.summary.sim_adapters_ready).toBe(PORTS.length)
-    // P2 Entra (ADR 0023), P3 ServiceNow, P5 OTLP ship reference enterprise adapters; rest remain M6.
-    for (const id of ['P2', 'P3', 'P5']) expect(m.ports.find((p) => p.id === id)!.enterprise_status).toBe('ready')
-    expect(m.ports.filter((p) => p.enterprise_status === 'stub')).toHaveLength(PORTS.length - 3)
-    expect(m.summary.enterprise_adapters_remaining).toBe(PORTS.length - 3)
+    // P1 CRM, P2 Entra (ADR 0023), P3 ServiceNow, P5 OTLP, P9 Kong Konnect ship reference adapters.
+    const ready = ['P1', 'P2', 'P3', 'P5', 'P9']
+    for (const id of ready) expect(m.ports.find((p) => p.id === id)!.enterprise_status).toBe('ready')
+    expect(m.ports.filter((p) => p.enterprise_status === 'stub')).toHaveLength(PORTS.length - ready.length)
+    expect(m.summary.enterprise_adapters_remaining).toBe(PORTS.length - ready.length)
     // the contract-test gate is carried through from the catalog, not invented
     expect(m.ports[0]!.contract_test_gate).toBe(PORTS[0]!.contract_test_gate)
   })
@@ -39,7 +40,7 @@ describe('GET /public/readiness/maturity', () => {
     const body = (await res.json()) as { data: ReturnType<typeof getMaturity>; meta: { request_id: string } }
     expect(body.data.milestones).toHaveLength(7)
     expect(body.data.ports).toHaveLength(9)
-    expect(body.data.summary.enterprise_adapters_remaining).toBe(6) // P2 Entra + P3 ServiceNow + P5 OTLP ship
+    expect(body.data.summary.enterprise_adapters_remaining).toBe(4) // 5 reference adapters ship (P1/P2/P3/P5/P9)
     expect(body.meta.request_id).toBeTruthy()
   })
 })

@@ -28,3 +28,20 @@ export {
   type OtlpConfig,
   type OtlpHttp
 } from './adapters/enterprise/p5-otlp.js'
+export {
+  CrmCareSurfaceAdapter,
+  crmCareFromEnv,
+  fetchCrmHttp,
+  CrmCareConfigError,
+  type CrmCareConfig,
+  type CrmHttp,
+  type CrmVendor
+} from './adapters/enterprise/p1-crm.js'
+export {
+  KongKonnectFinancialAdapter,
+  kongKonnectFromEnv,
+  fetchKongBillingHttp,
+  KongKonnectConfigError,
+  type KongKonnectConfig,
+  type KongBillingHttp
+} from './adapters/enterprise/p9-kong-konnect.js'
