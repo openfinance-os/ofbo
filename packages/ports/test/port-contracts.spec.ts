@@ -26,6 +26,15 @@ async function assertP3Contract(profile: DeployProfile) {
   expect(t.ticket_id).toBeTruthy()
 }
 
+/** The P7 contract, factored out so the SAME assertion binds both the demo sim and the
+ *  pre-staged OpenLineage enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
+async function assertP7Contract(profile: DeployProfile) {
+  const p7 = getAdapter('p7-lineage', profile)
+  await expect(
+    p7.emitLineage({ table: 'reconciliation_break', columns: ['variance_amount'], source: 'recon-engine', trace_id: trace.trace_id })
+  ).resolves.toBeUndefined()
+}
+
 /** The P5 contract, factored out so the SAME assertion binds both the demo sim and the
  *  pre-staged OTLP/HTTP APM enterprise adapter (ADR 0023 — the port-swap acceptance gate). */
 async function assertP5Contract(profile: DeployProfile) {
@@ -154,10 +163,7 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P7 accepts column-level lineage emission', async () => {
-      const p7 = getAdapter('p7-lineage', profile)
-      await expect(
-        p7.emitLineage({ table: 'reconciliation_break', columns: ['variance_amount'], source: 'recon-engine', trace_id: trace.trace_id })
-      ).resolves.toBeUndefined()
+      await assertP7Contract(profile)
     })
 
     it('P8 yields funnel events with entry-path dimension', async () => {
@@ -181,7 +187,7 @@ describePortContract('demo')
 
 // Ports pre-staged ahead of M6 (ADR 0023) — resolve under the enterprise profile and
 // must pass EXACTLY the same port contract the sim passes.
-const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm']
+const PRE_STAGED: PortName[] = ['p1-care-surface', 'p3-itsm', 'p5-apm', 'p7-lineage']
 const STILL_STUBBED = PORT_NAMES.filter((p) => !PRE_STAGED.includes(p))
 
 describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', () => {
@@ -205,5 +211,9 @@ describe('enterprise adapters: stubbed until M6 except pre-staged (ADR 0023)', (
 
   it('P5 (OTLP/HTTP APM enterprise) accepts an OTel span batch', async () => {
     await assertP5Contract('enterprise')
+  })
+
+  it('P7 (OpenLineage enterprise) accepts column-level lineage emission', async () => {
+    await assertP7Contract('enterprise')
   })
 })

@@ -20,3 +20,9 @@ export {
   OtlpApmError,
   type OtlpApmConfig
 } from './adapters/enterprise/otlp-apm.js'
+export {
+  createOpenLineageAdapter,
+  openLineageFromEnv,
+  OpenLineageError,
+  type OpenLineageConfig
+} from './adapters/enterprise/openlineage.js'
