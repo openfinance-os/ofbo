@@ -217,8 +217,9 @@ milestones:
           an in-memory fake, no tenant) AHEAD of their M6 swap, under the four guardrails —
           port-interface-only surface, the SAME port-contract suite the sim passes, all
           bank-specifics in config/Bank Profile, never a real tenant in demo. Landed: P3
-          ServiceNow ITSM (ItsmPort) + P1 Salesforce Service Cloud care surface (CareSurfacePort)
-          in packages/ports/src/adapters/enterprise. Ports not yet pre-staged stay stubbed
+          ServiceNow ITSM (ItsmPort), P1 Salesforce Service Cloud care surface (CareSurfacePort),
+          and P5 enterprise APM via OTLP/HTTP (ApmPort, vendor-neutral) in
+          packages/ports/src/adapters/enterprise. Ports not yet pre-staged stay stubbed
           (registry throws NotImplemented). Does NOT advance M6-PORT-SWAPS — the
           tenant/OAuth/residency final mile remains the per-bank engagement.
       - id: M6-KONG-METERING
