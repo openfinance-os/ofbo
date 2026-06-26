@@ -162,12 +162,29 @@ function describePortContract(profile: 'demo') {
 describePortContract('demo')
 
 describe('enterprise adapters land port-by-port (M6)', () => {
-  // P2 (Entra ID) is the first real enterprise adapter (ADR 0023) — it no longer throws
-  // NotImplemented; it resolves to a configured adapter (its own contract suite is p2-entra.spec.ts).
-  const STILL_STUB = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')
+  // ADR 0024: P2 (Entra ID) is the reference template; the other eight ports are pre-staged at
+  // rung ③. ALL nine are now WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
+  // unconfigured enterprise adapter throws a clear config error, never a silent demo/fake (their
+  // own contract suites are the per-adapter *.spec.ts files, which inject fakes).
+  const PRESTAGED = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')
 
-  it.each(STILL_STUB.map((p) => [p] as const))('%s enterprise stub throws NotImplemented', (port: PortName) => {
-    expect(() => getAdapter(port, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
+  it.each(PRESTAGED.map((p) => [p] as const))('%s is WIRED and FAIL-CLOSED when unconfigured (never NotImplemented, never a fake)', (port: PortName) => {
+    const saved = process.env
+    process.env = {} as NodeJS.ProcessEnv // no vendor config → must throw a config error, not bind a fake
+    let err: unknown
+    try {
+      getAdapter(port, 'enterprise')
+    } catch (e) {
+      err = e
+    } finally {
+      process.env = saved
+    }
+    expect(err).toBeInstanceOf(Error)
+    expect(err).not.toBeInstanceOf(EnterpriseAdapterNotImplementedError) // it IS wired
+  })
+
+  it('still throws NotImplemented for a port with no enterprise factory (mechanism retained for future ports)', () => {
+    expect(() => getAdapter('p99-future' as PortName, 'enterprise')).toThrow(EnterpriseAdapterNotImplementedError)
   })
 
   it('p2-identity-provider is WIRED for enterprise — resolves with config, errors clearly without', () => {
