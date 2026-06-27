@@ -93,6 +93,7 @@
     background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
     padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
   }
+  .tool-card .tc-group { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; color: var(--slate); background: var(--line-soft); align-self: flex-start; padding: 2px 8px; border-radius: 6px; margin: 0 0 -4px; }
   .tool-card .tc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .tool-card .tc-name { font-size: 18px; font-weight: 700; color: var(--navy); margin: 0; }
   .tool-card .tc-type { font-size: 12px; color: var(--muted-2); margin: 2px 0 0; font-weight: 600; letter-spacing: .02em; }
@@ -110,9 +111,12 @@
 
   /* Matrix */
   .matrix-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: #fff; }
-  table.matrix { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  table.matrix { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 13.5px; }
   table.matrix th, table.matrix td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
-  table.matrix thead th { background: var(--navy); color: #fff; font-weight: 600; font-size: 12.5px; position: sticky; top: 0; }
+  table.matrix thead th { background: var(--navy); color: #fff; font-weight: 600; font-size: 12.5px; }
+  table.matrix thead tr.groups th { background: var(--slate); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; text-align: center; border-bottom: 1px solid rgba(255,255,255,.16); border-left: 1px solid rgba(255,255,255,.16); }
+  table.matrix thead tr.groups th:first-child { background: var(--navy); border-left: none; }
+  table.matrix thead tr.cols th { font-size: 12px; vertical-align: bottom; }
   table.matrix thead th:first-child { border-top-left-radius: var(--radius); }
   table.matrix tbody tr:hover { background: #f9fbfe; }
   table.matrix td.control { font-weight: 600; color: var(--navy-2); }
@@ -181,7 +185,7 @@
   <div class="wrap">
     <p class="kicker">OFBO · Open Finance Back Office · Research Artifact</p>
     <h1>Adapting the Build Harness to AI-DLC Tools</h1>
-    <p class="lede">The OFBO harness was built so the AI authoring tool is <em>swappable</em>. Regulated control lives in deterministic CI gates, git-trailer provenance, and branch protection &mdash; not in any one editor. This page shows the adaptation contract every AI-driven-development-lifecycle tool must satisfy, classifies the tool landscape by type, and works two examples in full: <strong>Cursor</strong> and <strong>Claude Code</strong>. Others slot into the same frame.</p>
+    <p class="lede">The OFBO harness was built so the AI authoring tool is <em>swappable</em>. Regulated control lives in deterministic CI gates, git-trailer provenance, and branch protection &mdash; not in any one editor, and not in any one <em>model backend</em>. This page shows the adaptation contract every AI-driven-development-lifecycle tool must satisfy, classifies the landscape by type, and works the field in full: <strong>Claude Code</strong> across its four backends (Anthropic API, AWS&nbsp;Bedrock, Google&nbsp;Vertex, Microsoft&nbsp;Foundry/Azure), the <strong>AWS-managed hosted</strong> path, plus <strong>Cursor</strong> and <strong>OpenAI&nbsp;Codex</strong>. Others slot into the same frame.</p>
     <div class="hero-meta">
       <span class="chip">UAE Open Finance &middot; CBUAE / Al&nbsp;Tareq / Nebras</span>
       <span class="chip">Bar: CLAUDE.md hard stops + ADR&nbsp;0019</span>
@@ -199,7 +203,8 @@
     <div class="callout">
       <p style="margin:0 0 10px"><strong>Two tiers of enforcement &mdash; only one is tool-specific.</strong></p>
       <p style="margin:0 0 8px"><span class="tier-tag tier-adv">Advisory</span> &nbsp;The <code>PreToolUse</code> tripwires (PII / spec / test) and worktree isolation are <em>Claude Code</em> primitives. A different tool won't fire them &mdash; so this convenience layer must be re-created as tool-neutral git hooks.</p>
-      <p style="margin:0"><span class="tier-tag tier-block">Merge-blocking</span> <span class="tier-tag tier-ext">External</span> &nbsp;The deterministic CI gates (Q1b test-integrity, Q4.5 lineage), the sealed evidence bundle, and human four-eyes via branch protection are <em>tool-independent by design</em> (ADR&nbsp;0019). They care about the commit, not the editor that wrote it. This is the real safety net, and it survives any tool swap.</p>
+      <p style="margin:0 0 8px"><span class="tier-tag tier-block">Merge-blocking</span> <span class="tier-tag tier-ext">External</span> &nbsp;The deterministic CI gates (Q1b test-integrity, Q4.5 lineage), the sealed evidence bundle, and human four-eyes via branch protection are <em>tool-independent by design</em> (ADR&nbsp;0019). They care about the commit, not the editor that wrote it. This is the real safety net, and it survives any tool swap.</p>
+      <p style="margin:0"><strong>One tool, many backends.</strong> Claude Code is the same agent whether its model runs on the Anthropic API, AWS&nbsp;Bedrock, Google&nbsp;Vertex, or Microsoft&nbsp;Foundry. So the <em>tool-side</em> controls (tripwires, worktree isolation, provenance) are identical across all four &mdash; only <strong>where inference runs and what leaves the perimeter</strong> moves. That single axis is what separates a regulated-eligible backend from a restricted one; the matrix below makes it visible by holding the tool constant and varying the backend.</p>
     </div>
   </div>
 </section>
@@ -209,7 +214,7 @@
   <div class="wrap">
     <p class="eyebrow">Worked examples</p>
     <h2>Tool cards</h2>
-    <p class="sub">Each tool is scored against the same axes. The verdict reflects fit with the OFBO regulated pipeline &mdash; not raw coding quality. Cards render from a small data table (see <a href="#extend">Adding a tool</a>), so the set grows without re-engineering the page.</p>
+    <p class="sub">Each option is scored against the same axes. The verdict reflects fit with the OFBO regulated pipeline &mdash; not raw coding quality. Note the four Claude&nbsp;Code cards are <em>one tool on four backends</em>: the verdict swings on the backend's egress/residency/outsourcing posture, not the agent. Cards render from a small data table (see <a href="#extend">Adding a tool</a>), so the set grows without re-engineering the page.</p>
     <div id="toolCards" class="grid tool-grid"></div>
     <div class="legend">
       <span>Verdict:</span>
@@ -287,7 +292,7 @@
       <li><b>Score Gate&nbsp;2 (outsourcing).</b> Who is the data-plane counterparty, and is there an existing CBUAE-cleared relationship to ride? Can the contract grant CBUAE on-site/audit access, immediate cessation, and no-training/ZDR?</li>
       <li><b>Map the harness controls.</b> Mark each row of the matrix <em>native / bridge / blocker</em>. Tripwires and worktree isolation are usually <em>bridge</em> for non-Claude tools (re-implement as git <code>pre-commit</code> / <code>prepare-commit-msg</code> hooks). CI gates and four-eyes are always external.</li>
       <li><b>Wire provenance.</b> Ensure commits carry <code>Co-Authored-By</code> + a <code>Build-Model</code> / session trailer so the ADR&nbsp;0019 evidence bundle attributes the tool. Editor-side AI tracking is a hint; the CI bundle is the system of record.</li>
-      <li><b>Add one data object.</b> Append a record to the <code>TOOLS</code> array in this file's script (name, type, verdict, per-control status). The card and the matrix column generate themselves.</li>
+      <li><b>Add one data object.</b> Append a record to the <code>TOOLS</code> array in this file's script (name, <code>group</code>, type, verdict, per-control status). The card, its group chip, and the matrix column &mdash; including the spanning group header &mdash; generate themselves. For a pluggable agent, add one record per backend you intend to allow; hold the tool-side controls constant and let egress/residency/outsourcing carry the verdict.</li>
     </ol>
     <div class="callout" style="margin-top:18px">
       <strong>Decision rule of thumb.</strong> If the no-direct-egress rule is taken literally for <em>all</em> code: Type&nbsp;B (in-tenancy) and Type&nbsp;C (air-gapped) are eligible; Type&nbsp;A is restricted to non-regulated/synthetic work under an Enterprise DPA, or excluded. Everything downstream of egress &mdash; gates, provenance, four-eyes &mdash; is tool-neutral and already solved by the harness.
@@ -299,7 +304,7 @@
   <div class="wrap">
     <h4>Scope &amp; caveats</h4>
     <p><span class="note-strong">Research artifact, not legal advice.</span> Several primary sources were egress-blocked during research and quoted via search; confirm load-bearing wording against the in-force CBUAE Circular&nbsp;3/2025 (Open Finance) and Circular&nbsp;14/2021 (Outsourcing), a <em>signed</em> vendor DPA, the AWS account team on <code>me-central-1</code> in-region inference profiles, and the final EU AI Act "Digital Omnibus" applicability date.</p>
-    <p class="src">Companion analysis: <a href="https://github.com/openfinance-os/ofbo/blob/main/docs/research/cursor-vs-claude-ai-dlc-uae-bank.md"><code>docs/research/cursor-vs-claude-ai-dlc-uae-bank.md</code></a> &nbsp;&middot;&nbsp; Harness basis: <a href="https://github.com/openfinance-os/ofbo/blob/main/CLAUDE.md"><code>CLAUDE.md</code></a>, <a href="https://github.com/openfinance-os/ofbo/blob/main/docs/adrs/0019-build-harness-hardening.md"><code>docs/adrs/0019-build-harness-hardening.md</code></a>. Key sources include code.claude.com/docs (Bedrock, LLM gateway), AWS Bedrock data-protection &amp; Middle-East cross-region inference, cursor.com/data-use &amp; security, rulebook.centralbank.ae, github.com/awslabs/aidlc-workflows, artificialintelligenceact.eu, slsa.dev.</p>
+    <p class="src">Companion analysis: <a href="https://github.com/openfinance-os/ofbo/blob/main/docs/research/cursor-vs-claude-ai-dlc-uae-bank.md"><code>docs/research/cursor-vs-claude-ai-dlc-uae-bank.md</code></a> &nbsp;&middot;&nbsp; Harness basis: <a href="https://github.com/openfinance-os/ofbo/blob/main/CLAUDE.md"><code>CLAUDE.md</code></a>, <a href="https://github.com/openfinance-os/ofbo/blob/main/docs/adrs/0019-build-harness-hardening.md"><code>docs/adrs/0019-build-harness-hardening.md</code></a>. Key sources include code.claude.com/docs (Bedrock, Vertex AI, Microsoft Foundry, LLM gateway), AWS Bedrock data-protection &amp; Middle-East cross-region inference, Amazon Bedrock AgentCore, learn.microsoft.com / azure.microsoft.com &amp; platform.claude.com on Claude in Microsoft Foundry (Anthropic-hosted infra; East US2 / Sweden Central regions), OpenAI Codex &amp; Azure OpenAI, cursor.com/data-use &amp; security, rulebook.centralbank.ae, github.com/awslabs/aidlc-workflows, artificialintelligenceact.eu, slsa.dev.</p>
   </div>
 </footer>
 
@@ -332,22 +337,88 @@ const CONTROLS = [
 
 const TOOLS = [
   {
-    name: "Claude Code",
-    type: "Type B · Pluggable-backend agent",
-    verdict: "fits",
-    tagline: "Inference runs in the bank's own AWS tenancy via Bedrock; the OFBO harness is native to it.",
+    name: "Claude Code · Anthropic API",
+    group: "Claude Code — self-run agent",
+    type: "Self-run agent · first-party API backend",
+    verdict: "conditions",
+    tagline: "Newest models, day-one — but inference egresses to Anthropic's US/global cloud. No in-tenancy, no UAE region. For regulated repos: P6-gateway only, synthetic data, Enterprise DPA + zero-data-retention.",
     facts: {
-      "Egress": "In-tenancy via Bedrock (CLAUDE_CODE_USE_BEDROCK); routable through P6 gateway.",
-      "Residency": "UAE me-central-1 has Claude (~Feb 2026); data-at-rest in source region.",
-      "Outsourcing": "Rides existing AWS relationship; Anthropic gets no customer content.",
-      "Certs": "SOC 2 II, ISO 27001, ISO 42001, HIPAA, FedRAMP High + inherits AWS.",
+      "Egress": "Routable via P6 (ANTHROPIC_BASE_URL → gateway) so 'no DIRECT egress' is satisfiable — but inference data still leaves the perimeter to Anthropic's cloud.",
+      "Residency": "US or global only — no Middle-East, no EU (platform.claude.com data-residency).",
+      "Outsourcing": "Direct Anthropic SaaS counterparty holding prompts/code; needs CBUAE non-objection + audit rights at Anthropic.",
+      "Certs": "Anthropic SOC 2 II, ISO 27001, ISO 42001, HIPAA, FedRAMP High; ZDR on the Enterprise/API tier.",
+      "Provenance": "Stamps Co-Authored-By + session trailers by default."
+    },
+    status: { egress:"bridge", residency:"blocker", outsource:"bridge", tripwire:"native",
+              worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "Claude Code · AWS Bedrock",
+    group: "Claude Code — self-run agent",
+    type: "Type B · self-run agent · Bedrock backend (in-tenancy)",
+    verdict: "fits",
+    tagline: "Inference in the bank's own AWS account, in-region (me-central-1). No third-party proxy; the OFBO harness is native. The recommended regulated path.",
+    facts: {
+      "Egress": "In-tenancy via CLAUDE_CODE_USE_BEDROCK; bank's own IAM; routable through P6. Anthropic receives no customer content.",
+      "Residency": "UAE me-central-1 has Claude; data-at-rest stays in source region. Confirm in-region-only vs global cross-region inference.",
+      "Outsourcing": "Rides the bank's existing AWS relationship — likely already CBUAE-cleared.",
+      "Certs": "Inherits AWS in-region controls + Anthropic certs.",
       "Provenance": "Stamps Co-Authored-By + session trailers by default."
     },
     status: { egress:"native", residency:"native", outsource:"native", tripwire:"native",
               worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
   },
   {
+    name: "Claude Code · Google Vertex",
+    group: "Claude Code — self-run agent",
+    type: "Type B · self-run agent · Vertex AI backend (in-tenancy)",
+    verdict: "conditions",
+    tagline: "Inference in the bank's own GCP project via CLAUDE_CODE_USE_VERTEX — but no UAE GCP region, and few UAE banks are GCP-first.",
+    facts: {
+      "Egress": "In-tenancy via CLAUDE_CODE_USE_VERTEX; containable inside a VPC-SC perimeter; routable through P6.",
+      "Residency": "No UAE GCP region; nearest Gulf is me-central1 (Doha) / me-central2 (Dammam). Confirm Claude-on-Vertex regional availability.",
+      "Outsourcing": "Rides a GCP relationship — a new cloud counterparty for AWS/Azure-first banks; needs its own CBUAE clearance.",
+      "Certs": "Inherits GCP controls + Anthropic certs.",
+      "Provenance": "Stamps Co-Authored-By + session trailers by default."
+    },
+    status: { egress:"native", residency:"bridge", outsource:"bridge", tripwire:"native",
+              worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "Claude Code · Microsoft Foundry (Azure)",
+    group: "Claude Code — self-run agent",
+    type: "Self-run agent · Foundry backend",
+    verdict: "conditions",
+    tagline: "Native Claude Code support (CLAUDE_CODE_USE_FOUNDRY), Entra ID + APIM gateway — but Foundry's Claude runs on Anthropic-hosted infra (East US2 / Sweden), NOT the bank's Azure region.",
+    facts: {
+      "Egress": "CLAUDE_CODE_USE_FOUNDRY=1 with Azure APIM as the LLM gateway (Entra ID per-user) — but inference is not in the bank's Azure tenancy; it reaches Anthropic-hosted infra behind Foundry.",
+      "Residency": "Foundry projects: East US2 or Sweden Central; EU 'coming 2026'; no UAE. Claude runs on Anthropic-hosted infra, not Azure regional infra.",
+      "Outsourcing": "Rides the bank's existing Microsoft/Azure relationship; APIM gives per-user audit + quota. Data plane still reaches Anthropic-hosted infra.",
+      "Certs": "Inherits Azure controls + Anthropic certs.",
+      "Provenance": "Stamps Co-Authored-By + session trailers by default."
+    },
+    status: { egress:"bridge", residency:"blocker", outsource:"bridge", tripwire:"native",
+              worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "Claude · AWS Hosted platform",
+    group: "Claude — AWS-managed / hosted",
+    type: "Type D · AWS-managed agent (AgentCore / managed Claude Code)",
+    verdict: "conditions",
+    tagline: "AWS-hosted Claude agents — Bedrock AgentCore runtime, or managed/remote Claude Code on AWS. Data plane stays in AWS, but the agent executes on the platform, so autonomy oversight is the added control beyond merge four-eyes.",
+    facts: {
+      "Egress": "Execution + inference inside AWS (AgentCore runtime or managed Claude Code) — no third-party proxy; contained in the AWS account.",
+      "Residency": "AWS region-pinned (me-central-1 where available); confirm AgentCore + Claude regional availability in-Gulf.",
+      "Outsourcing": "Rides the AWS relationship; the managed runtime is an added AWS service to name in the outsourcing assessment.",
+      "Autonomy": "The agent runs on the platform — needs run-scoping + a human approval on the control plane, not only PR four-eyes.",
+      "Provenance": "Co-Authored-By preserved when the runtime is Claude Code; verify for AgentCore-orchestrated agents."
+    },
+    status: { egress:"native", residency:"native", outsource:"native", tripwire:"bridge",
+              worktree:"bridge", prov:"bridge", gates:"ext", foureyes:"ext" }
+  },
+  {
     name: "Cursor",
+    group: "Other agents",
     type: "Type A · Cloud-SaaS IDE / copilot",
     verdict: "conditions",
     tagline: "Strong interactive UX, but mandatorily proxies all context through its US cloud — collides with no-direct-egress.",
@@ -360,26 +431,42 @@ const TOOLS = [
     },
     status: { egress:"blocker", residency:"bridge", outsource:"bridge", tripwire:"bridge",
               worktree:"bridge", prov:"bridge", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "OpenAI Codex",
+    group: "Other agents",
+    type: "Type A / D · OpenAI cloud agent (CLI + cloud)",
+    verdict: "conditions",
+    tagline: "Codex CLI + cloud agent. Default backend is OpenAI's US cloud (off-perimeter); Azure OpenAI gives an in-region path but inherits the Foundry residency caveats. Not Claude Code — the hook/worktree layer is a rebuild.",
+    facts: {
+      "Egress": "Default to OpenAI's cloud; the cloud agent executes off-perimeter. Azure OpenAI can pin an Azure region, but inference still leaves the dev perimeter.",
+      "Residency": "OpenAI direct: US/EU/select, no UAE. Azure OpenAI has UAE North — verify Codex-on-Azure support.",
+      "Outsourcing": "New OpenAI counterparty (or rides Azure via Azure OpenAI); needs CBUAE non-objection + audit rights.",
+      "Certs": "OpenAI SOC 2 Type II, CSA STAR; enterprise ZDR available.",
+      "Provenance": "No Claude-style trailers by default — add a prepare-commit-msg hook to stamp model attribution."
+    },
+    status: { egress:"blocker", residency:"bridge", outsource:"bridge", tripwire:"bridge",
+              worktree:"bridge", prov:"bridge", gates:"ext", foureyes:"ext" }
   }
 ];
 
 const TAXONOMY = [
   { badge:"A", name:"Cloud-SaaS IDE / copilot",
-    desc:"Polished editor; all context flows through the vendor's cloud, which builds the final prompt. No in-tenancy or air-gapped mode.",
+    desc:"Polished editor; all context flows through the vendor's cloud, which builds the final prompt. No in-tenancy or air-gapped mode. (A pluggable agent pointed at a first-party API behaves the same way on this axis.)",
     egress:"Egress: mandatory vendor proxy", egressClass:"p-red",
-    examples:["Cursor","GitHub Copilot"] },
+    examples:["Cursor","GitHub Copilot","Claude Code (Anthropic API)","Codex (CLI default)"] },
   { badge:"B", name:"Pluggable-backend agent",
-    desc:"Agentic CLI whose model backend is swappable (Bedrock / Vertex / gateway). Inference can run inside the bank's own cloud account, in-region.",
+    desc:"Agentic CLI whose model backend is swappable (Bedrock / Vertex / Foundry / gateway). Inference can run inside the bank's own cloud account, in-region — the same tool moves between Type A and Type B by configuration.",
     egress:"Egress: containable in tenancy", egressClass:"p-green",
-    examples:["Claude Code"] },
+    examples:["Claude Code (Bedrock)","Claude Code (Vertex)","Claude Code (Foundry)"] },
   { badge:"C", name:"Self-hosted / air-gapped",
     desc:"Deploys into the buyer's infrastructure with local or in-VPC inference; code need never leave the perimeter. Trades model frontier for control.",
     egress:"Egress: none / in-perimeter", egressClass:"p-green",
     examples:["Tabnine","Windsurf (self-host)","Sourcegraph Cody (local)"] },
-  { badge:"D", name:"Autonomous cloud agent",
-    desc:"Ticket-to-PR agents that plan and execute in the vendor's cloud. Highest autonomy, but context and execution sit off-perimeter by default.",
-    egress:"Egress: vendor cloud (review needed)", egressClass:"p-amber",
-    examples:["Devin","OpenHands","Jules"] },
+  { badge:"D", name:"Autonomous / managed cloud agent",
+    desc:"Ticket-to-PR agents that plan and execute on a hosted platform. Highest autonomy; execution sits off your machine. Posture depends on WHOSE cloud — a vendor's (off-perimeter) vs. the bank's own AWS account (containable).",
+    egress:"Egress: depends on host cloud", egressClass:"p-amber",
+    examples:["Claude on AWS (AgentCore)","Codex (cloud)","Devin","OpenHands","Jules"] },
 ];
 
 const VERDICT = {
@@ -410,6 +497,7 @@ TOOLS.forEach(t => {
     `<div class="tc-row"><span class="k">${esc(k)}</span><span class="v">${esc(val)}</span></div>`).join("");
   cardsRoot.appendChild(el(`
     <article class="tool-card">
+      ${t.group ? `<span class="tc-group">${esc(t.group)}</span>` : ""}
       <div class="tc-head">
         <div>
           <p class="tc-name">${esc(t.name)}</p>
@@ -430,7 +518,17 @@ cardsRoot.appendChild(el(`
 
 /* Matrix */
 const table = document.getElementById("matrixTable");
-const head = `<thead><tr><th>Harness control</th>${
+// Group header row — collapse contiguous tools sharing a group into one spanning cell.
+const groupSpans = [];
+TOOLS.forEach(t => {
+  const g = t.group || "";
+  const last = groupSpans[groupSpans.length - 1];
+  if (last && last.group === g) last.span += 1;
+  else groupSpans.push({ group: g, span: 1 });
+});
+const groupRow = `<tr class="groups"><th></th>${
+  groupSpans.map(s => `<th colspan="${s.span}">${esc(s.group)}</th>`).join("")}</tr>`;
+const head = `<thead>${groupRow}<tr class="cols"><th>Harness control</th>${
   TOOLS.map(t=>`<th>${esc(t.name)}</th>`).join("")}</tr></thead>`;
 const body = `<tbody>${CONTROLS.map(c=>{
   const tier = TIER[c.tier];
