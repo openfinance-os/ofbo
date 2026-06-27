@@ -1,7 +1,8 @@
 # HG-0002 — Immutable control plane the agent cannot modify
 
-- Status: **Proposed** — awaiting bank change-governance decision
-- Date: 2026-06-20
+- Status: **Accepted** (Option 1; harness-owner direction, 2026-06-27) — the control-plane
+  CODEOWNERS + branch protection on the listed paths remain the bank's config step (see Decision)
+- Date: 2026-06-20 (proposed) · 2026-06-27 (accepted)
 - Scope: harness / AI-SDLC governance
 - Related: HG-0001 (human four-eyes — meaningless if the agent can disable it); the harness bank-readiness review (2026-06-20)
 
@@ -51,9 +52,26 @@ checks, escalating to Option 2 (controls repo) only if needed.
 
 ## Decision
 
-_Pending._ Once accepted: add CODEOWNERS for the control surfaces, move hard gates to
-managed settings, pin action SHAs + enable signing/provenance/SBOM, and mark all gates
-required in branch protection.
+**Accepted — Option 1 (harness-owner, 2026-06-27).** The control plane is owned by a party
+other than the one it governs:
+- **CODEOWNERS** on `.github/`, `.claude/` (hooks, settings, agents, skills), `CLAUDE.md`,
+  `scripts/`, and `docs/governance/` → changes there require a separate **human** approval
+  group and (with HG-0001 branch protection) cannot be self-merged.
+- **Org-managed settings** for the hard gates (`worktree.bgIsolation`, allowed hooks) via the
+  managed/policy layer the agent cannot edit.
+- **Pin CI actions to SHAs**, enable **signed commits + SLSA provenance + SBOM**, and mark the
+  Q1–Q4.5 + discovery/waist checks **required** in branch protection.
+
+**Sandboxed-execution note (important).** Running the harness only as isolated, ephemeral
+cloud agents (no developer laptop/devbox) does **not** satisfy this control: a sandboxed agent
+can still edit its own `.claude/` skills, hooks, and gates **in the repository it is working
+on**. Control-plane immutability must therefore be enforced *outside the agent's write scope* —
+in the GitHub control surface (CODEOWNERS + branch protection + managed settings), not in the
+runtime. Sandboxing contains host/exfiltration risk; it does not make guardrails tamper-proof.
+
+Remaining bank-config step (enforcement of record): apply the CODEOWNERS file + branch
+protection + managed settings above; the `worktree-policy` hook is the in-loop honour, not the
+control of record.
 
 ## Consequences
 

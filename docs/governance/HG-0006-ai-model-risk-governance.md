@@ -1,7 +1,7 @@
-# HG-0006 — AI/model-risk governance for the harness (SR 11-7-equivalent)
+# HG-0006 — AI/model-risk governance for the harness (CBUAE Responsible-AI / NIST AI RMF-aligned)
 
 - Status: **Proposed** — awaiting bank model-risk / governance decision
-- Date: 2026-06-20
+- Date: 2026-06-20 · re-anchored 2026-06-27 (regulatory basis updated — see Context)
 - Scope: harness / AI-SDLC governance
 - Related: HG-0001..0005 (the controls this governs); docs/model-cards/ (the pattern already used for BACKOFFICE-65); the harness bank-readiness review (2026-06-20)
 
@@ -14,8 +14,21 @@ fallback). The **harness itself has none of that governance**: no model card, no
 validation, no documented human-in-the-loop points, no change-control on the
 behaviour-defining config (skills, `CLAUDE.md`, reviewer prompts — which the agent has
 been editing), no kill-switch, and no monitoring of agent decisions/cost. Under model-risk
-expectations (SR 11-7 / CBUAE-equivalent) an unvalidated, self-modifying model driving
-production change is not acceptable.
+and responsible-AI expectations, an unvalidated, self-modifying model driving production
+change is not acceptable.
+
+**Regulatory re-anchoring (2026-06-27).** This record originally framed the requirement as
+"SR 11-7-equivalent." The US interagency model-risk guidance was **revised on 17 April 2026
+and now explicitly *excludes* generative and agentic AI** as "novel and rapidly evolving"
+(with an RFI on banks' AI use forthcoming), so SR 11-7 is no longer the controlling anchor for
+a GenAI harness. The governing basis is now: the **CBUAE Guidance Note on the Responsible
+Adoption and Use of AI/ML (2026)** — board-level accountability, "complete operational control"
+over deployed models, annual bias audits, **three-tier risk-calibrated human oversight**, and a
+mandatory **immediate cease-use capability** (the kill-switch, HG-0010) — layered over **NIST AI
+RMF + the Generative AI Profile (AI 600-1)** and certifiable under **ISO/IEC 42001**. SR 11-7
+remains useful as a *validation discipline* (inventory → validate → monitor), not as the GenAI
+compliance authority. (UAE primary sources — the CBUAE Guidance Note date and DIFC Reg 10 / CP3
+— should be confirmed against the regulator's rulebook before reliance in a formal filing.)
 
 ## Requirements & regulatory basis
 
