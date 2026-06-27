@@ -35,3 +35,13 @@ HG-0006 was re-anchored the same day (SR 11-7 was revised April 2026 to exclude 
 was added the same day from the adversarially-verified deep-research re-run (reward-hacking by
 retrieval). Spec
 PRs / ADRs / production merges are human-approved; never auto-merged.
+
+## Runbooks
+
+Operational activation steps a bank admin runs (outside the agent's write scope, HG-0002):
+
+- [`runbooks/main-branch-protection-activation.md`](runbooks/main-branch-protection-activation.md)
+  — turn on the native GitHub controls that make HG-0001 non-bypassable (real CODEOWNERS
+  teams, `main` branch protection with required Code Owner review + required checks + no
+  bypass, and a least-privilege agent identity per HG-0004). Prompted by an agent-identity
+  merge to `main` on 2026-06-27 that the inert controls did not refuse.
