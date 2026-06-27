@@ -1,0 +1,48 @@
+# CODEOWNERS — the harness's immutable control plane (HG-0002)
+# =============================================================================
+# These paths are the controls that constrain the autonomous build agent: its
+# rules, gates, hooks, reviewers, CI, governance, and the spec/ADR canon. Per
+# HG-0002, a change to any of them is a *control change* and must be approved by
+# a human group the build agent is NOT a member of — separate from ordinary
+# feature-work review (HG-0001).
+#
+# WHY A SANDBOX ISN'T ENOUGH: running the agent only in isolated, ephemeral
+# sandboxes does not make these controls tamper-proof — a sandboxed agent can
+# still edit its own skills/hooks/gates in the repo it is working on. Immutability
+# has to be enforced HERE, in the GitHub control surface, outside the agent's
+# write scope. This file is that enforcement (once activated — see SETUP).
+#
+# SETUP — the bank-config step; this file is INERT until all three are done:
+#   1. Create the two GitHub teams below with accountable HUMANS. The build
+#      agent / bot identity MUST NOT be a member of either team and must not be
+#      able to approve its own PRs.
+#        @openfinance-os/ofbo-maintainers       — baseline human reviewers
+#        @openfinance-os/control-plane-owners    — control-plane change approvers
+#   2. Settings → Branches → protect `main`: enable "Require review from Code
+#      Owners", "Dismiss stale approvals", and "Do not allow bypass". Without
+#      this, CODEOWNERS is advisory only (HG-0001/HG-0002 are not enforced).
+#   3. Make the Q1–Q4.5 + discovery/waist checks REQUIRED status checks.
+#
+# (The team handles are PLACEHOLDERS. Until the teams exist GitHub will flag them
+#  as unknown owners and the rules won't bind — which is why this file is safe to
+#  merge ahead of the org setup. Substitute the bank's real team slugs.)
+#
+# Syntax: last matching pattern wins, so the catch-all is FIRST and the stricter
+# control-plane patterns come AFTER it.
+# =============================================================================
+
+# --- Baseline: every change needs a human reviewer (HG-0001) ---
+*                           @openfinance-os/ofbo-maintainers
+
+# --- Control plane (HG-0002): the agent's own guardrails — stricter owners ---
+/.github/                   @openfinance-os/control-plane-owners
+/.github/workflows/         @openfinance-os/control-plane-owners
+/.github/CODEOWNERS         @openfinance-os/control-plane-owners
+/.claude/                   @openfinance-os/control-plane-owners
+/CLAUDE.md                  @openfinance-os/control-plane-owners
+/scripts/                   @openfinance-os/control-plane-owners
+/docs/governance/           @openfinance-os/control-plane-owners
+
+# --- Canon of record: contract + architecture decisions (human-only already) ---
+/specs/                     @openfinance-os/control-plane-owners
+/docs/adrs/                 @openfinance-os/control-plane-owners

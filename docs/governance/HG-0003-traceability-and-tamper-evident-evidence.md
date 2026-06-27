@@ -22,6 +22,12 @@ recovered only by luck. The sealed release-evidence bundle (BACKOFFICE-57) is go
 - **Tamper-evidence / independence.** The audit trail of *who approved, what changed,
   when* must not be writable by the agent and should be externally retained.
 - **Reconcilable DoD.** "Done" must be independently verifiable, not self-declared.
+- **Immutable AI-processing register (DIFC Reg 10 / CP No.3 2026).** Beyond change records, the
+  agent's *processing activities* — runs, prompt/decision metadata, model + version, the
+  outcomes of each human gate — must be captured in a system-generated, **immutable** register,
+  owned by the **Autonomous Systems Officer** (HG-0010) and not writable by the agent. This is
+  the OTel-GenAI agent-span stream (HG-0011 gateway) persisted to the WORM/SOC sink; distinct
+  from the product's `audit_high_sensitivity` trail.
 
 ## Options
 
