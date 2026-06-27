@@ -24,11 +24,14 @@ ADRs replace that with enforced human accountability and an immutable control pl
 | HG-0009 | Right diamond was a straight line (no solution exploration) | Develop diverges before delivery converges — explore N solution directions, judge, converge to an SDR + the discovery-linked backlog item |
 | HG-0010 | No mandatory cease-use capability | Immediate cease-use kill-switch + a named Autonomous Systems Officer (CBUAE-mandatory; DIFC Reg 10) |
 | HG-0011 | Coding-agent LLM traffic + execution not residency-controlled | Onshore model gateway + pre-egress DLP + attested sandbox execution (UAE residency / Outsourcing C 14/2021) |
+| HG-0012 | Agent can reach "green" by retrieval, not derivation (mine `.git`/look up the fix) | Controlled build/eval runtime — sealed history + egress allow-list + an independent derivation-vs-retrieval auditor |
 
 Status: **HG-0001, HG-0002, HG-0007, HG-0009 Accepted** (harness-owner direction — the
 mechanism is wired in-repo; production branch-protection + CODEOWNERS remain the bank's config
-step). **HG-0003–HG-0006, HG-0008, HG-0010, HG-0011 Proposed** for the bank's change/risk
+step). **HG-0003–HG-0006, HG-0008, HG-0010–HG-0012 Proposed** for the bank's change/risk
 governance to decide. HG-0010 and HG-0011 were added 2026-06-27 from the UAE regulated-banking
 harness assessment (CBUAE Responsible-AI Guidance 2026, DIFC Reg 10, Outsourcing C 14/2021);
-HG-0006 was re-anchored the same day (SR 11-7 was revised April 2026 to exclude GenAI). Spec
+HG-0006 was re-anchored the same day (SR 11-7 was revised April 2026 to exclude GenAI); HG-0012
+was added the same day from the adversarially-verified deep-research re-run (reward-hacking by
+retrieval). Spec
 PRs / ADRs / production merges are human-approved; never auto-merged.
