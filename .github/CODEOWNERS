@@ -31,18 +31,26 @@
 # control-plane patterns come AFTER it.
 # =============================================================================
 
+# INTERIM (2026-06-27): @michartmann is appended as a REAL, resolvable human owner on
+# every line so "Require review from Code Owners" can be satisfied the moment branch
+# protection is enabled — before the two teams above exist. The placeholder team handles
+# are kept so they become additional owners once created; remove @michartmann then, and
+# restore the two-tier separation (baseline ≠ control-plane). This interim collapses both
+# tiers onto one human — acceptable as a stopgap, not the target state.
+# See: docs/governance/runbooks/main-branch-protection-activation.md
+
 # --- Baseline: every change needs a human reviewer (HG-0001) ---
-*                           @openfinance-os/ofbo-maintainers
+*                           @openfinance-os/ofbo-maintainers @michartmann
 
 # --- Control plane (HG-0002): the agent's own guardrails — stricter owners ---
-/.github/                   @openfinance-os/control-plane-owners
-/.github/workflows/         @openfinance-os/control-plane-owners
-/.github/CODEOWNERS         @openfinance-os/control-plane-owners
-/.claude/                   @openfinance-os/control-plane-owners
-/CLAUDE.md                  @openfinance-os/control-plane-owners
-/scripts/                   @openfinance-os/control-plane-owners
-/docs/governance/           @openfinance-os/control-plane-owners
+/.github/                   @openfinance-os/control-plane-owners @michartmann
+/.github/workflows/         @openfinance-os/control-plane-owners @michartmann
+/.github/CODEOWNERS         @openfinance-os/control-plane-owners @michartmann
+/.claude/                   @openfinance-os/control-plane-owners @michartmann
+/CLAUDE.md                  @openfinance-os/control-plane-owners @michartmann
+/scripts/                   @openfinance-os/control-plane-owners @michartmann
+/docs/governance/           @openfinance-os/control-plane-owners @michartmann
 
 # --- Canon of record: contract + architecture decisions (human-only already) ---
-/specs/                     @openfinance-os/control-plane-owners
-/docs/adrs/                 @openfinance-os/control-plane-owners
+/specs/                     @openfinance-os/control-plane-owners @michartmann
+/docs/adrs/                 @openfinance-os/control-plane-owners @michartmann
