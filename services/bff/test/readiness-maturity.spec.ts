@@ -13,16 +13,17 @@ describe('product maturity', () => {
     expect(m.summary.milestones_total).toBe(7)
   })
 
-  it('derives one port row per catalog port — every sim ready; P2 enterprise ready, the rest stubs', () => {
+  it('derives one port row per catalog port — every sim ready; all nine enterprise adapters now ship', () => {
     const m = getMaturity()
     expect(m.ports).toHaveLength(PORTS.length)
     expect(m.ports.map((p) => p.id)).toEqual(PORTS.map((p) => p.id))
     expect(m.ports.every((p) => p.sim_status === 'ready')).toBe(true)
     expect(m.summary.sim_adapters_ready).toBe(PORTS.length)
-    // P2 Entra ID ships a reference enterprise adapter (ADR 0023); the rest remain M6 work.
-    expect(m.ports.find((p) => p.id === 'P2')!.enterprise_status).toBe('ready')
-    expect(m.ports.filter((p) => p.enterprise_status === 'stub')).toHaveLength(PORTS.length - 1)
-    expect(m.summary.enterprise_adapters_remaining).toBe(PORTS.length - 1)
+    // All nine ports carry a reference enterprise adapter: P2 the worked reference (ADR 0023),
+    // the other eight pre-staged to the same fidelity rung (ADR 0024). Production cutover is M6.
+    expect(m.ports.every((p) => p.enterprise_status === 'ready')).toBe(true)
+    expect(m.ports.filter((p) => p.enterprise_status === 'stub')).toHaveLength(0)
+    expect(m.summary.enterprise_adapters_remaining).toBe(0)
     // the contract-test gate is carried through from the catalog, not invented
     expect(m.ports[0]!.contract_test_gate).toBe(PORTS[0]!.contract_test_gate)
   })
@@ -39,7 +40,7 @@ describe('GET /public/readiness/maturity', () => {
     const body = (await res.json()) as { data: ReturnType<typeof getMaturity>; meta: { request_id: string } }
     expect(body.data.milestones).toHaveLength(7)
     expect(body.data.ports).toHaveLength(9)
-    expect(body.data.summary.enterprise_adapters_remaining).toBe(8) // P2 Entra reference adapter ships
+    expect(body.data.summary.enterprise_adapters_remaining).toBe(0) // all nine reference enterprise adapters ship (ADR 0023/0024)
     expect(body.meta.request_id).toBeTruthy()
   })
 })

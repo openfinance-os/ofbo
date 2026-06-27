@@ -15,7 +15,11 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <Stat value={`${s.milestones_done}/${s.milestones_total}`} label="milestones delivered" tone="reconciled" />
         <Stat value={`${s.sim_adapters_ready}/${s.ports_total}`} label="simulator adapters live" tone="reconciled" />
-        <Stat value={`${s.enterprise_adapters_remaining}`} label="enterprise adapters remaining (M6)" tone="break" />
+        <Stat
+          value={`${s.enterprise_adapters_remaining}`}
+          label="enterprise adapters remaining (M6)"
+          tone={s.enterprise_adapters_remaining === 0 ? 'reconciled' : 'break'}
+        />
       </div>
 
       <Card title="Build roadmap (PRD §9)">
@@ -49,7 +53,7 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
         </ol>
       </Card>
 
-      <Card title="Port adapters — sim ships today, enterprise is the M6 work">
+      <Card title="Port adapters — sim and reference enterprise ship today; production cutover is M6">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -71,7 +75,11 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
                     <span className="rounded-full bg-reconciled/15 px-2 py-0.5 text-xs font-semibold text-reconciled">ready</span>
                   </td>
                   <td className="px-4 py-2">
-                    <span className="rounded-full bg-break/15 px-2 py-0.5 text-xs font-semibold text-break">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        p.enterprise_status === 'ready' ? 'bg-reconciled/15 text-reconciled' : 'bg-break/15 text-break'
+                      }`}
+                    >
                       {p.enterprise_status === 'ready' ? 'ready' : 'to write (M6)'}
                     </span>
                   </td>
