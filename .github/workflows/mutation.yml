@@ -1,4 +1,5 @@
-# HARNESS-04 — mutation testing of the security-critical BFF core (rbac / auth / four-eyes).
+# HARNESS-04 — mutation testing of the security-critical BFF core (rbac / auth / four-eyes /
+# high-class audit / Idempotency-Key window).
 # Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a
 # behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run is
 # ~8 min, so it would tax every unrelated PR. Instead it runs on a schedule, on demand, and on
@@ -16,6 +17,8 @@ on:
       - 'services/bff/src/rbac.ts'
       - 'services/bff/src/auth.ts'
       - 'services/bff/src/approvals/**'
+      - 'services/bff/src/high-class-audit.ts'
+      - 'services/bff/src/idempotency.ts'
       - 'stryker.config.json'
       - 'vitest.mutation.config.ts'
       - '.github/workflows/mutation.yml'

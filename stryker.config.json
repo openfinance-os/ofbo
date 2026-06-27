@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "HARNESS-04 (ADR 0019 follow-up): mutation testing scoped to the security-critical BFF core. Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a behaviour change no test caught. Scoped to rbac/auth/approvals (scope enforcement + four-eyes) and DB-free (vitest.mutation.config.ts) so it runs fast and hermetically. `break` is calibrated below the measured baseline so a real regression fails CI without flaking on the noise floor.",
+  "_comment": "HARNESS-04 (ADR 0019 follow-up): mutation testing scoped to the security-critical BFF core. Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a behaviour change no test caught. Scoped to rbac/auth/approvals (scope enforcement + four-eyes), the high-class audit emission (audit immutability + PII redaction at emission — a CLAUDE.md hard stop), and the Idempotency-Key 24h dedup window (binding API convention); all DB-free (vitest.mutation.config.ts) so it runs fast and hermetically. `break` is calibrated below the measured baseline so a real regression fails CI without flaking on the noise floor.",
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
   "vitest": { "configFile": "vitest.mutation.config.ts" },
@@ -9,7 +9,9 @@
     "services/bff/src/rbac.ts",
     "services/bff/src/auth.ts",
     "services/bff/src/approvals/service.ts",
-    "services/bff/src/approvals/operation-summary.ts"
+    "services/bff/src/approvals/operation-summary.ts",
+    "services/bff/src/high-class-audit.ts",
+    "services/bff/src/idempotency.ts"
   ],
   "reporters": ["clear-text", "progress", "json", "html"],
   "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
