@@ -293,7 +293,7 @@ const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElemen
 const STATS=[
   ['135','features shipped'],['7','agent skills'],['4','AI reviewer agents'],
   ['4','safety hooks'],['17','custom gate scripts'],['9','discovery gates (D1–D9)'],
-  ['9','CI gates (Q1–Q4.5)'],['9','governance records'],['3','human decisions'],['0','standing meetings'],
+  ['9','CI gates (Q1–Q4.5)'],['12','governance records'],['3','human decisions'],['0','standing meetings'],
 ];
 /* ---- the four phases ---- */
 const PHASES=[
@@ -351,9 +351,9 @@ const LAYERS=[
   {cnt:'9',h:'CI quality gates',c:'var(--deliver)',
    why:'<b>The merge wall.</b> Build & unit, test-integrity, SAST, docs-integrity, integration + contract, portal E2E, security, and BCBS 239 lineage all must be green. A failed gate blocks merge — then a human still has to approve.',
    items:[['Q1 build+unit','GATE'],['Q1b test-integrity','GATE'],['Q2 SAST','GATE'],['Q2b docs','GATE'],['Q3 contract','GATE'],['Q3 E2E','GATE'],['Q4 security','GATE'],['Q4.5 lineage','GATE'],['Q5 prod (human)','GATE']]},
-  {cnt:'9',h:'Governance records',c:'var(--human)',
-   why:'<b>AI proposes, humans dispose.</b> The rules that keep a regulated bank accountable — four-eyes merges, an immutable control plane, model-risk governance. Three are accepted and wired; six await the bank’s decision.',
-   items:[['HG-0001 four-eyes','GOV'],['HG-0007 waist gate','GOV'],['HG-0009 develop diverge','GOV'],['HG-0002 control plane','GOV'],['HG-0005 prod gate','GOV'],['HG-0006 model risk','GOV']]},
+  {cnt:'12',h:'Governance records',c:'var(--human)',
+   why:'<b>AI proposes, humans dispose.</b> The rules that keep a regulated bank accountable — four-eyes merges, an immutable control plane, model-risk governance, and the UAE regulated-banking controls (cease-use kill-switch, onshore model gateway, a sealed build/eval runtime). Four are accepted and wired; eight await the bank’s decision.',
+   items:[['HG-0001 four-eyes','GOV'],['HG-0002 control plane','GOV'],['HG-0007 waist gate','GOV'],['HG-0009 develop diverge','GOV'],['HG-0003 traceability','GOV'],['HG-0004 least-privilege','GOV'],['HG-0005 prod gate','GOV'],['HG-0006 model risk','GOV'],['HG-0008 agnostic seams','GOV'],['HG-0010 kill-switch','GOV'],['HG-0011 model gateway','GOV'],['HG-0012 build runtime','GOV']]},
 ];
 /* ---- human gates ---- */
 const HUMAN=[
@@ -425,7 +425,7 @@ function openKind(name,kind){
     `<p>${KINDWHY[kind]}</p><div class="lab">Layer</div><p>${KINDLABEL[kind]}</p>`+
     (kind==='GOV'?statusLine(name):''));
 }
-function statusLine(name){const acc=/HG-0001|HG-0007|HG-0009/.test(name);
+function statusLine(name){const acc=/HG-0001|HG-0002|HG-0007|HG-0009/.test(name);
   return `<div class="lab">Status</div><p><span class="badge ${acc?'b-acc':'b-prop'}">${acc?'accepted · wired':'proposed'}</span></p>`}
 function closeModal(){$('#scrim').classList.remove('open')}
 $('#mClose').onclick=closeModal;
