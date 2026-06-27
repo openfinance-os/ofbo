@@ -4199,7 +4199,7 @@ export interface paths {
         };
         /**
          * Product maturity — what's built vs. what remains (public, ADR 0022)
-         * @description The companion to the readiness wizard: the wizard shows how close a given bank is; this shows how complete the product is. Milestone roadmap (M0–M6) + per-port adapter status (every sim adapter ships; the enterprise adapter is the M6 work). Static, no auth, no PII.
+         * @description The companion to the readiness wizard: the wizard shows how close a given bank is; this shows how complete the product is. Milestone roadmap (M0–M6) + per-port adapter status (every sim adapter ships, and every port now carries a reference enterprise adapter; M6 is the per-bank production cutover). Static, no auth, no PII.
          */
         get: {
             parameters: {
@@ -5156,7 +5156,7 @@ export interface components {
              */
             sim_status: "ready";
             /**
-             * @description Enterprise adapter — the M6 port-swap work
+             * @description Enterprise adapter — 'ready' means a reference adapter ships and swaps via config (ADR 0023/0024); the per-bank production cutover is M6
              * @enum {string}
              */
             enterprise_status: "stub" | "ready";

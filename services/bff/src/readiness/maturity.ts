@@ -45,9 +45,12 @@ const MILESTONES: MaturityMilestone[] = [
   { id: 'M6', title: 'Enterprise port-swaps', status: 'remaining', detail: 'Per-bank: write the 9 enterprise adapters, each passing the contract suite its simulator passes.' }
 ]
 
-// Ports that already ship a reference enterprise adapter (passes the port-swap contract suite).
-// P2 — Microsoft Entra ID — is the first (ADR 0023). Grows as reference adapters land.
-const ENTERPRISE_READY = new Set<string>(['P2'])
+// Ports that already ship a reference enterprise adapter. All nine now do: P2 — Microsoft Entra ID —
+// is the worked reference (ADR 0023); the other eight were pre-staged to the same fidelity rung ③
+// (sandbox-validated, config-from-env, registry-wired, contract-green) under ADR 0024. 'ready' here
+// means "a reference adapter ships and swaps via config" — the per-bank production cutover is still
+// M6 (which stays a remaining milestone above); it is not a claim that M6 is done.
+const ENTERPRISE_READY = new Set<string>(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9'])
 
 export function getMaturity(): MaturitySummary {
   const ports: MaturityPort[] = PORTS.map((p) => ({
@@ -59,6 +62,7 @@ export function getMaturity(): MaturitySummary {
     contract_test_gate: p.contract_test_gate
   }))
   const milestonesDone = MILESTONES.filter((m) => m.status === 'done').length
+  const enterpriseRemaining = ports.filter((p) => p.enterprise_status === 'stub').length
   return {
     milestones: MILESTONES,
     ports,
@@ -67,8 +71,8 @@ export function getMaturity(): MaturitySummary {
       milestones_done: milestonesDone,
       ports_total: ports.length,
       sim_adapters_ready: ports.length,
-      enterprise_adapters_remaining: ports.filter((p) => p.enterprise_status === 'stub').length,
-      note: `${milestonesDone} of ${MILESTONES.length} milestones delivered and live on the demo. All ${ports.length} simulator adapters ship today; the remaining work is the ${ports.length} enterprise adapters (M6), each inheriting the same contract tests its simulator already passes.`
+      enterprise_adapters_remaining: enterpriseRemaining,
+      note: `${milestonesDone} of ${MILESTONES.length} milestones delivered and live on the demo. All ${ports.length} simulator adapters ship today, and all ${ports.length} ports now carry a reference enterprise adapter (sandbox-validated, config-and-swap; ADR 0023/0024) — each inheriting the same contract tests its simulator already passes. M6 remains: the per-bank production cutover that hardens each reference adapter against the institution's live system.`
     }
   }
 }
