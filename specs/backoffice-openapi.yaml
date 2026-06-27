@@ -2430,7 +2430,8 @@ paths:
       description: >
         The companion to the readiness wizard: the wizard shows how close a given bank is; this
         shows how complete the product is. Milestone roadmap (M0–M6) + per-port adapter status
-        (every sim adapter ships; the enterprise adapter is the M6 work). Static, no auth, no PII.
+        (every sim adapter ships, and every port now carries a reference enterprise adapter; M6 is
+        the per-bank production cutover). Static, no auth, no PII.
       security: []
       x-rate-limit-per-min: 120
       responses:
@@ -3577,7 +3578,7 @@ components:
         id: { type: string, description: Port id P1..P9 }
         name: { type: string }
         sim_status: { type: string, enum: [ready], description: Demo-profile adapter — ships today }
-        enterprise_status: { type: string, enum: [stub, ready], description: Enterprise adapter — the M6 port-swap work }
+        enterprise_status: { type: string, enum: [stub, ready], description: 'Enterprise adapter — ''ready'' means a reference adapter ships and swaps via config (ADR 0023/0024); the per-bank production cutover is M6' }
         contract_test_gate: { type: string, description: The acceptance suite both adapters must pass }
     MaturitySummary:
       type: object
