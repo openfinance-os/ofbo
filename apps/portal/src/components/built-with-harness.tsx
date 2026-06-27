@@ -118,18 +118,33 @@ export function BuiltWithHarness() {
             {/* Footer */}
             <div className="flex items-center justify-between gap-3 border-t border-outline-variant bg-surface-container px-5 py-3">
               <span className="text-xs text-on-surface-variant">DEMO · synthetic data only · zero PII</span>
-              <a
-                href="/harness-map.html"
-                target="_blank"
-                rel="noreferrer"
-                data-testid="built-with-full-link"
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container"
-              >
-                Open the full map
-                <span className="font-symbols text-base" aria-hidden>
-                  open_in_new
-                </span>
-              </a>
+              <div className="flex items-center gap-2">
+                {/* Companion read: how the harness adapts to different AI-DLC tools (Cursor, Claude Code, …) */}
+                <a
+                  href="/ai-dlc-harness-tooling.html"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="built-with-aidlc-link"
+                  className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 text-sm font-semibold text-on-surface hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container"
+                >
+                  AI-DLC tooling
+                  <span className="font-symbols text-base" aria-hidden>
+                    open_in_new
+                  </span>
+                </a>
+                <a
+                  href="/harness-map.html"
+                  target="_blank"
+                  rel="noreferrer"
+                  data-testid="built-with-full-link"
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container"
+                >
+                  Open the full map
+                  <span className="font-symbols text-base" aria-hidden>
+                    open_in_new
+                  </span>
+                </a>
+              </div>
             </div>
           </div>
         </div>
