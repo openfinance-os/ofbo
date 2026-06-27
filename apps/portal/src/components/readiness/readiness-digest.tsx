@@ -71,6 +71,8 @@ export function ReadinessDigestView({
                   <td className="px-4 py-2">
                     {p.adapter_status === 'sim_ready' ? (
                       <span className="rounded-full bg-reconciled/15 px-2 py-0.5 text-xs font-semibold text-reconciled">no work</span>
+                    ) : p.adapter_status === 'enterprise_reference' ? (
+                      <span className="rounded-full bg-secondary/15 px-2 py-0.5 text-xs font-semibold text-secondary" title="A reference adapter ships; remaining work is config + the per-bank production cutover (M6).">reference ships</span>
                     ) : (
                       <span className="rounded-full bg-surface-container px-2 py-0.5 text-xs font-semibold text-on-surface-variant">to write</span>
                     )}

@@ -22,7 +22,7 @@ const digest: ReadinessDigest = {
   score: 84,
   verdict: 'Achievable; a few ports need scoping.',
   ports: [
-    { id: 'P2', name: 'Enterprise IdP', chosen_system: 'Okta', adapter_status: 'enterprise_to_write', contract_test_gate: 'gate', effort_band: 'low', config_keys: ['P2_OIDC_ISSUER'] }
+    { id: 'P2', name: 'Enterprise IdP', chosen_system: 'Okta', adapter_status: 'enterprise_reference', contract_test_gate: 'gate', effort_band: 'low', config_keys: ['P2_OIDC_ISSUER'] }
   ],
   governance: [{ id: 'BD-01', title: 'IdP', answer: 'OIDC provider', is_default: true, blocker: 'M1' }],
   generated_profile: { DEPLOY_PROFILE: 'enterprise', P2_SYSTEM: 'Okta' },
@@ -64,5 +64,17 @@ describe('ReadinessWizard', () => {
     )
     expect(screen.getByTestId('readiness-digest')).toBeInTheDocument()
     expect(screen.getByTestId('readiness-score')).toHaveTextContent('84')
+  })
+
+  it('shows an enterprise_reference port as "reference ships", not "to write"', () => {
+    render(
+      <ReadinessWizard
+        catalog={catalog}
+        initialProfile={{ slug: 'rdy-1', name: 'Bank A', created_at: '2026-06-25T00:00:00Z', input: { ports: { P2: 'okta' } }, digest }}
+      />
+    )
+    const row = screen.getByTestId('digest-port-P2')
+    expect(row).toHaveTextContent('reference ships')
+    expect(row).not.toHaveTextContent('to write')
   })
 })

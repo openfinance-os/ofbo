@@ -78,6 +78,18 @@ describe('assess — adapter status & sequencing', () => {
     expect(swapPorts).toContain('P2')
   })
 
+  it('a non-built-in choice maps to enterprise_reference (a reference adapter ships; ADR 0023/0024)', () => {
+    const d = assess({ ports: { P2: 'okta' } })
+    const p2 = d.ports.find((p) => p.id === 'P2')!
+    // not "to write from scratch": every port ships a reference enterprise adapter today;
+    // the bank's remaining work is config + the per-bank production cutover (M6).
+    expect(p2.adapter_status).toBe('enterprise_reference')
+    const step = d.sequencing.find((s) => s.port === 'P2')!
+    expect(step.action.toLowerCase()).toContain('reference')
+    expect(step.action.toLowerCase()).toContain('configure')
+    expect(step.action.toLowerCase()).not.toContain('write the')
+  })
+
   it('sequencing follows the M6 order (P2 before P6 before P4)', () => {
     const d = assess(bestEffort())
     const order = d.sequencing.map((s) => s.port)
@@ -106,10 +118,11 @@ describe('assess — governance register', () => {
     expect(d.generated_profile.P2_SYSTEM).toBe('Okta')
   })
 
-  it('already_done frames the work as bounded', () => {
+  it('already_done frames the work as bounded — reference adapters ship, remaining work is config + cutover', () => {
     const d = assess(bestEffort())
     expect(d.already_done.sim_adapters_ready).toBe(9)
     expect(d.already_done.ports_total).toBe(9)
+    expect(d.already_done.note.toLowerCase()).toContain('reference')
   })
 })
 
