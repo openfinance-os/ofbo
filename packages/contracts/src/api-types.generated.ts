@@ -5089,10 +5089,10 @@ export interface components {
             name: string;
             chosen_system: string;
             /**
-             * @description sim adapter ships today; enterprise adapter is the M6 work
+             * @description sim_ready = built-in / declined (no integration work); enterprise_reference = a reference enterprise adapter ships (ADR 0023/0024), so the remaining work is config + the per-bank production cutover (M6); enterprise_to_write = no reference adapter exists yet (none today)
              * @enum {string}
              */
-            adapter_status: "sim_ready" | "enterprise_to_write";
+            adapter_status: "sim_ready" | "enterprise_reference" | "enterprise_to_write";
             /** @description The port-swap acceptance test suite this adapter must pass */
             contract_test_gate: string;
             effort_band: components["schemas"]["ReadinessEffortBand"];

@@ -22,7 +22,7 @@ export interface PortResult {
   id: string
   name: string
   chosen_system: string
-  adapter_status: 'sim_ready' | 'enterprise_to_write'
+  adapter_status: 'sim_ready' | 'enterprise_reference' | 'enterprise_to_write'
   contract_test_gate: string
   effort_band: EffortBand
   config_keys: string[]
@@ -100,7 +100,11 @@ function portResult(port: CatalogPort, option: PortOption | undefined): PortResu
     id: port.id,
     name: port.name,
     chosen_system: option?.label ?? NOT_SELECTED,
-    adapter_status: builtin ? 'sim_ready' : 'enterprise_to_write',
+    // Every port ships a reference enterprise adapter today (ADR 0023 P2 + ADR 0024's eight,
+    // all wired in the ports registry), so a non-built-in choice is 'enterprise_reference', not
+    // 'enterprise_to_write' — the remaining work is config + the per-bank production cutover (M6).
+    // 'enterprise_to_write' is retained for any future port that ships without a reference.
+    adapter_status: builtin ? 'sim_ready' : 'enterprise_reference',
     contract_test_gate: builtin ? 'No enterprise adapter — built-in / declined' : port.contract_test_gate,
     effort_band: option?.effort_band ?? 'scoping',
     config_keys: builtin ? [] : port.config_keys
@@ -140,7 +144,7 @@ function sequencing(byId: Map<string, { port: CatalogPort; option: PortOption | 
       step: steps.length + 1,
       port: portId,
       system: entry.option.label,
-      action: `Write the ${entry.port.name} enterprise adapter for ${entry.option.label}; pass ${entry.port.contract_test_gate}.`
+      action: `Configure the ${entry.port.name} reference adapter for ${entry.option.label} and production-harden it; pass ${entry.port.contract_test_gate}.`
     })
   }
   return steps
@@ -182,7 +186,7 @@ export function assess(input: AssessmentInput): ReadinessDigest {
     already_done: {
       sim_adapters_ready: PORTS.length,
       ports_total: PORTS.length,
-      note: `All ${PORTS.length} simulator adapters ship today and pass the port-swap contract suite. The remaining work is only the enterprise adapters selected above — each inherits the same contract tests its simulator already passes.`
+      note: `All ${PORTS.length} simulator adapters ship today and pass the port-swap contract suite — and every port also ships a reference enterprise adapter (ADR 0023/0024). For the systems you selected, the remaining work is configuration and the per-bank production cutover (M6), not building an adapter from scratch.`
     },
     sequencing: sequencing(byId)
   }

@@ -3505,7 +3505,7 @@ components:
         id: { type: string }
         name: { type: string }
         chosen_system: { type: string }
-        adapter_status: { type: string, enum: [sim_ready, enterprise_to_write], description: sim adapter ships today; enterprise adapter is the M6 work }
+        adapter_status: { type: string, enum: [sim_ready, enterprise_reference, enterprise_to_write], description: 'sim_ready = built-in / declined (no integration work); enterprise_reference = a reference enterprise adapter ships (ADR 0023/0024), so the remaining work is config + the per-bank production cutover (M6); enterprise_to_write = no reference adapter exists yet (none today)' }
         contract_test_gate: { type: string, description: The port-swap acceptance test suite this adapter must pass }
         effort_band: { $ref: '#/components/schemas/ReadinessEffortBand' }
         config_keys:
