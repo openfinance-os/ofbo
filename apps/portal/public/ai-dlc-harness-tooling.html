@@ -111,7 +111,7 @@
 
   /* Matrix */
   .matrix-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: #fff; }
-  table.matrix { border-collapse: collapse; width: 100%; min-width: 1180px; font-size: 13.5px; }
+  table.matrix { border-collapse: collapse; width: 100%; min-width: 1320px; font-size: 13.5px; }
   table.matrix th, table.matrix td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   table.matrix thead th { background: var(--navy); color: #fff; font-weight: 600; font-size: 12.5px; }
   table.matrix thead tr.groups th { background: var(--slate); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; text-align: center; border-bottom: 1px solid rgba(255,255,255,.16); border-left: 1px solid rgba(255,255,255,.16); }
@@ -401,20 +401,36 @@ const TOOLS = [
               worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
   },
   {
-    name: "Claude · AWS Hosted platform",
+    name: "Claude · Bedrock AgentCore",
     group: "Claude — AWS-managed / hosted",
-    type: "Type D · AWS-managed agent (AgentCore / managed Claude Code)",
+    type: "Type D · AWS-managed agent runtime (AgentCore)",
     verdict: "conditions",
-    tagline: "AWS-hosted Claude agents — Bedrock AgentCore runtime, or managed/remote Claude Code on AWS. Data plane stays in AWS, but the agent executes on the platform, so autonomy oversight is the added control beyond merge four-eyes.",
+    tagline: "Claude agents hosted on Amazon Bedrock AgentCore — AWS runs the agent runtime and inference in the bank's own AWS account. Data plane stays in AWS, but AgentCore orchestrates the agent, so the OFBO hook/worktree layer doesn't apply natively and autonomy needs control-plane oversight.",
     facts: {
-      "Egress": "Execution + inference inside AWS (AgentCore runtime or managed Claude Code) — no third-party proxy; contained in the AWS account.",
+      "Egress": "Runtime + inference inside the bank's AWS account (AgentCore on Bedrock) — no third-party proxy.",
       "Residency": "AWS region-pinned (me-central-1 where available); confirm AgentCore + Claude regional availability in-Gulf.",
-      "Outsourcing": "Rides the AWS relationship; the managed runtime is an added AWS service to name in the outsourcing assessment.",
-      "Autonomy": "The agent runs on the platform — needs run-scoping + a human approval on the control plane, not only PR four-eyes.",
-      "Provenance": "Co-Authored-By preserved when the runtime is Claude Code; verify for AgentCore-orchestrated agents."
+      "Outsourcing": "Rides the AWS relationship; AgentCore is an added AWS managed service to name in the outsourcing assessment.",
+      "Harness": "Not Claude Code — the .claude tripwires/worktree don't apply; rebuild the advisory layer as runtime guardrails + tool-neutral git hooks.",
+      "Autonomy": "Agent runs autonomously on the platform — needs run-scoping + a control-plane approval, not only PR four-eyes."
     },
     status: { egress:"native", residency:"native", outsource:"native", tripwire:"bridge",
               worktree:"bridge", prov:"bridge", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "Claude Code · managed on AWS",
+    group: "Claude — AWS-managed / hosted",
+    type: "Type D · managed / remote Claude Code on AWS",
+    verdict: "conditions",
+    tagline: "Claude Code itself, run as a managed/remote service on AWS infra rather than the developer's machine. Still Claude Code — hooks, worktree and provenance apply natively — but execution is hosted, so the added control is run-scoping on the platform.",
+    facts: {
+      "Egress": "Inference via Bedrock in the AWS account; execution on managed AWS infra — contained, no third-party proxy.",
+      "Residency": "AWS region-pinned (me-central-1 where available); confirm the managed runtime's region.",
+      "Outsourcing": "Rides the AWS relationship; the managed execution service is the added item to cover.",
+      "Harness": "It IS Claude Code — the .claude tripwires, worktree isolation and provenance trailers all apply natively.",
+      "Autonomy": "Hosted/remote execution — scope the run + keep PR four-eyes; control-plane access joins the assessment."
+    },
+    status: { egress:"native", residency:"native", outsource:"native", tripwire:"native",
+              worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
   },
   {
     name: "Cursor",
