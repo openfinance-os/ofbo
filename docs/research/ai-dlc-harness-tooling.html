@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Adapting the OFBO Harness to AI-DLC Tools</title>
+<style>
+  :root {
+    --navy: #0f1c2e;
+    --navy-2: #16273d;
+    --slate: #243b53;
+    --ink: #1b2733;
+    --paper: #f7f9fc;
+    --card: #ffffff;
+    --line: #d9e2ec;
+    --line-soft: #eaf0f6;
+    --muted: #5b6b7e;
+    --muted-2: #8295a8;
+    --gold: #b8862b;
+    --gold-soft: #f3e7c9;
+    --green: #1c7c54;
+    --green-bg: #e3f3ea;
+    --amber: #9a6a00;
+    --amber-bg: #fbeecf;
+    --red: #a01f2d;
+    --red-bg: #f7e0e2;
+    --blue: #1f5f8b;
+    --blue-bg: #e3eef6;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(16,28,46,.06), 0 8px 24px rgba(16,28,46,.06);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; font-family: var(--sans); color: var(--ink);
+    background: var(--paper); line-height: 1.55; font-size: 16px;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header.hero {
+    background: linear-gradient(160deg, var(--navy) 0%, var(--slate) 100%);
+    color: #fff; padding: 56px 0 44px; border-bottom: 3px solid var(--gold);
+  }
+  .kicker {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--gold-soft); font-weight: 600; margin: 0 0 12px;
+  }
+  header.hero h1 { font-size: 34px; line-height: 1.15; margin: 0 0 14px; font-weight: 700; letter-spacing: -.01em; }
+  header.hero p.lede { font-size: 18px; color: #c9d6e5; max-width: 760px; margin: 0; }
+  .hero-meta { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16);
+    color: #dce6f1; padding: 5px 11px; border-radius: 999px;
+  }
+
+  /* Section scaffolding */
+  section { padding: 44px 0; border-bottom: 1px solid var(--line-soft); }
+  section:last-of-type { border-bottom: none; }
+  .eyebrow { color: var(--gold); font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; margin: 0 0 8px; }
+  h2 { font-size: 25px; margin: 0 0 8px; letter-spacing: -.01em; color: var(--navy); }
+  h2 + .sub { color: var(--muted); margin: 0 0 24px; max-width: 800px; font-size: 16px; }
+  h3 { font-size: 17px; margin: 0 0 6px; color: var(--navy-2); }
+
+  .callout {
+    background: linear-gradient(180deg,#fff, #fbfdff);
+    border: 1px solid var(--line); border-left: 4px solid var(--gold);
+    border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .callout strong { color: var(--navy); }
+
+  /* Pills */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 600;
+    font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .p-green { color: var(--green); background: var(--green-bg); border-color: #bfe3cf; }
+  .p-amber { color: var(--amber); background: var(--amber-bg); border-color: #ecd9a6; }
+  .p-red   { color: var(--red);   background: var(--red-bg);   border-color: #ecc3c7; }
+  .p-blue  { color: var(--blue);  background: var(--blue-bg);  border-color: #c2dbec; }
+
+  /* Tool cards */
+  .grid { display: grid; gap: 18px; }
+  .tool-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .tool-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 14px;
+  }
+  .tool-card .tc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .tool-card .tc-name { font-size: 18px; font-weight: 700; color: var(--navy); margin: 0; }
+  .tool-card .tc-type { font-size: 12px; color: var(--muted-2); margin: 2px 0 0; font-weight: 600; letter-spacing: .02em; }
+  .tool-card .tc-tag { font-size: 13.5px; color: var(--muted); margin: 0; }
+  .tc-rows { display: flex; flex-direction: column; gap: 9px; margin: 2px 0 0; }
+  .tc-row { display: grid; grid-template-columns: 116px 1fr; gap: 10px; font-size: 13px; align-items: start; }
+  .tc-row .k { color: var(--muted-2); font-weight: 600; }
+  .tc-row .v { color: var(--ink); }
+  .tool-card.add {
+    border-style: dashed; background: #fcfdff; align-items: center; justify-content: center;
+    text-align: center; color: var(--muted); min-height: 220px; gap: 8px;
+  }
+  .tool-card.add .plus { font-size: 30px; color: var(--gold); line-height: 1; }
+  .tool-card.add code { font-size: 12px; }
+
+  /* Matrix */
+  .matrix-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: #fff; }
+  table.matrix { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13.5px; }
+  table.matrix th, table.matrix td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  table.matrix thead th { background: var(--navy); color: #fff; font-weight: 600; font-size: 12.5px; position: sticky; top: 0; }
+  table.matrix thead th:first-child { border-top-left-radius: var(--radius); }
+  table.matrix tbody tr:hover { background: #f9fbfe; }
+  table.matrix td.control { font-weight: 600; color: var(--navy-2); }
+  table.matrix td.control small { display: block; font-weight: 400; color: var(--muted); margin-top: 3px; font-size: 12px; }
+  .tier-tag { font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; padding: 2px 7px; border-radius: 5px; display: inline-block; margin-top: 6px; }
+  .tier-block { background: var(--red-bg); color: var(--red); }
+  .tier-adv { background: var(--amber-bg); color: var(--amber); }
+  .tier-ext { background: var(--blue-bg); color: var(--blue); }
+  .cellnote { display: block; color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+
+  /* Taxonomy */
+  .tax-grid { grid-template-columns: repeat(auto-fit, minmax(250px,1fr)); }
+  .tax {
+    background: #fff; border: 1px solid var(--line); border-top: 3px solid var(--slate);
+    border-radius: 10px; padding: 18px; box-shadow: var(--shadow);
+  }
+  .tax h3 { display:flex; align-items:center; gap:8px; }
+  .tax .badge { font-family: var(--mono); font-size: 11px; background: var(--navy); color:#fff; padding: 2px 7px; border-radius: 5px; }
+  .tax p { font-size: 13.5px; color: var(--muted); margin: 8px 0 10px; }
+  .tax .egress { font-size: 12.5px; font-weight: 600; }
+  .tax ul.examples { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tax ul.examples li { font-size: 11.5px; background: var(--line-soft); color: var(--slate); padding: 3px 8px; border-radius: 6px; }
+
+  /* Two gates */
+  .gates { grid-template-columns: 1fr 1fr; }
+  .gate { background:#fff; border:1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); border-top: 3px solid var(--red); }
+  .gate h3 { color: var(--red); }
+  .gate.soft { border-top-color: var(--green); }
+  .gate.soft h3 { color: var(--green); }
+  .gate p { font-size: 13.5px; color: var(--muted); margin: 8px 0 0; }
+
+  /* Steps */
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  ol.steps li {
+    background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 16px 56px;
+    position: relative; box-shadow: var(--shadow);
+  }
+  ol.steps li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 16px; top: 16px; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--gold); color: #fff; font-weight: 700; font-size: 13px;
+    display: grid; place-items: center;
+  }
+  ol.steps li b { color: var(--navy); }
+  ol.steps li code, .callout code, .tc-row code { font-family: var(--mono); font-size: 12px; background: var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 18px 0 0; font-size: 12.5px; color: var(--muted); align-items: center; }
+  .legend .pill { font-size: 11px; }
+
+  footer { background: var(--navy); color: #aebccd; padding: 32px 0 40px; font-size: 13px; }
+  footer h4 { color:#fff; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; }
+  footer p { margin: 0 0 10px; max-width: 820px; }
+  footer .src { font-size: 12px; color: #8298b0; word-break: break-word; }
+  .note-strong { color: #e7eef6; }
+
+  @media (max-width: 680px) {
+    header.hero h1 { font-size: 27px; }
+    .gates { grid-template-columns: 1fr; }
+    .tc-row { grid-template-columns: 100px 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="kicker">OFBO · Open Finance Back Office · Research Artifact</p>
+    <h1>Adapting the Build Harness to AI-DLC Tools</h1>
+    <p class="lede">The OFBO harness was built so the AI authoring tool is <em>swappable</em>. Regulated control lives in deterministic CI gates, git-trailer provenance, and branch protection &mdash; not in any one editor. This page shows the adaptation contract every AI-driven-development-lifecycle tool must satisfy, classifies the tool landscape by type, and works two examples in full: <strong>Cursor</strong> and <strong>Claude Code</strong>. Others slot into the same frame.</p>
+    <div class="hero-meta">
+      <span class="chip">UAE Open Finance &middot; CBUAE / Al&nbsp;Tareq / Nebras</span>
+      <span class="chip">Bar: CLAUDE.md hard stops + ADR&nbsp;0019</span>
+      <span class="chip">Updated 2026-06-27</span>
+    </div>
+  </div>
+</header>
+
+<!-- THESIS -->
+<section id="thesis">
+  <div class="wrap">
+    <p class="eyebrow">The core principle</p>
+    <h2>The methodology is the harness; the tool is the worker</h2>
+    <p class="sub">AI-DLC is a tool-agnostic methodology &mdash; AWS's own framework states it <em>"works with any IDE, agent, or model."</em> OFBO encodes a stricter instance of it. Because the load-bearing controls are mechanical and pipeline-side, a different tool changes <em>ergonomics</em>, not <em>assurance</em>.</p>
+    <div class="callout">
+      <p style="margin:0 0 10px"><strong>Two tiers of enforcement &mdash; only one is tool-specific.</strong></p>
+      <p style="margin:0 0 8px"><span class="tier-tag tier-adv">Advisory</span> &nbsp;The <code>PreToolUse</code> tripwires (PII / spec / test) and worktree isolation are <em>Claude Code</em> primitives. A different tool won't fire them &mdash; so this convenience layer must be re-created as tool-neutral git hooks.</p>
+      <p style="margin:0"><span class="tier-tag tier-block">Merge-blocking</span> <span class="tier-tag tier-ext">External</span> &nbsp;The deterministic CI gates (Q1b test-integrity, Q4.5 lineage), the sealed evidence bundle, and human four-eyes via branch protection are <em>tool-independent by design</em> (ADR&nbsp;0019). They care about the commit, not the editor that wrote it. This is the real safety net, and it survives any tool swap.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TOOL CARDS (data-driven) -->
+<section id="tools">
+  <div class="wrap">
+    <p class="eyebrow">Worked examples</p>
+    <h2>Tool cards</h2>
+    <p class="sub">Each tool is scored against the same axes. The verdict reflects fit with the OFBO regulated pipeline &mdash; not raw coding quality. Cards render from a small data table (see <a href="#extend">Adding a tool</a>), so the set grows without re-engineering the page.</p>
+    <div id="toolCards" class="grid tool-grid"></div>
+    <div class="legend">
+      <span>Verdict:</span>
+      <span class="pill p-green"><span class="dot"></span>Fits</span>
+      <span class="pill p-amber"><span class="dot"></span>Fits with conditions</span>
+      <span class="pill p-red"><span class="dot"></span>Blocked as-is</span>
+    </div>
+  </div>
+</section>
+
+<!-- ADAPTATION MATRIX -->
+<section id="matrix">
+  <div class="wrap">
+    <p class="eyebrow">The adaptation contract</p>
+    <h2>Control-by-control: native, bridge, or blocker</h2>
+    <p class="sub">For each harness control, does the tool satisfy it out of the box (<strong>native</strong>), need a tool-neutral bridge (<strong>bridge</strong>), or fail it outright (<strong>blocker</strong>)? The rightmost tiers tell you whether a gap is cosmetic or fatal.</p>
+    <div class="matrix-scroll">
+      <table class="matrix" id="matrixTable"></table>
+    </div>
+    <div class="legend">
+      <span class="pill p-green"><span class="dot"></span>Native</span>
+      <span class="pill p-amber"><span class="dot"></span>Bridge needed</span>
+      <span class="pill p-red"><span class="dot"></span>Blocker</span>
+      <span class="pill p-blue"><span class="dot"></span>Tool-agnostic (external)</span>
+    </div>
+  </div>
+</section>
+
+<!-- TAXONOMY -->
+<section id="taxonomy">
+  <div class="wrap">
+    <p class="eyebrow">Know the type before you score the tool</p>
+    <h2>Four types of AI-DLC tool</h2>
+    <p class="sub">The decisive question for a UAE bank is <em>where inference runs and what leaves the perimeter</em>. That is a property of the tool's <strong>type</strong>, not its brand. Place a new tool in a type first; the egress and outsourcing posture mostly follows.</p>
+    <div class="grid tax-grid" id="taxGrid"></div>
+  </div>
+</section>
+
+<!-- TWO GATES -->
+<section id="gates">
+  <div class="wrap">
+    <p class="eyebrow">What actually decides it</p>
+    <h2>The two binding gates &mdash; and two common myths</h2>
+    <p class="sub">For a UAE Open Finance bank, the regulatory weight falls on exactly two gates. Two things people <em>expect</em> to be blockers are not.</p>
+    <div class="grid gates">
+      <div class="gate">
+        <h3>Gate 1 &middot; Data egress (P6, no direct egress)</h3>
+        <p>All external traffic must route through the enterprise egress gateway; code must not leave the bank's boundary uncontrolled. A tool that <em>mandatorily proxies context through its own cloud</em> (Type&nbsp;A) cannot honour this. A tool whose inference runs <em>in the bank's own tenancy</em> (Type&nbsp;B in-region, or Type&nbsp;C air-gapped) can.</p>
+      </div>
+      <div class="gate">
+        <h3>Gate 2 &middot; CBUAE outsourcing &amp; audit access</h3>
+        <p>Using an external AI SaaS is outsourcing under CBUAE Circular&nbsp;14/2021. If material: board approval, <em>non-objection before signing</em>, and contract clauses granting <em>CBUAE on-site/audit access at the provider</em>. The Feb-2026 AI Guidance Note adds: responsibility cannot be outsourced; audit rights, cyber guarantees, immediate-cessation. Easiest to clear when the counterparty is a cloud the bank has <em>already</em> cleared.</p>
+      </div>
+      <div class="gate soft">
+        <h3>Myth 1 &middot; "The code must be UAE-resident"</h3>
+        <p>Residency rules attach to <em>Consumer / transaction / Personal / Payment data</em> &mdash; not source code. PII-free code is, on the face of the texts, out of scope. OFBO's synthetic-only / zero-PII mandate keeps it that way. The residency objection is about <em>data</em>, which never enters the tool's context.</p>
+      </div>
+      <div class="gate soft">
+        <h3>Myth 2 &middot; "AI-written code triggers the EU AI Act"</h3>
+        <p>EU AI Act Art.&nbsp;12 / 17 bind <em>providers of high-risk AI systems</em> and govern the deployed system's runtime logging &mdash; not the act of writing code with an assistant (limited-risk at most). What's regulated is what the bank <em>ships</em>, regardless of which tool helped write it. Provenance is a defensible self-imposed control, not a tool mandate.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EXTEND -->
+<section id="extend">
+  <div class="wrap">
+    <p class="eyebrow">Others can be added later</p>
+    <h2>Adding a new tool to the frame</h2>
+    <p class="sub">Onboarding a candidate (GitHub Copilot, Tabnine, Windsurf, Sourcegraph Cody, Devin, OpenHands&hellip;) is a fixed worksheet. The page is data-driven, so the last step is a one-line edit.</p>
+    <ol class="steps">
+      <li><b>Classify the type.</b> A&nbsp;cloud-SaaS copilot, B&nbsp;pluggable-backend agent, C&nbsp;self-hosted/air-gapped, or D&nbsp;autonomous cloud agent. This fixes the egress and outsourcing posture before any deep review.</li>
+      <li><b>Score Gate&nbsp;1 (egress).</b> Where does inference physically run? Can it be pinned to the bank's tenancy / an in-region endpoint / the P6 gateway? If it mandatorily proxies through the vendor's cloud, it is blocked for regulated repos.</li>
+      <li><b>Score Gate&nbsp;2 (outsourcing).</b> Who is the data-plane counterparty, and is there an existing CBUAE-cleared relationship to ride? Can the contract grant CBUAE on-site/audit access, immediate cessation, and no-training/ZDR?</li>
+      <li><b>Map the harness controls.</b> Mark each row of the matrix <em>native / bridge / blocker</em>. Tripwires and worktree isolation are usually <em>bridge</em> for non-Claude tools (re-implement as git <code>pre-commit</code> / <code>prepare-commit-msg</code> hooks). CI gates and four-eyes are always external.</li>
+      <li><b>Wire provenance.</b> Ensure commits carry <code>Co-Authored-By</code> + a <code>Build-Model</code> / session trailer so the ADR&nbsp;0019 evidence bundle attributes the tool. Editor-side AI tracking is a hint; the CI bundle is the system of record.</li>
+      <li><b>Add one data object.</b> Append a record to the <code>TOOLS</code> array in this file's script (name, type, verdict, per-control status). The card and the matrix column generate themselves.</li>
+    </ol>
+    <div class="callout" style="margin-top:18px">
+      <strong>Decision rule of thumb.</strong> If the no-direct-egress rule is taken literally for <em>all</em> code: Type&nbsp;B (in-tenancy) and Type&nbsp;C (air-gapped) are eligible; Type&nbsp;A is restricted to non-regulated/synthetic work under an Enterprise DPA, or excluded. Everything downstream of egress &mdash; gates, provenance, four-eyes &mdash; is tool-neutral and already solved by the harness.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <h4>Scope &amp; caveats</h4>
+    <p><span class="note-strong">Research artifact, not legal advice.</span> Several primary sources were egress-blocked during research and quoted via search; confirm load-bearing wording against the in-force CBUAE Circular&nbsp;3/2025 (Open Finance) and Circular&nbsp;14/2021 (Outsourcing), a <em>signed</em> vendor DPA, the AWS account team on <code>me-central-1</code> in-region inference profiles, and the final EU AI Act "Digital Omnibus" applicability date.</p>
+    <p class="src">Companion analysis: <code>docs/research/cursor-vs-claude-ai-dlc-uae-bank.md</code> &nbsp;&middot;&nbsp; Harness basis: <code>CLAUDE.md</code>, <code>docs/adrs/0019-build-harness-hardening.md</code>. Key sources include code.claude.com/docs (Bedrock, LLM gateway), AWS Bedrock data-protection &amp; Middle-East cross-region inference, cursor.com/data-use &amp; security, rulebook.centralbank.ae, github.com/awslabs/aidlc-workflows, artificialintelligenceact.eu, slsa.dev.</p>
+  </div>
+</footer>
+
+<script>
+/* ---------------------------------------------------------------------------
+ * Tool landscape — data-driven. To add a tool: append one object to TOOLS
+ * with a `status` value for every control id in CONTROLS. The card and the
+ * matrix column render automatically. status ∈ native | bridge | blocker | ext
+ * verdict ∈ fits | conditions | blocked
+ * ------------------------------------------------------------------------- */
+
+const CONTROLS = [
+  { id: "egress",    label: "Data egress (P6, no direct egress)", tier: "block",
+    note: "Does inference run inside the bank's boundary / via P6?" },
+  { id: "residency", label: "UAE data residency", tier: "block",
+    note: "Attaches to data, not code; in-region option a plus." },
+  { id: "outsource", label: "CBUAE outsourcing + audit access", tier: "block",
+    note: "Non-objection if material; on-site/audit rights." },
+  { id: "tripwire",  label: "PreToolUse tripwires (PII/spec/test)", tier: "adv",
+    note: "Native to Claude Code; else rebuild as git hooks." },
+  { id: "worktree",  label: "Worktree isolation", tier: "adv",
+    note: "Claude Code primitive; else a discipline + CI check." },
+  { id: "prov",      label: "Provenance trailers", tier: "adv",
+    note: "Co-Authored-By / Build-Model into the evidence bundle." },
+  { id: "gates",     label: "Merge-blocking CI gates (Q1b / Q4.5)", tier: "ext",
+    note: "Deterministic, run on the commit — tool-agnostic." },
+  { id: "foureyes",  label: "Four-eyes merge / control plane", tier: "ext",
+    note: "GitHub branch protection + CODEOWNERS." },
+];
+
+const TOOLS = [
+  {
+    name: "Claude Code",
+    type: "Type B · Pluggable-backend agent",
+    verdict: "fits",
+    tagline: "Inference runs in the bank's own AWS tenancy via Bedrock; the OFBO harness is native to it.",
+    facts: {
+      "Egress": "In-tenancy via Bedrock (CLAUDE_CODE_USE_BEDROCK); routable through P6 gateway.",
+      "Residency": "UAE me-central-1 has Claude (~Feb 2026); data-at-rest in source region.",
+      "Outsourcing": "Rides existing AWS relationship; Anthropic gets no customer content.",
+      "Certs": "SOC 2 II, ISO 27001, ISO 42001, HIPAA, FedRAMP High + inherits AWS.",
+      "Provenance": "Stamps Co-Authored-By + session trailers by default."
+    },
+    status: { egress:"native", residency:"native", outsource:"native", tripwire:"native",
+              worktree:"native", prov:"native", gates:"ext", foureyes:"ext" }
+  },
+  {
+    name: "Cursor",
+    type: "Type A · Cloud-SaaS IDE / copilot",
+    verdict: "conditions",
+    tagline: "Strong interactive UX, but mandatorily proxies all context through its US cloud — collides with no-direct-egress.",
+    facts: {
+      "Egress": "Mandatory proxy via Anysphere US-AWS backend — even BYOK, even Privacy Mode.",
+      "Residency": "No UAE region; no air-gap. (Code-residency is interpretive anyway.)",
+      "Outsourcing": "New US-startup counterparty holding code; on-site audit rights are the risk.",
+      "Certs": "SOC 2 Type II; ISO 27001 unconfirmed.",
+      "Provenance": "Per-commit AI tracking via Enterprise API — a hint, not in the commit."
+    },
+    status: { egress:"blocker", residency:"bridge", outsource:"bridge", tripwire:"bridge",
+              worktree:"bridge", prov:"bridge", gates:"ext", foureyes:"ext" }
+  }
+];
+
+const TAXONOMY = [
+  { badge:"A", name:"Cloud-SaaS IDE / copilot",
+    desc:"Polished editor; all context flows through the vendor's cloud, which builds the final prompt. No in-tenancy or air-gapped mode.",
+    egress:"Egress: mandatory vendor proxy", egressClass:"p-red",
+    examples:["Cursor","GitHub Copilot"] },
+  { badge:"B", name:"Pluggable-backend agent",
+    desc:"Agentic CLI whose model backend is swappable (Bedrock / Vertex / gateway). Inference can run inside the bank's own cloud account, in-region.",
+    egress:"Egress: containable in tenancy", egressClass:"p-green",
+    examples:["Claude Code"] },
+  { badge:"C", name:"Self-hosted / air-gapped",
+    desc:"Deploys into the buyer's infrastructure with local or in-VPC inference; code need never leave the perimeter. Trades model frontier for control.",
+    egress:"Egress: none / in-perimeter", egressClass:"p-green",
+    examples:["Tabnine","Windsurf (self-host)","Sourcegraph Cody (local)"] },
+  { badge:"D", name:"Autonomous cloud agent",
+    desc:"Ticket-to-PR agents that plan and execute in the vendor's cloud. Highest autonomy, but context and execution sit off-perimeter by default.",
+    egress:"Egress: vendor cloud (review needed)", egressClass:"p-amber",
+    examples:["Devin","OpenHands","Jules"] },
+];
+
+const VERDICT = {
+  fits:       { cls:"p-green", text:"Fits" },
+  conditions: { cls:"p-amber", text:"Fits with conditions" },
+  blocked:    { cls:"p-red",   text:"Blocked as-is" },
+};
+const STAT = {
+  native:  { cls:"p-green", text:"Native" },
+  bridge:  { cls:"p-amber", text:"Bridge" },
+  blocker: { cls:"p-red",   text:"Blocker" },
+  ext:     { cls:"p-blue",  text:"External" },
+};
+const TIER = {
+  block: { cls:"tier-block", text:"Merge-blocking" },
+  adv:   { cls:"tier-adv",   text:"Advisory" },
+  ext:   { cls:"tier-ext",   text:"External" },
+};
+
+function el(html){ const t=document.createElement("template"); t.innerHTML=html.trim(); return t.content.firstElementChild; }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* Tool cards */
+const cardsRoot = document.getElementById("toolCards");
+TOOLS.forEach(t => {
+  const v = VERDICT[t.verdict];
+  const rows = Object.entries(t.facts).map(([k,val]) =>
+    `<div class="tc-row"><span class="k">${esc(k)}</span><span class="v">${esc(val)}</span></div>`).join("");
+  cardsRoot.appendChild(el(`
+    <article class="tool-card">
+      <div class="tc-head">
+        <div>
+          <p class="tc-name">${esc(t.name)}</p>
+          <p class="tc-type">${esc(t.type)}</p>
+        </div>
+        <span class="pill ${v.cls}"><span class="dot"></span>${v.text}</span>
+      </div>
+      <p class="tc-tag">${esc(t.tagline)}</p>
+      <div class="tc-rows">${rows}</div>
+    </article>`));
+});
+cardsRoot.appendChild(el(`
+  <article class="tool-card add">
+    <div class="plus">+</div>
+    <div><strong>Add a tool</strong></div>
+    <div>Append one object to the <code>TOOLS</code> array.<br/>Card &amp; matrix column self-generate.</div>
+  </article>`));
+
+/* Matrix */
+const table = document.getElementById("matrixTable");
+const head = `<thead><tr><th>Harness control</th>${
+  TOOLS.map(t=>`<th>${esc(t.name)}</th>`).join("")}</tr></thead>`;
+const body = `<tbody>${CONTROLS.map(c=>{
+  const tier = TIER[c.tier];
+  const cells = TOOLS.map(t=>{
+    const s = STAT[t.status[c.id]] || STAT.bridge;
+    return `<td><span class="pill ${s.cls}"><span class="dot"></span>${s.text}</span></td>`;
+  }).join("");
+  return `<tr>
+    <td class="control">${esc(c.label)}<small>${esc(c.note)}</small>
+      <span class="tier-tag ${tier.cls}">${tier.text}</span></td>
+    ${cells}</tr>`;
+}).join("")}</tbody>`;
+table.innerHTML = head + body;
+
+/* Taxonomy */
+const taxRoot = document.getElementById("taxGrid");
+TAXONOMY.forEach(x => {
+  taxRoot.appendChild(el(`
+    <div class="tax">
+      <h3><span class="badge">${x.badge}</span> ${esc(x.name)}</h3>
+      <p>${esc(x.desc)}</p>
+      <span class="pill ${x.egressClass}"><span class="dot"></span>${esc(x.egress)}</span>
+      <ul class="examples">${x.examples.map(e=>`<li>${esc(e)}</li>`).join("")}</ul>
+    </div>`));
+});
+</script>
+</body>
+</html>
