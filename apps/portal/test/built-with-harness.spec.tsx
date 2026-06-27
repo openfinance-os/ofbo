@@ -30,6 +30,11 @@ describe('BuiltWithHarness', () => {
     // embeds the map served from /public, and links to it full-screen
     expect(screen.getByTestId('harness-map-frame')).toHaveAttribute('src', '/harness-map.html')
     expect(screen.getByTestId('built-with-full-link')).toHaveAttribute('href', '/harness-map.html')
+    // and a companion link to the AI-DLC tooling page, served from /public
+    expect(screen.getByTestId('built-with-aidlc-link')).toHaveAttribute(
+      'href',
+      '/ai-dlc-harness-tooling.html',
+    )
   })
 
   it('closes via the close control and via Escape', () => {
