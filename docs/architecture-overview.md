@@ -72,7 +72,7 @@ port-swap). Contract tests bind both — that's the port-swap acceptance gate.
 Each module = `service.ts` (logic + `InMemory*Store` default) + `routes.ts`
 (Hono handlers) wired into `app.ts` (`AppDeps`, `IMPLEMENTED_ROUTES`). The
 `worker.ts` re-wires the same services with Postgres-backed stores for jobs.
-**Twenty feature modules** today — newest: `care-surface` (P1 short-lived act+sub
+**Twenty-two feature modules** today (incl. new `agents` — the MCP-gateway persona catalogue + spend-control — `governance`, `risk-signals`) — newest: `agents` (BACKOFFICE-60 / ADR 0017–0018), `care-surface` (P1 short-lived act+sub
 token minting, BACKOFFICE-25), `lineage` (column-level BCBS 239 read for Compliance,
 BACKOFFICE-49), `risk-signals` (Risk analyst triage surface, BACKOFFICE-30/-42), and
 `GET /disputes/{id}/call-recording` (call/transcript linkage, BACKOFFICE-64).
@@ -102,7 +102,7 @@ flowchart LR
 One store class per resource (`*-store.ts`), all RLS-enabled from day one, with
 `audit.ts` (INSERT-only `audit_high_sensitivity`), `lineage.ts` + `lineage-gate.ts`
 (Q4.5 BCBS 239), `retention.ts` (24-month hot / 5-year immutable), and
-`classification.ts`. Migrations in `packages/db/migrations` (0001 → 0025).
+`classification.ts`. Migrations in `packages/db/migrations` (0001 → 0027).
 
 ## 5. Shared packages
 
@@ -128,7 +128,7 @@ It is non-linear: evidence found late can send you back a diamond.
 ```mermaid
 flowchart LR
     Ch["Challenge / trigger"]
-    subgraph D1["Diamond 1 — DISCOVERY harness (new)"]
+    subgraph D1["Diamond 1 — DISCOVERY harness (built)"]
       direction LR
       Disc["Discover (diverge)<br/>research · market · reg/risk · data · current-state"]
       Def["Define (converge)<br/>synthesize · frame · business case · scope"]
@@ -150,13 +150,13 @@ flowchart LR
 
 ### Discovery harness (Diamond 1) — from challenge to PRD
 
-One discovery per opportunity, evidence-first, with a kill-switch. Stages:
+One discovery per opportunity, evidence-first, with a kill-switch. **Built today** as a working harness: canon `discovery/DISCOVERY.md`, a `discovery` skill + `brand-render` skill, reviewer agents (`data-governance`, `discovery-boundary`), eight CI gates **D1 framing · D2 evidence · D3 scope & stakeholders · D4 no-solutioning · D5 synthesis integrity · D6 data-governance feasibility · D7 brand conformance · D8 tangibility**, and two real runs end-to-end (`consent-lifecycle-hygiene`, `fee-variance-reconciliation`) — solution-agnostic via the data-risk-register and brand seams. Stages:
 
 1. **Frame** the challenge — strategy/OKRs, a regulatory mandate, a customer/market signal, an exec sponsor ask, or a pain point/incident.
 2. **Discover (diverge)** — gather evidence, not solutions: stakeholder & user research, market & competitor scan, regulatory & risk landscape (discovery-mode risk review), data & signal analysis, current-state journey mapping.
 3. **Define (converge)** — synthesize evidence into insight themes, frame the problem ("How might we…"), build the **business case** (NPV/IRR, cost-benefit, options), prioritise & scope, and draft the problem statement.
    - **Optional RFP branch (build-vs-buy):** when discovery surfaces a capability gap, run RFI → RFP → scored (weighted) evaluation → shortlist + PoC/demo → partner selection; the vendor-shaped constraints fold back into the problem statement.
-4. **Gate** — investment / CEC committee approval + problem-statement sign-off. This is the four-eyes of discovery; **kill-criteria** can stop here (a discovery is allowed to fail).
+4. **Gate** — investment committee approval + problem-statement sign-off. This is the four-eyes of discovery; **kill-criteria** can stop here (a discovery is allowed to fail).
 5. **Handoff** — the agreed problem statement becomes the **PRD + acceptance criteria** (plus any selected partner) and seeds the delivery canon (`CLAUDE.md` · PRD · OpenAPI · `backlog.yaml`).
 
 **Discovery guardrails** (the analog of the delivery hard-stops): evidence over assertion (every claim cites a signal), people-centred (real users in the loop), visualize & make tangible, explicit kill-criteria, and early regulatory/risk feasibility so no dead-end problem reaches delivery.
@@ -173,7 +173,7 @@ flowchart TB
       d1["synthesize themes"]; d2["frame problem"]; d3["business case"]; d4["scope + draft statement"]
     end
     RFP["⌥ Optional: build-vs-buy — RFI → RFP → eval → shortlist/PoC → select"]
-    G["④ Gate — investment/CEC + sign-off (kill-criteria)"]
+    G["④ Gate — investment committee + sign-off (kill-criteria)"]
     H["⑤ Handoff — PRD + acceptance criteria → delivery canon"]
     F --> Discover --> Define
     Define -. "when build-vs-buy" .-> RFP -.-> Define
@@ -184,7 +184,7 @@ flowchart TB
 
 The repo is built by an AI-DLC story loop on top of a quality-gated CI/CD pipeline.
 Canon is `CLAUDE.md` + `docs/PRD_Open_Finance_Back_Office.md` +
-`specs/backoffice-openapi.yaml` + `docs/backlog.yaml` (BACKOFFICE-01..80). One story
+`specs/backoffice-openapi.yaml` + `docs/backlog.yaml` (BACKOFFICE / HARNESS / DISCOVERY — 134 of ~139 done). One story
 per branch, spec-first, demoable on merge.
 
 ```mermaid
