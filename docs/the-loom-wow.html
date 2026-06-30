@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Loom — how a regulated entity builds</title>
+<title>The Loom — Ways of Working (WoW)</title>
 <style>
   :root{
     --bg:#f7f6f1;--surface:#ffffff;--panel:#faf9f5;--ink:#2c2c2a;--ink2:#5f5e5a;
@@ -97,23 +97,24 @@
       </g>
     </svg>
     <div>
-      <h1>The Loom</h1>
-      <p class="thesis tag">the regulated entity's way of building</p>
+      <h1>The Loom — Ways of Working</h1>
+      <p class="thesis tag">how a regulated entity builds: harness, brain &amp; architecture, in one place</p>
     </div>
   </div>
-  <p class="byline">AI agents run the <b>discovery</b> &amp; <b>delivery</b> harnesses across a frame of <b>always-on controls</b>, weaving any solution to the institution's own <b>pattern</b> (its context) — from an idea to live, audit-ready software. Open Finance is the first cloth off the loom.</p>
+  <p class="byline">One disciplined way of working. AI agents run the <b>discovery</b> &amp; <b>delivery</b> harnesses across a frame of <b>always-on controls</b>, weaving each solution to the institution's own <b>brain</b> — its <b>regulated context</b>, the <b>solution domain</b>, and how the <b>bank itself works</b> — from an idea to live, audit-ready software, stopping for a human at exactly three decisions. Open Finance is the first cloth off the loom.</p>
   <div class="meta">
-    <span class="pill">the loom is the deliverable</span>
-    <span class="pill">proven on Open Finance</span>
-    <span class="pill">any solution · any domain</span>
+    <span class="pill">harness + brain + architecture, unified</span>
     <span class="pill">context is king</span>
+    <span class="pill">3 human decisions</span>
+    <span class="pill">any solution · any domain</span>
   </div>
+  <p style="font-family:var(--mono);font-size:11.5px;color:var(--ink2);margin:10px 0 0">Companion to the live build-provenance map · <a href="https://backoffice.openfinance-os.org/harness-map" style="color:var(--acc)">backoffice.openfinance-os.org/harness-map</a> — this page adds the context brain the map doesn't cover.</p>
 </header>
 <div class="defbox" id="tldr" style="margin-top:22px">
   <h3>In one minute</h3>
   <p style="margin:6px 0 0"><b>What it is.</b> The Loom is a reusable way for a regulated entity to build software with AI &mdash; discovery and delivery harnesses running across a frame of always-on controls, weaving to the institution's own context (its "brain").</p>
-  <p style="margin:6px 0 0"><b>The proof.</b> We built the Open Finance Back Office on it &mdash; a demonstrable, quality-gated, audit-evidenced system (synthetic data, non-production), driven by an <b>autonomous build loop</b> that has carried 134 of ~139 backlog stories to done &mdash; and now a matching <b>discovery harness</b> (the front of the diamond) with its own D1&ndash;D8 gates, that has already run two problems end to end.</p>
-  <p style="margin:6px 0 0"><b>Why it matters.</b> The method is reusable across domains, and the accumulated context compounds into a moat a competitor cannot simply buy.</p>
+  <p style="margin:6px 0 0"><b>The proof.</b> We built the Open Finance Back Office on it &mdash; <b>135 shipped features across ~740 files</b> (synthetic data, permanently non-production): an autonomous agent harness runs the full lifecycle &mdash; discover, define, develop, deliver &mdash; and stops for a human at <b>exactly three decisions</b>. The cast that makes it safe: <b>7 skills · 4 reviewer agents · 4 hooks · 17 scripts · 18 gates</b>.</p>
+  <p style="margin:6px 0 0"><b>The part the map misses.</b> A harness alone is generic. What makes the output <em>this</em> institution's is the <b>context brain</b> &mdash; three dimensions the harness reads at every step: the <b>regulated context</b> (the regime's rules), the <b>solution domain</b> (this problem space), and the institution's own <b>DNA</b> (how the bank works). It compounds into a moat a competitor cannot simply buy.</p>
   <p style="margin:6px 0 0"><b>The guardrail.</b> Agents do the building and the recurring assurance work; humans stay accountable and hold four-eyes approval (see <em>AI governance</em>, below).</p>
   <p style="margin:6px 0 0"><b>The ask.</b> Back the Loom as the regulated entity's default way to build &mdash; and take one or two real domains through it next.</p>
 </div>
@@ -123,6 +124,7 @@
   <ol>
     <li><a href="#idea">We built a way to build</a></li>
     <li><a href="#model">The harnesses — a double diamond</a></li>
+    <li><a href="#wow">Before / after · the cast · three decisions</a></li>
     <li><a href="#brain">The context brain — three dimensions</a></li>
     <li><a href="#assurance">Continuous assurance (agents, not meetings)</a></li>
     <li><a href="#governance">AI governance &amp; accountability</a></li>
@@ -443,7 +445,7 @@
     </svg>
     <figcaption>Figure 4 — Discovery harness: frame → discover → define (+ optional RFP) → gate → hand off the PRD.</figcaption>
   </figure>
-  <div class="callout"><b>Not a slide — built.</b> The discovery harness now exists in the repo as a working mirror of delivery: a binding canon (<code>discovery/DISCOVERY.md</code>), a <code>discovery</code> skill and a <code>brand-render</code> skill, two reviewer agents (<code>data-governance</code>, <code>discovery-boundary</code>), and eight CI-enforced gates &mdash; <b>D1 problem framing · D2 evidence · D3 scope &amp; stakeholders · D4 no-solutioning · D5 synthesis integrity · D6 data-governance feasibility · D7 brand conformance · D8 tangibility</b>. It has already taken <b>two real problems</b> end-to-end (consent-lifecycle hygiene and fee-variance reconciliation), each emitting cited evidence, a framed problem, a business case and an on-brand prototype (real <code>.docx</code>/<code>.pptx</code>/<code>.xlsx</code>). It is solution-agnostic by construction: the domain mounts through two <em>seams</em> &mdash; a data-risk register and a brand profile &mdash; so the same machinery runs discovery for a different institution unchanged.</div>
+  <div class="callout"><b>Not a slide — built.</b> The discovery harness now exists in the repo as a working mirror of delivery: a binding canon (<code>discovery/DISCOVERY.md</code>), a <code>discovery</code> skill and a <code>brand-render</code> skill, two reviewer agents (<code>data-governance</code>, <code>discovery-boundary</code>), and eight CI-enforced gates &mdash; <b>D1 problem framing · D2 evidence · D3 scope &amp; stakeholders · D4 no-solutioning · D5 synthesis integrity · D6 data-governance feasibility · D7 brand conformance · D8 tangibility</b> <em>(the live deployment runs a ninth, D9)</em>. It has already taken <b>two real problems</b> end-to-end (consent-lifecycle hygiene and fee-variance reconciliation), each emitting cited evidence, a framed problem, a business case and an on-brand prototype (real <code>.docx</code>/<code>.pptx</code>/<code>.xlsx</code>). It is solution-agnostic by construction: the domain mounts through two <em>seams</em> &mdash; a data-risk register and a brand profile &mdash; so the same machinery runs discovery for a different institution unchanged.</div>
 
   <h3>Delivery — shipping it under control</h3>
   <p>The <b>delivery harness</b> turns the PRD into working software on rails. Every change is specification-first, four-eyes approved, and auto-deployed to a live demo; nothing ships without clearing build, security, integration and data-lineage gates; and no real customer data ever touches the system. Compliance and auditability are properties of the line — not a scramble before an audit.</p>
@@ -528,9 +530,55 @@
   </figure>
 </section>
 
+<!-- ============ WAYS OF WORKING — before/after · cast · decisions ============ -->
+<section id="wow">
+  <h2><span class="k">Ways of working</span>Before &amp; after, the cast, and the three decisions</h2>
+  <p class="lead">The conventional way a regulated bank ships one feature is a chain of human ceremonies &mdash; each its own meeting, attendees and hand-authored artifact. The Loom keeps the rigour: the same checks still happen, but they run as deterministic gates and independent AI reviewers, and a person is called only where accountability genuinely requires one.</p>
+
+  <div class="grid">
+    <div class="grp">
+      <h4>Before — the conventional regulated path</h4>
+      <p class="sub">per feature — each line a meeting humans schedule, attend &amp; document</p>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="big">~11</div><div class="cap">recurring human ceremonies</div></div>
+        <div class="stat"><div class="big">~14</div><div class="cap">hand-authored artifacts</div></div>
+        <div class="stat"><div class="big">weeks</div><div class="cap">calendar time / feature</div></div>
+      </div>
+    </div>
+    <div class="grp" style="border-color:var(--acc);background:var(--accbg)">
+      <h4>After — the agent harness</h4>
+      <p class="sub">the same checks run — as deterministic gates &amp; independent AI reviewers</p>
+      <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="big">3</div><div class="cap">human decision points</div></div>
+        <div class="stat"><div class="big">auto</div><div class="cap">artifacts generated, then reviewed</div></div>
+        <div class="stat"><div class="big">hours</div><div class="cap">typical time / feature</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>The cast — what makes it safe enough for a bank</h3>
+  <p>Autonomy without guardrails is a non-starter in a regulated shop, so the harness is layered: agents do the open-ended work, but every consequential step is fenced by something deterministic. As published on the live map:</p>
+  <div class="grid">
+    <div class="grp"><h4>7 skills</h4><p class="sub">the agent&rsquo;s playbooks — one per phase</p><div class="mods"><span class="mod">discovery</span><span class="mod">brand-render</span><span class="mod">next-story</span><span class="mod">implement-story</span><span class="mod">spec-change</span><span class="mod">run-ofbo</span><span class="mod">+ 1 more (live)</span></div></div>
+    <div class="grp"><h4>4 reviewer agents</h4><p class="sub">independent, pre-PR — separate from the builder</p><div class="mods"><span class="mod">contract-conformance</span><span class="mod">hard-stop</span><span class="mod">data-governance</span><span class="mod">discovery-boundary</span></div></div>
+    <div class="grp"><h4>4 hooks</h4><p class="sub">enforced on every edit &amp; session</p><div class="mods"><span class="mod">worktree-policy</span><span class="mod">pii-guard</span><span class="mod">spec-tripwire</span><span class="mod">test-tripwire</span></div></div>
+    <div class="grp"><h4>18 gates</h4><p class="sub">a failed gate blocks the merge</p><div class="mods"><span class="mod">Discovery D1–D9</span><span class="mod">Delivery Q1–Q4.5</span><span class="mod">Q1b/Q2b integrity</span><span class="mod">+ 17 scripts</span></div></div>
+  </div>
+  <p style="font-family:var(--mono);font-size:11.5px;color:var(--ink2);margin-top:6px">Cast counts (7 skills · 17 scripts · 18 gates · D1&ndash;D9 · 135 features · ~740 files) are as published on the live harness-map. The detailed enumeration in <em>The Loom today</em> below reflects the subset checked into this repository snapshot &mdash; the live deployment runs slightly ahead.</p>
+
+  <h3>Three decisions a person still owns</h3>
+  <p>The agent proposes; a human disposes. Everywhere else the machine is faster and more consistent &mdash; but these three carry regulatory accountability, so they never run on AI judgement alone.</p>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="grp" style="border-color:var(--acc)"><h4>&#9670; Waist gate &mdash; <code>HG-0007</code></h4><p class="sub">discovery hand-off</p><p style="margin:6px 0 0;font-size:13.5px">A human <b>accepts the framed problem</b> before any delivery story exists &mdash; the four-eyes of discovery; kill-criteria can stop here.</p></div>
+    <div class="grp" style="border-color:var(--acc)"><h4>&#9670; Merge gate &mdash; <code>HG-0001</code></h4><p class="sub">four-eyes merge to main</p><p style="margin:6px 0 0;font-size:13.5px">A human <b>approves &amp; merges every PR</b> on a protected branch &mdash; no self-merge of an agent&rsquo;s own work.</p></div>
+    <div class="grp" style="border-color:var(--acc)"><h4>&#9670; Prod gate &mdash; <code>HG-0005 / Q5</code></h4><p class="sub">production approval</p><p style="margin:6px 0 0;font-size:13.5px">A human <b>approves the release</b> to production &mdash; evidenced at release time with a sealed bundle.</p></div>
+  </div>
+  <div class="callout"><b>The whole design.</b> Everything between these points &mdash; discovery, evidence, design, code, tests, contract checks, lineage, the pull request itself &mdash; is produced and verified by the harness. The human reads, questions, and decides. <b>Machines do the work; people own the calls that matter.</b></div>
+</section>
+
 <section id="brain">
   <h2><span class="k">The context brain</span>Three dimensions — regulated context, solution domain, how the bank works</h2>
-  <p class="lead">A harness alone is generic, and so is an AI agent. What makes the Loom produce <em>this</em> institution's software is <b>context</b>. We treat it as a first-class asset: a <b>regulated-entity brain</b> the harnesses read from at every step and write back to after every cycle. It has a <em>general-practice</em> base that ships with the Loom, and on top of it the three dimensions that are the institution's own:</p>
+  <p class="lead">A harness alone is generic, and so is an AI agent. What makes the Loom produce <em>this</em> institution's software &mdash; and what the live harness-map deliberately leaves out &mdash; is <b>context</b>. We treat it as a first-class asset: a <b>regulated-entity brain</b> the harnesses read from at every step and write back to after every cycle. It has a <em>general-practice</em> base that ships with the Loom, and on top of it the three dimensions that are the institution's own:</p>
   <ul class="tight">
     <li><b>Regulated context &mdash; the regime's rules (what you must obey).</b> The mandates and posture the entity is bound by: CBUAE / Al&nbsp;Tareq / Nebras obligations and deadlines, FAPI&nbsp;2.0 security (mTLS, PAR, PKCE), BCBS&nbsp;239 lineage, PDPL and UAE data residency, and the risk taxonomy &amp; controls. In the repo this is a live <em>seam</em> &mdash; the data-risk register (<code>controls.json</code>, <code>regulations.json</code>, <code>risk-taxonomy.json</code>) that discovery&rsquo;s D6 gate reads.</li>
     <li><b>Solution domain &mdash; this problem space (what you're building).</b> The shape of the thing itself: the Open Finance model, the OpenAPI contract (81 paths), the vendor-neutral ports P1&ndash;P9, the data model and retention tiers, the persona &amp; scope matrix, and the synthetic dataset. Swap this dimension and the same Loom builds a different solution.</li>
@@ -1296,11 +1344,11 @@ packages/release-evidence/ gate→control mappings + sealed bundle</pre>
     <div class="stat"><div class="big">A compounding brain</div><div class="cap">context captured once, reused forever — the moat</div></div>
   </div>
   <p style="margin-top:18px">Open Finance Back Office is the first thing we built this way. It should be the template for the next.</p>
-  <div class="callout">Want the detail behind the proof? Expand the <em>Example architecture</em> panel above — the full system the Loom produced: architecture, controls, and a worked example end to end. (Also available standalone as <code>architecture-overview.html</code>.)</div>
+  <div class="callout">This page unifies what used to live in three places: the harness (the live build-provenance map at <a href="https://backoffice.openfinance-os.org/harness-map" style="color:var(--acc)">backoffice.openfinance-os.org/harness-map</a>), the <b>context brain</b> the map doesn&rsquo;t cover, and the architecture it produced. Want the engineering detail? Expand the <em>Example architecture</em> panel above, or open the standalone <code>architecture-overview.html</code>.</div>
 </section>
 
 <footer class="doc">
-  The Loom — the regulated entity's way of building · the Loom is the deliverable, Open Finance the proof · synthetic data only, permanently non-production
+  The Loom — Ways of Working · harness + context brain + architecture in one place · companion to backoffice.openfinance-os.org/harness-map · the Loom is the deliverable, Open Finance the proof · synthetic data only, permanently non-production
 </footer>
 
 </div>

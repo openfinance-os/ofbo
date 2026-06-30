@@ -40,14 +40,14 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
   test('the "how this was built" colophon opens the embedded harness map', async ({ page }) => {
     await page.goto('/')
     // the served map is reachable (the iframe + full-screen link target)
-    const map = await page.request.get('/harness-map.html')
+    const map = await page.request.get('/the-loom-ways-of-working.html')
     expect(map.status()).toBe(200)
     expect(await map.text()).toContain('Double Diamond')
     // pre-sign-in colophon → dialog embedding the map
     await page.getByTestId('built-with-open').click()
     await expect(page.getByTestId('built-with-dialog')).toBeVisible()
-    await expect(page.getByTestId('harness-map-frame')).toHaveAttribute('src', '/harness-map.html')
-    await expect(page.getByTestId('built-with-full-link')).toHaveAttribute('href', '/harness-map.html')
+    await expect(page.getByTestId('harness-map-frame')).toHaveAttribute('src', '/the-loom-ways-of-working.html')
+    await expect(page.getByTestId('built-with-full-link')).toHaveAttribute('href', '/the-loom-ways-of-working.html')
     // the embedded map actually renders its Double Diamond phase cards inside the iframe
     await expect(page.frameLocator('[data-testid="harness-map-frame"]').locator('.fc').first()).toBeVisible()
     await page.getByTestId('built-with-close').click()

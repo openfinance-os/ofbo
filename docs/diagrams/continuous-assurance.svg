@@ -1,0 +1,101 @@
+<svg id="svg-life" viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t-life d-life" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t-life">Continuous assurance — agents on the regulatory lifecycle</title>
+<desc id="d-life">Instead of humans in the loop and recurring meetings, the harness pulls in specialised agents continuously — on every change, on a schedule, and on events. They run a six-step regulatory lifecycle (watch, assess, check, test, evidence, confirm and report), each step previously a meeting, now run by an agent. The loop never ends; it re-runs on the next trigger, producing continuous assurance that every audit and regulatory commitment is managed, reviewed and confirmed, always audit-ready. Humans stay for judgment and four-eyes approvals.</desc>
+<defs>
+  <marker id="life-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#5f5e5a"/></marker>
+  <marker id="life-arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7F77DD"/></marker>
+</defs>
+<style>
+  #svg-life .ink{fill:#2c2c2a;} #svg-life .ink2{fill:#5f5e5a;}
+  #svg-life .box{fill:#faf9f5;stroke:#d3d1c7;}
+  #svg-life .acc{fill:rgba(127,119,221,0.09);stroke:#7F77DD;}
+  #svg-life .card{fill:#ffffff;stroke:#e6e4dc;}
+  #svg-life .e{stroke:#5f5e5a;fill:none;stroke-width:1.4;}
+  #svg-life .loop{stroke:#7F77DD;fill:none;stroke-width:1.8;stroke-dasharray:6 4;}
+  #svg-life .ag{fill:#6a62c9;font-weight:700;}
+  #svg-life .was{fill:#8a8881;font-style:italic;}
+  #svg-life .lbl{font-weight:700;} #svg-life .mono{font-family:ui-monospace,monospace;}
+  #svg-life .h{font-size:8px;} #svg-life .ttl{font-size:9.5px;font-weight:700;}
+</style>
+<text x="24" y="26" class="ink lbl" font-size="16">Continuous assurance — agents, not meetings</text>
+<text x="24" y="44" class="ink2" font-size="11.5">The harness pulls specialised agents into the regulatory lifecycle — not once, but on an ongoing basis — so every commitment stays confirmed.</text>
+<text x="24" y="70" class="ink2 lbl mono" font-size="10">①  PULLED IN BY THE HARNESS — continuously · on every change · on a schedule · on events</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="24" y="78" width="152" height="32" rx="6" class="card"/><text x="100" y="98" class="ink">every commit / PR</text></g>
+  <g><rect x="184" y="78" width="152" height="32" rx="6" class="card"/><text x="260" y="98" class="ink">every merge / deploy</text></g>
+  <g><rect x="344" y="78" width="152" height="32" rx="6" class="card"/><text x="420" y="98" class="ink">daily / continuous</text></g>
+  <g><rect x="504" y="78" width="152" height="32" rx="6" class="card"/><text x="580" y="98" class="ink">new regulation</text></g>
+  <g><rect x="664" y="78" width="152" height="32" rx="6" class="card"/><text x="740" y="98" class="ink">cert expiry ≤7d</text></g>
+  <g><rect x="824" y="78" width="152" height="32" rx="6" class="card"/><text x="900" y="98" class="ink">scheme / risk signal</text></g>
+</g>
+<g class="e"><path marker-end="url(#life-ar)" d="M300 112 L300 150"/><path marker-end="url(#life-ar)" d="M500 112 L500 150"/><path marker-end="url(#life-ar)" d="M700 112 L700 150"/></g>
+<text x="24" y="146" class="ink2 lbl mono" font-size="10">②  THE REGULATORY LIFECYCLE — each step run by an agent the harness pulls in (no meeting required)</text>
+<rect x="24" y="152" width="952" height="144" rx="10" class="box"/>
+<g>
+  <g><rect x="32" y="162" width="148" height="124" rx="7" class="card"/>
+    <text x="40" y="181" class="ink ttl">① Watch</text>
+    <text x="40" y="198" class="ag" font-size="7.8">agent: change-watch</text>
+    <text x="40" y="214" class="ink2 h">reg &amp; risk horizon scan</text>
+    <text x="40" y="270" class="was h">was: periodic review</text></g>
+  <g><rect x="190" y="162" width="148" height="124" rx="7" class="card"/>
+    <text x="198" y="181" class="ink ttl">② Assess</text>
+    <text x="198" y="198" class="ag" font-size="7.8">agent: risk-reviewer</text>
+    <text x="198" y="214" class="ink2 h">risk &amp; impact review</text>
+    <text x="198" y="270" class="was h">was: risk committee</text></g>
+  <g><rect x="348" y="162" width="148" height="124" rx="7" class="card"/>
+    <text x="356" y="181" class="ink ttl">③ Check</text>
+    <text x="356" y="198" class="ag" font-size="7.8">agents: conformance</text>
+    <text x="356" y="208" class="ag" font-size="7.8">+ hard-stop</text>
+    <text x="356" y="224" class="ink2 h">spec &amp; hard-stop check</text>
+    <text x="356" y="270" class="was h">was: design review</text></g>
+  <g><rect x="506" y="162" width="148" height="124" rx="7" class="card"/>
+    <text x="514" y="181" class="ink ttl">④ Test</text>
+    <text x="514" y="198" class="ag" font-size="7.8">agent: gate runners</text>
+    <text x="514" y="214" class="ink2 h">controls · Q1–Q4.5</text>
+    <text x="514" y="270" class="was h">was: control-test cycle</text></g>
+  <g><rect x="664" y="162" width="148" height="124" rx="7" class="card"/>
+    <text x="672" y="181" class="ink ttl">⑤ Evidence</text>
+    <text x="672" y="198" class="ag" font-size="7.8">agents: audit + lineage</text>
+    <text x="672" y="214" class="ink2 h">trail + BCBS 239</text>
+    <text x="672" y="270" class="was h">was: audit-prep scramble</text></g>
+  <g><rect x="822" y="162" width="148" height="124" rx="7" class="acc"/>
+    <text x="830" y="181" class="ink ttl">⑥ Confirm &amp; report</text>
+    <text x="830" y="198" class="ag" font-size="7.8">agent: attest + report</text>
+    <text x="830" y="214" class="ink2 h">confirm · file · notify</text>
+    <text x="830" y="231" class="ink2 h" font-weight="700">+ human four-eyes</text>
+    <text x="830" y="270" class="was h">was: sign-off meetings</text></g>
+</g>
+<g class="e" stroke-width="1.6">
+  <path marker-end="url(#life-ar)" d="M180 224 L189 224"/>
+  <path marker-end="url(#life-ar)" d="M338 224 L347 224"/>
+  <path marker-end="url(#life-ar)" d="M496 224 L505 224"/>
+  <path marker-end="url(#life-ar)" d="M654 224 L663 224"/>
+  <path marker-end="url(#life-ar)" d="M812 224 L821 224"/>
+</g>
+<path class="loop" marker-end="url(#life-arA)" d="M896 286 C896 344 106 344 106 288"/>
+<text x="500" y="335" text-anchor="middle" class="ink2" font-size="9.5">↻ continuous — never "done": the loop re-runs on the next trigger, on an ongoing basis</text>
+<rect x="24" y="356" width="952" height="56" rx="9" class="acc"/>
+<text x="40" y="377" class="ink lbl mono" font-size="10">③  CONTINUOUS ASSURANCE</text>
+<text x="40" y="394" class="ink2" font-size="9.5">Every audit &amp; regulatory commitment is managed, reviewed and confirmed on an ongoing basis — always audit-ready, evidence by construction.</text>
+<text x="40" y="407" class="ink2" font-size="9.5">Humans stay for judgment &amp; four-eyes; agents do the recurring review, testing, evidence and reporting — writing it all to the brain / evidence ledger.</text>
+<text x="24" y="434" class="ink2 lbl mono" font-size="10">④  WHY THIS IS DIFFERENT — agents on an ongoing basis, not humans in countless meetings</text>
+<g>
+  <rect x="24" y="440" width="466" height="150" rx="9" class="box"/>
+  <text x="40" y="461" class="ink ttl" font-size="10.5">BEFORE — point-in-time, meeting-driven</text>
+  <text x="40" y="483" class="ink2" font-size="9">•  humans in the loop; countless meetings &amp; handoffs</text>
+  <text x="40" y="503" class="ink2" font-size="9">•  periodic reviews; evidence gathered after the fact</text>
+  <text x="40" y="523" class="ink2" font-size="9">•  compliance proven at audit time — a scramble</text>
+  <text x="40" y="543" class="ink2" font-size="9">•  assurance is a snapshot, and quickly goes stale</text>
+  <text x="40" y="570" class="was" font-size="9">slow, costly, and only ever as current as the last review</text>
+</g>
+<g>
+  <rect x="510" y="440" width="466" height="150" rx="9" class="acc"/>
+  <text x="526" y="461" class="ink ttl" font-size="10.5">NOW — continuous, agent-driven</text>
+  <text x="526" y="483" class="ink2" font-size="9">•  agents pulled in by the harness on every trigger</text>
+  <text x="526" y="503" class="ink2" font-size="9">•  review, testing &amp; evidence run automatically, always-on</text>
+  <text x="526" y="523" class="ink2" font-size="9">•  compliance is a property of the line, not an event</text>
+  <text x="526" y="543" class="ink2" font-size="9">•  every commitment confirmed live — always audit-ready</text>
+  <text x="526" y="570" class="ag" font-size="9">fast, cheap, and current to the last commit</text>
+</g>
+<text x="24" y="616" class="ink2 mono" font-size="9">Agents augment people; accountability &amp; four-eyes stay human — the harness just makes the recurring assurance continuous.</text>
+</svg>

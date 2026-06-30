@@ -1,0 +1,65 @@
+<svg id="svg-loom" viewBox="0 0 920 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t-loom d-loom" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t-loom">The Loom — the regulated entity's way of building</title>
+<desc id="d-loom">A loom as metaphor for the build model. The warp threads held under tension are the always-on controls (four-eyes, audit, lineage, quality gates, data residency). Two harness bars across the warp are the discovery and delivery harnesses. A shuttle carrying the weft is the AI agents, pulled by the harness to weave continuously. The pattern the loom weaves to is the regulated-entity brain (its context). The woven cloth is shipped, audit-ready solutions — Open Finance first, then payments, lending, servicing, risk.</desc>
+<style>
+  #svg-loom .ink{fill:#2c2c2a;} #svg-loom .ink2{fill:#5f5e5a;}
+  #svg-loom .frame{fill:#8a8881;}
+  #svg-loom .warp{stroke:#cfcabf;stroke-width:1.3;}
+  #svg-loom .weft{stroke:#b9b3e8;stroke-width:2;}
+  #svg-loom .harness{fill:rgba(127,119,221,0.16);stroke:#7F77DD;}
+  #svg-loom .shuttle{fill:#7F77DD;}
+  #svg-loom .pat{fill:rgba(127,119,221,0.10);stroke:#7F77DD;}
+  #svg-loom .dot{stroke:#7F77DD;stroke-width:1.3;fill:none;stroke-dasharray:3 3;}
+  #svg-loom .chip{fill:#faf9f5;stroke:#d3d1c7;}
+  #svg-loom .chipOn{fill:rgba(127,119,221,0.12);stroke:#7F77DD;}
+  #svg-loom .lbl{font-weight:700;} #svg-loom .mono{font-family:ui-monospace,monospace;}
+</style>
+<defs><marker id="loom-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7F77DD"/></marker></defs>
+<text x="40" y="42" class="ink lbl" font-size="30">The Loom</text>
+<text x="40" y="64" class="ink2" font-size="12">The regulated entity's way of building — AI agents run the discovery &amp; delivery harnesses across a frame of always-on controls,</text>
+<text x="40" y="80" class="ink2" font-size="12">weaving any solution to the institution's own pattern (its context), from idea to live, audit-ready software.</text>
+<rect x="150" y="104" width="560" height="12" rx="3" class="frame"/>
+<rect x="150" y="430" width="560" height="12" rx="3" class="frame"/>
+<rect x="148" y="104" width="11" height="338" rx="3" class="frame"/>
+<rect x="701" y="104" width="11" height="338" rx="3" class="frame"/>
+<g class="warp">
+  <line x1="188" y1="116" x2="188" y2="430"/><line x1="228" y1="116" x2="228" y2="430"/><line x1="268" y1="116" x2="268" y2="430"/>
+  <line x1="308" y1="116" x2="308" y2="430"/><line x1="348" y1="116" x2="348" y2="430"/><line x1="388" y1="116" x2="388" y2="430"/>
+  <line x1="428" y1="116" x2="428" y2="430"/><line x1="468" y1="116" x2="468" y2="430"/><line x1="508" y1="116" x2="508" y2="430"/>
+  <line x1="548" y1="116" x2="548" y2="430"/><line x1="588" y1="116" x2="588" y2="430"/><line x1="628" y1="116" x2="628" y2="430"/><line x1="668" y1="116" x2="668" y2="430"/>
+</g>
+<text x="24" y="196" class="ink2 lbl" font-size="9.5">WARP — always-on controls</text>
+<g class="ink2 mono" font-size="8">
+  <text x="24" y="214">four-eyes</text>
+  <text x="24" y="228">INSERT-only audit</text>
+  <text x="24" y="242">BCBS 239 lineage</text>
+  <text x="24" y="256">quality gates Q1–Q4.5</text>
+  <text x="24" y="270">data residency</text>
+</g>
+<path class="dot" d="M120 248 L186 248"/>
+<rect x="166" y="184" width="528" height="20" rx="5" class="harness"/>
+<text x="178" y="198" class="ink lbl" font-size="10.5">① Discovery harness</text>
+<rect x="166" y="244" width="528" height="20" rx="5" class="harness"/>
+<text x="178" y="258" class="ink lbl" font-size="10.5">② Delivery harness</text>
+<g class="weft" stroke-dasharray="6 5"><line x1="352" y1="309" x2="396" y2="309"/><line x1="494" y1="309" x2="556" y2="309"/></g>
+<rect x="398" y="298" width="96" height="22" rx="11" class="shuttle"/>
+<text x="446" y="313" text-anchor="middle" fill="#fff" class="lbl" font-size="9.5">agents</text>
+<text x="446" y="340" text-anchor="middle" class="ink2" font-size="9">the shuttle — pulled by the harness, weaving continuously</text>
+<rect x="726" y="150" width="170" height="50" rx="8" class="pat"/>
+<text x="738" y="170" class="ink lbl" font-size="10.5">the brain</text>
+<text x="738" y="186" class="ink2" font-size="9">= the pattern (the entity's context)</text>
+<path class="dot" marker-end="url(#loom-ar)" d="M726 178 C700 150 690 132 672 124"/>
+<text x="600" y="138" class="ink2" font-size="8.5">weaves to the pattern</text>
+<rect x="184" y="368" width="490" height="62" rx="2" fill="rgba(127,119,221,0.05)"/>
+<g class="weft"><line x1="186" y1="380" x2="670" y2="380"/><line x1="186" y1="396" x2="670" y2="396"/><line x1="186" y1="412" x2="670" y2="412"/></g>
+<text x="160" y="462" class="ink2 lbl" font-size="10">woven cloth = live, audit-ready solutions</text>
+<g class="mono" font-size="8" text-anchor="middle">
+  <g><rect x="430" y="452" width="96" height="22" rx="5" class="chipOn"/><text x="478" y="467" class="ink">Open Finance ✓</text></g>
+  <g><rect x="534" y="452" width="72" height="22" rx="5" class="chip"/><text x="570" y="467" class="ink">payments</text></g>
+  <g><rect x="614" y="452" width="64" height="22" rx="5" class="chip"/><text x="646" y="467" class="ink">lending</text></g>
+  <g><rect x="686" y="452" width="74" height="22" rx="5" class="chip"/><text x="723" y="467" class="ink">servicing</text></g>
+  <g><rect x="768" y="452" width="58" height="22" rx="5" class="chip"/><text x="797" y="467" class="ink">risk…</text></g>
+</g>
+<line x1="40" y1="500" x2="880" y2="500" stroke="#ece9e0"/>
+<text x="40" y="520" class="ink2" font-size="9">Metaphor — <tspan class="lbl">warp:</tspan> controls · <tspan class="lbl">harnesses:</tspan> discovery &amp; delivery · <tspan class="lbl">shuttle:</tspan> AI agents · <tspan class="lbl">pattern:</tspan> the regulated-entity brain · <tspan class="lbl">cloth:</tspan> shipped solutions</text>
+</svg>
