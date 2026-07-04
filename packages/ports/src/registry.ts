@@ -9,6 +9,7 @@ import { nebrasEgressFromEnv } from './adapters/enterprise/nebras-egress.js'
 import { openLineageFromEnv } from './adapters/enterprise/openlineage.js'
 import { onboardingHandoverFromEnv } from './adapters/enterprise/onboarding-handover.js'
 import { financialSystemFromEnv } from './adapters/enterprise/financial-system.js'
+import { strWorkflowFromEnv } from './adapters/enterprise/str-workflow.js'
 import { EnterpriseAdapterNotImplementedError, type DeployProfile } from './types.js'
 
 export type PortName = keyof PortMap
@@ -22,7 +23,8 @@ export const PORT_NAMES = [
   'p6-nebras-egress',
   'p7-lineage',
   'p8-onboarding-handover',
-  'p9-financial-system'
+  'p9-financial-system',
+  'p10-str-workflow'
 ] as const satisfies readonly PortName[]
 
 /**
@@ -44,7 +46,8 @@ const ENTERPRISE_FACTORIES: Partial<{ [K in PortName]: () => PortMap[K] }> = {
   'p6-nebras-egress': () => nebrasEgressFromEnv(process.env),
   'p7-lineage': () => openLineageFromEnv(process.env),
   'p8-onboarding-handover': () => onboardingHandoverFromEnv(process.env),
-  'p9-financial-system': () => financialSystemFromEnv(process.env)
+  'p9-financial-system': () => financialSystemFromEnv(process.env),
+  'p10-str-workflow': () => strWorkflowFromEnv(process.env)
 }
 const enterpriseCache = new Map<PortName, unknown>()
 

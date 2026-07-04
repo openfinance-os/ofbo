@@ -347,6 +347,27 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/str-drafts",
+    "tag": "reports",
+    "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/str-drafts/{str_draft_id}",
+    "tag": "reports",
+    "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/str-drafts/{str_draft_id}:submit-to-workflow",
+    "tag": "reports",
+    "scope": "compliance:reports:generate",
+    "fourEyes": true
+  },
+  {
+    "method": "get",
     "path": "/back-office/lfi-reports",
     "tag": "reports",
     "scope": "compliance:reports:read",

@@ -7,9 +7,9 @@ import { loadSpec, listRoutes } from '../src/spec.js'
 const isPublic = (path: string) => path.startsWith('/public/')
 
 describe('contract canon', () => {
-  it('has exactly 86 paths and 12 tags (incl. the 5 public readiness paths + readiness tag)', () => {
+  it('has exactly 89 paths and 12 tags (incl. the 5 public readiness paths + readiness tag)', () => {
     const spec = loadSpec()
-    expect(Object.keys(spec.paths)).toHaveLength(86)
+    expect(Object.keys(spec.paths)).toHaveLength(89)
     expect(spec.tags).toHaveLength(12)
   })
 

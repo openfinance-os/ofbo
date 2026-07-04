@@ -107,6 +107,14 @@ export {
   type ServiceDeskCasePage
 } from './service-desk-case-store.js'
 export {
+  PgStrDraftStore,
+  type StoredStrDraft,
+  type StrDraftRecordInput,
+  type StrDraftStatusPatch,
+  type StrDraftListQuery,
+  type StrDraftPage
+} from './str-draft-store.js'
+export {
   PgComplianceReportStore,
   type StoredComplianceReport,
   type ComplianceReportCreateInput,
