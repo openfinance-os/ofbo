@@ -63,6 +63,35 @@ describe('demo scenario seed', () => {
     expect(appr.rows[0].n).toBe(1)
   })
 
+  it('seeds 4 STR drafts across the lifecycle (incl. the INC-2026-0042 draft)', async () => {
+    const all = await admin.query(`SELECT count(*)::int AS n FROM str_draft WHERE created_by = 'demo:risk-analyst'`)
+    expect(all.rows[0].n).toBeGreaterThanOrEqual(4)
+    const states = await admin.query(`SELECT count(DISTINCT status)::int AS n FROM str_draft WHERE created_by = 'demo:risk-analyst'`)
+    expect(states.rows[0].n).toBe(3) // draft, awaiting_handoff, handed_off
+    const inc = await admin.query(`SELECT count(*)::int AS n FROM str_draft WHERE source_consent_id = 'consent-INC-2026-0042'`)
+    expect(inc.rows[0].n).toBe(1)
+  })
+
+  it('seeds the named TPP counterparties with a spread of status (incl. one unbilled)', async () => {
+    // The 6 net-new fictional institutions (org-fictional-fintech-01 already exists from the base
+    // dataset, so its row is skipped by the natural-key guard — that dedup is correct).
+    const named = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE registration_number LIKE 'CN-100%'`)
+    expect(named.rows[0].n).toBeGreaterThanOrEqual(6)
+    const statuses = await admin.query(`SELECT count(DISTINCT production_status)::int AS n FROM tpp_counterparty WHERE registration_number LIKE 'CN-100%'`)
+    expect(statuses.rows[0].n).toBeGreaterThanOrEqual(3) // active_traffic, directory_only, dormant
+    const unbilled = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE unbilled_traffic = true`)
+    expect(unbilled.rows[0].n).toBeGreaterThanOrEqual(1)
+  })
+
+  it('seeds 3 invoice runs and 3 scheme notifications', async () => {
+    const inv = await admin.query(`SELECT count(*)::int AS n FROM invoice_run WHERE billing_period IN ('2026-03','2026-04','2026-05')`)
+    expect(inv.rows[0].n).toBe(3)
+    const notif = await admin.query(`SELECT count(DISTINCT notification_type)::int AS n FROM scheme_notification WHERE created_by = 'demo:operations-analyst'`)
+    expect(notif.rows[0].n).toBe(3)
+    const breaking = await admin.query(`SELECT dual_running_required FROM scheme_notification WHERE notification_type = 'breaking_change' LIMIT 1`)
+    expect(breaking.rows[0].dual_running_required).toBe(true)
+  })
+
   it('is idempotent — re-running the scenario does not duplicate', async () => {
     const before = await admin.query(`SELECT count(*)::int AS n FROM service_desk_case WHERE nebras_case_reference LIKE 'NBR-SD-%'`)
     await seedDemoScenario(url)
