@@ -30,7 +30,7 @@ describe('demo scenario seed', () => {
   })
 
   it('seeds 4 pending four-eyes approvals', async () => {
-    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE approval_request_id LIKE 'demo-appr-%' AND state = 'pending'`)
+    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' LIKE 'demo-appr-%' AND state = 'pending'`)
     expect(r.rows[0].n).toBe(4)
   })
 
@@ -56,7 +56,7 @@ describe('demo scenario seed', () => {
     const dispute = await admin.query(`SELECT count(*)::int AS n FROM dispute_case WHERE care_case_id = 'dispute-INC-2026-0042'`)
     const brk = await admin.query(`SELECT count(*)::int AS n FROM reconciliation_break WHERE source_a_ref = 'NBR-INC-2026-0042'`)
     const sig = await admin.query(`SELECT count(*)::int AS n FROM risk_signal WHERE signal_data->>'incident' = 'INC-2026-0042'`)
-    const appr = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE approval_request_id = 'demo-appr-incident-refund'`)
+    const appr = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' = 'demo-appr-incident-refund'`)
     expect(dispute.rows[0].n).toBe(1)
     expect(brk.rows[0].n).toBe(1)
     expect(sig.rows[0].n).toBe(1)
@@ -90,6 +90,26 @@ describe('demo scenario seed', () => {
     expect(notif.rows[0].n).toBe(3)
     const breaking = await admin.query(`SELECT dual_running_required FROM scheme_notification WHERE notification_type = 'breaking_change' LIMIT 1`)
     expect(breaking.rows[0].dual_running_required).toBe(true)
+  })
+
+  it('seeds the four previously-empty consoles (reports, trust-framework, respondent, agents)', async () => {
+    const rpt = await admin.query(`SELECT count(*)::int AS n FROM compliance_report WHERE requested_by = 'demo:compliance-officer'`)
+    expect(rpt.rows[0].n).toBeGreaterThanOrEqual(5)
+    const tf = await admin.query(`SELECT count(*)::int AS n FROM trust_framework_participant WHERE holder_ref LIKE 'holder-%'`)
+    expect(tf.rows[0].n).toBe(5)
+    const tfTurnover = await admin.query(`SELECT count(*)::int AS n FROM trust_framework_participant WHERE status IN ('departing','vacant')`)
+    expect(tfTurnover.rows[0].n).toBe(2) // a turnover in flight
+    const rd = await admin.query(`SELECT count(*)::int AS n FROM respondent_dispute WHERE nebras_dispute_ref LIKE 'NBR-RD-%'`)
+    expect(rd.rows[0].n).toBe(4)
+    const ag = await admin.query(`SELECT count(*)::int AS n FROM agent_registry WHERE client_id LIKE 'agent-%'`)
+    expect(ag.rows[0].n).toBe(4)
+    const agRevoked = await admin.query(`SELECT count(*)::int AS n FROM agent_registry WHERE status = 'revoked' AND client_id LIKE 'agent-%'`)
+    expect(agRevoked.rows[0].n).toBe(1)
+  })
+
+  it('seeds approval_request_ids as UUIDs (contract requires uuid format)', async () => {
+    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' LIKE 'demo-appr-%' AND approval_request_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`)
+    expect(r.rows[0].n).toBe(4) // all four scenario approvals carry uuid-shaped ids
   })
 
   it('is idempotent — re-running the scenario does not duplicate', async () => {
