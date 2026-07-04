@@ -68,6 +68,9 @@ export function summariseOperation(operationType: string, payload: Record<string
     case 'consents.fraud_revoke':
       // NEVER: consent_id, case_context (operator free text). Label only.
       return { descriptor: 'Fraud-suspected consent revoke' }
+    case 'compliance.str_handoff':
+      // BACKOFFICE-63 — NEVER: source_consent_id, case_context (operator free text). Label only.
+      return { descriptor: 'STR draft handoff to the bank STR workflow' }
     case 'reconciliation.break_reopen':
       // NEVER: break_id, justification (operator free text). Label only.
       return { descriptor: 'Reopen reconciliation break' }
