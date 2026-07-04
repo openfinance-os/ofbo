@@ -38,7 +38,12 @@ function convert(node: unknown): unknown {
     if (DROP.has(k) || k.startsWith('x-')) continue
     out[k] = convert(v)
   }
-  if (src.nullable === true && typeof src.type === 'string') out.type = [src.type, 'null']
+  // OAS 3.0 `nullable: true` → JSON Schema. Wrap the whole node in `anyOf: [null, node]` — the
+  // universally-correct conversion. Folding into a `["T","null"]` type union is NOT enough: for a
+  // nullable ENUM the `enum` still rejects null (e.g. RespondentDispute.verdict_outcome), and for a
+  // nullable OBJECT ref there is no scalar `type` to fold (e.g. DisputeCase.refund_amount) — both
+  // false-drift. anyOf lets null pass every keyword while a non-null value validates against `node`.
+  if (src.nullable === true) return { anyOf: [{ type: 'null' }, out] }
   return out
 }
 

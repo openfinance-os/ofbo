@@ -122,20 +122,23 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     // subject) so the persona holding the approver scope can actually approve live in the demo
     // (no-self-approval still holds). approver_required_scope is each held by exactly one persona:
     // disputes:admin→customer-care-agent, billing:write→finance-analyst, compliance:reports:generate→compliance-officer.
-    type Appr = [string, string, string, string, Record<string, unknown>]
+    // approval_request_id is a UUID in the contract (real approvals use crypto.randomUUID) — use
+    // stable UUID literals here (not readable slugs, which drift from the spec's uuid format), and
+    // carry a `demo_marker` in the payload for the scenario's own natural-key scoping.
+    type Appr = [string, string, string, string, string, Record<string, unknown>]
     const approvals: Appr[] = [
-      // approval_request_id, operation_type, initiator (a colleague), approver_required_scope, payload (PII-free)
-      ['demo-appr-refund-01', 'disputes.refund', 'demo:care-agent-2', 'disputes:admin', { dispute_id: 'demo-dispute-02', refund_amount: { amount: 75000, currency: 'AED' } }],
-      ['demo-appr-invoice-01', 'tpp.invoice_run', 'demo:finance-analyst-2', 'billing:write', { billing_period: '2026-05', record_set_id: 'demo-rs-2026-05', invoice_count: 3 }],
-      ['demo-appr-report-01', 'reports.generate_cbuae', 'demo:compliance-officer-2', 'compliance:reports:generate', { report_type: 'cbuae_monthly_reconciliation', period: '2026-05' }]
+      // approval_request_id (uuid), demo_marker, operation_type, initiator (a colleague), approver_required_scope, payload (PII-free)
+      ['a0000000-0000-4000-8000-000000000001', 'demo-appr-refund-01', 'disputes.refund', 'demo:care-agent-2', 'disputes:admin', { dispute_id: 'demo-dispute-02', refund_amount: { amount: 75000, currency: 'AED' } }],
+      ['a0000000-0000-4000-8000-000000000002', 'demo-appr-invoice-01', 'tpp.invoice_run', 'demo:finance-analyst-2', 'billing:write', { billing_period: '2026-05', record_set_id: 'demo-rs-2026-05', invoice_count: 3 }],
+      ['a0000000-0000-4000-8000-000000000003', 'demo-appr-report-01', 'reports.generate_cbuae', 'demo:compliance-officer-2', 'compliance:reports:generate', { report_type: 'cbuae_monthly_reconciliation', period: '2026-05' }]
     ]
-    for (const [arid, opType, initiator, scope, payload] of approvals) {
+    for (const [arid, marker, opType, initiator, scope, payload] of approvals) {
       await pool.query(
         `INSERT INTO approval_request
            (bank_id, channel, approval_request_id, operation_type, operation_payload, state, initiator, approver_required_scope, expires_at)
          SELECT $1, $2, $3, $4, $5::jsonb, 'pending', $6, $7, now() + interval '2 hours'
           WHERE NOT EXISTS (SELECT 1 FROM approval_request WHERE approval_request_id = $3)`,
-        [DEMO_BANK_ID, CH, arid, opType, JSON.stringify(payload), initiator, scope]
+        [DEMO_BANK_ID, CH, arid, opType, JSON.stringify({ ...payload, demo_marker: marker }), initiator, scope]
       )
     }
 
@@ -205,13 +208,14 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
         WHERE NOT EXISTS (SELECT 1 FROM risk_signal WHERE signal_data->>'demo_id' = 'inc-0042')`,
       [DEMO_BANK_ID, CH, INCIDENT, INCIDENT_PSU, INCIDENT_TPP]
     )
-    // (d) the pending four-eyes refund (Approvals) — payload references the incident + dispute
+    // (d) the pending four-eyes refund (Approvals) — payload references the incident + dispute.
+    //     approval_request_id is a stable UUID literal (contract requires uuid format).
     await pool.query(
       `INSERT INTO approval_request
          (bank_id, channel, approval_request_id, operation_type, operation_payload, state, initiator, approver_required_scope, expires_at)
-       SELECT $1, $2, 'demo-appr-incident-refund', 'disputes.refund', $3::jsonb, 'pending', 'demo:care-agent-2', 'disputes:admin', now() + interval '2 hours'
-        WHERE NOT EXISTS (SELECT 1 FROM approval_request WHERE approval_request_id = 'demo-appr-incident-refund')`,
-      [DEMO_BANK_ID, CH, JSON.stringify({ incident: INCIDENT, dispute_id: `dispute-${INCIDENT}`, psu: INCIDENT_PSU, tpp: INCIDENT_TPP, refund_amount: { amount: 75000, currency: 'AED' } })]
+       SELECT $1, $2, 'a0000000-0000-4000-8000-000000000042', 'disputes.refund', $3::jsonb, 'pending', 'demo:care-agent-2', 'disputes:admin', now() + interval '2 hours'
+        WHERE NOT EXISTS (SELECT 1 FROM approval_request WHERE approval_request_id = 'a0000000-0000-4000-8000-000000000042')`,
+      [DEMO_BANK_ID, CH, JSON.stringify({ incident: INCIDENT, dispute_id: `dispute-${INCIDENT}`, psu: INCIDENT_PSU, tpp: INCIDENT_TPP, refund_amount: { amount: 75000, currency: 'AED' }, demo_marker: 'demo-appr-incident-refund' })]
     )
 
     // ── 7. Nebras service-desk cases (BACKOFFICE-79) → the service-desk surface has depth.
@@ -391,6 +395,115 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
+    // ── 13. Compliance reports (BACKOFFICE-06/08) → the Reports surface shows a submitted history
+    //       plus the current period moving through generate → approve → submit. No PSU PII.
+    type Rpt = [string, string, string, number, string | null, number]
+    const reports: Rpt[] = [
+      // report_type, status, classification, period_months_ago, approved_by, age_days
+      ['cbuae_monthly_reconciliation', 'submitted', 'confidential-restricted', 3, 'demo:programme-manager', 70],
+      ['cbuae_monthly_reconciliation', 'submitted', 'confidential-restricted', 2, 'demo:programme-manager', 40],
+      ['cbuae_monthly_reconciliation', 'approved', 'confidential-restricted', 1, 'demo:programme-manager', 8],
+      ['nebras_quarterly_liability', 'awaiting_approval', 'restricted', 1, null, 3],
+      ['consent_activity_summary', 'generating', 'internal-confidential', 0, null, 0]
+    ]
+    for (const [rtype, status, cls, pMonths, approver, ageD] of reports) {
+      await pool.query(
+        `INSERT INTO compliance_report
+           (bank_id, channel, report_type, status, reporting_period_start, reporting_period_end,
+            classification, requested_by, approved_by, storage_path, integrity_hash, generated_at, submitted_at, created_at)
+         SELECT $1, $2, $3, $4,
+                date_trunc('month', now()) - ($5 || ' months')::interval,
+                date_trunc('month', now()) - ($5 || ' months')::interval + interval '1 month' - interval '1 second',
+                $6, 'demo:compliance-officer', $7::text,
+                CASE WHEN $4 IN ('approved','submitted','archived') THEN 'demo/reports/' || $3 || '-' || $5 ELSE NULL END,
+                CASE WHEN $4 IN ('approved','submitted','archived') THEN 'sha256:demo-' || $3 || '-' || $5 ELSE NULL END,
+                CASE WHEN $4 = 'generating' THEN NULL ELSE now() - ($8 || ' days')::interval END,
+                CASE WHEN $4 = 'submitted' THEN now() - ($8 || ' days')::interval + interval '2 hours' ELSE NULL END,
+                now() - ($8 || ' days')::interval
+          WHERE NOT EXISTS (SELECT 1 FROM compliance_report c
+                             WHERE c.report_type = $3
+                               AND c.reporting_period_start = date_trunc('month', now()) - ($5 || ' months')::interval)`,
+        [DEMO_BANK_ID, CH, rtype, status, String(pMonths), cls, approver, String(ageD)]
+      )
+    }
+
+    // ── 14. Trust Framework participants (BACKOFFICE-74) → the directory of the bank's own
+    //       role-holders (Org Admin / PBC / PTC / STC) with T&C + onboarding-stage status and a
+    //       turnover in flight. Holder names are INTERNAL role-holder labels (synthetic), no PSU PII.
+    type Tfp = [string, string, string, string, string, string | null, string, string | null, number | null]
+    const participants: Tfp[] = [
+      // role, holder_ref, holder_display_name, individual_tnc, organisational_tnc, onboarding_stage, status, nominated_replacement_ref, stage_due_days
+      ['org_admin', 'holder-oa-1', 'Org Admin Holder (synthetic)', 'signed', 'signed', 'live', 'active', null, null],
+      ['pbc', 'holder-pbc-1', 'PBC Holder (synthetic)', 'signed', 'signed', 'live', 'active', null, null],
+      ['ptc', 'holder-ptc-1', 'PTC Holder (synthetic)', 'sent', 'signed', 'tnc_pending', 'active', null, 5],
+      ['stc', 'holder-stc-1', 'STC Holder (synthetic)', 'signed', 'signed', 'live', 'departing', 'holder-stc-2', null],
+      ['stc', 'holder-stc-2', 'STC Nominee (synthetic)', 'not_started', 'signed', 'onboarding', 'vacant', null, 10]
+    ]
+    for (const [role, ref, name, indTnc, orgTnc, stage, status, replacement, dueD] of participants) {
+      await pool.query(
+        `INSERT INTO trust_framework_participant
+           (bank_id, channel, role, organisation_id, holder_ref, holder_display_name, onboarding_stage,
+            individual_tnc_status, organisational_tnc_status, onboarding_stage_due_at, status, nominated_replacement_ref)
+         SELECT $1, $2, $3, 'org-self-bank', $4, $5, $6, $7, $8,
+                CASE WHEN $9::text IS NULL THEN NULL ELSE now() + ($9::text || ' days')::interval END,
+                $10, $11::text
+          WHERE NOT EXISTS (SELECT 1 FROM trust_framework_participant WHERE holder_ref = $4 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, role, ref, name, stage, indTnc, orgTnc, dueD === null ? null : String(dueD), status, replacement]
+      )
+    }
+
+    // ── 15. Respondent-side Nebras disputes (BACKOFFICE-75) → the respondent-dispute surface has
+    //       depth across the scheme clocks (response → resolution → appeal → implementation), incl.
+    //       one overdue and one resolved with a partial-upheld verdict. No PSU PII.
+    type Rd = [string, string, string, string, number, number, string | null, number]
+    const respondent: Rd[] = [
+      // nebras_dispute_ref, category, subject_summary, state, response_due_hours, resolution_due_hours, verdict, age_hours
+      ['NBR-RD-0001', 'billing', 'Nebras billing-line variance raised against the bank as respondent.', 'received', 20, 240, null, 4],
+      ['NBR-RD-0002', 'consent', 'Consent-handling complaint routed to the bank for response.', 'responded', -2, 200, null, 30],
+      ['NBR-RD-0003', 'liability', 'Liability-apportionment dispute under resolution.', 'under_resolution', -48, 120, null, 60],
+      ['NBR-RD-0004', 'data_sharing', 'Data-sharing SLA dispute — resolved, upheld in part.', 'resolved', -100, -10, 'partially_upheld', 120]
+    ]
+    for (const [ref, category, summary, state, respDueH, resolDueH, verdict, ageH] of respondent) {
+      await pool.query(
+        `INSERT INTO respondent_dispute
+           (bank_id, channel, nebras_dispute_ref, category, subject_summary, raised_at,
+            state, response_due_at, responded_at, resolution_due_at, resolved_at, verdict_outcome, created_at)
+         SELECT $1, $2, $3, $4, $5, now() - ($6 || ' hours')::interval,
+                $7, now() + ($8 || ' hours')::interval,
+                CASE WHEN $7 IN ('responded','under_resolution','resolved','appealed','awaiting_implementation','implemented','closed') THEN now() - ($6 || ' hours')::interval + interval '2 hours' ELSE NULL END,
+                now() + ($9 || ' hours')::interval,
+                CASE WHEN $7 IN ('resolved','implemented','closed') THEN now() - interval '2 hours' ELSE NULL END,
+                $10::text, now() - ($6 || ' hours')::interval
+          WHERE NOT EXISTS (SELECT 1 FROM respondent_dispute WHERE nebras_dispute_ref = $3 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, ref, category, summary, String(ageH), state, String(respDueH), String(resolDueH), verdict]
+      )
+    }
+
+    // ── 16. Automation agent registry (BACKOFFICE-60) → the Agents surface has depth: a set of
+    //       least-privilege read-only automations under human-derived personas, one revoked. Agents
+    //       carry no PSU PII — service-account metadata only.
+    type Ag = [string, string, string, string, string[], string, number, number]
+    const agents: Ag[] = [
+      // client_id, display_name, persona, derived_from, scopes, status, spend_budget, age_days
+      ['agent-recon-ro', 'Reconciliation read-only bot', 'reconciliation-readonly-agent', 'finance-analyst', ['reconciliation:read', 'billing:read'], 'active', 0, 20],
+      ['agent-care-ro', 'Care read-only assistant', 'care-readonly-agent', 'customer-care-agent', ['consents:read', 'disputes:read'], 'active', 0, 12],
+      ['agent-analytics-ro', 'Analytics export bot', 'analytics-readonly-agent', 'programme-manager', ['analytics:read'], 'active', 0, 5],
+      ['agent-compliance-ro', 'Compliance read-only bot', 'compliance-readonly-agent', 'compliance-officer', ['compliance:reports:read'], 'revoked', 0, 40]
+    ]
+    for (const [clientId, name, persona, from, scopes, status, budget, ageD] of agents) {
+      await pool.query(
+        `INSERT INTO agent_registry
+           (bank_id, channel, client_id, display_name, persona, derived_from, scopes, status,
+            allow_mutations, spend_budget, registered_by, approved_by, created_at, revoked_at, revoke_reason)
+         SELECT $1, $2, $3, $4, $5, $6, $7::text[], $8, false, $9, 'demo:platform-admin', 'demo:platform-super-admin',
+                now() - ($10 || ' days')::interval,
+                CASE WHEN $8 = 'revoked' THEN now() - interval '2 days' ELSE NULL END,
+                CASE WHEN $8 = 'revoked' THEN 'Rotated out of the demo automation set (synthetic).' ELSE NULL END
+          WHERE NOT EXISTS (SELECT 1 FROM agent_registry WHERE client_id = $3 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, clientId, name, persona, from, scopes, status, budget, String(ageD)]
+      )
+    }
+
     // ── BCBS 239 lineage for every table this scenario touches (Q4.5 stays green; idempotent).
     const lineage: [string, string[]][] = [
       ['reconciliation_log', ['bank_id', 'channel', 'run_id', 'status', 'line_count_total']],
@@ -403,7 +516,11 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       ['str_draft', ['bank_id', 'channel', 'source_consent_id', 'status', 'created_by']],
       ['tpp_counterparty', ['bank_id', 'channel', 'organisation_id', 'legal_name', 'production_status', 'registration_state']],
       ['invoice_run', ['bank_id', 'channel', 'billing_period', 'status']],
-      ['scheme_notification', ['bank_id', 'channel', 'notification_type', 'status', 'notice_compliant']]
+      ['scheme_notification', ['bank_id', 'channel', 'notification_type', 'status', 'notice_compliant']],
+      ['compliance_report', ['bank_id', 'channel', 'report_type', 'status', 'classification']],
+      ['trust_framework_participant', ['bank_id', 'channel', 'role', 'organisation_id', 'status']],
+      ['respondent_dispute', ['bank_id', 'channel', 'nebras_dispute_ref', 'category', 'state']],
+      ['agent_registry', ['bank_id', 'channel', 'client_id', 'persona', 'status']]
     ]
     for (const [table, columns] of lineage) {
       await pool.query(

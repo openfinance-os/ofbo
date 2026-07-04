@@ -8,6 +8,7 @@ import {
   PgDisputeStore,
   PgRespondentDisputeStore,
   PgFraudIncidentStore,
+  PgAgentStore,
   PgSchemeNotificationStore,
   PgTrustFrameworkParticipantStore,
   PgServiceDeskCaseStore,
@@ -55,6 +56,7 @@ const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
 const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
 const respondentDisputeStore = url ? new PgRespondentDisputeStore(url, tenancy, lineage) : undefined
 const fraudIncidentStore = url ? new PgFraudIncidentStore(url, tenancy, lineage) : undefined
+const agentStore = url ? new PgAgentStore(url, tenancy, lineage) : undefined
 const schemeNotificationStore = url ? new PgSchemeNotificationStore(url, tenancy, lineage) : undefined
 const trustFrameworkStore = url ? new PgTrustFrameworkParticipantStore(url, tenancy, lineage) : undefined
 const serviceDeskStore = url ? new PgServiceDeskCaseStore(url, tenancy, lineage) : undefined
@@ -86,6 +88,7 @@ const app = createApp({
   ...(disputeStore ? { disputeStore } : {}),
   ...(respondentDisputeStore ? { respondentDisputeStore } : {}),
   ...(fraudIncidentStore ? { fraudIncidentStore } : {}),
+  ...(agentStore ? { agentStore } : {}),
   ...(schemeNotificationStore ? { schemeNotificationStore } : {}),
   ...(trustFrameworkStore ? { trustFrameworkStore } : {}),
   ...(serviceDeskStore ? { serviceDeskStore } : {}),
