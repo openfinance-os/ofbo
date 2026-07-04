@@ -278,6 +278,119 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
+    // ── 9. STR (Suspicious Transaction Report) drafts (BACKOFFICE-63) → the Compliance STR queue
+    //      has depth across the lifecycle. The INC-2026-0042 fraud thread CONTINUES here: the
+    //      fraud-suspected revoke on the incident PSU raised an STR draft held for Compliance
+    //      handoff to the bank's STR workflow (P10). No PSU PII — an internal consent ref +
+    //      synthetic case context only.
+    type Str = [string, string, string, string | null, string | null, number]
+    const strDrafts: Str[] = [
+      // source_consent_id, case_context, status, workflow_ref, approved_by, age_hours
+      [`consent-${INCIDENT}`, `Unauthorised-payment incident ${INCIDENT}: a fraud-suspected consent revoke raised this STR draft for Compliance review.`, 'draft', null, null, 5],
+      ['consent-demo-7741', 'Velocity anomaly: 6 revoke+re-grant cycles in 24h against one AISP (synthetic).', 'draft', null, null, 20],
+      ['consent-demo-8852', 'CoP-mismatch cluster across 3 fintechs sharing a beneficiary (synthetic).', 'awaiting_handoff', null, null, 8],
+      ['consent-demo-9963', 'Structuring pattern — repeated payments just below the reporting threshold (synthetic).', 'handed_off', 'str-wf-demo-9963', 'demo:risk-analyst', 30]
+    ]
+    for (const [consentRef, ctx, status, workflowRef, approvedBy, ageH] of strDrafts) {
+      await pool.query(
+        `INSERT INTO str_draft
+           (bank_id, channel, source_consent_id, case_context, status, created_by, workflow_ref, approved_by, handed_off_at, created_at)
+         SELECT $1, $2, $3, $4, $5, 'demo:risk-analyst', $6::text, $7::text,
+                CASE WHEN $5 = 'handed_off' THEN now() - interval '1 hour' ELSE NULL END,
+                now() - ($8 || ' hours')::interval
+          WHERE NOT EXISTS (SELECT 1 FROM str_draft WHERE source_consent_id = $3)`,
+        [DEMO_BANK_ID, CH, consentRef, ctx, status, workflowRef, approvedBy, String(ageH)]
+      )
+    }
+
+    // ── 10. TPP counterparties (BACKOFFICE-07/73) → the TPP Billing & Registry surface reads like
+    //       a real book of business: a spread of production status, registration state, MTD fee
+    //       accruals, and one carrying UNBILLED traffic (a flag the Finance desk chases). Names are
+    //       fictional institutions; contacts are role labels only (no PSU/person PII).
+    const CONTACTS = JSON.stringify([{ role: 'technical', label: 'Integration Desk' }, { role: 'commercial', label: 'Partnerships' }])
+    type Tpp = [string, string, string, string, string, boolean, number | null]
+    const tpps: Tpp[] = [
+      // organisation_id, legal_name, registration_number, production_status, registration_state, unbilled_traffic, mtd_fee_accrual (fils)
+      ['org-fictional-fintech-01', 'Fictional Fintech 01', 'CN-1000001', 'active_traffic', 'registered', false, 4820000],
+      ['org-falcon-pay', 'Falcon Pay Technologies FZ-LLC', 'CN-1002841', 'active_traffic', 'registered', false, 3125000],
+      ['org-dhabi-ledger', 'Dhabi Ledger Fintech LLC', 'CN-1004120', 'active_traffic', 'registered', true, 1890000],
+      ['org-nakheel-ob', 'Nakheel Open Banking DMCC', 'CN-1005537', 'directory_only', 'onboarding', false, null],
+      ['org-barari-wealth', 'Barari Wealth Aggregation FZE', 'CN-1006644', 'active_traffic', 'registered', false, 970000],
+      ['org-marina-aisp', 'Marina AISP Services FZ-LLC', 'CN-1008899', 'active_traffic', 'registered', false, 2450000],
+      ['org-sougha-pay', 'Sougha Payments Ltd', 'CN-1007788', 'dormant', 'suspended', false, null]
+    ]
+    for (const [orgId, legalName, regNum, prodStatus, regState, unbilled, mtd] of tpps) {
+      await pool.query(
+        `INSERT INTO tpp_counterparty
+           (bank_id, channel, organisation_id, legal_name, registration_number, directory_contacts,
+            directory_synced_at, production_status, first_traffic_at, registration_state, financial_system_ref,
+            unbilled_traffic, mtd_fee_accrual_amount, mtd_fee_accrual_currency)
+         SELECT $1, $2, $3, $4, $5, $6::jsonb, now() - interval '6 hours', $7,
+                CASE WHEN $7 = 'active_traffic' THEN now() - interval '40 days' ELSE NULL END,
+                $8,
+                CASE WHEN $8 = 'registered' THEN 'fms-' || $3 ELSE NULL END,
+                $9, $10::bigint, CASE WHEN $10::bigint IS NULL THEN NULL ELSE 'AED' END
+          WHERE NOT EXISTS (SELECT 1 FROM tpp_counterparty WHERE organisation_id = $3 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, orgId, legalName, regNum, CONTACTS, prodStatus, regState, unbilled, mtd]
+      )
+    }
+
+    // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the
+    //       current period awaiting four-eyes approval (coherent with the billing:write approval in
+    //       section 4, period 2026-05). invoices carry per-TPP amounts (money values, no PII).
+    type Inv = [string, string, number, number, number]
+    const invoiceRuns: Inv[] = [
+      // billing_period, status, invoice_count, withheld_line_count, age_days
+      ['2026-03', 'settled', 6, 0, 95],
+      ['2026-04', 'settled', 6, 1, 64],
+      ['2026-05', 'pending_approval', 5, 2, 3]
+    ]
+    for (const [period, status, count, withheld, ageD] of invoiceRuns) {
+      const invoices = JSON.stringify(
+        Array.from({ length: count }, (_, i) => ({
+          organisation_id: tpps[i % tpps.length]![0],
+          amount: { amount: 500000 + i * 137000, currency: 'AED' }
+        }))
+      )
+      await pool.query(
+        `INSERT INTO invoice_run
+           (bank_id, channel, billing_period, record_set_id, status, invoices, withheld_line_count, created_at)
+         SELECT $1, $2, $3, gen_random_uuid(), $4, $5::jsonb, $6, now() - ($7 || ' days')::interval
+          WHERE NOT EXISTS (SELECT 1 FROM invoice_run WHERE billing_period = $3 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, period, status, invoices, withheld, String(ageD)]
+      )
+    }
+
+    // ── 12. Scheme notifications (BACKOFFICE-78) → outbound downtime/change notices surface has
+    //       depth: a compliant maintenance notice, a point release, and a breaking change with the
+    //       30-day dual-running clock running. notice_compliant + the deadline are computed.
+    type Notif = [string, string, string, number, number, number, number, boolean, boolean, string]
+    const notifs: Notif[] = [
+      // type, title, description, start_in_days, duration_h, notice_required_days, notified_days_ago, dual_running, acknowledged, status
+      ['planned_maintenance', 'Nebras Hub maintenance — TPP Reports API', 'Scheduled Hub maintenance; TPP Reports polling paused during the window.', 7, 4, 10, 14, false, true, 'acknowledged'],
+      ['version_release', 'Al Tareq API v2.1.3 point release', 'Non-breaking point release; no client action required.', 14, 2, 10, 20, false, true, 'acknowledged'],
+      ['breaking_change', 'Consent schema v3 — breaking payload change', 'Breaking change to the consent payload; 30-day dual-running required before cutover.', 40, 6, 30, 8, true, false, 'notified']
+    ]
+    for (const [type, title, desc, startD, durH, noticeReq, notifiedAgo, dual, ack, status] of notifs) {
+      await pool.query(
+        `INSERT INTO scheme_notification
+           (bank_id, channel, notification_type, title, description, scheduled_start, scheduled_end,
+            notice_required_days, notified_at, notice_deadline, notice_compliant, dual_running_required,
+            dual_running_complete, acknowledged, acknowledged_at, propagate_to_tpp, status, created_by)
+         SELECT $1, $2, $3, $4, $5,
+                now() + ($6 || ' days')::interval,
+                now() + ($6 || ' days')::interval + ($7 || ' hours')::interval,
+                $8::int, now() - ($9 || ' days')::interval,
+                now() + ($6 || ' days')::interval - ($8 || ' days')::interval,
+                (now() - ($9 || ' days')::interval) <= (now() + ($6 || ' days')::interval - ($8 || ' days')::interval),
+                $10, false, $11,
+                CASE WHEN $11 THEN now() - interval '2 days' ELSE NULL END,
+                true, $12, 'demo:operations-analyst'
+          WHERE NOT EXISTS (SELECT 1 FROM scheme_notification WHERE title = $4 AND bank_id = $1)`,
+        [DEMO_BANK_ID, CH, type, title, desc, String(startD), String(durH), String(noticeReq), String(notifiedAgo), dual, ack, status]
+      )
+    }
+
     // ── BCBS 239 lineage for every table this scenario touches (Q4.5 stays green; idempotent).
     const lineage: [string, string[]][] = [
       ['reconciliation_log', ['bank_id', 'channel', 'run_id', 'status', 'line_count_total']],
@@ -286,7 +399,11 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       ['approval_request', ['bank_id', 'channel', 'approval_request_id', 'operation_type', 'state']],
       ['dispute_case', ['bank_id', 'channel', 'psu_identifier', 'dispute_type', 'state', 'compensation_blocked']],
       ['service_desk_case', ['bank_id', 'channel', 'nebras_case_reference', 'case_type', 'priority', 'status']],
-      ['fraud_incident', ['bank_id', 'channel', 'nebras_severity', 'itsm_priority', 'status', 'scheme_imposed_hold']]
+      ['fraud_incident', ['bank_id', 'channel', 'nebras_severity', 'itsm_priority', 'status', 'scheme_imposed_hold']],
+      ['str_draft', ['bank_id', 'channel', 'source_consent_id', 'status', 'created_by']],
+      ['tpp_counterparty', ['bank_id', 'channel', 'organisation_id', 'legal_name', 'production_status', 'registration_state']],
+      ['invoice_run', ['bank_id', 'channel', 'billing_period', 'status']],
+      ['scheme_notification', ['bank_id', 'channel', 'notification_type', 'status', 'notice_compliant']]
     ]
     for (const [table, columns] of lineage) {
       await pool.query(

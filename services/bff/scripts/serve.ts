@@ -11,6 +11,7 @@ import {
   PgSchemeNotificationStore,
   PgTrustFrameworkParticipantStore,
   PgServiceDeskCaseStore,
+  PgStrDraftStore,
   PgIdempotencyStore,
   PgLineageEmitter,
   PgLineageReader,
@@ -57,6 +58,7 @@ const fraudIncidentStore = url ? new PgFraudIncidentStore(url, tenancy, lineage)
 const schemeNotificationStore = url ? new PgSchemeNotificationStore(url, tenancy, lineage) : undefined
 const trustFrameworkStore = url ? new PgTrustFrameworkParticipantStore(url, tenancy, lineage) : undefined
 const serviceDeskStore = url ? new PgServiceDeskCaseStore(url, tenancy, lineage) : undefined
+const strDraftStore = url ? new PgStrDraftStore(url, tenancy, lineage) : undefined
 const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
 const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
 const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
@@ -87,6 +89,7 @@ const app = createApp({
   ...(schemeNotificationStore ? { schemeNotificationStore } : {}),
   ...(trustFrameworkStore ? { trustFrameworkStore } : {}),
   ...(serviceDeskStore ? { serviceDeskStore } : {}),
+  ...(strDraftStore ? { strDraftStore } : {}),
   ...(complianceReportStore ? { complianceReportStore, reportStore: complianceReportStore } : {}),
   ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
   ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
