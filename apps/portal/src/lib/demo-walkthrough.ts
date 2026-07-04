@@ -82,7 +82,7 @@ export const WALKTHROUGH: WalkthroughStep[] = [
     persona: 'Risk Analyst',
     console: { label: 'Risk', href: '/risk' },
     actions: [
-      `Among the seeded signals, open the tpp_behaviour signal that is the ${INCIDENT} thread — the unauthorised-payment pattern flagged for Fictional Fintech 01.`,
+      `Among the seeded signals, open the tpp_behaviour signal that is the ${INCIDENT} thread — the unauthorised-payment pattern flagged for Kanz Money FZ-LLC.`,
       'Show the predictive liability forecast — a deterministic, explainable, drift-monitored AI artefact (advance warning, never an automated control).',
       'Triage a signal (acknowledge → investigate → close) — every transition is audited.'
     ],

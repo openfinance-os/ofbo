@@ -15,9 +15,25 @@ export const DEMO_BANK_ID = '11111111-1111-4111-8111-111111111111'
 const CHANNELS = ['internal_retail', 'internal_sme', 'internal_corporate', 'external_direct', 'external_tpp_aas'] as const
 const CONSENT_STATUSES = ['AwaitingAuthorization', 'Authorized', 'Rejected', 'Suspended', 'Consumed', 'Expired', 'Revoked'] as const
 const LINE_TYPES = ['nebras_fees', 'payment_settlement', 'consent_record', 'tpp_aas_pass_through', 'lfi_access_log'] as const
-const TPPS = ['org-fictional-fintech-01', 'org-fictional-fintech-02', 'org-fictional-fintech-03'] as const
-const FIRST_NAMES = ['Zayn', 'Lulwa', 'Omar', 'Mariam', 'Tariq', 'Noor', 'Hessa', 'Faris'] as const
-const LAST_NAMES = ['Al-Fiction', 'Demoson', 'Testwala', 'Samplebhai', 'Mockner', 'Specced'] as const
+// The three data-sharing TPPs that appear in Alpha Bank's consents + billing are named after
+// real UAE Open Finance / open-banking providers so the demo reads like a live ecosystem. These
+// are institution names (public), not PSU PII. Anything carrying a NEGATIVE synthetic state
+// (suspended / fraud / STR) uses a fictional name instead (see seed-demo.ts) — no real brand is
+// shown in an adverse light.
+const TPPS = ['org-tarabut-gateway', 'org-lean-technologies', 'org-tabby'] as const
+const TPP_DISPLAY_NAMES: Record<string, string> = {
+  'org-tarabut-gateway': 'Tarabut Gateway',
+  'org-lean-technologies': 'Lean Technologies',
+  'org-tabby': 'Tabby'
+}
+// Synthetic customer names reflecting the UAE's Emirati + resident-expat mix. Fictional people —
+// paired with the 999-prefixed (never 784) Emirates IDs and 000 (never real) bank code below, so
+// the "zero real PII" guarantee holds.
+const FULL_NAMES = [
+  'Ahmed Al Mansoori', 'Fatima Al Zaabi', 'Mohammed Al Nuaimi', 'Aisha Al Marri',
+  'Khalid Al Suwaidi', 'Maryam Al Falasi', 'Saeed Al Ketbi', 'Noura Al Shamsi',
+  'Rajesh Menon', 'Priya Nair', 'James Fernandes', 'Sara Haddad'
+] as const
 
 export const PERSONA_LOGINS = [
   'operations-analyst',
@@ -134,13 +150,17 @@ function deterministicUuid(seed: string): string {
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
 }
 
-/** 'org-fictional-fintech-01' → 'Fictional Fintech 01'. */
-function tppDisplayName(org: string): string {
-  return org
-    .replace(/^org-/, '')
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
+/** Real institution name for a known org-id (e.g. 'org-tarabut-gateway' → 'Tarabut Gateway'),
+ *  else a title-cased fallback ('org-meydan-pay' → 'Meydan Pay'). */
+export function tppDisplayName(org: string): string {
+  return (
+    TPP_DISPLAY_NAMES[org] ??
+    org
+      .replace(/^org-/, '')
+      .split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+  )
 }
 
 function addMonthsIso(iso: string, months: number): string {
@@ -152,7 +172,7 @@ function addMonthsIso(iso: string, months: number): string {
 export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
   const pick = makePick(mulberry32(seed))
 
-  const psus = Array.from({ length: 6 }, (_, i) => {
+  const psus = Array.from({ length: FULL_NAMES.length }, (_, i) => {
     const accounts = Array.from({ length: pick.int(1, 3) }, () => ({
       iban: `AE${pick.digits(2)}000${pick.digits(16)}`,
       account_ref: `acc-${pick.digits(6)}`
@@ -197,10 +217,16 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
         channel: CHANNELS[h % CHANNELS.length]!
       }
     })
+    const emirates_id = `999-${pick.int(1960, 2005)}-${pick.digits(7)}-${pick.digits(1)}`
+    // The name now comes from FULL_NAMES by index; burn the two RNG draws the previous
+    // first/last-name pick consumed (in the same position) so the rest of the deterministic
+    // dataset — consent/payment composition, billing lines — stays byte-identical.
+    pick.of(FULL_NAMES)
+    pick.of(FULL_NAMES)
     return {
       bank_customer_id: `cust-${String(i + 1).padStart(4, '0')}`,
-      emirates_id: `999-${pick.int(1960, 2005)}-${pick.digits(7)}-${pick.digits(1)}`,
-      full_name: `${pick.of(FIRST_NAMES)} ${pick.of(LAST_NAMES)}`,
+      emirates_id,
+      full_name: FULL_NAMES[i]!,
       accounts,
       consents,
       payments
