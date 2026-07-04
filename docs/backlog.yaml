@@ -243,6 +243,112 @@ milestones:
           Unblock only if the bank adopts Kong; then raise the metering-feed requirement
           (extends BACKOFFICE-73) and/or the P6 adapter, tests-first against port-contracts.spec.ts.
 
+  # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
+  # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +
+  # insurers in parallel, Tier 1 M6 deploy as the later upmarket motion. Build order: VAL first
+  # (strengthens all three motions), then HOST hardening/provisioning, then the insurance module.
+  - name: COMMERCIAL
+    items:
+      - id: VAL-01
+        title: Liability-avoided KPI + ROI walkthrough screen
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        note: >-
+          Translate operating events into AED using the published scheme liability schedule
+          (consent-state failure 500, revocation failure 350, data breach 750, SLA failure
+          200-350, breaking-change mismanagement 5000): revocations acknowledged <5s, breaks
+          resolved inside SLA, compliant scheme notifications each accrue "exposure avoided".
+          Surface as an executive-dashboard headline KPI and as a closing ROI screen in the
+          demo walkthrough. Compute-and-display over existing stores — no new substrate.
+        acceptance:
+          - The liability schedule is a named, tested constant set (AED minor units), cited to
+            the scheme document — never magic numbers in the view layer.
+          - Executive dashboard headline shows a period-scoped "liability exposure avoided"
+            AED figure with a per-category breakdown; analytics scope-gating unchanged.
+          - The demo walkthrough ends with an ROI screen totalling liability avoided + fee
+            variance recovered from the seeded scenario; token-only, OpenAPI-bound, no PII.
+          - Deterministic against the seeded demo dataset (stable figure for a given seed).
+      - id: HOST-02
+        title: Re-scope bank_internal_view for multi-tenant hosting
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        note: >-
+          bank_internal_view is a cross-bank SELECT designed for ONE bank's internal
+          aggregation; in a hosted multi-tenant deployment it is a cross-CUSTOMER read path.
+          Must be group-scoped (or operator-only with explicit governance) BEFORE any second
+          tenant exists. Pre-requisite hardening for HOST-01.
+        acceptance:
+          - bank_internal_view SELECT is constrained to an explicit tenant-group membership
+            (new mapping table, RLS-guarded) — a role member sees only its group's banks.
+          - An integration test proves a member of group A cannot read group B rows via the
+            internal-view role on at least reconciliation, disputes, and audit tables.
+          - Existing single-tenant behaviour is preserved (the demo bank remains a
+            single-member group; all current tests stay green).
+          - Migration is additive; INSERT-only audit and retention posture untouched.
+      - id: HOST-01
+        title: Tenant provisioning + per-tenant PRD §10 configuration
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        depends_on: [HOST-02]
+        note: >-
+          Second tenant end-to-end — the moment the hosted-SaaS claim is real. Provision a new
+          bank_id (RLS tenancy exists day-one), seed per-tenant synthetic data (distinct seed),
+          and make the PRD §10 adopting-bank defaults (approval expiry, SLA weekend pause,
+          four-eyes-on-fraud-revoke, care-surface residency) per-tenant configuration with the
+          current values as defaults. No application-core profile branching (CLAUDE.md).
+        acceptance:
+          - A provisioning path (script or admin endpoint per spec decision) creates a second
+            tenant with its own bank_id, seeded dataset, and §10 config row; idempotent.
+          - Two tenants run against one BFF deployment; an integration test proves full RLS
+            isolation of the second tenant from the first across every RLS-guarded table.
+          - PRD §10 defaults are read from per-tenant config everywhere they are enforced
+            (approvals expiry, SLA clocks, fraud-revoke gating) with unchanged defaults.
+          - Demo profile remains single-tenant by default; the DEMO banner and zero-PII
+            posture hold for every tenant.
+      - id: HOST-03
+        title: "ADR: per-tenant P6 scheme-certificate custody for hosted deployments"
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        note: >-
+          Each LFI holds its own FAPI 2.0 scheme certificate chain; a hosted egress gateway
+          means custodying tenant certs (HSM/KMS, rotation, revocation, audit). This is an
+          ADR-authoring story: research + a Proposed ADR with options (per-tenant KMS keys,
+          BYO-egress hybrid, operator HSM) and a recommendation. HUMAN-GATED - the story ends
+          at Proposed; no implementation until the ADR is accepted.
+        acceptance:
+          - A Proposed ADR covering custody options, rotation/revocation lifecycle, residency,
+            liability allocation, and the audit trail for certificate use; no code changes.
+      - id: INS-01
+        title: Insurance module — line types, quote-fee reconciliation, insurance consent purposes
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        note: >-
+          Extends the reconciliation + consent substrate to insurers (mandated participants):
+          insurance data-sharing line types in the LineType enum + fee schedule (quotes are
+          tiered 5-12.5 fils — representable in the existing milli-fil engine), insurance
+          consent purposes, and synthetic insurance data in the Nebras sim (policy/quote
+          shapes per the Insurance Data Sharing standard). Spec-first: LineType enum + consent
+          purpose additions are contract changes (human-approved spec PR before code).
+        acceptance:
+          - New insurance line types flow through engine, thresholds, fee schedule, breaks,
+            and the CBUAE export exactly as bank lines do (tests-first per line type).
+          - Quote-fee reconciliation catches an injected tiered-fee variance via the sim's
+            fault-injection surface.
+          - Insurance consent purposes appear in consent search/detail with scope hygiene
+            unchanged; synthetic insurance dataset is deterministic and PII-safe (999/000
+            invariants).
+      - id: INS-02
+        title: Policy-centric care console variant (insurer/broker personas)
+        adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
+        depends_on: [INS-01]
+        note: >-
+          The care surface reframed for insurers: policies/claims/quotes instead of
+          accounts/payments, plus insurer-operations and broker personas whose scopes follow
+          the existing persona-matrix discipline (strict subsets, review-FAIL on excess).
+          Stitch remains the appearance reference; generate the screen there first if absent.
+        acceptance:
+          - A policy-centric care view (search by policy ref, consent + quote history,
+            revoke path) gated by new insurer personas; four-eyes and audit semantics
+            identical to the bank care surface.
+          - Persona scope matrix extended without widening any existing persona; scope-gating
+            asserted in tests; WCAG 2.1 AA on the new screens.
+          - Token-only, OpenAPI-bound, DEMO-bannered, zero PII.
+
   # Build-harness improvements — the machinery that governs the autonomous build loop itself
   # (not a product feature). Researched against 2025-26 agentic-coding practice; ADR 0019 (01-04), ADR 0020 (05).
   - name: HARNESS

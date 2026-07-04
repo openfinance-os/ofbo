@@ -1,7 +1,6 @@
 # ADR 0026 — Commercial positioning: scheme-distributed console tier (Nebras VAS) + independent assurance tier
 
-- Status: **Proposed** — awaiting human acceptance (commercial direction is a human decision;
-  CLAUDE.md rule 6)
+- Status: **Accepted** — chosen by the user (2026-07-04)
 - Date: 2026-07-04
 - Scope: how OFBO is packaged, distributed, and priced — and the ONE product-architecture
   constraint that follows from it (the independence split). No code change is implied by this
@@ -120,3 +119,7 @@ Split the product along the conflict-of-interest line and run BOTH distribution 
 Accept/reject the split-and-dual-motion positioning, and if accepted: (a) authorize drafting
 the Nebras engagement (the pitch one-pager is at `docs/proposals/nebras-vas-pitch.md`), and
 (b) green-light the HOST/INS/VAL backlog entries.
+
+**ACCEPTED by the user 2026-07-04.** The HOST-01..03 / INS-01..02 / VAL-01 entries were added
+to `docs/backlog.yaml` under the COMMERCIAL track on acceptance; the Nebras engagement draft
+(the pitch one-pager) is authorized as the basis for outreach.
