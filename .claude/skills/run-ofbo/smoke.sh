@@ -60,7 +60,14 @@ FAILS=0
 check() { # check <name> <expected> <actual>
   if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1 (expected $2, got $3)"; FAILS=$((FAILS+1)); fi
 }
-FAPI="$(uuidgen | tr 'A-Z' 'a-z')"
+# Portable UUID: uuidgen isn't installed everywhere (e.g. minimal CI containers).
+gen_uuid() {
+  if command -v uuidgen >/dev/null 2>&1; then uuidgen
+  elif [ -r /proc/sys/kernel/random/uuid ]; then cat /proc/sys/kernel/random/uuid
+  else node -e 'process.stdout.write(require("crypto").randomUUID())'
+  fi
+}
+FAPI="$(gen_uuid | tr 'A-Z' 'a-z')"
 BFF="http://localhost:$BFF_PORT"
 SIM="http://localhost:$SIM_PORT"
 
