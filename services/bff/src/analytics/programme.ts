@@ -25,7 +25,7 @@ export const CBUAE_RELEASE_CALENDAR: CbuaeRelease[] = [
 
 /** Licensed entities in the bank's group (each with separate LFI certification). */
 export const GROUP_ENTITIES: { entity_id: string; name: string; cert_subject: string }[] = [
-  { entity_id: 'demo-bank-lfi', name: 'Demo Bank (LFI)', cert_subject: 'Demo Bank (LFI)' }
+  { entity_id: 'alpha-bank-lfi', name: 'Alpha Bank (LFI)', cert_subject: 'Alpha Bank (LFI)' }
 ]
 
 const DAY_MS = 24 * 3600 * 1000

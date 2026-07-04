@@ -9,7 +9,7 @@ import type { StoredCertification } from '@ofbo/db'
  */
 
 const certs: StoredCertification[] = [
-  { certification_id: 'c1', role: 'LFI', subject: 'Demo Bank (LFI)', track: 't', current_stage: 'Live-Proving', stages_total: 4, stages_completed: 3, status: 'live_proving', updated_at: '2026-06-01T00:00:00.000Z' },
+  { certification_id: 'c1', role: 'LFI', subject: 'Alpha Bank (LFI)', track: 't', current_stage: 'Live-Proving', stages_total: 4, stages_completed: 3, status: 'live_proving', updated_at: '2026-06-01T00:00:00.000Z' },
   { certification_id: 'c2', role: 'TPP', subject: 'org-1', track: 't', current_stage: 'Live', stages_total: 4, stages_completed: 4, status: 'live', updated_at: '2026-06-01T00:00:00.000Z' }
 ]
 const pipeline = { registered: 3, onboarding: 1, unregistered: 2 }
@@ -24,7 +24,7 @@ describe('ProgrammeReportService', () => {
     expect(readiness).toMatchObject({ total: 6, ready_count: 3, in_progress_count: 3 })
     const me = out.multi_entity as { entity_count: number; entities: { name: string; lfi_certification_status: string }[] }
     expect(me.entity_count).toBe(1)
-    expect(me.entities[0]).toMatchObject({ name: 'Demo Bank (LFI)', lfi_certification_status: 'live_proving' })
+    expect(me.entities[0]).toMatchObject({ name: 'Alpha Bank (LFI)', lfi_certification_status: 'live_proving' })
   })
 
   it('computes the release-calendar delivery-vs-deadline gap (delivered / on_track / at_risk / overdue)', () => {

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { generateDemoDataset, DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
@@ -15,11 +15,16 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
   try {
     const tpps = [...new Set(ds.billing_lines.map((l) => l.tpp_organisation_id))]
     for (const org of tpps) {
+      // These three carry Alpha Bank's live consent + billing traffic, so they are active,
+      // registered counterparties (not directory-only). Names are real UAE OF providers.
       await pool.query(
-        `INSERT INTO tpp_counterparty (bank_id, channel, organisation_id, legal_name, directory_synced_at)
-         VALUES ($1, 'external_tpp_aas', $2, $3, now())
+        `INSERT INTO tpp_counterparty
+           (bank_id, channel, organisation_id, legal_name, directory_synced_at,
+            production_status, registration_state, first_traffic_at, financial_system_ref)
+         VALUES ($1, 'external_tpp_aas', $2, $3, now(),
+                 'active_traffic', 'registered', now() - interval '90 days', 'fms-' || $2)
          ON CONFLICT (bank_id, organisation_id) DO NOTHING`,
-        [DEMO_BANK_ID, org, `Fictional ${org.replace('org-fictional-', '').replace(/-/g, ' ')}`]
+        [DEMO_BANK_ID, org, tppDisplayName(org)]
       )
     }
     // BACKOFFICE-71: the consuming-TPP registry's write path emits BCBS 239 lineage.
@@ -36,9 +41,9 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
     // (the verbatim scheme tracks) + a resolved historical outage (zero active =
     // "all operational"). Idempotent; the seed emits BCBS 239 lineage for both.
     const certifications: [string, string, string, string, number, number, string][] = [
-      ['LFI', 'Demo Bank (LFI)', 'Sandbox -> Pre-Prod CX -> Prod -> Live-Proving', 'Live-Proving (>=2 TPPs)', 4, 3, 'live_proving'],
-      ['TPP', 'org-fictional-fintech-01', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Live (>=1 LFI)', 4, 4, 'live'],
-      ['TPP', 'org-fictional-fintech-02', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Functional', 4, 2, 'in_progress']
+      ['LFI', 'Alpha Bank (LFI)', 'Sandbox -> Pre-Prod CX -> Prod -> Live-Proving', 'Live-Proving (>=2 TPPs)', 4, 3, 'live_proving'],
+      ['TPP', 'Tarabut Gateway', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Live (>=1 LFI)', 4, 4, 'live'],
+      ['TPP', 'Lean Technologies', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Functional', 4, 2, 'in_progress']
     ]
     for (const [role, subject, track, stage, total, done, status] of certifications) {
       await pool.query(

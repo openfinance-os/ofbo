@@ -171,13 +171,14 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     }
 
     // ── 6. A COHERENT LINKED INCIDENT — one thread a presenter can trace across every console.
-    //   INC-2026-0042: an unauthorised payment by PSU cust-0001 via Fictional Fintech 01 →
+    //   INC-2026-0042: an unauthorised payment by PSU cust-0001 via Kanz Money (a FICTIONAL TPP —
+    //   this thread carries a fraud signal + STR draft, so it is never attributed to a real brand) →
     //   a dispute (Care) → a reconciliation break on the same payment (Finance) → a risk signal
     //   (Risk) → a pending four-eyes refund (Approvals). The shared token INC-2026-0042 appears on
     //   each surface so the audience sees it is ONE incident across the system, not separate rows.
     const INCIDENT = 'INC-2026-0042'
     const INCIDENT_PSU = 'cust-0001'
-    const INCIDENT_TPP = 'Fictional Fintech 01'
+    const INCIDENT_TPP = 'Kanz Money FZ-LLC'
     // (a) the dispute (Customer Care → cust-0001)
     await pool.query(
       `INSERT INTO dispute_case
@@ -309,19 +310,21 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
 
     // ── 10. TPP counterparties (BACKOFFICE-07/73) → the TPP Billing & Registry surface reads like
     //       a real book of business: a spread of production status, registration state, MTD fee
-    //       accruals, and one carrying UNBILLED traffic (a flag the Finance desk chases). Names are
-    //       fictional institutions; contacts are role labels only (no PSU/person PII).
+    //       accruals, and one carrying UNBILLED traffic (a flag the Finance desk chases). Healthy
+    //       counterparties carry real UAE Open Finance provider names; entries in a NEGATIVE state
+    //       (unbilled alert / suspended) use fictional names so no real brand is shown adversely.
+    //       Contacts are role labels only (no PSU/person PII). The base three (Tarabut/Lean/Tabby)
+    //       are seeded by seedDemoDataset — these add further registry depth.
     const CONTACTS = JSON.stringify([{ role: 'technical', label: 'Integration Desk' }, { role: 'commercial', label: 'Partnerships' }])
     type Tpp = [string, string, string, string, string, boolean, number | null]
     const tpps: Tpp[] = [
       // organisation_id, legal_name, registration_number, production_status, registration_state, unbilled_traffic, mtd_fee_accrual (fils)
-      ['org-fictional-fintech-01', 'Fictional Fintech 01', 'CN-1000001', 'active_traffic', 'registered', false, 4820000],
-      ['org-falcon-pay', 'Falcon Pay Technologies FZ-LLC', 'CN-1002841', 'active_traffic', 'registered', false, 3125000],
-      ['org-dhabi-ledger', 'Dhabi Ledger Fintech LLC', 'CN-1004120', 'active_traffic', 'registered', true, 1890000],
-      ['org-nakheel-ob', 'Nakheel Open Banking DMCC', 'CN-1005537', 'directory_only', 'onboarding', false, null],
-      ['org-barari-wealth', 'Barari Wealth Aggregation FZE', 'CN-1006644', 'active_traffic', 'registered', false, 970000],
-      ['org-marina-aisp', 'Marina AISP Services FZ-LLC', 'CN-1008899', 'active_traffic', 'registered', false, 2450000],
-      ['org-sougha-pay', 'Sougha Payments Ltd', 'CN-1007788', 'dormant', 'suspended', false, null]
+      ['org-yap', 'YAP Digital Ltd', 'CN-1005537', 'active_traffic', 'registered', false, 2450000],       // real, healthy
+      ['org-sarwa', 'Sarwa Digital Wealth Ltd', 'CN-1006644', 'active_traffic', 'registered', false, 970000], // real, healthy
+      ['org-mamo', 'Mamo Pay FZ-LLC', 'CN-1008899', 'active_traffic', 'registered', false, 1610000],      // real, healthy
+      ['org-baraka', 'Baraka Financial Ltd', 'CN-1009912', 'directory_only', 'onboarding', false, null],  // real, onboarding (neutral)
+      ['org-meydan-pay', 'Meydan Pay Technologies FZ-LLC', 'CN-1004120', 'active_traffic', 'registered', true, 1890000], // FICTIONAL — unbilled alert
+      ['org-falaj-money', 'Falaj Money Ltd', 'CN-1007788', 'dormant', 'suspended', false, null]           // FICTIONAL — suspended
     ]
     for (const [orgId, legalName, regNum, prodStatus, regState, unbilled, mtd] of tpps) {
       await pool.query(

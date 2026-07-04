@@ -177,9 +177,9 @@ const simApm: ApmPort = {
 }
 
 const DIRECTORY = [
-  { organisation_id: 'org-fictional-fintech-01', legal_name: 'Fictional Fintech One FZ-LLC' },
-  { organisation_id: 'org-fictional-fintech-02', legal_name: 'Fictional Fintech Two Ltd' },
-  { organisation_id: 'org-fictional-fintech-03', legal_name: 'Fictional Payments Co PSC' }
+  { organisation_id: 'org-tarabut-gateway', legal_name: 'Tarabut Gateway Ltd' },
+  { organisation_id: 'org-lean-technologies', legal_name: 'Lean Technologies FZ-LLC' },
+  { organisation_id: 'org-tabby', legal_name: 'Tabby FZ-LLC' }
 ]
 
 /** Thrown when the Nebras sim returns a non-2xx (e.g. 429 rate limit). The
