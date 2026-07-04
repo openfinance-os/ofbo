@@ -156,14 +156,24 @@ function describePortContract(profile: 'demo') {
       const status = await p9.getSettlementStatus(reg.financial_system_ref, trace)
       expect(['instructed', 'issued', 'settled', 'overdue', 'credit_noted']).toContain(status.invoice_status)
     })
+
+    it('P10 hands an STR draft to the bank workflow and returns a workflow ref (never calls AML GO)', async () => {
+      const p10 = getAdapter('p10-str-workflow', profile)
+      const out = await p10.handoffStrDraft(
+        { str_draft_id: '5f0e63c0-0000-4000-8000-0000000000a1', source_consent_id: 'consent-demo-7741', case_context: 'synthetic' },
+        trace
+      )
+      expect(out.workflow_ref).toBeTruthy()
+      expect(out.accepted_at).toBeTruthy()
+    })
   })
 }
 
 describePortContract('demo')
 
 describe('enterprise adapters land port-by-port (M6)', () => {
-  // ADR 0024: P2 (Entra ID) is the reference template; the other eight ports are pre-staged at
-  // rung ③. ALL nine are now WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
+  // ADR 0024: P2 (Entra ID) is the reference template; the other nine ports are pre-staged at
+  // rung ③. ALL ten are now WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
   // unconfigured enterprise adapter throws a clear config error, never a silent demo/fake (their
   // own contract suites are the per-adapter *.spec.ts files, which inject fakes).
   const PRESTAGED = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')

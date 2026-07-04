@@ -9,7 +9,8 @@ import type {
   NebrasEgressPort,
   OnboardingCase,
   OnboardingHandoverPort,
-  PortMap
+  PortMap,
+  StrWorkflowPort
 } from '../interfaces.js'
 
 /**
@@ -330,6 +331,14 @@ const simFinancialSystem: FinancialSystemPort = {
   }
 }
 
+// P10 — the bank's STR workflow. Records the handoff and returns a deterministic workflow
+// reference; it NEVER calls the CBUAE AML GO portal (there is no AML GO client in the sim).
+const simStrWorkflow: StrWorkflowPort = {
+  async handoffStrDraft({ str_draft_id }) {
+    return { workflow_ref: `str-wf-${str_draft_id}`, accepted_at: new Date().toISOString() }
+  }
+}
+
 export const SIM_ADAPTERS: PortMap = {
   'p1-care-surface': simCareSurface,
   'p2-identity-provider': simIdentityProvider,
@@ -339,5 +348,6 @@ export const SIM_ADAPTERS: PortMap = {
   'p6-nebras-egress': simNebrasEgress,
   'p7-lineage': simLineage,
   'p8-onboarding-handover': simOnboardingHandover,
-  'p9-financial-system': simFinancialSystem
+  'p9-financial-system': simFinancialSystem,
+  'p10-str-workflow': simStrWorkflow
 }

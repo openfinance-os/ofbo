@@ -98,6 +98,8 @@ import {
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
+import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
+import { strDraftRoutes } from './str/routes.js'
 import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader } from './analytics/finance-view.js'
 import {
   OperationsConsoleService,
@@ -238,6 +240,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/service-desk-cases',
   'get /back-office/service-desk-cases/{case_id}',
   'post /back-office/service-desk-cases/{case_id}:update',
+  'get /back-office/str-drafts',
+  'get /back-office/str-drafts/{str_draft_id}',
+  'post /back-office/str-drafts/{str_draft_id}:submit-to-workflow',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -309,6 +314,9 @@ export interface AppDeps {
   /** BACKOFFICE-79 — Nebras service-desk case store (defaults in-memory; the worker
    *  wires the durable PgServiceDeskCaseStore). */
   serviceDeskStore?: ServiceDeskCaseStore
+  /** BACKOFFICE-63 — STR draft store (defaults in-memory; the worker wires the durable
+   *  PgStrDraftStore). */
+  strDraftStore?: StrDraftStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -409,9 +417,19 @@ export function createApp(deps: AppDeps = {}) {
   const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
   const invoiceRunStore = deps.invoiceRunStore ?? new InMemoryInvoiceRunStore()
   const reportStore = deps.reportStore ?? new InMemoryReportStore()
+  // BACKOFFICE-63 — STR drafts are persisted here (default in-memory; worker wires PgStrDraftStore).
+  // Built before the fraud-revoke op so an approved fraud-revoke can record its STR draft.
+  const strDraftStore = deps.strDraftStore ?? new InMemoryStrDraftStore()
   const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
-  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
+  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory, strDrafts: strDraftStore })
+  // BACKOFFICE-63 — the four-eyes executor hands an approved STR draft to the bank's STR
+  // workflow (P10) and records the workflow ref. The Back Office never submits to AML GO directly.
+  const strHandoffOperation = makeStrHandoffOperation({
+    store: strDraftStore,
+    strWorkflow: getAdapter('p10-str-workflow', profileFromConfig(process.env)),
+    audit: highClassAudit
+  })
   const queryPurposeRegistrar = deps.queryPurposeRegistrar ?? new InMemoryQueryPurposeRegistrar()
   const registerQueryPurposeOperation = makeRegisterQueryPurposeOperation({ registrar: queryPurposeRegistrar, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
@@ -440,11 +458,14 @@ export function createApp(deps: AppDeps = {}) {
       [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
       [REPORT_GENERATION_OPERATION]: reportGenerationOperation,
-      [AGENT_REGISTER_OPERATION]: agentRegisterOperation
+      [AGENT_REGISTER_OPERATION]: agentRegisterOperation,
+      [STR_HANDOFF_OPERATION]: strHandoffOperation
     }
   })
   const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit, idp)
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
+  // BACKOFFICE-63 — STR draft list/get (compliance:reports:read) + four-eyes handoff.
+  const strDraftService = new StrDraftService(approvals, strDraftStore, highClassAudit)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
   const paymentSource = deps.paymentSource ?? (training ? trainingPaymentSource() : sharedDemoPaymentDirectory())
@@ -671,6 +692,7 @@ export function createApp(deps: AppDeps = {}) {
     ...lfiReportRoutes(lfiReportService, idempotencyStore),
     ...trustFrameworkRoutes(trustFrameworkService, idempotencyStore),
     ...serviceDeskRoutes(serviceDeskService, idempotencyStore),
+    ...strDraftRoutes(strDraftService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService),
     // ADR 0022 — public, pre-login readiness wizard (no scope; auth middlewares skip /public/*)
     ...readinessRoutes(new ReadinessService(deps.readinessProfileStore ?? new InMemoryReadinessProfileStore()))

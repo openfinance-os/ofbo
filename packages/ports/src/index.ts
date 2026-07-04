@@ -59,3 +59,9 @@ export {
   FinancialSystemError,
   type FinancialSystemConfig
 } from './adapters/enterprise/financial-system.js'
+export {
+  createStrWorkflowAdapter,
+  strWorkflowFromEnv,
+  StrWorkflowError,
+  type StrWorkflowConfig
+} from './adapters/enterprise/str-workflow.js'
