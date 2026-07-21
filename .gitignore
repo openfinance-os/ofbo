@@ -8,6 +8,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Isolated git worktrees created by the build-loop worktree-isolation workflow (CLAUDE.md).
+# Transient scratch checkouts — never committed.
+.claude/worktrees/
+
 # StrykerJS mutation-testing run artifacts (HARNESS-04; report uploaded as a CI artifact)
 .stryker-tmp/
 reports/mutation/
