@@ -12,6 +12,47 @@ export const DEFAULT_SEED = 20260611
 
 export const DEMO_BANK_ID = '11111111-1111-4111-8111-111111111111'
 
+/**
+ * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §6) — the
+ * flagged three-tenant demo. Each tenant is one customer's single-member tenant group (HOST-02),
+ * proving the platform runs many institutions on one deployment, provably isolated. Names use the
+ * same obviously-synthetic convention as "Alpha Bank" (no real institution). Zero-PII holds per
+ * tenant. The insurer tenant reuses the existing bank data model for the scaffold — true insurance
+ * line types / policy shapes are INS-01 (spec-first, human-gated) and are NOT introduced here.
+ */
+export type TenantTier = 'tier1' | 'tier2' | 'insurer' | 'longtail'
+
+export interface DemoTenant {
+  slug: string
+  bank_id: string
+  tenant_group_id: string
+  display_name: string
+  short_name: string
+  tier: TenantTier
+  /** Semantic brand key the portal maps to design tokens (token-only — never a raw hex). */
+  brand: 'indigo' | 'emerald' | 'teal'
+  /** Numeric seed for generateDemoDataset so each tenant's synthetic content is distinct + deterministic. */
+  seed: number
+  /** bank (LFI/TPP-of-record) vs insurer — display + persona framing only (INS-01 is a separate module). */
+  kind: 'bank' | 'insurer'
+}
+
+export const DEMO_TENANTS: readonly DemoTenant[] = [
+  { slug: 'alpha-bank', bank_id: DEMO_BANK_ID, tenant_group_id: '1a000000-0000-4000-8000-000000000001', display_name: 'Alpha Bank', short_name: 'Alpha', tier: 'tier2', brand: 'indigo', seed: DEFAULT_SEED, kind: 'bank' },
+  { slug: 'beta-bank', bank_id: '22222222-2222-4222-8222-222222222222', tenant_group_id: '2a000000-0000-4000-8000-000000000002', display_name: 'Beta Bank', short_name: 'Beta', tier: 'tier2', brand: 'emerald', seed: DEFAULT_SEED + 101, kind: 'bank' },
+  { slug: 'gamma-takaful', bank_id: '33333333-3333-4333-8333-333333333333', tenant_group_id: '3a000000-0000-4000-8000-000000000003', display_name: 'Gamma Takaful', short_name: 'Gamma', tier: 'insurer', brand: 'teal', seed: DEFAULT_SEED + 202, kind: 'insurer' }
+] as const
+
+export const DEFAULT_TENANT_SLUG = 'alpha-bank'
+
+export function tenantBySlug(slug: string): DemoTenant | undefined {
+  return DEMO_TENANTS.find((t) => t.slug === slug)
+}
+
+export function tenantByBankId(bankId: string): DemoTenant | undefined {
+  return DEMO_TENANTS.find((t) => t.bank_id === bankId)
+}
+
 const CHANNELS = ['internal_retail', 'internal_sme', 'internal_corporate', 'external_direct', 'external_tpp_aas'] as const
 const CONSENT_STATUSES = ['AwaitingAuthorization', 'Authorized', 'Rejected', 'Suspended', 'Consumed', 'Expired', 'Revoked'] as const
 const LINE_TYPES = ['nebras_fees', 'payment_settlement', 'consent_record', 'tpp_aas_pass_through', 'lfi_access_log'] as const

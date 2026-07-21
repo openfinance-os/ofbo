@@ -1,6 +1,7 @@
 export { applyMigrations } from './apply.js'
 export { seedDemoDataset } from './seed.js'
 export { seedDemoScenario } from './seed-demo.js'
+export { seedDemoTenants } from './seed-tenants.js'
 export { PgApprovalStore, type StoredApprovalRecord, type StoredApprovalState } from './approvals-store.js'
 export { PgReadinessProfileStore } from './readiness-profile-store.js'
 export {
@@ -183,6 +184,7 @@ export { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
 export {
   GovernedQueryError,
   isPurposeApproved,
+  resolveTenantGroup,
   runGovernedAggregate,
   seedQueryPurposes,
   SEED_QUERY_PURPOSES,

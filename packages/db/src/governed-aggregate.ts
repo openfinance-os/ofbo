@@ -61,6 +61,30 @@ export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipa
   purposeCode?: string
 }
 
+/**
+ * HOST-02 (ADR 0027) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
+ * (a bank sees only its own membership row). Returns `undefined` when the bank is not enrolled in
+ * any group (single-tenant default / legacy) — the caller then runs the bypass unpinned and the
+ * re-scoped policy falls back to the pre-HOST-02 behaviour. When a group IS returned, the governed
+ * bypass is pinned to it so it can never read across a customer boundary.
+ */
+export async function resolveTenantGroup(pool: pg.Pool, bankId: string): Promise<string | undefined> {
+  const c = await pool.connect()
+  try {
+    await c.query(beginAppTx(bankId))
+    const res = await c.query(`SELECT tenant_group_id FROM tenant_group_member WHERE bank_id = $1 LIMIT 1`, [bankId])
+    await c.query('COMMIT')
+    return res.rows[0]?.tenant_group_id as string | undefined
+  } catch {
+    await c.query('ROLLBACK').catch(() => undefined)
+    // The mapping table only exists once migration 0030 is applied; a caller running against an
+    // older schema (or where the read is denied) degrades to the unpinned/legacy path.
+    return undefined
+  } finally {
+    c.release()
+  }
+}
+
 /** True iff `purposeCode` is registered AND approved for this bank (checked as ofbo_app under RLS). */
 export async function isPurposeApproved(pool: pg.Pool, bankId: string, purposeCode: string): Promise<boolean> {
   const c = await pool.connect()
@@ -96,10 +120,14 @@ export async function runGovernedAggregate<T>(
     )
   }
 
+  // HOST-02 (ADR 0027): pin the caller's tenant group so the RLS bypass is scoped to ONE
+  // customer. `undefined` (bank not enrolled in a group) keeps the legacy single-tenant path.
+  const tenantGroupId = await resolveTenantGroup(ctx.pool, ctx.bankId)
+
   const c = await ctx.pool.connect()
   let out: { result: T; rowCount: number }
   try {
-    await c.query(beginInternalViewTx())
+    await c.query(beginInternalViewTx(tenantGroupId))
     out = await queryFn(c)
     await c.query('COMMIT')
   } catch (e) {
