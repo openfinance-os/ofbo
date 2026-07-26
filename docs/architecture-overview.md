@@ -102,7 +102,7 @@ flowchart LR
 One store class per resource (`*-store.ts`), all RLS-enabled from day one, with
 `audit.ts` (INSERT-only `audit_high_sensitivity`), `lineage.ts` + `lineage-gate.ts`
 (Q4.5 BCBS 239), `retention.ts` (24-month hot / 5-year immutable), and
-`classification.ts`. Migrations in `packages/db/migrations` (0001 → 0027).
+`classification.ts`. Migrations in `packages/db/migrations` (0001 → 0030).
 
 ## 5. Shared packages
 

@@ -3,7 +3,7 @@ import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 
 /**
- * HOST-02 (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md) — the load-bearing
+ * HOST-02 (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md) — the load-bearing
  * isolation proof for hosted multi-tenancy. Migration 0030 re-scopes the `bank_internal_view`
  * cross-tenant bypass from `USING (true)` to the caller's pinned tenant group. This suite proves:
  *   1. a group-pinned bypass reads ONLY its own group and CANNOT see another tenant's rows;

@@ -75,7 +75,7 @@ interface WorkerEnv {
    *  audit sink, and a sandbox egress — so a trainee's action never reaches production data,
    *  the production audit trail, or the real scheme. */
   OFBO_TRAINING?: string
-  /** HOST-01 scaffold (ADR 0027) — 'true' enables the flagged three-tenant demo, in which the
+  /** HOST-01 scaffold (ADR 0028) — 'true' enables the flagged three-tenant demo, in which the
    *  request's tenant rides an `x-ofbo-tenant` slug header. OFF by default: the demo (and every
    *  non-demo deployment) stays single-tenant on BANK_ID unless this is explicitly set. */
   MULTITENANT_DEMO?: string
@@ -84,7 +84,7 @@ interface WorkerEnv {
 const DEFAULT_BANK_ID = '11111111-1111-4111-8111-111111111111'
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §2.4, §6) —
+ * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §2.4, §6) —
  * resolve the request's tenant. In the flagged multi-tenant demo (MULTITENANT_DEMO=true) the
  * tenant rides an `x-ofbo-tenant` slug header — a DEMO STAND-IN for the production path, where
  * tenant is a verified claim on the authenticated principal (blueprint §2.4). Outside the demo

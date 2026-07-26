@@ -1,4 +1,4 @@
--- HOST-02 (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md D-1):
+-- HOST-02 (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md D-1):
 -- tenant groups + re-scope of the bank_internal_view cross-tenant read path.
 --
 -- WHY: bank_internal_view is the platform's one deliberate RLS-bypass role — its
@@ -13,7 +13,7 @@
 -- exactly as before (single-tenant default — the demo bank is the only bank, so USING(true)
 -- returns only its rows). With a group pinned it is strictly group-scoped. Production
 -- hardening (fail-closed when unpinned) is a follow-up once every tenant is guaranteed a
--- group membership (see ADR 0027 "Consequences").
+-- group membership (see ADR 0028 "Consequences").
 
 -- Denormalized control-plane mapping. Every row is keyed by bank_id, so the standard
 -- RLS-by-bank_id pattern applies uniformly; tenant_group_id groups the licensed entities of

@@ -62,7 +62,7 @@ export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipa
 }
 
 /**
- * HOST-02 (ADR 0027) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
+ * HOST-02 (ADR 0028) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
  * (a bank sees only its own membership row). Returns `undefined` when the bank is not enrolled in
  * any group (single-tenant default / legacy) — the caller then runs the bypass unpinned and the
  * re-scoped policy falls back to the pre-HOST-02 behaviour. When a group IS returned, the governed
@@ -120,7 +120,7 @@ export async function runGovernedAggregate<T>(
     )
   }
 
-  // HOST-02 (ADR 0027): pin the caller's tenant group so the RLS bypass is scoped to ONE
+  // HOST-02 (ADR 0028): pin the caller's tenant group so the RLS bypass is scoped to ONE
   // customer. `undefined` (bank not enrolled in a group) keeps the legacy single-tenant path.
   const tenantGroupId = await resolveTenantGroup(ctx.pool, ctx.bankId)
 
