@@ -64,7 +64,11 @@ jobs:
       # The scripts/ tests cover the merge-blocking harness gates (HARNESS-06 ADR numbering).
       - name: Harness unit tests (gates + renderers)
         run: node --test 'discovery/**/*.test.mjs' 'scripts/test/*.test.mjs'
+      # Same independence rule as Q2/Q4 (HARNESS-07): a failing harness unit test must not hide
+      # whether the discovery runs and the waist gate are themselves clean. No install guard
+      # needed here — this job is dependency-free, so checkout is the only prerequisite.
       - name: Validate every discovery run (D1–D9)
+        if: ${{ !cancelled() }}
         run: |
           status=0
           shopt -s nullglob
@@ -77,6 +81,7 @@ jobs:
       # The waist gate (HG-0007): a pending feature backlog item must trace to a green
       # discovery hand-off. Closes the seam between the two diamonds.
       - name: Discovery → delivery waist gate (backlog ↔ hand-off)
+        if: ${{ !cancelled() }}
         run: node scripts/discovery-link-check.mjs
 
   q2-static-sast:
@@ -89,10 +94,18 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - id: install
+        run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm typecheck
+      # lint, typecheck and SAST are INDEPENDENT checks that happen to share a runner. Without
+      # this guard a lint error skips both of the others, so one run reports one problem and the
+      # SAST result is simply absent — indistinguishable, on the checks tab, from having passed.
+      # Gated on setup rather than a bare !cancelled(): if the install itself failed there is no
+      # node_modules and running the rest would only produce noise. (HARNESS-07)
+      - if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: pnpm typecheck
       - name: semgrep (SAST)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           pipx install semgrep
           semgrep scan --config p/typescript --error --exclude '*.generated.ts'
@@ -250,12 +263,19 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - id: install
+        run: pnpm install --frozen-lockfile
       # Dependency scan blocks on high/critical in SHIPPED (production) deps.
       # Dev/build-tooling advisories are tracked separately, not a merge blocker.
       - name: dependency scan (production deps)
         run: pnpm audit --prod --audit-level=high
+      # The secrets scan is independent of the dependency scan — a vulnerable transitive dep
+      # says nothing about whether a credential was committed. Before this guard, the audit
+      # failing skipped the secrets scan entirely: that is exactly how it went unrun on main
+      # from 22-26 Jul while the audit was red, with no red secrets check to show for it.
+      # A skipped security scan must never be mistakable for a passing one. (HARNESS-07)
       - name: secrets scan (security review)
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: |
           pipx install semgrep
           semgrep scan --config p/secrets --error --exclude '*.generated.ts'
