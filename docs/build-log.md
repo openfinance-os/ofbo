@@ -1776,3 +1776,24 @@ Reference split verified before and after: the three prose "ADR 0027" citations 
 `pnpm audit --prod --audit-level=high` now exits 0 (1 low / 4 moderate remain, below the gate's threshold and unchanged in kind).
 
 **Evidence.** doc-link-check 58 docs / 28 ADRs clean · audit exit 0 · lint clean · typecheck clean across all 7 projects · full build incl. the Next portal (the real test of the sharp/postcss bumps — both sit in its build pipeline) · unit **1209 passing** (182 files) · integration **136 passing** (68 files, real Postgres 16) · Q4.5 lineage PASSED, no gaps · discovery waist gate OK · gen-drift none · Q1b clean. **Not verified locally: Q4's semgrep secrets scan** — `semgrep.dev` is blocked by this environment's egress policy, so the ruleset cannot be fetched. It runs in CI, and note it has *not* run on current `main` either: it is sequenced after the dependency scan in the same job and was skipped when that step failed. This diff introduces no secrets (manifest, lockfile, ADR rename, comment text).
+
+---
+
+## 2026-07-26 — HARNESS-06: ADR number reservation — the cross-PR half of the numbering gate (Q2c)
+
+Follow-up to the red-main fix earlier today. That PR renumbered the colliding ADR; this one stops the collision being *creatable*.
+
+**The hole.** HARNESS-05's duplicate-number check (ADR 0020, Q2b) is **intra-tree** — it fails when the checked-out tree holds two ADRs sharing a `NNNN` prefix. A collision, though, is made by two branches that are each individually clean: #294 adds `0027-multi-tenant-tenancy-model.md`, #295 adds `0027-ozone-channel-si-distribution.md`, both trees hold exactly one 0027, both go green, both merge, and `main` is red after the fact. The number is contended *across* branches, so the check has to look across branches too. This is the second occurrence of the shape (ADR 0018 while PR #250 was open), which is what makes it structural rather than bad luck — concurrent build loops each pick "the next free number" against a snapshot that is already stale.
+
+**`scripts/adr-number-check.mjs` + CI gate Q2c.** Two checks, increasing reach:
+
+1. **BASE** (offline, no token) — a number this branch *adds* must not already exist on the base ref. Catches the stale-branch case: `main` took your number while your PR sat open. This alone would have failed #294 on any rebuild after #295 merged, which is the cheap 90% of the fix.
+2. **PEER** (GitHub API) — that number must also not be claimed by an **open** PR opened *earlier*. Catches the collision while both are still in flight, the only point at which renumbering is nearly free.
+
+Tie-break is **first-opened-keeps-it** (lower PR number holds the claim), so exactly **one** side of a collision fails — deterministic, and it matches how both real collisions were actually resolved. Both-fail would have been a worse design: two red PRs racing to renumber.
+
+**Failure posture, chosen deliberately.** A real collision is a hard, merge-blocking fail. An API that is unreachable, rate-limited or unauthorized is a **soft skip** with a printed reason — a merge gate that flakes on GitHub availability trains people to ignore it, and check (1) still runs offline regardless. `GITHUB_TOKEN` is read-only here (list open PRs + their changed files).
+
+**Own job, not a Q2b step.** Deliberate, and the same reasoning as HARNESS-07: a step appended to Q2b would be silently skipped whenever `doc-link-check` failed first — a gate you cannot trust to be red when it matters is not a gate. `fetch-depth: 0` on that job's checkout, since the base diff needs real history.
+
+**Evidence.** 7 unit tests over the pure collision rule (`scripts/test/adr-number-check.test.mjs`, `node --test`), including the real 2026-07-22 case, the free-number pass, the same-file-both-sides non-collision (a rename must not self-trip), and multi-holder reporting. Negative test against the live repo: adding a `0027-*.md` while `main` still holds two 0027s fails with both holders named and exit 1; removing it returns exit 0. The harness-test step now also globs `scripts/test/*.test.mjs`, so these run in CI alongside the discovery gate tests. ADR 0020 amended in place (decision unchanged, reach extended); backlog HARNESS-06 → done.

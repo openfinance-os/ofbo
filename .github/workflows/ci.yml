@@ -61,8 +61,9 @@ jobs:
         with:
           node-version-file: .nvmrc
       # The discovery harness is pure-Node and dependency-free — no install step needed.
+      # The scripts/ tests cover the merge-blocking harness gates (HARNESS-06 ADR numbering).
       - name: Harness unit tests (gates + renderers)
-        run: node --test 'discovery/**/*.test.mjs'
+        run: node --test 'discovery/**/*.test.mjs' 'scripts/test/*.test.mjs'
       - name: Validate every discovery run (D1–D9)
         run: |
           status=0
@@ -108,6 +109,28 @@ jobs:
       # longer exists, or if two ADRs share a number. The doc analogue of Q1's generated-artifact
       # diff-check (HARNESS-05, ADR 0020).
       - run: node scripts/doc-link-check.mjs
+
+  # Q2b is intra-tree, so it cannot see a number contended ACROSS branches — two PRs each
+  # adding a different 0027 are both green until the second one merges (ADR 0018 and ADR 0027
+  # both landed that way). Deliberately its OWN job, not a step on Q2b: a gate that can be
+  # skipped by an unrelated earlier failure is a gate you cannot trust to be red when it matters.
+  q2c-adr-numbering:
+    name: Q2c — ADR number reservation (cross-PR)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Needs real history: the check diffs this branch's ADRs against the base branch.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: ADR number reservation
+        env:
+          # Read-only use: list open PRs and their changed files. Absent/expired token or an
+          # unreachable API soft-skips the peer check — a merge gate must not flake on GitHub.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/adr-number-check.mjs
 
   q3-integration-contract:
     name: Q3 — integration + contract

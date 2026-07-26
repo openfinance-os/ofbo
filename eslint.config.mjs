@@ -38,5 +38,12 @@ export default tseslint.config(
     // grant Node globals.
     files: ['discovery/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' } }
+  },
+  {
+    // Harness gate scripts are plain-JS Node CLIs. They import `node:` builtins explicitly, so
+    // only `fetch` needs granting — it is a Node >=18 global with no importable module form,
+    // and package.json engines already require node >=22.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { fetch: 'readonly' } }
   }
 )
