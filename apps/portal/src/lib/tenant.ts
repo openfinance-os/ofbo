@@ -3,7 +3,7 @@ import { cache } from 'react'
 import { TENANT_COOKIE } from './cookies'
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §6) — the portal
+ * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the portal
  * side of the flagged three-tenant demo. This 3-entry registry MIRRORS `DEMO_TENANTS` in
  * `@ofbo/synthetic-data` (which the portal does not depend on); the slugs + labels must stay in
  * sync. The switch is a server-side cookie the portal forwards to the BFF as `x-ofbo-tenant`; the

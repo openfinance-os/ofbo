@@ -1757,3 +1757,22 @@ StrykerJS (`@stryker-mutator/vitest-runner`) scoped to the security core — `rb
 Honest baseline, not a vanity number. The 101 survivors are the hardening backlog — `StringLiteral` (audit/error text), `Regex` (code-format validation), and the highest-value `ConditionalExpression` flips in the four-eyes guards. Killing those + raising `break` is the intended ongoing ratchet.
 
 Adds two devDeps (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`); `test:mutation` script; `.stryker-tmp/` + `reports/mutation/` gitignored. Reviewers: pending PR. ADR 0021; backlog HARNESS-04 → done.
+
+---
+
+## 2026-07-26 — REPO HEALTH: main red since 22 Jul — duplicate ADR number (Q2b) + high advisories in shipped deps (Q4)
+
+Not a story. `main` had been failing CI since the 22 Jul merge burst (`e276091`); both failures were merge-blocking, so nothing could land on top of them. Two independent gates, two independent causes.
+
+**Q2b — documentation integrity: duplicate ADR 0027.** PRs **#294** (multi-tenant tenancy model) and **#295** (Ozone-as-channel + SI-delivery) were open concurrently and each numbered its ADR 0027 — a collision git cannot see, because the filenames differ. #295 merged first (07:54:51), #294 46s later (07:55:37), so #294's record is the one that took an occupied number: `0027-multi-tenant-tenancy-model.md` → **`0028-multi-tenant-tenancy-model.md`**, with a `Numbering:` line in the header recording why. This is the exact collision class ADR 0020's duplicate-number check was written for, and the second time it has fired (ADR 0018 → 0019 while PR #250 was open) — the gate worked, it just fired post-merge because both PRs were green when they were each last built.
+
+Reference split verified before and after: the three prose "ADR 0027" citations in `docs/proposals/ozone-*` all point at the **Ozone** record and are untouched; all 15 code/spec citations (`packages/db` tenant-tx, governed-aggregate, seed-tenants, migration `0030_tenant_group.sql`, `services/bff/src/worker.ts`, the portal tenant scaffold) point at the **tenancy** record and moved to 0028. Migration comment edits are inert — there is no migration checksum mechanism. Also corrected `architecture-overview.md`'s stale migration range (0001 → 0027) to 0030, drift the path-existence check cannot catch.
+
+**Q4 — dependency scan: 5 HIGH advisories in production deps.** `next` was one minor behind the DoS fix; `sharp`, `postcss` and `fast-uri` were each pinned *by a parent* below their patched version, so `pnpm update` alone could not lift them.
+
+- `next` 15.5.19 → **15.5.22** (GHSA App-Router Server Actions DoS, patched 15.5.21). The declared range hardened `^15.1.6` → `^15.5.22` so a lockfile rebuild cannot resolve back below the floor.
+- New **`pnpm.overrides`** floors for the three parent-pinned transitives: `sharp` ^0.35.0 (libvips CVE-2026-33327/33328/35590/35591; next pins `^0.34.3`), `postcss` ^8.5.18 (two sourceMappingURL path-traversal/disclosure advisories; next pins an exact 8.4.31), `fast-uri` ^3.1.4 (host confusion via literal backslash authority delimiter; reached through `ajv` under `@modelcontextprotocol/sdk` in `services/mcp-gateway`). Resolved: sharp 0.35.3, postcss 8.5.23, fast-uri 3.1.4. An `overridesNote` next to the block states the rule — overrides are for parent-pinned deps only, a direct dependency is bumped in its own manifest, and an entry is dropped once the parent ships the fix.
+
+`pnpm audit --prod --audit-level=high` now exits 0 (1 low / 4 moderate remain, below the gate's threshold and unchanged in kind).
+
+**Evidence.** doc-link-check 58 docs / 28 ADRs clean · audit exit 0 · lint clean · typecheck clean across all 7 projects · full build incl. the Next portal (the real test of the sharp/postcss bumps — both sit in its build pipeline) · unit **1209 passing** (182 files) · integration **136 passing** (68 files, real Postgres 16) · Q4.5 lineage PASSED, no gaps · discovery waist gate OK · gen-drift none · Q1b clean. **Not verified locally: Q4's semgrep secrets scan** — `semgrep.dev` is blocked by this environment's egress policy, so the ruleset cannot be fetched. It runs in CI, and note it has *not* run on current `main` either: it is sequenced after the dependency scan in the same job and was skipped when that step failed. This diff introduces no secrets (manifest, lockfile, ADR rename, comment text).

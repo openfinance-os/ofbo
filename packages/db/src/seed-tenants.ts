@@ -5,7 +5,7 @@ import { generateDemoDataset, DEMO_TENANTS, DEMO_BANK_ID, tppDisplayName, type D
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged
+ * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged
  * THREE-TENANT demo. Additive and OPT-IN: run AFTER the normal `db:seed:demo` (which seeds the
  * Alpha Bank reference tenant). This:
  *   1. enrols every demo tenant into its own single-member tenant group (HOST-02, migration 0030)
