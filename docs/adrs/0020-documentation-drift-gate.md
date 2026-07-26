@@ -4,6 +4,12 @@
 - Date: 2026-06-24
 - Scope: build-harness machinery, not a product feature (CLAUDE.md rule 6 — process primitives get an ADR).
 - Companion to ADR 0019 (HARNESS-01..03); this is the HARNESS-05 follow-up.
+- **Amended 2026-07-26 (HARNESS-06)** — the ADR-number check below is *intra-tree*, so it detects
+  a collision only once both colliding ADRs are in one tree, i.e. after the second merges. That is
+  how ADR 0027 broke `main` on 2026-07-22, in the same shape as the 0018 case this ADR cites.
+  `scripts/adr-number-check.mjs` + CI **Q2c** add the cross-branch half — base-ref and open-PR
+  reservation, first-opened-keeps-the-number. The decision below is unchanged; its reach is
+  extended. See the HARNESS-06 backlog entry.
 
 ## Context
 
