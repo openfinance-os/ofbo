@@ -111,8 +111,8 @@ const thisPrNumber = () => {
   }
 }
 
-const api = async (url, token) => {
-  const res = await fetch(url, {
+const api = async (url, token, doFetch) => {
+  const res = await doFetch(url, {
     headers: {
       accept: 'application/vnd.github+json',
       authorization: `Bearer ${token}`,
@@ -126,19 +126,30 @@ const api = async (url, token) => {
 /**
  * ADR paths claimed by OPEN pull requests opened before `selfPr`. Throws on any API problem so
  * the caller can soft-skip — never converts an availability failure into a merge block.
+ *
+ * `doFetch` is injectable so the request plumbing (URLs, earlier-PR filter, removed-file and
+ * out-of-directory exclusions) is testable without a network or a token. Left un-injected in
+ * production, it is the Node global.
  */
-const peerAdrs = async (repo, token, selfPr) => {
-  const prs = await api(`https://api.github.com/repos/${repo}/pulls?state=open&per_page=100`, token)
+export const peerAdrs = async (repo, token, selfPr, doFetch = fetch) => {
+  const prs = await api(
+    `https://api.github.com/repos/${repo}/pulls?state=open&per_page=100`,
+    token,
+    doFetch
+  )
   const earlier = prs.filter((pr) => pr.number < selfPr)
   const claimed = []
   for (const pr of earlier) {
     const files = await api(
       `https://api.github.com/repos/${repo}/pulls/${pr.number}/files?per_page=100`,
-      token
+      token,
+      doFetch
     )
     for (const f of files) {
+      // A deleted ADR releases its number rather than claiming it.
       if (f.status === 'removed') continue
       const num = adrNumber(f.filename)
+      // Guard the directory too: an `0027-notes.md` elsewhere in the repo is not an ADR.
       if (num !== null && f.filename.startsWith(`${ADR_DIR}/`)) {
         claimed.push({ number: num, path: f.filename, source: `PR #${pr.number}` })
       }
