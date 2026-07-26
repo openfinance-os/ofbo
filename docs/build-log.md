@@ -1776,3 +1776,22 @@ Reference split verified before and after: the three prose "ADR 0027" citations 
 `pnpm audit --prod --audit-level=high` now exits 0 (1 low / 4 moderate remain, below the gate's threshold and unchanged in kind).
 
 **Evidence.** doc-link-check 58 docs / 28 ADRs clean · audit exit 0 · lint clean · typecheck clean across all 7 projects · full build incl. the Next portal (the real test of the sharp/postcss bumps — both sit in its build pipeline) · unit **1209 passing** (182 files) · integration **136 passing** (68 files, real Postgres 16) · Q4.5 lineage PASSED, no gaps · discovery waist gate OK · gen-drift none · Q1b clean. **Not verified locally: Q4's semgrep secrets scan** — `semgrep.dev` is blocked by this environment's egress policy, so the ruleset cannot be fetched. It runs in CI, and note it has *not* run on current `main` either: it is sequenced after the dependency scan in the same job and was skipped when that step failed. This diff introduces no secrets (manifest, lockfile, ADR rename, comment text).
+
+---
+
+## 2026-07-26 — HARNESS-07: un-shadow independent CI checks — a skipped security scan must not look like a passing one
+
+Second follow-up to the red-main fix. Found while confirming what had actually run on `main`: Q4's semgrep **secrets scan had not executed at all** between 22 and 26 Jul. Not because it was broken — because it never got the chance.
+
+**The defect.** Steps in a job are sequential under `bash -e`, so a failing step skips every step after it. Q4 runs `pnpm audit` then the secrets scan; while the audit was red, the secrets scan was skipped on every single run. The checks tab showed one red Q4 — indistinguishable from "the dependency scan is red and the secrets scan is fine". A security control that is *absent* looked exactly like one that *passed*, for four days, and nothing in the system said otherwise. Q2 has the identical shape: a lint error skips both `typecheck` and the semgrep **SAST**.
+
+The two scans are independent — a vulnerable transitive dependency tells you nothing about whether a credential was committed. Sequencing them was an artefact of sharing a runner, not a real dependency.
+
+**The fix.** Independent checks carry `if: ${{ !cancelled() && steps.install.outcome == 'success' }}`, so an earlier *check* failing no longer suppresses them (the job still goes red — nothing is being downgraded). Applied to Q4's secrets scan, Q2's typecheck + SAST, and the Discovery job's run-validation + waist gate.
+
+Two deliberate choices:
+
+- **Gated on setup, not a bare `!cancelled()`.** If `pnpm install` itself fails there is no `node_modules`, and running the scans anyway would produce a screenful of noise failures that obscure the one real cause. `steps.install.outcome == 'success'` draws the line where it belongs: a failed *check* must not suppress its peers; a failed *prerequisite* legitimately does. The Discovery job is dependency-free, so plain `!cancelled()` is correct there.
+- **In-job guards, not new jobs.** Splitting Q4 into two jobs gives each its own check-run, which is nicer to read — but it retires the name `Q4 — security review + dependency scan`, and any branch-protection rule pinned to that name would then wait forever on a check that never reports. The guard achieves the substance (neither scan can be silently skipped) with no rename. Splitting is still available later if the required-check names are updated in the same change.
+
+**Honest limit on the evidence.** The guard only *changes* behaviour on a run where something fails, so a green CI run cannot demonstrate it. Verified statically instead: the workflow parses, and the conditions attach to exactly the five intended steps and nothing else (the pre-existing `if: always()` on the Playwright artifact upload is untouched). Proving it live would mean deliberately failing a step in a throwaway PR — worth doing on request, not worth the noise unprompted.
