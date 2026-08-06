@@ -1,9 +1,13 @@
 {
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
-  "_comment": "HARNESS-04 (ADR 0019 follow-up): mutation testing scoped to the security-critical BFF core. Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a behaviour change no test caught. Scoped to rbac/auth/approvals (scope enforcement + four-eyes), the high-class audit emission (audit immutability + PII redaction at emission — a CLAUDE.md hard stop), and the Idempotency-Key 24h dedup window (binding API convention); all DB-free (vitest.mutation.config.ts) so it runs fast and hermetically. `break` is calibrated below the measured baseline so a real regression fails CI without flaking on the noise floor.",
+  "_comment": "HARNESS-04 (ADR 0019 follow-up): mutation testing scoped to the security-critical BFF core. Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW \u2014 a surviving mutant is a behaviour change no test caught. Scoped to rbac/auth/approvals (scope enforcement + four-eyes), the high-class audit emission (audit immutability + PII redaction at emission \u2014 a CLAUDE.md hard stop), and the Idempotency-Key 24h dedup window (binding API convention); all DB-free (vitest.mutation.config.ts) so it runs fast and hermetically. HARNESS-13 RATCHET: break was 65 against a 70.3% baseline \u2014 five points of slack, so the control could decay a long way before failing. Re-measured 2026-08-06 over 493 mutants: 71.20% (351 killed / 116 survived) on vitest 2, and 70.99% (350/117) on vitest 3 after the HARNESS-12 bump \u2014 a one-mutant delta, so ~0.2pp is the observed run-to-run noise floor. break is now 70: about one point (~5 mutants) of headroom, which absorbs that noise and fails on real decay. Raise it again as the 117 survivors are killed; never lower it to make a red run green.",
   "testRunner": "vitest",
-  "plugins": ["@stryker-mutator/vitest-runner"],
-  "vitest": { "configFile": "vitest.mutation.config.ts" },
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "vitest": {
+    "configFile": "vitest.mutation.config.ts"
+  },
   "coverageAnalysis": "perTest",
   "mutate": [
     "services/bff/src/rbac.ts",
@@ -13,9 +17,20 @@
     "services/bff/src/high-class-audit.ts",
     "services/bff/src/idempotency.ts"
   ],
-  "reporters": ["clear-text", "progress", "json", "html"],
-  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
-  "thresholds": { "high": 90, "low": 70, "break": 65 },
+  "reporters": [
+    "clear-text",
+    "progress",
+    "json",
+    "html"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 70,
+    "break": 70
+  },
   "concurrency": 2,
   "timeoutMS": 60000
 }
