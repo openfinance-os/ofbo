@@ -1,5 +1,10 @@
 # Design-conformance audit — portal screens vs Stitch
 
+> **⚠️ Point-in-time snapshot (re-audited 2026-06-22) — superseded in part. Annotated 2026-08-06 (DOCS-01).**
+> The "remaining" items listed at the end (UIF-07b, UIF-09b) are marked `done` in
+> `docs/backlog.yaml`; this document was not updated when they landed. Treat the verdicts as the
+> state on the audit date, and re-audit before relying on them.
+
 Audit of the built portal screens against their **Stitch** appearance references
 (project `8050269076066130289`, "Regulated Institutional Interface"). Division of truth
 per CLAUDE.md: **Stitch = layout + design tokens; OpenAPI = behaviour + data.** Verdicts

@@ -21,10 +21,10 @@ flowchart TB
         Worker["services/bff worker.ts<br/>headless scheduled jobs<br/>(no public ingress)"]
     end
 
-    subgraph Ports["packages/ports — port interfaces (P1-P9)"]
+    subgraph Ports["packages/ports — port interfaces (P1-P10)"]
         Reg["registry.ts<br/>getAdapter(port, profile)<br/>ONLY profile branch point"]
         Sim["adapters/sim (demo)"]
-        Ent["adapters/enterprise (M6 stub)"]
+        Ent["adapters/enterprise (all 10 pre-staged, ADR 0024)"]
     end
 
     subgraph Data["Data layer"]
@@ -46,7 +46,7 @@ flowchart TB
     BFF -. "contracts (OpenAPI-gen)" .- Portal
 ```
 
-## 2. Ports (P1–P9) — every external system is an interface
+## 2. Ports (P1–P10) — every external system is an interface
 
 `packages/ports/src/interfaces.ts` defines the contract; `registry.ts` is the
 **only** place `DEPLOY_PROFILE` is read. Core code calls `getAdapter(port, profile)`

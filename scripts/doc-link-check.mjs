@@ -83,6 +83,56 @@ for (const [num, files] of byNumber) {
   if (files.length > 1) findings.push(`duplicate ADR number ${num}: ${files.join(', ')}`)
 }
 
+// DOCS-01 — check 3: NUMERIC drift. A path reference rots loudly (the file is gone); a COUNT
+// rots silently. The README claimed "76 paths, 10 tags" against a spec that had grown to 89/12,
+// and "127 of the 135 backlog items" against 140/150 — both invisible to checks 1 and 2 because
+// nothing was broken, just wrong. These are the counts a reader uses to size up the project, so
+// they are derived here from the artefacts themselves and compared to the prose.
+const countMatches = (file, re) => {
+  try {
+    return (readFileSync(file, 'utf8').match(re) ?? []).length
+  } catch {
+    return null
+  }
+}
+
+const SPEC = 'specs/backoffice-openapi.yaml'
+const specPaths = countMatches(SPEC, /^ {2}\//gm)
+const specTags = countMatches(SPEC, /^ {2}- name:/gm)
+// Items are `status: <value>` occurrences that are NOT the header comment's legend line.
+const backlogSrc = (() => {
+  try {
+    return readFileSync('docs/backlog.yaml', 'utf8')
+  } catch {
+    return null
+  }
+})()
+const backlogDone = backlogSrc ? (backlogSrc.match(/\bstatus:\s*done\b/g) ?? []).length : null
+
+const readme = existsSync('README.md') ? readFileSync('README.md', 'utf8') : ''
+
+// "**89 paths, 12 tags**" — the spec-size claim.
+const claimedSpec = readme.match(/\*\*(\d+) paths, (\d+) tags\*\*/)
+if (claimedSpec && specPaths !== null && specTags !== null) {
+  if (Number(claimedSpec[1]) !== specPaths || Number(claimedSpec[2]) !== specTags) {
+    findings.push(
+      `README.md numeric drift: claims "${claimedSpec[1]} paths, ${claimedSpec[2]} tags" but ` +
+        `${SPEC} has ${specPaths} paths and ${specTags} tags`
+    )
+  }
+}
+
+// "140 of the 150 backlog items are done" — the progress claim.
+const claimedBacklog = readme.match(/(\d+) of the (\d+) backlog items are done/)
+if (claimedBacklog && backlogDone !== null) {
+  if (Number(claimedBacklog[1]) !== backlogDone) {
+    findings.push(
+      `README.md numeric drift: claims ${claimedBacklog[1]} backlog items done but ` +
+        `docs/backlog.yaml has ${backlogDone}`
+    )
+  }
+}
+
 if (findings.length > 0) {
   process.stderr.write(`\ndoc-link-check FAILED — ${findings.length} drift finding(s):\n`)
   for (const f of findings) process.stderr.write(`  ✗ ${f}\n`)
