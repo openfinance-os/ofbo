@@ -251,7 +251,7 @@ milestones:
     items:
       - id: VAL-01
         title: Liability-avoided KPI + ROI walkthrough screen
-        status: pending
+        status: in-progress
         status_note: >-
           Not started: no liability-schedule constant set and no exposure-avoided figure exists in
           services/bff/src or apps/portal/src (verified by search, 2026-08-06). Compute-and-display
