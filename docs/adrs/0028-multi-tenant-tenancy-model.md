@@ -1,6 +1,15 @@
 # ADR 0028 — Multi-tenant tenancy model (operator → tenant-group → bank_id)
 
 - Status: **Proposed** — awaiting human decision (cross-cutting tenancy primitive; CLAUDE.md rule 6).
+- ⚠️ **Implementation has landed ahead of acceptance (flagged 2026-08-06, DOCS-01).** This record is
+  still Proposed, but its substance is merged on `main`: migration `0030_tenant_group.sql`
+  (tenant groups + the re-scoped `bank_internal_view` bypass), `packages/db/src/seed-tenants.ts`,
+  the `MULTITENANT_DEMO` worker flag and the portal tenant switcher — with backlog HOST-02 delivered
+  and HOST-01 part-built. CLAUDE.md rule 6 says a genuinely-uncovered gap raises an ADR **and stops**;
+  that did not happen here, so the decision is now being asked retrospectively. **A human must
+  Accept, amend, or reject this record** — nothing in this PR presumes the answer, and the status
+  is deliberately left as Proposed. If rejected, the merged tenancy scaffold has to be unwound;
+  that cost is the reason this is flagged rather than quietly reconciled.
 - Date: 2026-07-21
 - Numbering: renumbered 0027 → 0028 on 2026-07-26. PR #294 (this ADR) and PR #295 (ADR 0027,
   Ozone-as-channel) were open concurrently and both claimed 0027; #295 merged first, so this

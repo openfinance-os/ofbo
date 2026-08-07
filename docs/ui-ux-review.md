@@ -1,5 +1,13 @@
 # OFBO Portal — Full UI/UX Review (2026-06-21)
 
+> **⚠️ Point-in-time snapshot (2026-06-21) — superseded in part. Annotated 2026-08-06 (DOCS-01).**
+> Read this as the record of what the review *found*, not as current state. Its Tier-1 findings
+> became the **UX-01…UX-11** backlog milestone, all now `done`, and the shared accessibility gate
+> it asked for exists (`apps/portal/test/a11y.spec.tsx` — axe WCAG 2.0/2.1 A+AA across the screen
+> components). At least one description is now factually stale: the DEMO banner is described below
+> as sticky with `role="alert"`, whereas `apps/portal/src/components/demo-banner.tsx` renders a
+> bottom-right pill with `role="note"`. Verify against the tree before acting on any item here.
+
 Holistic UX review of the built portal (`apps/portal`) across six dimensions:
 information architecture & navigation, accessibility (WCAG 2.1 AA), interaction & state
 design, visual consistency & responsive, regulated-context UX & content, and
