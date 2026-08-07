@@ -251,6 +251,11 @@ milestones:
     items:
       - id: VAL-01
         title: Liability-avoided KPI + ROI walkthrough screen
+        status: pending
+        status_note: >-
+          Not started: no liability-schedule constant set and no exposure-avoided figure exists in
+          services/bff/src or apps/portal/src (verified by search, 2026-08-06). Compute-and-display
+          over existing stores when picked up.
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         note: >-
           Translate operating events into AED using the published scheme liability schedule
@@ -269,6 +274,17 @@ milestones:
           - Deterministic against the seeded demo dataset (stable figure for a given seed).
       - id: HOST-02
         title: Re-scope bank_internal_view for multi-tenant hosting
+        status: done
+        status_note: >-
+          Delivered: migration 0030_tenant_group.sql adds tenant_group_member and re-scopes every
+          internal_view_select policy to a pinned app.tenant_group, with the documented unpinned
+          fallback for single-tenant backward compatibility. packages/db/src/tenant-tx.ts adds
+          beginInternalViewTx(tenantGroupId). All four acceptance criteria are covered by
+          packages/db/test/tenant-isolation.int.spec.ts ("HOST-02 - cross-tenant isolation of the
+          bank_internal_view bypass"): group-pinned reads see only their own group, unpinned falls
+          back to legacy read-all, ordinary ofbo_app RLS is unaffected, and a tenant sees only its
+          own membership row. Status recorded retrospectively by DOCS-01 - the item shipped with
+          no status field at all.
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         note: >-
           bank_internal_view is a cross-bank SELECT designed for ONE bank's internal
@@ -285,6 +301,16 @@ milestones:
           - Migration is additive; INSERT-only audit and retention posture untouched.
       - id: HOST-01
         title: Tenant provisioning + per-tenant PRD §10 configuration
+        status: in-progress
+        status_note: >-
+          Scaffold only. packages/db/src/seed-tenants.ts enrols every demo tenant in its own
+          single-member group and seeds a compact dataset for two extra tenants (Beta Bank, Gamma
+          Takaful); worker.ts carries MULTITENANT_DEMO and apps/portal/src/lib/tenant.ts the switcher.
+          Its own header states it "deliberately does NOT re-parameterise the rich single-tenant seed
+          (that is HOST-01 proper)". The PRD §10 per-tenant configuration criterion is NOT met: the
+          defaults remain code constants (e.g. approvals/service.ts expiryBusinessHours ?? 2), as the
+          tier-2 BaaS readiness review §4.1 #3 also found. Remaining: parameterised seed + per-tenant
+          §10 config rows read wherever those defaults are enforced.
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         depends_on: [HOST-02]
         note: >-
@@ -304,6 +330,11 @@ milestones:
             posture hold for every tenant.
       - id: HOST-03
         title: "ADR: per-tenant P6 scheme-certificate custody for hosted deployments"
+        status: blocked
+        status_note: >-
+          ADR-authoring item (per-tenant P6 scheme-certificate custody) - per CLAUDE.md rule 6 an ADR
+          is a human decision, so this cannot be picked up by the build loop. Unblock by a human
+          accepting the tenancy direction (ADR 0028 is itself still Proposed).
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         note: >-
           Each LFI holds its own FAPI 2.0 scheme certificate chain; a hosted egress gateway
@@ -316,6 +347,11 @@ milestones:
             liability allocation, and the audit trail for certificate use; no code changes.
       - id: INS-01
         title: Insurance module — line types, quote-fee reconciliation, insurance consent purposes
+        status: blocked
+        status_note: >-
+          Insurance line types / policy shapes are spec-first and human-gated (ADR 0028 + the
+          seed-tenants.ts header both say so explicitly). Needs a specs/backoffice-openapi.yaml
+          change decided by a human before any implementation.
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         note: >-
           Extends the reconciliation + consent substrate to insurers (mandated participants):
@@ -334,6 +370,9 @@ milestones:
             invariants).
       - id: INS-02
         title: Policy-centric care console variant (insurer/broker personas)
+        status: blocked
+        status_note: >-
+          Depends on INS-01 (same spec-first, human-gated insurance data model).
         adr: docs/adrs/0026-commercial-positioning-nebras-vas-split.md
         depends_on: [INS-01]
         note: >-
@@ -481,9 +520,9 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
       - The training environment serves a synthetic-PSU dataset that MIRRORS production's shape
         (same generator) but is a SEPARATE set of records (distinct seed) — a trainee can never
         act on a real operator's PSU.
-      - Training actions NEVER write to the production audit (audit_high_sensitivity): the
+      - 'Training actions NEVER write to the production audit (audit_high_sensitivity): the
         training High-class audit sink is structurally separate and is never the production
-        emitter, even when a production emitter is otherwise configured.
+        emitter, even when a production emitter is otherwise configured.'
       - Training mutations (revoke, dispute, refund) never propagate to the real scheme — a
         sandbox egress acknowledges them locally so nothing real moves.
       - Every training response is marked (x-ofbo-environment=training) so the portal can render
