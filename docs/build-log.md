@@ -1817,6 +1817,22 @@ Tie-break is **first-opened-keeps-it** (lower PR number holds the claim), so exa
 
 **Evidence.** 11 unit tests (`scripts/test/adr-number-check.test.mjs`, `node --test`). Seven cover the pure collision rule — the real 2026-07-22 case, the free-number pass, the same-file-both-sides non-collision (a rename must not self-trip), and multi-holder reporting. Four cover the **peer plumbing** against an injected fake GitHub: URL construction, the earlier-PR filter (a newer PR's files are never even fetched), removed-file and wrong-directory exclusions, and error propagation. That second group was added after the gate's first CI run reported `no ADR added — peer check SKIPPED`: correct behaviour for a PR that amends an ADR rather than adding one, but it meant the API path would have shipped never having executed. Since that path **soft-skips** on error, a bug in it degrades to "never catches anything" rather than anything visible — precisely the failure mode HARNESS-07 is about, so it should not be the one path taken on trust. Negative test against the live repo: adding a `0027-*.md` while `main` still holds two 0027s fails with both holders named and exit 1; removing it returns exit 0. The harness-test step now also globs `scripts/test/*.test.mjs`, so these run in CI alongside the discovery gate tests. ADR 0020 amended in place (decision unchanged, reach extended); backlog HARNESS-06 → done.
 
+---
+
+## 2026-07-26 — HARNESS-08: ESLint ignores nested worktree checkouts
+
+Found during the post-merge smoke test of the #296/#297/#298 stack: `pnpm lint` from the repo root reported **32 errors, every one of them inside `.claude/worktrees/`** — the isolated checkout CLAUDE.md rule 0 requires build work to happen in.
+
+**Why it happens.** A worktree under `.claude/worktrees/` is a full second checkout nested inside the first. `.gitignore` covers it (added in `89104f8`), but **ESLint flat config does not read `.gitignore`** — `ignores` is its own list. So a root lint walks into every parallel branch's checkout and reports that branch's findings against paths in the current tree.
+
+**Why it mattered more than cosmetics.** The loudest phantom was the `no-restricted-syntax` rule on `DEPLOY_PROFILE` — the guard that makes profile-branching outside `packages/ports` a lint error precisely because PRD §3.1 makes it a review FAIL. Seeing it fire against a file that is not in your tree is the wrong kind of alarm in a repo where that rule is load-bearing: it trains you to dismiss the one error you must never dismiss.
+
+**Why nobody noticed.** CI checks out fresh and has no `.claude/worktrees/`, so Q2 was green on every PR while local lint was noisy. The gate and the developer's terminal disagreed, and only the terminal was wrong — the failure mode a build loop is least likely to report, because the loop reads CI.
+
+**Fix.** `'.claude/worktrees/**'` added to the `ignores` list in `eslint.config.mjs`, alongside the existing `.remember/**` scratch-dir precedent. Each worktree still lints itself — the isolation is what makes that correct.
+
+**Evidence.** Reproduced first, not assumed: a probe checkout at `.claude/worktrees/probe-checkout/` containing a `DEPLOY_PROFILE` read made a root lint fail with exactly the misleading §3.1 error. After the fix, the same probe still on disk, lint exits 0. Negative control run alongside it — a deliberate `no-explicit-any` in `packages/db/src` — still fails, confirming the ignore did not over-broaden and silence real code. Probe removed after verification.
+
 ## 2026-08-06 — HARNESS-09: the coverage gate becomes a gate
 
 **The gap.** `vitest.config.ts` has carried 80% thresholds (statements/branches/functions/lines, scoped to `services/bff/src`) since the substrate landed — and no CI job ever ran them. Q1 executed bare `pnpm test`; `grep -rn coverage .github/workflows/` returned nothing. CLAUDE.md's "coverage ≥80%" was a local convention wearing a gate's clothes: the same absent-control-looks-like-a-passing-one class as HARNESS-07, found by the 2026-08 improvement-plan audit (`docs/reviews/improvement-plan-2026-08.md` §2.1, priority 1 of 7).
