@@ -1,17 +1,36 @@
 import { describe, expect, it } from 'vitest'
 import { PORT_NAMES, getAdapter, type PortName } from '../src/registry.js'
+import type { PortMap } from '../src/interfaces.js'
+import { buildEnterpriseBench } from './fixtures/enterprise-harness.js'
 import { EnterpriseAdapterNotImplementedError } from '../src/types.js'
 
 const trace = { trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
 
 /**
- * Port contract suite — binds ANY adapter behind the interface. Sim adapters run
- * now; the same expectations gate enterprise adapters at M6 (port-swap acceptance).
+ * Port contract suite — binds ANY adapter behind the interface, and is now RUN against both
+ * profiles (HARNESS-10). CLAUDE.md: "an enterprise adapter must pass exactly the tests the
+ * simulator passes — that is the port-swap acceptance gate, M6". Until HARNESS-10 this
+ * function was literally typed `profile: 'demo'` and never invoked for anything else, so the
+ * gate was carried by a comment rather than by code.
+ *
+ * `get` resolves a port to the adapter under test, so the SAME assertions drive the sim
+ * adapters and the enterprise adapters (the latter configured + transport-faked by
+ * fixtures/enterprise-harness.ts).
+ *
+ * One expectation is a fact about the DEMO PROFILE rather than about the port contract — the
+ * nine seeded personas with demo tokens. A real IdP does not expose them, and asserting it
+ * should would be a fake gate. It is REGISTERED only under demo — never a skip marker, which
+ * Q1b blocks and which reads identically to "disabled because it was failing" — and the
+ * enterprise-side truth is asserted explicitly instead, so the difference between the two
+ * profiles is auditable rather than implied.
  */
-function describePortContract(profile: 'demo') {
+function describePortContract(
+  profile: 'demo' | 'enterprise',
+  get: <K extends PortName>(port: K) => PortMap[K]
+) {
   describe(`port contracts (${profile} profile)`, () => {
     it('P1 mints care tokens with act+sub claims and ≤15 min expiry', async () => {
-      const p1 = getAdapter('p1-care-surface', profile)
+      const p1 = get('p1-care-surface')
       const t = await p1.mintCareToken({ agent_id: 'agent-001', psu_id: 'psu-001' }, trace)
       expect(t.act).toBe('agent-001')
       expect(t.sub).toBe('psu-001')
@@ -19,19 +38,27 @@ function describePortContract(profile: 'demo') {
       expect(new Date(t.expires_at).getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000)
     })
 
-    it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
-      const p2 = getAdapter('p2-identity-provider', profile)
-      const personas = await p2.personaLogins()
-      expect(personas).toHaveLength(9)
-      expect(personas.map((p) => p.persona)).toContain('platform-super-admin')
-      expect(personas.map((p) => p.persona)).toContain('platform-admin')
-      const claims = await p2.verifyToken(personas[0]!.demo_token)
-      expect(claims.mfa).toBe(true)
-      expect(claims.persona).toBe(personas[0]!.persona)
-    })
+    // Registered ONLY under the demo profile — deliberately NOT a skip marker. Q1b
+    // (anti-reward-hacking) blocks those, and rightly: "skipped" in a report is
+    // indistinguishable from "disabled because it was failing". There is no enterprise
+    // expectation being suppressed here — a real Entra tenant has no demo personas at all, so
+    // there is nothing to assert. The enterprise-side truth is asserted separately below
+    // (personas derive from configured mapping; no demo token is ever issued).
+    if (profile === 'demo') {
+      it('P2 verifies tokens with MFA and exposes the 9 demo personas', async () => {
+        const p2 = get('p2-identity-provider')
+        const personas = await p2.personaLogins()
+        expect(personas).toHaveLength(9)
+        expect(personas.map((p) => p.persona)).toContain('platform-super-admin')
+        expect(personas.map((p) => p.persona)).toContain('platform-admin')
+        const claims = await p2.verifyToken(personas[0]!.demo_token)
+        expect(claims.mfa).toBe(true)
+        expect(claims.persona).toBe(personas[0]!.persona)
+      })
+    }
 
     it('P2 mints + verifies an agent session token (ADR 0018) — round-trip carries the bound identity', async () => {
-      const p2 = getAdapter('p2-identity-provider', profile)
+      const p2 = get('p2-identity-provider')
       const minted = await p2.mintAgentSession(
         { agent_id: 'agent-abc', persona: 'care-readonly-agent', scopes: ['consents:admin', 'audit:read'], allow_mutations: true, spend_budget: 3 },
         trace
@@ -51,13 +78,13 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P2 returns null for a non-agent (human) bearer — the human OIDC path handles it', async () => {
-      const p2 = getAdapter('p2-identity-provider', profile)
+      const p2 = get('p2-identity-provider')
       expect(await p2.verifyAgentSession('demo-token:platform-admin')).toBeNull()
       expect(await p2.verifyAgentSession('not-a-token')).toBeNull()
     })
 
     it('P2 rejects a tampered agent session token (forged identity must not verify)', async () => {
-      const p2 = getAdapter('p2-identity-provider', profile)
+      const p2 = get('p2-identity-provider')
       const minted = await p2.mintAgentSession(
         { agent_id: 'agent-xyz', persona: 'care-readonly-agent', scopes: ['audit:read'], allow_mutations: false, spend_budget: 0 },
         trace
@@ -73,7 +100,7 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P3 creates ITSM tickets with team routing', async () => {
-      const p3 = getAdapter('p3-itsm', profile)
+      const p3 = get('p3-itsm')
       const t = await p3.createTicket(
         { type: 'liability_threshold', severity: 'high', team: 'risk_compliance', summary: 'test' },
         trace
@@ -82,14 +109,14 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P4 reads balances as binding Money', async () => {
-      const p4 = getAdapter('p4-core-banking', profile)
+      const p4 = get('p4-core-banking')
       const b = await p4.getBalance('acc-001', trace)
       expect(Number.isInteger(b.balance.amount)).toBe(true)
       expect(b.balance.currency).toMatch(/^[A-Z]{3}$/)
     })
 
     it('P5 accepts an OTel span batch', async () => {
-      const p5 = getAdapter('p5-apm', profile)
+      const p5 = get('p5-apm')
       await expect(
         p5.exportSpans([
           {
@@ -106,13 +133,13 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P6 acknowledges consent revocation within the 5s scheme SLA', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
+      const p6 = get('p6-nebras-egress')
       const r = await p6.revokeConsent('consent-001', 'CLIENT_INSTRUCTION', trace)
       expect(r.acknowledged_in_ms).toBeLessThan(5000)
     })
 
     it('P6 creates dispute cases and syncs the directory deterministically', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
+      const p6 = get('p6-nebras-egress')
       const d = await p6.createDisputeCase({ summary: 'fee variance' }, trace)
       expect(d.nebras_case_id).toBeTruthy()
       const dir1 = await p6.syncDirectory(trace)
@@ -122,13 +149,13 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P6 dispatches a refund via the Ozone Connect flow, returning an IPP status (BACKOFFICE-62)', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
+      const p6 = get('p6-nebras-egress')
       const r = await p6.dispatchRefund('consent-001', { amount: 150000, currency: 'AED' }, trace)
       expect(['ACCC', 'ACSP', 'ACSC', 'RJCT', 'PDNG']).toContain(r.ipp_status)
     })
 
     it('P6 reports a consent status for drift checks (DEMO-01)', async () => {
-      const p6 = getAdapter('p6-nebras-egress', profile)
+      const p6 = get('p6-nebras-egress')
       const r = await p6.getConsentStatus('consent-001', trace)
       expect(r.consent_id).toBe('consent-001')
       expect(typeof r.status).toBe('string')
@@ -136,21 +163,21 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P7 accepts column-level lineage emission', async () => {
-      const p7 = getAdapter('p7-lineage', profile)
+      const p7 = get('p7-lineage')
       await expect(
         p7.emitLineage({ table: 'reconciliation_break', columns: ['variance_amount'], source: 'recon-engine', trace_id: trace.trace_id })
       ).resolves.toBeUndefined()
     })
 
     it('P8 yields funnel events with entry-path dimension', async () => {
-      const p8 = getAdapter('p8-onboarding-handover', profile)
+      const p8 = get('p8-onboarding-handover')
       const events = await p8.getFunnelEvents({ from: '2026-01-01', to: '2026-12-31' })
       expect(events.length).toBeGreaterThan(0)
       for (const e of events) expect(['DIRECT_SIGNUP', 'ONBOARDING_HANDOVER']).toContain(e.entry_path)
     })
 
     it('P9 registers counterparties and tracks settlement', async () => {
-      const p9 = getAdapter('p9-financial-system', profile)
+      const p9 = get('p9-financial-system')
       const reg = await p9.registerCounterparty({ organisation_id: 'org-001', legal_name: 'Fictional Fintech FZ-LLC' }, trace)
       expect(reg.financial_system_ref).toBeTruthy()
       const status = await p9.getSettlementStatus(reg.financial_system_ref, trace)
@@ -158,7 +185,7 @@ function describePortContract(profile: 'demo') {
     })
 
     it('P10 hands an STR draft to the bank workflow and returns a workflow ref (never calls AML GO)', async () => {
-      const p10 = getAdapter('p10-str-workflow', profile)
+      const p10 = get('p10-str-workflow')
       const out = await p10.handoffStrDraft(
         { str_draft_id: '5f0e63c0-0000-4000-8000-0000000000a1', source_consent_id: 'consent-demo-7741', case_context: 'synthetic' },
         trace
@@ -169,7 +196,40 @@ function describePortContract(profile: 'demo') {
   })
 }
 
-describePortContract('demo')
+describePortContract('demo', (port) => getAdapter(port, 'demo'))
+
+// HARNESS-10 — the port-swap acceptance gate, now executable. Every enterprise adapter is
+// constructed from Bank-Profile-shaped config with a faked vendor transport, then driven
+// through EXACTLY the assertions above. This proves the request-build → parse → map path an
+// M6 swap depends on; it does NOT prove a live tenant (auth, residency, real payload drift are
+// the rung-④ mile). That boundary is stated, not blurred.
+const enterpriseBench = buildEnterpriseBench()
+describePortContract('enterprise', (port) => enterpriseBench[port])
+
+describe('HARNESS-10 — the port-swap gate itself', () => {
+  // A gate that silently stops covering a port is the failure class this work closes. If a new
+  // port is added to PORT_NAMES without a bench entry, the enterprise contract run would simply
+  // never exercise it — and nothing above would go red. This makes that omission fail here.
+  it('the enterprise bench covers EVERY port — a new port cannot skip the gate', () => {
+    const bench = buildEnterpriseBench()
+    for (const port of PORT_NAMES) {
+      expect(bench[port], `no enterprise bench entry for ${port}`).toBeTruthy()
+    }
+    expect(Object.keys(bench).sort()).toEqual([...PORT_NAMES].sort())
+  })
+
+  // The one contract expectation that is DEMO-only (nine seeded personas with demo tokens) is
+  // skipped under enterprise rather than faked. Skipping silently would hide it, so the
+  // enterprise-side truth is asserted explicitly instead: personas come from Bank-Profile
+  // CONFIG, and no demo token is ever issued by the enterprise IdP.
+  it('P2 enterprise derives personas from configured mapping and issues NO demo tokens', async () => {
+    const p2 = buildEnterpriseBench()['p2-identity-provider']
+    const personas = await p2.personaLogins()
+    expect(personas.map((p) => p.persona)).toEqual(['compliance-officer'])
+    expect(personas.every((p) => p.demo_token === '')).toBe(true)
+    expect(personas.map((p) => p.persona)).not.toContain('platform-super-admin')
+  })
+})
 
 describe('enterprise adapters land port-by-port (M6)', () => {
   // ADR 0024: P2 (Entra ID) is the reference template; the other nine ports are pre-staged at
