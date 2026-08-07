@@ -1890,3 +1890,22 @@ The third is the whole story. Both conventions are correct where they stand, and
 **Proved the net catches what it is for.** Injecting an off-by-one into the shared parameter index — precisely the bug a naive dedup would have introduced — turns both paging tests red, and green again on revert. A refactor of a silent read path verified only by "the suite still passes" would have been faith, not evidence.
 
 Verified: integration **140/140** on a pristine database (69 files), unit **1224/1224** (coverage 95.5%), `lint` + `typecheck` clean, Q4.5 lineage gate **PASSED**.
+
+## 2026-08-06 — HARNESS-12: dependencies stop being watched by nobody
+
+**The gap.** Twice now, `main` has gone red without a commit doing anything: 22–26 Jul (five HIGH advisories, the four-day outage recorded above) and again on 2026-08-04, when a docs-only PR failed Q4 because `fast-uri` and `ip-address` advisories had been published in the interim. Both times the code was fine and the world moved. There was no Renovate or Dependabot config — dependency currency was a thing someone noticed, which is not a control.
+
+**Half one — clear the backlog.** GitHub reported **41 advisories on the default branch (1 critical, 17 high)**. Now **11 (3 low, 8 moderate) — zero high, zero critical.**
+
+- **vitest 2.1.9 → 3.2.7** clears the critical (GHSA-5xrq-8626-4rwp — the UI server can read and execute arbitrary files). Stryker's vitest-runner declares `vitest: >=2.0.0`, so the mutation harness rides along unchanged. **3.2.7, not 4.x**: the minimum that closes the vulnerability, since 4 removes workspace files and changes more surface than a security fix should.
+- **jsdom ^25 → ^30 in BOTH `package.json` and `apps/portal/package.json`.** The portal carried its own pin, which is why `ws` survived the first pass and still showed `apps/portal > jsdom@25.0.1 > ws@8.20.1` after the root bump. A workspace-wide claim about a dependency is worth exactly as much as the number of `package.json` files you actually checked.
+- **Dev-tree override floors** for `brace-expansion`, `js-yaml`, `undici`, `vite`, `ws` — all advisories whose parent pins below the patch, so `pnpm update` cannot lift them. `brace-expansion` is **ranged per major** (`@1`/`@2`/`@5`) because minimatch 3, 9 and 10 put three mutually incompatible lines in one tree; a single floor would have forced one of them and broken the others.
+- `overridesNote` now separates **production** floors (what Q4's `--prod` audit actually gates) from **dev-tree** floors (not gated — but these tools run in CI holding a token, so the risk is real, and pretending otherwise because the gate is silent would be the same self-deception HARNESS-07 was about).
+- Aligned the `@hono/node-server` skew: `nebras-sim` `^1.13.7` → `^2.0.4`, matching the BFF.
+- Since vitest 3.2 deprecates workspace files (removed in 4), projects moved from `vitest.workspace.ts` into `test.projects` in `vitest.config.ts` — which also retires the split that forced the coverage gate to live in a different file from the projects it gates.
+
+**Half two — stop doing this by hand.** `renovate.json`: weekly window; security PRs immediate and exempt from the major-approval gate (an advisory is not a scheduled chore); majors and the gate-running toolchain (pnpm/node/typescript/stryker) behind `dependencyDashboardApproval`; `pnpm.overrides` explicitly unmanaged, because those are justified floors to be *removed by hand* once upstream ships a patched range, not churned.
+
+**No automerge, anywhere — deliberately.** The obvious convenience is letting Renovate self-merge green patch bumps. HG-0001 makes non-self-merge a governance control, and a bot merging its own PR is precisely the hole that control exists to close. Renovate opens, CI judges, a human merges.
+
+**Verified, not assumed** — jsdom 25→30 and vite 5→6 are large jumps under 70 portal component tests: unit **1209/1209** (coverage 95.6%), integration **136/136** on a fresh database, `lint`, `typecheck` and `pnpm build` all clean, `pnpm audit --prod --audit-level=high` exit 0. vitest 3→4 left as a future chore, now trackable on the dashboard.
