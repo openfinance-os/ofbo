@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-60 — agent_registry persistence (ADR 0017). Writes run as ofbo_app with
@@ -69,16 +70,6 @@ function toRecord(r: Record<string, unknown>): StoredAgent {
   }
 }
 
-const encodeCursor = (createdAt: string, id: string) =>
-  Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && id ? { createdAt, id } : null
-  } catch {
-    return null
-  }
-}
 
 export class PgAgentStore {
   private readonly pool: pg.Pool
@@ -183,8 +174,7 @@ export class PgAgentStore {
       const params: unknown[] = []
       const where: string[] = []
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) > ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after))
       }
       const res = await c.query(
         `SELECT ${SELECT_COLUMNS} FROM agent_registry
@@ -200,7 +190,7 @@ export class PgAgentStore {
     const last = page[page.length - 1] as Record<string, unknown> | undefined
     return {
       rows: page.map(toRecord),
-      next_cursor: hasMore && last ? encodeCursor(iso(last.created_at), last.id as string) : null
+      next_cursor: hasMore && last ? encodeCursor({ createdAt: iso(last.created_at), id: last.id as string }) : null
     }
   }
 

@@ -1873,6 +1873,24 @@ One incidental finding worth recording: writing the bench immediately caught a r
 
 **Guarded.** `scripts/test/mutation-ratchet-check.test.mjs` (picked up by the discovery-gates harness glob) asserts the floor stays within 1.5pp of the measured baseline *and* never above it (a floor above the baseline would red a clean tree), that `workflow_dispatch` survives, and that Q1b both still executes on pull requests and still announces itself on a dispatch. Verified it bites: dropping `break` to 60 fails the test with the baseline quoted back — because lowering the floor to turn a red mutation run green is the one move ADR 0019 exists to prevent, and nothing else in CI would have noticed.
 
+## 2026-08-06 — CODE-01: one keyset implementation, and the bug that made it worth doing carefully
+
+**The premise was wrong in an interesting way.** The audit called this "~25 copies of security-and-correctness-sensitive code" to deduplicate. Reading all sixteen showed they were not copies of one thing. Three genuine divergences:
+
+1. **Direction** — nine stores page ascending (`>`), seven descending (`<` with `ORDER BY … DESC`).
+2. **Tie-break column** — `tpp_counterparty` keys on `organisation_id`, which is **TEXT**, and must *not* take the `::uuid` cast every other store applies. A helper that hardcoded the cast would have broken that store at runtime.
+3. **Parameter indexing** — fifteen stores push the two binds first and reference `$${params.length - 1}` / `$${params.length}`. `consent-events.ts` builds its clause *before* pushing, over a variable-length prefix of event-type placeholders, and references `$${params.length + 1}` / `$${params.length + 2}`.
+
+The third is the whole story. Both conventions are correct where they stand, and **neither survives being pasted into the other**. A mechanical dedup that picked one and applied it everywhere would emit SQL that still parses, still runs, and silently binds the wrong parameters — in a regulated read path, which is about the worst place for a bug that does not announce itself.
+
+**So the helper exposes no convention.** `keysetClause(params, after, opts)` takes the array the caller will hand to `query()`, appends the two binds itself, and derives the placeholder numbers from the push it just made. Callers cannot get the arithmetic wrong because callers no longer do arithmetic. `keysetOrderBy` lives beside it so a store cannot page one way and sort the other — an error that returns rows in an order the cursor does not follow, skipping or repeating at page edges. Net **−141 lines** across 16 files; zero hand-rolled keyset arithmetic left in `packages/db`.
+
+**The coverage was the actual risk.** Before this, exactly two integration specs so much as mentioned a cursor, and none walked a multi-page sequence. Sixteen hand-rolled implementations of a silent-failure read path, under a net that thin, is the finding — more than the duplication was. Added 15 unit tests (both parameter conventions, the text-key no-cast path, DESC applied to *both* key parts) and 4 live integration tests that page `consent-events` ascending over its variable-length prefix and `tpp_counterparty` over its TEXT key, asserting every row is served exactly once and that paging terminates.
+
+**Proved the net catches what it is for.** Injecting an off-by-one into the shared parameter index — precisely the bug a naive dedup would have introduced — turns both paging tests red, and green again on revert. A refactor of a silent read path verified only by "the suite still passes" would have been faith, not evidence.
+
+Verified: integration **140/140** on a pristine database (69 files), unit **1224/1224** (coverage 95.5%), `lint` + `typecheck` clean, Q4.5 lineage gate **PASSED**.
+
 ## 2026-08-06 — HARNESS-12: dependencies stop being watched by nobody
 
 **The gap.** Twice now, `main` has gone red without a commit doing anything: 22–26 Jul (five HIGH advisories, the four-day outage recorded above) and again on 2026-08-04, when a docs-only PR failed Q4 because `fast-uri` and `ip-address` advisories had been published in the interim. Both times the code was fine and the world moved. There was no Renovate or Dependabot config — dependency currency was a thing someone noticed, which is not a control.
