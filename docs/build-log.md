@@ -1909,3 +1909,33 @@ Verified: integration **140/140** on a pristine database (69 files), unit **1224
 **No automerge, anywhere — deliberately.** The obvious convenience is letting Renovate self-merge green patch bumps. HG-0001 makes non-self-merge a governance control, and a bot merging its own PR is precisely the hole that control exists to close. Renovate opens, CI judges, a human merges.
 
 **Verified, not assumed** — jsdom 25→30 and vite 5→6 are large jumps under 70 portal component tests: unit **1209/1209** (coverage 95.6%), integration **136/136** on a fresh database, `lint`, `typecheck` and `pnpm build` all clean, `pnpm audit --prod --audit-level=high` exit 0. vitest 3→4 left as a future chore, now trackable on the dashboard.
+
+## 2026-08-07 — HARNESS-14: the deploy gate was red for twelve days, and the reason it stayed red is the finding
+
+**Found while verifying something else.** After merging the eight-PR improvement-plan stack I checked that `main` was actually green rather than asserting it. CI was. The **deploy** workflow was not — and had not been since **2026-07-26**. Four of its five jobs (BFF, DB migrate+seed, Nebras simulator, portal) succeeded every time; the fifth, `Smoke — demo URL live`, failed every time on one assertion.
+
+**First question: did I break it?** No — and the way to know was cheap. The same failure, same test, same message, appears on the deploy for PR #300, which was **docs-only**, and on #297 twelve days earlier. A markdown file cannot change portal auth. That settled attribution before any diagnosis.
+
+**Second question — the one that mattered: is the demo leaking the dashboard to unauthenticated visitors?** The assertion was `expect(status).toBeGreaterThanOrEqual(300)` on `GET /dashboard` with no session, and the observed status was **200**. On a regulated console that reads like an access-control hole, and it could not be left as "probably fine". Egress to the demo URL is blocked from the build container (403 at the proxy), so the demo could not be probed directly — instead the portal was built and served locally on plain `next start`:
+
+- Status is **200 there too**, so this is *not* an OpenNext/Cloudflare adapter difference.
+- The body contains **zero** shell — no `app-shell`, no `sidebar`, no audit panel, no KPIs.
+- The only thing in it is `<meta id="__next-page-redirect" http-equiv="refresh" content="1;url=/">`.
+
+So `requireSession()` → `redirect('/')` is working exactly as written. Next expresses `redirect()` **two** ways depending on whether the response has begun streaming: a 3xx with a `Location` header, or — once the `<head>` has flushed on a `dynamic = 'force-dynamic'` page, which `/dashboard` is — a 200 carrying a meta-refresh. Both are the same redirect. The test pinned one form and called the other a failure. No leak.
+
+**The real defect is what that cost.** The old test asserted nothing whatsoever about the response body. It checked the *transport* and not the *property*. Which means a genuine leak — a 200 that **does** carry the shell — would have produced the same red X as twelve days of correct behaviour, in a job everyone had already learned to scroll past. The control had no signal left in it. That is the HARNESS-07 class again: an absent control that looks like a present one. The variation is that this check was *visibly* red rather than silently skipped, and got ignored just as effectively — arguably more so, because a red X that never changes teaches you to stop reading it.
+
+**Fixed by asserting the security property first and directly.** The response must not contain `data-testid="app-shell"` (nor `sidebar` / `persona-badge` / `audit-panel`), and *then* it must bounce to sign-in by **either** redirect form. This is strictly stronger than what it replaces — the old assertion made no body claim at all — which matters, because "the gate went green after I edited the test" is the shape of reward hacking and the difference has to be demonstrable, not asserted.
+
+**Proved it discriminates.** A stub server serving the three response shapes, so the proof touches no production auth code (an earlier attempt to prove it by disabling `requireSession` and rebuilding was correctly refused, and was the wrong instrument anyway):
+
+| Response shape | Expected | Result |
+|---|---|---|
+| 200 + meta-refresh, no shell (what the portal really does) | pass | **passes** |
+| 200 **with** `app-shell` — the leak the gate exists to catch | fail | **fails on `app-shell`** |
+| 307 to `/somewhere-else` — bounced, wrong target | fail | **fails on the bounce check** |
+
+Then run green against a real locally-built portal on `next start`: 2/2.
+
+**Left alone deliberately:** the `/dashboard` page still redirects post-flush rather than pre-flush. Making it emit a clean 3xx means moving the session check ahead of the streamed render, which is a portal-architecture change, not a test fix — and the security property holds either way. Worth an ADR if the 3xx form is ever wanted for its own sake.
