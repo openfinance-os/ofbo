@@ -2,7 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { PgAuditEmitter } from '../src/audit.js'
-import { PgLineageEmitter, validateLineageCoverage } from '../src/lineage.js'
+import {
+  NON_REGULATED_TABLES,
+  PgLineageEmitter,
+  evaluateLineageGate,
+  regulatedTables,
+  validateLineageCoverage
+} from '../src/lineage.js'
 import { PgTppCounterpartyStore } from '../src/tpp-counterparty-store.js'
 
 const url = process.env.DATABASE_URL
@@ -78,5 +84,68 @@ describe('BACKOFFICE-49 — BCBS 239 lineage emission at write time (P7 demo ada
     // seed now emit tpp_counterparty lineage, so it is covered (not a gap).
     expect(result.covered).toContain('tpp_counterparty')
     expect(result.gaps).not.toContain('tpp_counterparty')
+  })
+
+  // HARNESS-11 — the gate's SCOPE is the control, not just its verdict. The table set was a
+  // hand-maintained 17-entry literal that had drifted to ~2/3 of the regulated surface: every
+  // table added since it was written (str_draft, service_desk_case, trust_framework_participant,
+  // respondent_dispute, fraud_incident, scheme_notification, ...) was invisible to Q4.5 while
+  // the gate still reported PASSED. These assertions pin the derivation itself.
+  describe('HARNESS-11 — the checked surface is derived, not hand-listed', () => {
+    it('covers EVERY table ofbo_app can INSERT into, minus the documented non-regulated set', async () => {
+      const derived = await regulatedTables(admin)
+      const { rows } = await admin.query(
+        `SELECT DISTINCT table_name FROM information_schema.role_table_grants
+          WHERE grantee = 'ofbo_app' AND privilege_type = 'INSERT' AND table_schema = 'public'`
+      )
+      const insertable = rows.map((r) => r.table_name as string)
+      const expected = insertable.filter((t) => !(t in NON_REGULATED_TABLES)).sort()
+
+      expect(derived).toEqual(expected)
+      // A migration adding a regulated table must widen this set with no code change.
+      expect(derived.length).toBeGreaterThanOrEqual(20)
+    })
+
+    it('every excluded table is excluded for a stated reason, and is genuinely writable', async () => {
+      for (const reason of Object.values(NON_REGULATED_TABLES)) {
+        expect(reason.length).toBeGreaterThan(20)
+      }
+      const derived = await regulatedTables(admin)
+      for (const table of Object.keys(NON_REGULATED_TABLES)) {
+        expect(derived).not.toContain(table)
+      }
+    })
+
+    it('strictly supersedes the retired 17-table literal — coverage widened, nothing dropped', async () => {
+      // The exact list this gate carried before HARNESS-11.
+      const RETIRED_LITERAL = [
+        'reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case',
+        'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request',
+        'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run',
+        'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification',
+        'platform_outage', 'agent_registry'
+      ]
+      const derived = await regulatedTables(admin)
+      for (const t of RETIRED_LITERAL) expect(derived).toContain(t)
+      expect(derived.length).toBeGreaterThan(RETIRED_LITERAL.length)
+    })
+
+    it('a regulated table with rows but no lineage is reported as a gap (the gate can actually fail)', async () => {
+      // Anti-vacuous-pass guard: prove the checker DETECTS a gap rather than only ever
+      // returning "covered". Uses a synthetic table granted the same INSERT privilege,
+      // so it enters the derived surface exactly as a real migration's table would.
+      await admin.query(`CREATE TABLE IF NOT EXISTS harness11_probe (id uuid PRIMARY KEY)`)
+      await admin.query(`GRANT INSERT, SELECT ON harness11_probe TO ofbo_app`)
+      await admin.query(`INSERT INTO harness11_probe (id) VALUES ($1) ON CONFLICT DO NOTHING`, [crypto.randomUUID()])
+      try {
+        const derived = await regulatedTables(admin)
+        expect(derived).toContain('harness11_probe')
+        const result = await validateLineageCoverage(url)
+        expect(result.gaps).toContain('harness11_probe')
+        expect(evaluateLineageGate(result).ok).toBe(false)
+      } finally {
+        await admin.query(`DROP TABLE IF EXISTS harness11_probe`)
+      }
+    })
   })
 })

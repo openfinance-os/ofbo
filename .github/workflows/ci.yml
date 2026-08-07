@@ -8,6 +8,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # HARNESS-13 — on-demand full-matrix run. Needed because eleven stories were merged on
+  # locally-run gates during the July GitHub Actions billing outage ("Merged on local gates"
+  # in docs/backlog.yaml) and nothing has since re-verified that surface in CI on demand.
+  # Q1b is the one gate that CANNOT run here — it diffs against a PR merge base, which a
+  # manual dispatch does not have. It therefore reports that explicitly rather than skipping
+  # silently: a "full matrix" run that quietly omits a gate is precisely the HARNESS-07 bug.
+  workflow_dispatch:
 
 # Supersede in-progress runs for the same branch/PR: a new push cancels the stale
 # run rather than letting both consume runners (deploy.yml/release-evidence.yml
@@ -32,13 +39,18 @@ jobs:
       - name: Generated artifacts are committed and current
         run: git diff --exit-code packages/contracts/src/*.generated.ts
       - run: pnpm build
-      - run: pnpm test
+      # HARNESS-09: the unit suite runs WITH the coverage gate — vitest.config.ts's 80%
+      # thresholds (scoped to services/bff/src) fail the run when breached, so the
+      # CLAUDE.md "coverage >=80%" rule is CI-enforced, not a local convention.
+      - run: pnpm test:coverage
 
   q1b-test-integrity:
     name: Q1b — test integrity (anti-reward-hacking)
     runs-on: ubuntu-latest
     # Only meaningful on a PR (needs a merge base to diff against). Skipped on push to main.
-    if: github.event_name == 'pull_request'
+    # HARNESS-13: on workflow_dispatch the JOB still runs so the check-run exists and says why
+    # it could not check — an omitted gate must never be indistinguishable from a passing one.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,7 +62,20 @@ jobs:
       # Deterministic, no install needed: fails if the diff weakens tests (skip/only/.fails
       # markers, or net assertion loss alongside an implementation change). The control of
       # record behind the local .claude/hooks/test-tripwire.sh advisory tripwire.
-      - run: node scripts/test-integrity.mjs
+      - if: github.event_name == 'pull_request'
+        run: node scripts/test-integrity.mjs
+      - if: github.event_name != 'pull_request'
+        name: Not applicable on a manual dispatch — stated, not silently skipped
+        run: |
+          echo "::notice title=Q1b NOT RUN::test-integrity diffs the PR against its merge base."
+          echo "A workflow_dispatch run has no merge base, so this gate cannot execute here."
+          echo "It is NOT a pass. Q1b is enforced on every pull request."
+          {
+            echo "### Q1b — test integrity: NOT RUN"
+            echo ""
+            echo "This gate diffs a PR against its merge base. A manual dispatch has no merge"
+            echo "base, so it cannot execute. **This is not a pass** — Q1b runs on every PR."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   discovery-gates:
     name: Discovery — D1–D9 gates + waist + harness tests

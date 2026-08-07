@@ -103,16 +103,53 @@ export class PgLineageReader {
   }
 }
 
+/**
+ * Tables the application role can write that are NOT regulated figures, and so carry
+ * no BCBS 239 lineage by design. Structurally different from KNOWN_LINEAGE_GAPS below:
+ * these are permanent exclusions with a standing justification, not gaps awaiting a story.
+ * Anything not listed here is treated as a regulated write path and MUST emit lineage.
+ */
+export const NON_REGULATED_TABLES: Record<string, string> = {
+  lineage_events:
+    'the lineage sink itself — self-referential; lineage about lineage is not a BCBS 239 figure',
+  idempotency_key:
+    'operational 24h replay cache — the schema sole deletion path, exempt from retention enrolment too (see registry-coverage.int.spec.ts)',
+  readiness_profile:
+    'ADR 0022 public Integration Readiness Wizard — bank system-metadata self-assessment, explicitly non-regulated and PII-free (packages/db/src/readiness-profile-store.ts)'
+}
+
+/**
+ * The regulated record surface, DERIVED from the privilege catalogue rather than hand-listed:
+ * every table the unprivileged `ofbo_app` role can INSERT into, minus the documented
+ * non-regulated exclusions. Mirrors registry-coverage.int.spec.ts, which derives the same
+ * surface for retention/classification enrolment.
+ *
+ * This is the point of the control: a table added by a future migration is covered by Q4.5
+ * the moment its store can write to it, with no list to remember to update. The previous
+ * hand-maintained 17-table list had drifted to cover ~2/3 of the surface (HARNESS-11).
+ */
+export async function regulatedTables(pool: pg.Pool): Promise<string[]> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT table_name FROM information_schema.role_table_grants
+      WHERE grantee = 'ofbo_app' AND privilege_type = 'INSERT' AND table_schema = 'public'
+      ORDER BY table_name`
+  )
+  return rows
+    .map((r) => r.table_name as string)
+    .filter((t) => !(t in NON_REGULATED_TABLES))
+}
+
 /** Q4.5 (BCBS 239) validation: every Back Office table with rows must have lineage events. */
 export async function validateLineageCoverage(
   databaseUrl: string
 ): Promise<{ covered: string[]; gaps: string[] }> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
-    const tables = ['reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case', 'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request', 'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run', 'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification', 'platform_outage', 'agent_registry']
+    const tables = await regulatedTables(pool)
     const covered: string[] = []
     const gaps: string[] = []
     for (const t of tables) {
+      // Identifiers come from the privilege catalogue, never from request input.
       const rows = await pool.query(`SELECT EXISTS (SELECT 1 FROM ${t}) AS has_rows`)
       if (!rows.rows[0].has_rows) continue
       const lineage = await pool.query(`SELECT EXISTS (SELECT 1 FROM lineage_events WHERE table_name = $1) AS has_lineage`, [t])
