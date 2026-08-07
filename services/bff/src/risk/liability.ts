@@ -6,6 +6,7 @@ import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
 import { dataEnvelope } from '../envelope.js'
 import { liveFreshness, type FreshnessEnvelope } from '../analytics/freshness.js'
+import { LIABILITY_SCHEDULE_MINOR, LIABILITY_SLA_TIERS_MINOR } from './liability-schedule.js'
 
 /**
  * BACKOFFICE-36 — proactive Nebras-liability event monitor (threshold-based). The
@@ -20,20 +21,19 @@ import { liveFreshness, type FreshnessEnvelope } from '../analytics/freshness.js
 export const LIABILITY_MONITOR_SCOPE = 'risk:read'
 export type LiableParty = 'LFI' | 'TPP'
 
-/** v2.1 per-incident scheme amounts (AED). */
-export const LIABILITY_MATRIX: Record<string, number> = {
-  consent_state_failure: 500,
-  revocation_failure: 350,
-  sca_auth_error: 500,
-  data_breach: 750,
-  sla_execution_failure: 350, // tiered by delay — see SLA_TIERS
-  consumer_protection_violation: 1000,
-  deprecation_mismanagement: 2500,
-  lfi_breaking_change: 5000,
-  fraud_prevention_failure: 10000
-}
-/** SLA-execution failure is tiered 350/250/200 by delay severity (v2.1). */
-export const SLA_TIERS: Record<number, number> = { 1: 350, 2: 250, 3: 200 }
+/**
+ * v2.1 per-incident scheme amounts (whole AED), DERIVED from the minor-unit schedule in
+ * `liability-schedule.ts` — which is the single source of truth (VAL-01). This view exists
+ * because the BACKOFFICE-36 monitor and its stored signals speak whole AED; deriving rather
+ * than restating means the two can never drift apart.
+ */
+export const LIABILITY_MATRIX: Record<string, number> = Object.fromEntries(
+  Object.entries(LIABILITY_SCHEDULE_MINOR).map(([issue, minor]) => [issue, minor / 100])
+)
+/** SLA-execution failure is tiered 350/250/200 by delay severity (v2.1). Derived, as above. */
+export const SLA_TIERS: Record<number, number> = Object.fromEntries(
+  Object.entries(LIABILITY_SLA_TIERS_MINOR).map(([tier, minor]) => [Number(tier), minor / 100])
+)
 
 export interface LiabilityEvent {
   issue: string
