@@ -2,6 +2,7 @@ import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import { redactPii } from '@ofbo/redaction'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-23 — compliance_report persistence (the CBUAE inquiry bundle and,
@@ -56,15 +57,6 @@ export interface ComplianceReportPage {
 const SELECT_COLUMNS = `id, report_type, status, reporting_period_start, reporting_period_end,
   classification, requested_by, approved_by, integrity_hash, generated_at, submitted_at, approval_id, created_at`
 
-const encodeCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && id ? { createdAt, id } : null
-  } catch {
-    return null
-  }
-}
 
 const LINEAGE_COLUMNS = [
   'bank_id', 'channel', 'report_type', 'status', 'reporting_period_start',
@@ -216,8 +208,7 @@ export class PgComplianceReportStore {
         where.push(`status = $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after, { direction: 'desc' }))
       }
       return (
         await c.query(
@@ -230,7 +221,7 @@ export class PgComplianceReportStore {
     const hasMore = rows.length > limit
     const slice = (hasMore ? rows.slice(0, limit) : rows).map(toRecord)
     const last = slice[slice.length - 1]
-    return { rows: slice, next_cursor: hasMore && last ? encodeCursor(last.created_at, last.id) : null }
+    return { rows: slice, next_cursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null }
   }
 
   async close(): Promise<void> {

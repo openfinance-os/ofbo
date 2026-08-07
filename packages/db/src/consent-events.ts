@@ -1,6 +1,11 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { AuditEmitterConfig } from './audit.js'
+import { decodeCursor, encodeCursor, keysetClause, type Keyset } from './keyset.js'
+
+// Re-exported: consent-events was the only module that published these, and the BFF imports
+// them from here. CODE-01 moved the implementation to ./keyset.js; the public surface is unchanged.
+export { encodeCursor, type Keyset }
 
 /**
  * BACKOFFICE-19 — read the 24-month consent lifecycle timeline from the
@@ -35,25 +40,7 @@ const CONSENT_EVENT_TYPES = ['consent_granted', 'consent_accessed', 'consent_mod
 const MAX_LIMIT = 200
 const DEFAULT_LIMIT = 50
 
-interface Keyset {
-  createdAt: string
-  id: string
-}
 
-/** Opaque cursor = base64url("<created_at_iso>|<id>"). */
-export function encodeCursor(k: Keyset): string {
-  return Buffer.from(`${k.createdAt}|${k.id}`, 'utf8').toString('base64url')
-}
-
-function decodeCursor(cursor: string): Keyset | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    if (!createdAt || !id) return null
-    return { createdAt, id }
-  } catch {
-    return null
-  }
-}
 
 const stripPrefix = (t: string): ConsentTimelineEvent['event_type'] =>
   t.replace(/^consent_/, '') as ConsentTimelineEvent['event_type']
@@ -79,15 +66,13 @@ export class PgConsentEventReader {
       await c.query(beginAppTx(this.config.bankId))
       const params: unknown[] = [value, ...CONSENT_EVENT_TYPES]
       const typePlaceholders = CONSENT_EVENT_TYPES.map((_, i) => `$${i + 2}`).join(', ')
-      // Keyset on (created_at, id). created_at is truncated to milliseconds on
-      // BOTH sides: pg returns timestamptz to JS at ms precision, so an untruncated
-      // µs-precision column comparison would let the boundary row re-appear on the
-      // next page (the cursor's ms value < the real µs value).
-      let keyset = ''
-      if (after) {
-        keyset = `AND (date_trunc('milliseconds', created_at), id) > ($${params.length + 1}::timestamptz, $${params.length + 2}::uuid)`
-        params.push(after.createdAt, after.id)
-      }
+      // Keyset on (created_at, id) — see ./keyset.ts for why created_at is truncated to
+      // milliseconds on BOTH sides. This call site is the reason keysetClause appends its own
+      // binds: it builds over a variable-length prefix (the event-type placeholders), so its
+      // old hand-rolled arithmetic was `params.length + 1/+2` while every other store used
+      // `- 1/length`. Neither survived being copied into the other; now neither exists.
+      const keysetPredicate = keysetClause(params, after)
+      const keyset = keysetPredicate ? `AND ${keysetPredicate}` : ''
       // 24-month window (PRD §7) — the regulated hot tier.
       const { rows } = await c.query(
         `SELECT id, target_consent_id, target_psu_identifier, event_type,

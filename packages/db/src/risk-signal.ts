@@ -2,6 +2,7 @@ import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 import { runGovernedAggregate, type GovernedAuditSink, type GovernedReadContext } from './governed-aggregate.js'
+import { keysetClause } from './keyset.js'
 
 /** BACKOFFICE-33: the risk view's cross-fintech aggregate reads run under this governed purpose. */
 const RISK_PURPOSE = 'risk_monitoring'
@@ -247,8 +248,7 @@ export class PgRiskMetricsStore {
         }
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after, { direction: 'desc' }))
       }
       const res = await c.query(
         `SELECT id, signal_type, severity, status, client_id, channel, signal_data, nebras_liability_event_ref, created_at

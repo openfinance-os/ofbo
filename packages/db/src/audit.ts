@@ -2,6 +2,7 @@ import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import { redactPii } from '@ofbo/redaction'
 import type { LineageSink } from './lineage.js'
+import { keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-45: the DB-backed High-class audit emitter. INSERT-only by
@@ -251,8 +252,7 @@ export class PgAuditReader {
         where.push(`created_at <= $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after, { direction: 'desc' }))
       }
       return (
         await c.query(

@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-77 — fraud_incident persistence. Extends the BACKOFFICE-22 fraud
@@ -92,16 +93,6 @@ function toRecord(r: Record<string, unknown>): StoredFraudIncident {
   }
 }
 
-const encodeCursor = (createdAt: string, id: string) =>
-  Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && id ? { createdAt, id } : null
-  } catch {
-    return null
-  }
-}
 
 export class PgFraudIncidentStore {
   private readonly pool: pg.Pool
@@ -213,8 +204,7 @@ export class PgFraudIncidentStore {
         where.push(`nebras_severity = $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) > ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after))
       }
       const res = await c.query(
         `SELECT ${SELECT_COLUMNS} FROM fraud_incident
@@ -230,7 +220,7 @@ export class PgFraudIncidentStore {
     const last = page[page.length - 1] as Record<string, unknown> | undefined
     return {
       rows: page.map(toRecord),
-      next_cursor: hasMore && last ? encodeCursor(iso(last.created_at), last.id as string) : null
+      next_cursor: hasMore && last ? encodeCursor({ createdAt: iso(last.created_at), id: last.id as string }) : null
     }
   }
 
