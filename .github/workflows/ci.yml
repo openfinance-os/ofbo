@@ -39,7 +39,10 @@ jobs:
       - name: Generated artifacts are committed and current
         run: git diff --exit-code packages/contracts/src/*.generated.ts
       - run: pnpm build
-      - run: pnpm test
+      # HARNESS-09: the unit suite runs WITH the coverage gate — vitest.config.ts's 80%
+      # thresholds (scoped to services/bff/src) fail the run when breached, so the
+      # CLAUDE.md "coverage >=80%" rule is CI-enforced, not a local convention.
+      - run: pnpm test:coverage
 
   q1b-test-integrity:
     name: Q1b — test integrity (anti-reward-hacking)
