@@ -1832,3 +1832,126 @@ Found during the post-merge smoke test of the #296/#297/#298 stack: `pnpm lint` 
 **Fix.** `'.claude/worktrees/**'` added to the `ignores` list in `eslint.config.mjs`, alongside the existing `.remember/**` scratch-dir precedent. Each worktree still lints itself — the isolation is what makes that correct.
 
 **Evidence.** Reproduced first, not assumed: a probe checkout at `.claude/worktrees/probe-checkout/` containing a `DEPLOY_PROFILE` read made a root lint fail with exactly the misleading §3.1 error. After the fix, the same probe still on disk, lint exits 0. Negative control run alongside it — a deliberate `no-explicit-any` in `packages/db/src` — still fails, confirming the ignore did not over-broaden and silence real code. Probe removed after verification.
+
+## 2026-08-06 — HARNESS-09: the coverage gate becomes a gate
+
+**The gap.** `vitest.config.ts` has carried 80% thresholds (statements/branches/functions/lines, scoped to `services/bff/src`) since the substrate landed — and no CI job ever ran them. Q1 executed bare `pnpm test`; `grep -rn coverage .github/workflows/` returned nothing. CLAUDE.md's "coverage ≥80%" was a local convention wearing a gate's clothes: the same absent-control-looks-like-a-passing-one class as HARNESS-07, found by the 2026-08 improvement-plan audit (`docs/reviews/improvement-plan-2026-08.md` §2.1, priority 1 of 7).
+
+**The fix.** Q1's unit step is now `pnpm test:coverage` — one line, because the machinery already existed end to end; only the invocation was missing. Verified before flipping: 1209/1209 unit tests green with coverage at **95.5% statements / 81.7% branches / 97.5% functions / 95.5% lines**, comfortably above the floor, so the gate went live with no ratchet, no threshold edits, no test changes.
+
+**Self-guarding.** `scripts/test/coverage-gate-check.test.mjs` (picked up by the discovery-gates job's `scripts/test/*.test.mjs` glob) asserts both halves of the control: the Q1 job text invokes `test:coverage` (and does NOT run the unit suite bare), and the config's four thresholds remain ≥80. A quiet workflow revert or threshold lowering now reds CI instead of silently reopening the gap — the lesson HARNESS-06/07 keep teaching: a control that isn't asserted somewhere CI runs is one edit away from being a story we tell ourselves.
+
+## 2026-08-06 — HARNESS-11: the Q4.5 lineage gate learns its own scope
+
+**The gap.** `validateLineageCoverage` walked a **hardcoded 17-table literal** (`packages/db/src/lineage.ts`). The `ofbo_app` role can INSERT into **26** tables. Every table added since that literal was written — `str_draft`, `service_desk_case`, `trust_framework_participant`, `respondent_dispute`, `fraud_incident`, `scheme_notification` — was outside the BCBS 239 gate entirely, and the gate printed `Q4.5 PASSED` the whole time. Not a wrong answer: an answer to a smaller question than the one we thought we were asking. Found by the 2026-08 improvement-plan audit (§2.3).
+
+**The fix.** The surface is now **derived** from `information_schema.role_table_grants` — the identical pattern `registry-coverage.int.spec.ts` already uses to enrol tables in retention/classification, so the repo now derives its regulated surface the same way twice instead of hand-maintaining it once. A migration that adds a regulated table is covered by Q4.5 the moment its store can write to it, with no list to remember.
+
+**Exclusions are typed differently from gaps — deliberately.** `KNOWN_LINEAGE_GAPS` means "a real gap, mapped to the story that closes it" and stays **empty**. The three tables that legitimately carry no lineage go in a new `NON_REGULATED_TABLES` with a standing reason each: `lineage_events` (the sink itself — lineage about lineage is not a figure), `idempotency_key` (the schema's sole deletion path, already retention-exempt), `readiness_profile` (ADR 0022's public wizard — system metadata, explicitly non-regulated and PII-free, as its store has always documented). Collapsing those two ideas into one allowlist would have quietly converted "permanently out of scope" into "we owe a story", and vice versa.
+
+**Measured, not asserted.** One CI-equivalent run against a fresh Postgres (`db:apply` → `db:seed` → `test:integration` → gate): **covered 9 → 23 tables, allowed gaps none, unexpected none, Q4.5 PASSED.** The widening cost nothing because the write paths were already emitting lineage — the gate simply had not been looking at them.
+
+**Proving the wider gate can still fail.** A widened gate that can no longer go red would be the same bug in a better costume. The new anti-vacuous-pass test grants `ofbo_app` INSERT on a synthetic table, writes one row, and asserts the derivation picks it up, `validateLineageCoverage` reports it as a gap, and `evaluateLineageGate(...).ok` is `false` — then drops it. Plus set-equality against the live privilege catalogue, a justified-reason check per exclusion, and a strict-superset assertion against the retired literal so no previously-checked table can be silently dropped.
+
+## 2026-08-06 — DOCS-01: the ground-truth docs stop lying, and one of them starts parsing
+
+**What was wrong.** The README sized the project for a reader with two numbers, both stale: the spec had **89 paths / 12 tags**, not "76 paths, 10 tags"; the backlog was **140 of 150** done, not "127 of the 135". `CLAUDE.md` listed ports **P1–P9** while `packages/ports/src/interfaces.ts` has carried a tenth (`p10-str-workflow`, ADR 0022) since BACKOFFICE-63, and described an adapter layout — `adapters/<port>/sim/`, `adapters/<port>/enterprise/` — that has never existed on disk. `docs/architecture-overview.md` still labelled the enterprise adapters "M6 stub" though all ten are ADR-0024 rung ③ and fail-closed. None of this was visible to Q2b, which checks that references *resolve*, not that claims are *true*.
+
+**The backlog did not parse.** `docs/backlog.yaml` is described in the README as the "machine-readable work queue (drives the autonomous build loop)". It has not been loadable YAML: one acceptance line in BACKOFFICE-59 begins `- Training actions NEVER write to the production audit (audit_high_sensitivity): the …`, and an unquoted `: ` inside a plain sequence item makes YAML read the whole thing as a mapping key. Pre-existing, not introduced here — every tool that touches the file works by regex, so nothing ever complained. Fixed by quoting the scalar, text unchanged. **The file now parses**, and the counts above are derived from it rather than from a grep that also matched a `BACKOFFICE-NN` placeholder inside a comment.
+
+**Six items had no status at all.** The entire COMMERCIAL milestone (`VAL-01`, `HOST-01/02/03`, `INS-01/02`) carried no `status:` field while HOST scaffold code was merged. Each now carries a status *and the evidence for it*: **HOST-02 → done** (migration `0030_tenant_group.sql` plus four tests in `tenant-isolation.int.spec.ts` covering all four of its acceptance criteria); **HOST-01 → in-progress**, because `seed-tenants.ts` says in its own header that it "deliberately does NOT re-parameterise the rich single-tenant seed (that is HOST-01 proper)" and the PRD §10 per-tenant config criterion is unmet (`approvals/service.ts` still takes `expiryBusinessHours ?? 2`); **VAL-01 → pending** (no liability-schedule constants exist anywhere); **HOST-03/INS-01/INS-02 → blocked**, all three being ADR- or spec-first decisions that CLAUDE.md rule 6 reserves for a human. The waist gate only matches `BACKOFFICE-\d+`, so none of these trip HG-0007.
+
+**ADR 0028 is flagged, not resolved.** Its tenancy scaffold is merged on `main` while the record is still **Proposed** — rule 6 says raise an ADR *and stop*, which did not happen. The honest move is not to quietly stamp it Accepted to make the tree consistent: a header warning now states that implementation landed ahead of acceptance and that a human must Accept, amend, or reject, noting that rejection means unwinding merged code. The status is left untouched.
+
+**Made durable.** Correcting numbers once just resets the clock. `scripts/doc-link-check.mjs` (Q2b) gains a third check: derive the spec's path/tag counts and the backlog's done-count from the artefacts and compare them to the README's prose. Verified by reintroducing the exact original drift — the gate names both errors and exits 1, then passes again once restored. Two stale point-in-time reviews (`ui-ux-review.md`, `design-conformance-audit.md`) got dated "superseded in part" banners rather than edits, since rewriting a review to match today destroys the record of what it found — the UX one now says outright that its DEMO-banner description (`sticky`, `role="alert"`) no longer matches the component (a bottom-right pill, `role="note"`).
+
+## 2026-08-06 — HARNESS-10: the port-swap acceptance gate becomes executable
+
+**The gap.** CLAUDE.md states the M6 rule plainly: "an enterprise adapter must pass exactly the tests the simulator passes (that is the port-swap acceptance gate, M6)". The gate did not exist. `describePortContract` was literally typed `profile: 'demo'`, was only ever invoked as `describePortContract('demo')`, and closed with a comment inviting a future reader to "re-enable per port by calling `describePortContract('enterprise')`" — which would not have worked: the enterprise adapters need configuration and a transport, and three of the assertions are demo-profile facts. All ten enterprise adapters existed and were fail-closed, but were proved only by their own specs. The acceptance criterion M6 depends on was carried by prose.
+
+**What it is now.** `describePortContract(profile, get)` takes an adapter **resolver**, so one set of assertions drives both profiles. `test/fixtures/enterprise-harness.ts` constructs all ten enterprise adapters from Bank-Profile-shaped config with a routed fake vendor transport. The canned vendor payloads are lifted from each adapter's own spec, so the bench cannot drift into asserting a shape the adapter does not actually parse. **44 passing / 1 skipped**, with 16 contract assertions now binding the enterprise adapters through their real request-build → transport → response-parse → map path.
+
+**The boundary is stated, not blurred.** This is ADR 0024 rung ②: no live tenant. Auth, residency, rate limits and real payload drift remain the rung-④ M6 mile, and the fixture says so in its header. A bench that quietly implied more than it tests would be the same failure class this work exists to close.
+
+**The demo-only expectation is skipped, then replaced.** One assertion — P2 exposing nine seeded personas with demo tokens — is a fact about the demo profile, not about the port. A real Entra tenant does not expose them, and faking it would be a fake gate. It is skipped under enterprise **and** replaced by an explicit enterprise-side assertion: personas derive from the configured Bank-Profile mapping, and `demo_token` is empty for every one. The difference between the profiles is now auditable rather than implied.
+
+**Two guards on the gate itself.** First, the bench must cover every entry in `PORT_NAMES` — add a P11 without a bench entry and this fails, so a new port cannot silently escape the gate. Second, the anti-vacuous-pass check: injecting a 6000 ms revoke acknowledgement (against the scheme's 5 s SLA) and a bogus `ipp_status` turns the enterprise run **red on exactly those two tests**, then green again when reverted. A gate that cannot fail is not a gate.
+
+One incidental finding worth recording: writing the bench immediately caught a route-ordering bug in my own fake (`/invoice-runs` shadowing `/invoice-runs/{ref}/status`). That is the bench doing its job on day one — the mapping paths are genuinely being executed, not stubbed past.
+
+## 2026-08-06 — HARNESS-13: the mutation floor stops leaving five points of slack, and CI can be asked to run in full
+
+**Ratchet.** `stryker.config.json` carried `break: 65` against a baseline recorded as 70.3%. That is five points of slack: the security core (rbac / auth / approvals / high-class audit / idempotency) could lose real coverage and the weekly gate would still be green. Re-measured over 493 mutants: **71.20%** (351 killed / 116 survived) on vitest 2, and **70.99%** (350 / 117) on vitest 3 after the HARNESS-12 bump — a **one-mutant** difference across a major test-runner version, which makes ~0.2pp the observed run-to-run noise floor. `break` is now **70**: roughly one point, about five mutants, of headroom. Enough to absorb the noise, not enough to hide decay. Confirmed by a full local run that the gate exits 0 at the new floor rather than assuming it.
+
+**Dispatch.** The audit asked for one deliberate full-matrix run to close out the eleven stories that carry "Merged on local gates" from the July Actions billing outage. That could not be done: `ci.yml` had `push` and `pull_request` triggers and no `workflow_dispatch`. Added.
+
+**The interesting part is the gate that cannot run.** Q1b (test-integrity) diffs a PR against its merge base; a manual dispatch has no merge base. Its `if:` was `github.event_name == 'pull_request'`, so on a dispatch the job would simply not appear — and a "full matrix" run missing a gate, with nothing to show for it, is precisely the bug HARNESS-07 was about. The job now **runs** on a dispatch and reports itself: a `::notice`, a step-summary block, and the words "This is not a pass." The check-run exists and tells the truth about what it did.
+
+**Guarded.** `scripts/test/mutation-ratchet-check.test.mjs` (picked up by the discovery-gates harness glob) asserts the floor stays within 1.5pp of the measured baseline *and* never above it (a floor above the baseline would red a clean tree), that `workflow_dispatch` survives, and that Q1b both still executes on pull requests and still announces itself on a dispatch. Verified it bites: dropping `break` to 60 fails the test with the baseline quoted back — because lowering the floor to turn a red mutation run green is the one move ADR 0019 exists to prevent, and nothing else in CI would have noticed.
+
+## 2026-08-06 — CODE-01: one keyset implementation, and the bug that made it worth doing carefully
+
+**The premise was wrong in an interesting way.** The audit called this "~25 copies of security-and-correctness-sensitive code" to deduplicate. Reading all sixteen showed they were not copies of one thing. Three genuine divergences:
+
+1. **Direction** — nine stores page ascending (`>`), seven descending (`<` with `ORDER BY … DESC`).
+2. **Tie-break column** — `tpp_counterparty` keys on `organisation_id`, which is **TEXT**, and must *not* take the `::uuid` cast every other store applies. A helper that hardcoded the cast would have broken that store at runtime.
+3. **Parameter indexing** — fifteen stores push the two binds first and reference `$${params.length - 1}` / `$${params.length}`. `consent-events.ts` builds its clause *before* pushing, over a variable-length prefix of event-type placeholders, and references `$${params.length + 1}` / `$${params.length + 2}`.
+
+The third is the whole story. Both conventions are correct where they stand, and **neither survives being pasted into the other**. A mechanical dedup that picked one and applied it everywhere would emit SQL that still parses, still runs, and silently binds the wrong parameters — in a regulated read path, which is about the worst place for a bug that does not announce itself.
+
+**So the helper exposes no convention.** `keysetClause(params, after, opts)` takes the array the caller will hand to `query()`, appends the two binds itself, and derives the placeholder numbers from the push it just made. Callers cannot get the arithmetic wrong because callers no longer do arithmetic. `keysetOrderBy` lives beside it so a store cannot page one way and sort the other — an error that returns rows in an order the cursor does not follow, skipping or repeating at page edges. Net **−141 lines** across 16 files; zero hand-rolled keyset arithmetic left in `packages/db`.
+
+**The coverage was the actual risk.** Before this, exactly two integration specs so much as mentioned a cursor, and none walked a multi-page sequence. Sixteen hand-rolled implementations of a silent-failure read path, under a net that thin, is the finding — more than the duplication was. Added 15 unit tests (both parameter conventions, the text-key no-cast path, DESC applied to *both* key parts) and 4 live integration tests that page `consent-events` ascending over its variable-length prefix and `tpp_counterparty` over its TEXT key, asserting every row is served exactly once and that paging terminates.
+
+**Proved the net catches what it is for.** Injecting an off-by-one into the shared parameter index — precisely the bug a naive dedup would have introduced — turns both paging tests red, and green again on revert. A refactor of a silent read path verified only by "the suite still passes" would have been faith, not evidence.
+
+Verified: integration **140/140** on a pristine database (69 files), unit **1224/1224** (coverage 95.5%), `lint` + `typecheck` clean, Q4.5 lineage gate **PASSED**.
+
+## 2026-08-06 — HARNESS-12: dependencies stop being watched by nobody
+
+**The gap.** Twice now, `main` has gone red without a commit doing anything: 22–26 Jul (five HIGH advisories, the four-day outage recorded above) and again on 2026-08-04, when a docs-only PR failed Q4 because `fast-uri` and `ip-address` advisories had been published in the interim. Both times the code was fine and the world moved. There was no Renovate or Dependabot config — dependency currency was a thing someone noticed, which is not a control.
+
+**Half one — clear the backlog.** GitHub reported **41 advisories on the default branch (1 critical, 17 high)**. Now **11 (3 low, 8 moderate) — zero high, zero critical.**
+
+- **vitest 2.1.9 → 3.2.7** clears the critical (GHSA-5xrq-8626-4rwp — the UI server can read and execute arbitrary files). Stryker's vitest-runner declares `vitest: >=2.0.0`, so the mutation harness rides along unchanged. **3.2.7, not 4.x**: the minimum that closes the vulnerability, since 4 removes workspace files and changes more surface than a security fix should.
+- **jsdom ^25 → ^30 in BOTH `package.json` and `apps/portal/package.json`.** The portal carried its own pin, which is why `ws` survived the first pass and still showed `apps/portal > jsdom@25.0.1 > ws@8.20.1` after the root bump. A workspace-wide claim about a dependency is worth exactly as much as the number of `package.json` files you actually checked.
+- **Dev-tree override floors** for `brace-expansion`, `js-yaml`, `undici`, `vite`, `ws` — all advisories whose parent pins below the patch, so `pnpm update` cannot lift them. `brace-expansion` is **ranged per major** (`@1`/`@2`/`@5`) because minimatch 3, 9 and 10 put three mutually incompatible lines in one tree; a single floor would have forced one of them and broken the others.
+- `overridesNote` now separates **production** floors (what Q4's `--prod` audit actually gates) from **dev-tree** floors (not gated — but these tools run in CI holding a token, so the risk is real, and pretending otherwise because the gate is silent would be the same self-deception HARNESS-07 was about).
+- Aligned the `@hono/node-server` skew: `nebras-sim` `^1.13.7` → `^2.0.4`, matching the BFF.
+- Since vitest 3.2 deprecates workspace files (removed in 4), projects moved from `vitest.workspace.ts` into `test.projects` in `vitest.config.ts` — which also retires the split that forced the coverage gate to live in a different file from the projects it gates.
+
+**Half two — stop doing this by hand.** `renovate.json`: weekly window; security PRs immediate and exempt from the major-approval gate (an advisory is not a scheduled chore); majors and the gate-running toolchain (pnpm/node/typescript/stryker) behind `dependencyDashboardApproval`; `pnpm.overrides` explicitly unmanaged, because those are justified floors to be *removed by hand* once upstream ships a patched range, not churned.
+
+**No automerge, anywhere — deliberately.** The obvious convenience is letting Renovate self-merge green patch bumps. HG-0001 makes non-self-merge a governance control, and a bot merging its own PR is precisely the hole that control exists to close. Renovate opens, CI judges, a human merges.
+
+**Verified, not assumed** — jsdom 25→30 and vite 5→6 are large jumps under 70 portal component tests: unit **1209/1209** (coverage 95.6%), integration **136/136** on a fresh database, `lint`, `typecheck` and `pnpm build` all clean, `pnpm audit --prod --audit-level=high` exit 0. vitest 3→4 left as a future chore, now trackable on the dashboard.
+
+## 2026-08-07 — HARNESS-14: the deploy gate was red for twelve days, and the reason it stayed red is the finding
+
+**Found while verifying something else.** After merging the eight-PR improvement-plan stack I checked that `main` was actually green rather than asserting it. CI was. The **deploy** workflow was not — and had not been since **2026-07-26**. Four of its five jobs (BFF, DB migrate+seed, Nebras simulator, portal) succeeded every time; the fifth, `Smoke — demo URL live`, failed every time on one assertion.
+
+**First question: did I break it?** No — and the way to know was cheap. The same failure, same test, same message, appears on the deploy for PR #300, which was **docs-only**, and on #297 twelve days earlier. A markdown file cannot change portal auth. That settled attribution before any diagnosis.
+
+**Second question — the one that mattered: is the demo leaking the dashboard to unauthenticated visitors?** The assertion was `expect(status).toBeGreaterThanOrEqual(300)` on `GET /dashboard` with no session, and the observed status was **200**. On a regulated console that reads like an access-control hole, and it could not be left as "probably fine". Egress to the demo URL is blocked from the build container (403 at the proxy), so the demo could not be probed directly — instead the portal was built and served locally on plain `next start`:
+
+- Status is **200 there too**, so this is *not* an OpenNext/Cloudflare adapter difference.
+- The body contains **zero** shell — no `app-shell`, no `sidebar`, no audit panel, no KPIs.
+- The only thing in it is `<meta id="__next-page-redirect" http-equiv="refresh" content="1;url=/">`.
+
+So `requireSession()` → `redirect('/')` is working exactly as written. Next expresses `redirect()` **two** ways depending on whether the response has begun streaming: a 3xx with a `Location` header, or — once the `<head>` has flushed on a `dynamic = 'force-dynamic'` page, which `/dashboard` is — a 200 carrying a meta-refresh. Both are the same redirect. The test pinned one form and called the other a failure. No leak.
+
+**The real defect is what that cost.** The old test asserted nothing whatsoever about the response body. It checked the *transport* and not the *property*. Which means a genuine leak — a 200 that **does** carry the shell — would have produced the same red X as twelve days of correct behaviour, in a job everyone had already learned to scroll past. The control had no signal left in it. That is the HARNESS-07 class again: an absent control that looks like a present one. The variation is that this check was *visibly* red rather than silently skipped, and got ignored just as effectively — arguably more so, because a red X that never changes teaches you to stop reading it.
+
+**Fixed by asserting the security property first and directly.** The response must not contain `data-testid="app-shell"` (nor `sidebar` / `persona-badge` / `audit-panel`), and *then* it must bounce to sign-in by **either** redirect form. This is strictly stronger than what it replaces — the old assertion made no body claim at all — which matters, because "the gate went green after I edited the test" is the shape of reward hacking and the difference has to be demonstrable, not asserted.
+
+**Proved it discriminates.** A stub server serving the three response shapes, so the proof touches no production auth code (an earlier attempt to prove it by disabling `requireSession` and rebuilding was correctly refused, and was the wrong instrument anyway):
+
+| Response shape | Expected | Result |
+|---|---|---|
+| 200 + meta-refresh, no shell (what the portal really does) | pass | **passes** |
+| 200 **with** `app-shell` — the leak the gate exists to catch | fail | **fails on `app-shell`** |
+| 307 to `/somewhere-else` — bounced, wrong target | fail | **fails on the bounce check** |
+
+Then run green against a real locally-built portal on `next start`: 2/2.
+
+**Left alone deliberately:** the `/dashboard` page still redirects post-flush rather than pre-flush. Making it emit a clean 3xx means moving the session check ahead of the streamed render, which is a portal-architecture change, not a test fix — and the security property holds either way. Worth an ADR if the 3xx form is ever wanted for its own sake.
