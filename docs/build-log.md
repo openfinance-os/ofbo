@@ -1955,3 +1955,27 @@ So `requireSession()` → `redirect('/')` is working exactly as written. Next ex
 Then run green against a real locally-built portal on `next start`: 2/2.
 
 **Left alone deliberately:** the `/dashboard` page still redirects post-flush rather than pre-flush. Making it emit a clean 3xx means moving the session check ahead of the streamed render, which is a portal-architecture change, not a test fix — and the security property holds either way. Worth an ADR if the 3xx form is ever wanted for its own sake.
+
+## 2026-08-07 — HARNESS-15: rehearsing the first release found a gate that could not fail
+
+The improvement plan's §2.4 asked for the first-ever release evidence bundle: `releases/` held only a README, `git tag` was empty, and `.github/workflows/release-evidence.yml` had never fired. Rather than cut `v0.1.0` and find out in public, the pipeline was dry-run locally against `main` — real postgres, all 30 migrations, seeded, `--out` pointed at a scratch dir so nothing tracked moved.
+
+**The pipeline works.** `collect-provenance.ts` (HARNESS-03, never executed until now) ran clean on the first-release path — no prior tag, so no `--prev`, so the bounded-window branch nobody had exercised. 167 commits walked, 98 carrying a model trailer, 5 distinct build agents. The bundle assembled and sealed: 14 control mappings, 6 gates, 23 lineage-covered tables, sha256. Q1 1241/1241, Q3 144/144, `pnpm audit --audit-level=high` clean at 11 advisories with zero high or critical — HARNESS-12's fix holding.
+
+**Then the interesting part.** `collect-gates.mjs` wrote Q4.5's status as a hardcoded `'pass'` — and wrote it *before* the proof existed, since the CLI collects live coverage from `DATABASE_URL` afterwards. `buildEvidenceBundle` copied `lineage_proof` through verbatim and checked only that all six gates were **present**, never that Q4.5 agreed with the evidence printed beneath it. Injecting three gaps produced this, in one sealed document:
+
+| Gate | Status | …and thirty lines below |
+| --- | --- | --- |
+| Q4.5 BCBS 239 lineage validation | **pass** | `Gaps: audit_high_sensitivity, str_draft, fraud_incident` |
+
+Today's real gap count is zero, so the first bundle would have been truthful. That is exactly what makes it worth fixing now: the guard was inert, so it would have gone on being truthful right up until a migration added an uncovered regulated table — the one event Q4.5 exists to detect. HARNESS-11 made the *gate* derive its own surface; the evidence bundle was still hardcoding the *verdict*. Third instance of the HARNESS-07 class in this plan, and the first one where the untrue statement would have been **sealed, committed, and handed to an auditor**.
+
+The proof is the only thing that knows the answer, so the proof decides. `deriveLineageGateStatus()`: gaps → `fail`, covered-with-no-gaps → `pass`, empty-with-no-gaps → `skipped`. That last case is not pedantry — `cli.ts` records `{ covered: [], gaps: [] }` when `DATABASE_URL` is unset, and "no proof was collected" must not render as "the gate passed". Every other gate is passed through untouched; CI step outcomes are the only witness those have.
+
+**A second, quieter finding.** `verifyEvidenceBundle` was exported, unit-tested, and called by nothing. The digest was computed at write time and never checked again — a tamper-evident seal with no one reading it. `scripts/verify-bundle.ts` is now the reader, and the workflow runs it *between* assembling and committing, so a bundle whose digest does not recompute never reaches git. Ordering is the load-bearing part, and it is asserted: a verification after the commit cannot stop a corrupt bundle. Being handed no bundles exits non-zero, because "verified nothing" must not look like "verified everything".
+
+**Guards, and proof they bite.** The 4 derivation tests were red before the fix. Moving the verify step after the commit reds the ordering assertion. The verifier is driven through its real exit codes rather than as a function, so the CI step cannot decay into something that always exits 0. Re-running the whole pipeline afterwards: Q4.5 reads `pass | 23 regulated tables covered, no gaps`, the same gap injection reads `fail | lineage gaps (3): …`, and the verifier confirms the seal. Unit 1251/1251, `node --test scripts/test` 19/19, lint + typecheck clean.
+
+**Deliberately not done:** cutting `v0.1.0`. Publishing a release fires the workflow and commits `releases/` to `main` — outward-facing and effectively irreversible, so it stays a human call. What this story bought is that when someone does cut it, the bundle's own claims are checked rather than asserted.
+
+**Also observed, not acted on:** `committed_at` is inside the sealed content, so re-running for the same tag+commit yields a different digest — a bundle can be verified in place but never independently re-derived. And only 20 of 167 commits carry a story trailer, so the provenance table's Story column is mostly `—`; many of those are human merge commits, so it reads as trailer coverage rather than a pipeline defect. Both are worth a decision, neither is worth blocking a release.
