@@ -42,11 +42,18 @@ beforeAll(() => {
   const bundle = buildEvidenceBundle(input)
   writeFileSync(join(dir, 'good.json'), serializeBundle(bundle))
 
-  // Tamper the way it would actually matter: flip a gate verdict, leave the seal alone.
-  const tampered = JSON.parse(serializeBundle(bundle))
-  tampered.quality_gates.find((g: { gate: string }) => g.gate === 'Q4.5').status = 'pass'
-  tampered.lineage_proof.gaps = ['str_draft']
-  writeFileSync(join(dir, 'tampered.json'), JSON.stringify(tampered, null, 2))
+  // Two tampers, kept SEPARATE so each is proven on its own. Folding them into one file hid a
+  // no-op: the fixture's Q4.5 is already 'pass' (derived), so writing 'pass' over it changed
+  // nothing and only the lineage edit was doing any work.
+  const gateTampered = JSON.parse(serializeBundle(bundle))
+  const q45 = gateTampered.quality_gates.find((g: { gate: string }) => g.gate === 'Q4.5')
+  expect(q45.status).toBe('pass') // guard: the flip below must be a real change
+  q45.status = 'fail'
+  writeFileSync(join(dir, 'tampered-gate.json'), JSON.stringify(gateTampered, null, 2))
+
+  const lineageTampered = JSON.parse(serializeBundle(bundle))
+  lineageTampered.lineage_proof.gaps = ['str_draft']
+  writeFileSync(join(dir, 'tampered-lineage.json'), JSON.stringify(lineageTampered, null, 2))
 
   writeFileSync(join(dir, 'garbage.json'), 'not json at all')
 })
@@ -59,7 +66,11 @@ describe('verify-bundle script', () => {
   })
 
   it('exits non-zero when a gate verdict was altered under the seal', () => {
-    expect(run(join(dir, 'tampered.json'))).not.toBe(0)
+    expect(run(join(dir, 'tampered-gate.json'))).not.toBe(0)
+  })
+
+  it('exits non-zero when the lineage proof was altered under the seal', () => {
+    expect(run(join(dir, 'tampered-lineage.json'))).not.toBe(0)
   })
 
   it('exits non-zero for an unreadable bundle rather than skipping it', () => {
@@ -71,6 +82,6 @@ describe('verify-bundle script', () => {
   })
 
   it('fails the whole run if any one of several bundles is bad', () => {
-    expect(run(join(dir, 'good.json'), join(dir, 'tampered.json'))).not.toBe(0)
+    expect(run(join(dir, 'good.json'), join(dir, 'tampered-gate.json'))).not.toBe(0)
   })
 })

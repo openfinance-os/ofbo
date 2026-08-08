@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { evaluateLineageGate } from '@ofbo/db'
 import { CONTROL_MAPPINGS, QUALITY_GATES, type ControlMapping, type QualityGateId } from './control-mappings.js'
 import { EMPTY_PROVENANCE, type BuildProvenance } from './provenance.js'
 
@@ -94,20 +95,39 @@ export class EvidenceBundleError extends Error {}
  * the proof exists: the CLI collects the live coverage from DATABASE_URL afterwards. Nothing
  * reconciled the two, so a sealed bundle could assert a passing BCBS 239 gate while the lineage
  * section listed uncovered regulated tables — a control that cannot report its own failure,
- * which is the class HARNESS-07 and HARNESS-09 exist to close. The proof is the only thing that
- * knows the answer, so the proof decides.
+ * which is the class HARNESS-07 and HARNESS-09 exist to close.
+ *
+ * The verdict is delegated to `evaluateLineageGate` — the SAME function the Q4.5 CI gate uses
+ * (packages/db/src/lineage-gate.ts) — rather than re-deciding here. A second definition of
+ * "did Q4.5 pass" is how the bundle and the gate drift apart: this derivation once failed on
+ * ANY gap, which agreed with the gate only while KNOWN_LINEAGE_GAPS was empty. The first
+ * allowlisted table would have had CI print `Q4.5 PASSED` while the sealed bundle recorded
+ * `fail` — the same bundle-vs-gate disagreement this story exists to remove, merely inverted.
  *
  * Empty-and-no-gaps is `skipped`, not `pass`: `cli.ts` records `{ covered: [], gaps: [] }` when
  * DATABASE_URL is unset, and "no proof was collected" must not read as "the gate passed".
  */
-export function deriveLineageGateStatus(proof: LineageProof): { status: GateStatus; summary: string } {
-  if (proof.gaps.length > 0) {
-    return { status: 'fail', summary: `lineage gaps (${proof.gaps.length}): ${proof.gaps.join(', ')}` }
-  }
-  if (proof.covered.length === 0) {
+export function deriveLineageGateStatus(
+  proof: LineageProof,
+  allowlist?: Record<string, string>
+): { status: GateStatus; summary: string } {
+  if (proof.covered.length === 0 && proof.gaps.length === 0) {
     return { status: 'skipped', summary: 'no lineage proof collected (DATABASE_URL unset or no regulated tables observed)' }
   }
-  return { status: 'pass', summary: `${proof.covered.length} regulated tables covered, no gaps` }
+  // Defaulting inside evaluateLineageGate (rather than here) keeps KNOWN_LINEAGE_GAPS the single
+  // source of the allowlist; the parameter exists so a test can prove the allowlist is honoured
+  // while the real one is legitimately empty.
+  const result = allowlist ? evaluateLineageGate(proof, allowlist) : evaluateLineageGate(proof)
+  if (!result.ok) {
+    return {
+      status: 'fail',
+      summary: `lineage gaps (${result.unexpectedGaps.length}): ${result.unexpectedGaps.join(', ')}`
+    }
+  }
+  const allowed = result.allowedGaps.length > 0
+    ? `, ${result.allowedGaps.length} allowlisted gap(s): ${result.allowedGaps.join(', ')}`
+    : ', no gaps'
+  return { status: 'pass', summary: `${proof.covered.length} regulated tables covered${allowed}` }
 }
 
 /**

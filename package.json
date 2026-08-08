@@ -10,7 +10,7 @@
     "overrides": {
       "sharp": "^0.35.0",
       "postcss": "^8.5.18",
-      "nanoid": "^3.3.17",
+      "nanoid@3": "^3.3.17",
       "fast-uri": "^3.1.5",
       "ip-address": "^10.3.1",
       "brace-expansion@1": "^1.1.18",
@@ -21,7 +21,7 @@
       "vite": "^6.4.3",
       "ws": "^8.21.0"
     },
-    "overridesNote": "pnpm.overrides are dependency-scan floors: advisories whose PARENT pins the package below the patched version, so `pnpm update` alone cannot lift them. A direct dependency is bumped in its own package.json instead of here. Drop an entry once the parent ships the patched range. PRODUCTION floors (gate Q4 `pnpm audit --prod --audit-level=high`): sharp/postcss are pinned by next (^0.34.3 and an exact 8.4.31); nanoid is pinned by postcss below the GHSA-2v37-7h3g-55p8 patch (next > postcss > nanoid@3.3.16, patched >=3.3.17) — only the 3.x line is in the tree, so a plain floor suffices; fast-uri (via ajv) and ip-address (via express-rate-limit) are pinned under @modelcontextprotocol/sdk. DEV-TREE floors (HARNESS-12 \u2014 not gated by Q4, which is --prod, but these tools run in CI holding a token, so supply-chain risk is real): brace-expansion is ranged per major because three incompatible lines are in the tree at once (minimatch 3/9/10); js-yaml via eslint + @redocly; undici via wrangler/miniflare; vite via the stryker vitest-runner path."
+    "overridesNote": "pnpm.overrides are dependency-scan floors: advisories whose PARENT pins the package below the patched version, so `pnpm update` alone cannot lift them. A direct dependency is bumped in its own package.json instead of here. Drop an entry once the parent ships the patched range. PRODUCTION floors (gate Q4 `pnpm audit --prod --audit-level=high`): sharp/postcss are pinned by next (^0.34.3 and an exact 8.4.31); nanoid is pinned by postcss below the GHSA-2v37-7h3g-55p8 patch (next > postcss > nanoid@3.3.16, patched >=3.3.17) — scoped to @3 so a future 5.x consumer is not dragged back to the CJS-era 3.x line; fast-uri (via ajv) and ip-address (via express-rate-limit) are pinned under @modelcontextprotocol/sdk. DEV-TREE floors (HARNESS-12 \u2014 not gated by Q4, which is --prod, but these tools run in CI holding a token, so supply-chain risk is real): brace-expansion is ranged per major because three incompatible lines are in the tree at once (minimatch 3/9/10); js-yaml via eslint + @redocly; undici via wrangler/miniflare; vite via the stryker vitest-runner path."
   },
   "scripts": {
     "gen": "pnpm --filter @ofbo/contracts gen",
