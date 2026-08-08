@@ -98,6 +98,12 @@ jobs:
       - name: Build + write evidence bundle
         run: pnpm --filter @ofbo/release-evidence bundle -- --tag "$RELEASE_TAG" --commit "$RELEASE_SHA" --ref "refs/tags/$RELEASE_TAG" --input "$GITHUB_WORKSPACE/gate-input.json" --provenance "$GITHUB_WORKSPACE/provenance.json"
 
+      # HARNESS-15 — recompute the seal before the bundle reaches git. verifyEvidenceBundle()
+      # was exported and unit-tested but never called, so the digest was written and never
+      # checked again. A bundle whose seal does not recompute must not be committed.
+      - name: Verify the sealed bundle
+        run: pnpm --filter @ofbo/release-evidence verify "releases/$RELEASE_TAG/evidence-bundle.json"
+
       - name: Commit bundle to git
         env:
           TAG: ${{ github.event.release.tag_name }}

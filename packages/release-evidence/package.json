@@ -9,7 +9,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "bundle": "tsx src/cli.ts",
-    "provenance": "tsx scripts/collect-provenance.ts"
+    "provenance": "tsx scripts/collect-provenance.ts",
+    "verify": "tsx scripts/verify-bundle.ts"
   },
   "dependencies": {
     "@ofbo/db": "workspace:*"
