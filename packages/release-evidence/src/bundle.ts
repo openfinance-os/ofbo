@@ -88,6 +88,29 @@ export function canonicalJson(value: unknown): string {
 export class EvidenceBundleError extends Error {}
 
 /**
+ * HARNESS-15 — Q4.5's verdict is DERIVED from the lineage proof, never taken from the caller.
+ *
+ * `collect-gates.mjs` writes a hardcoded `status: 'pass'` for Q4.5, and it writes it *before*
+ * the proof exists: the CLI collects the live coverage from DATABASE_URL afterwards. Nothing
+ * reconciled the two, so a sealed bundle could assert a passing BCBS 239 gate while the lineage
+ * section listed uncovered regulated tables — a control that cannot report its own failure,
+ * which is the class HARNESS-07 and HARNESS-09 exist to close. The proof is the only thing that
+ * knows the answer, so the proof decides.
+ *
+ * Empty-and-no-gaps is `skipped`, not `pass`: `cli.ts` records `{ covered: [], gaps: [] }` when
+ * DATABASE_URL is unset, and "no proof was collected" must not read as "the gate passed".
+ */
+export function deriveLineageGateStatus(proof: LineageProof): { status: GateStatus; summary: string } {
+  if (proof.gaps.length > 0) {
+    return { status: 'fail', summary: `lineage gaps (${proof.gaps.length}): ${proof.gaps.join(', ')}` }
+  }
+  if (proof.covered.length === 0) {
+    return { status: 'skipped', summary: 'no lineage proof collected (DATABASE_URL unset or no regulated tables observed)' }
+  }
+  return { status: 'pass', summary: `${proof.covered.length} regulated tables covered, no gaps` }
+}
+
+/**
  * Build and seal the bundle. Throws if a required gate is missing or the git
  * anchor is incomplete — an evidence bundle with holes is worse than none.
  */
@@ -101,11 +124,16 @@ export function buildEvidenceBundle(input: EvidenceBundleInput): EvidenceBundle 
     throw new EvidenceBundleError(`evidence bundle missing required quality gates: ${missing.join(', ')}`)
   }
 
+  // Q4.5 is re-stated from the proof (HARNESS-15). Every other gate is carried through exactly
+  // as the caller supplied it — CI step outcomes are the only witness those gates have.
+  const lineage = deriveLineageGateStatus(input.lineage_proof)
+  const gates = input.gates.map((g) => (g.gate === 'Q4.5' ? { ...g, ...lineage } : g))
+
   const content = {
     schema_version: EVIDENCE_SCHEMA_VERSION,
     release: input.release,
     control_mappings: CONTROL_MAPPINGS,
-    quality_gates: input.gates,
+    quality_gates: gates,
     test_results: input.test_results,
     scan_outputs: input.scan_outputs,
     lineage_proof: input.lineage_proof,
