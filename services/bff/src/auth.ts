@@ -105,12 +105,6 @@ export interface AuthAuditSink {
   record(event: AuthAuditEvent): Promise<void>
 }
 
-export class InMemoryAuthAuditSink implements AuthAuditSink {
-  readonly events: AuthAuditEvent[] = []
-  async record(event: AuthAuditEvent): Promise<void> {
-    this.events.push(event)
-  }
-}
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -263,3 +257,9 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
     await next()
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/auth.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryAuthAuditSink
+} from '../memory/auth.js'

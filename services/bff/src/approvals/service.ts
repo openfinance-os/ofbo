@@ -34,22 +34,6 @@ export interface ApprovalStore {
   listPending(): Promise<ApprovalRecord[]>
 }
 
-export class InMemoryApprovalStore implements ApprovalStore {
-  private readonly rows = new Map<string, ApprovalRecord>()
-  async create(r: ApprovalRecord) {
-    this.rows.set(r.approval_request_id, structuredClone(r))
-  }
-  async get(id: string) {
-    const r = this.rows.get(id)
-    return r ? structuredClone(r) : null
-  }
-  async update(r: ApprovalRecord) {
-    this.rows.set(r.approval_request_id, structuredClone(r))
-  }
-  async listPending() {
-    return [...this.rows.values()].filter((r) => r.state === 'pending').map((r) => structuredClone(r))
-  }
-}
 
 export interface GatedOperation {
   /** Scope required to INITIATE the operation — the spec's '(initiator scope)'. */
@@ -228,3 +212,10 @@ export function toWire(r: ApprovalRecord) {
     ...(r.execution_result !== undefined ? { execution_result: r.execution_result } : {})
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/approvals.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryApprovalStore
+} from '../../memory/approvals.js'
+import { InMemoryApprovalStore } from '../../memory/approvals.js'

@@ -33,25 +33,6 @@ export interface RiskSignalStore {
 }
 
 /** No-database default (tests / local dev). The worker wires PgRiskMetricsStore. */
-export class InMemoryRiskSignalStore implements RiskSignalStore {
-  constructor(private readonly rows: StoredRiskSignal[] = []) {}
-  async listSignals(query: RiskSignalListQuery): Promise<RiskSignalPage> {
-    let rows = [...this.rows].sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
-    if (query.signal_type) rows = rows.filter((r) => r.signal_type === query.signal_type)
-    if (query.severity) rows = rows.filter((r) => r.severity === query.severity)
-    if (query.status) rows = rows.filter((r) => r.status === query.status)
-    return { rows, next_cursor: null }
-  }
-  async getSignal(id: string): Promise<StoredRiskSignal | null> {
-    return this.rows.find((r) => r.id === id) ?? null
-  }
-  async updateSignalStatus(id: string, status: string): Promise<StoredRiskSignal | null> {
-    const r = this.rows.find((x) => x.id === id)
-    if (!r) return null
-    r.status = status
-    return r
-  }
-}
 
 export interface RiskSignalServiceDeps {
   store: RiskSignalStore
@@ -96,3 +77,9 @@ export class RiskSignalService {
     return updated
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/risk-signals.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryRiskSignalStore
+} from '../../memory/risk-signals.js'

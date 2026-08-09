@@ -1955,3 +1955,25 @@ So `requireSession()` → `redirect('/')` is working exactly as written. Next ex
 Then run green against a real locally-built portal on `next start`: 2/2.
 
 **Left alone deliberately:** the `/dashboard` page still redirects post-flush rather than pre-flush. Making it emit a clean 3xx means moving the session check ahead of the streamed render, which is a portal-architecture change, not a test fix — and the security property holds either way. Worth an ADR if the 3xx form is ever wanted for its own sake.
+
+## 2026-08-09 — CODE-02: the in-memory stores leave production source, and the measurement that nearly went the other way
+
+The improvement plan's §4 asks for the 27 `InMemory*` stores to move out of production source: they sat interleaved with the service logic they back (`reconciliation/service.ts` carried three in its last 150 lines, on top of a 900-line service) and they counted against the Q1 coverage denominator, which HARNESS-09 scopes to `services/bff/src/**`.
+
+**The measurement came first, and the obvious assumption was backwards.** The expectation was that pulling well-tested store code out of the denominator would *lower* coverage. It mattered which way: branches had only **1.71pp** of headroom (2502/3062 = 81.71% against an 80% floor), and the arithmetic on `(2502−C)/(3062−B)` said at most ~262 fully-covered branches could leave before the gate went red. So the stores' own coverage was computed before anything moved — per-class line spans crossed against the v8 report:
+
+| | statements | branches | functions |
+| --- | --- | --- | --- |
+| the InMemory classes | 806/838 (96.2%) | **286/358 (79.9%)** | 117/121 |
+
+They are the **worst branch-covered code in the BFF** — below both the 80% floor and the 81.71% file-wide average. Removing them *raises* branches. Predicted 81.95%; actual after the move **82.00%** (headroom 1.71pp → 2.00pp), statements 95.61 → 95.65, functions 97.48 → 97.90, gate exit 0.
+
+**Not `testing/`, not `fixtures/`.** The plan offered both names; both would misdescribe the code. `app.ts` falls back to these stores whenever a durable store is not injected — which is whenever `DATABASE_URL` is absent, i.e. the demo profile in production. They ship and they serve real demo traffic. They live in `services/bff/memory/` with a README that says so, because in a regulated codebase a directory named for tests is a claim about what the code is for.
+
+**Zero test churn, by design.** Imports in this repo are mixed — `import { ReconciliationService, InMemoryReconciliationBreakStore } from '../src/reconciliation/service.js'` — so relocating the classes would have meant splitting import statements across ~55 test files, which is exactly where a mechanical sweep goes wrong. Instead each store is re-exported from the module declaring its interface: the public surface is unchanged and every existing import still resolves. Q1b confirms it: *no test files changed*.
+
+**No runtime cycle.** `memory/ → src/` imports are strictly type-only and erase at compile time; the only runtime edge is `src/ → memory/` at the construction sites. Five store-only *values* stood in the way (`encodeAgentCursor`, `decodeAgentCursor`, str's `encodeCursor`, `newSlug`, `QueryPurposeRegistrarError`) — each was checked across `src/`, `test/`, `apps/`, `packages/` and `scripts/`, found to have no user but its own store, and moved with it rather than exported to create a back-edge.
+
+Net: 24 production files, **−893/+146** lines; `reconciliation/service.ts` 1068 → 929; zero `InMemory` classes left under `src/`. Verified unit 1241/1241, integration 144/144, lint + typecheck + build clean.
+
+**Aside, found while verifying:** `pnpm db:seed` is not idempotent. Re-seeding an already-seeded database inflates row counts and reds five assertions in `packages/db/test/seed-demo.int.spec.ts` (7 vs 5 cases, 5 vs 3 invoice runs, 4 vs 2 consoles). It cost a diagnosis here — the failures looked like the refactor until the diff was checked against `packages/`, which it never touches, and a pristine database went 144/144. CI never sees it because every run starts fresh. Left alone; worth a story if anyone ever seeds twice deliberately.
