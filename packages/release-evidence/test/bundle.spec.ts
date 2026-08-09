@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { evaluateLineageGate } from '@ofbo/db'
 import {
   buildEvidenceBundle,
   canonicalJson,
+  deriveLineageGateStatus,
   EvidenceBundleError,
   EVIDENCE_SCHEMA_VERSION,
   renderBundleMarkdown,
@@ -54,6 +56,89 @@ describe('buildEvidenceBundle', () => {
     expect(() =>
       buildEvidenceBundle(input({ release: { tag: '', commit: '', committed_at: 'x' } }))
     ).toThrow(/git anchor/)
+  })
+})
+
+// HARNESS-15 — Q4.5's status is DERIVED from the lineage proof the bundle carries, never
+// trusted from the input. collect-gates.mjs writes a hardcoded `'pass'` for Q4.5 *before* the
+// proof exists (the CLI collects it later from DATABASE_URL), so a bundle could assert a
+// passing BCBS 239 gate while listing uncovered regulated tables in the section below it.
+describe('Q4.5 lineage gate derivation', () => {
+  it('reds the gate when the proof reports gaps, whatever the input claimed', () => {
+    // ALL_GATES supplies Q4.5 as 'pass' — exactly the hardcoded literal the defect shipped.
+    const b = buildEvidenceBundle(
+      input({ lineage_proof: { covered: ['risk_signal'], gaps: ['audit_high_sensitivity', 'str_draft'] } })
+    )
+    const q45 = b.quality_gates.find((g) => g.gate === 'Q4.5')
+    expect(q45?.status).toBe('fail')
+    expect(q45?.summary).toContain('audit_high_sensitivity')
+    expect(q45?.summary).toContain('str_draft')
+  })
+
+  it('marks the gate skipped when no proof was collected at all', () => {
+    // cli.ts records `{ covered: [], gaps: [] }` when DATABASE_URL is unset — an honest gap,
+    // which is not the same thing as a gate that ran and found nothing wrong.
+    const b = buildEvidenceBundle(input({ lineage_proof: { covered: [], gaps: [] } }))
+    expect(b.quality_gates.find((g) => g.gate === 'Q4.5')?.status).toBe('skipped')
+  })
+
+  it('passes only when tables are covered and no gap remains', () => {
+    const b = buildEvidenceBundle(
+      input({ lineage_proof: { covered: ['audit_high_sensitivity', 'risk_signal'], gaps: [] } })
+    )
+    const q45 = b.quality_gates.find((g) => g.gate === 'Q4.5')
+    expect(q45?.status).toBe('pass')
+    expect(q45?.summary).toContain('2')
+  })
+
+  it('cannot be talked into a pass by an input that claims one', () => {
+    const lying: GateResult[] = ALL_GATES.map((g) =>
+      g.gate === 'Q4.5' ? { ...g, status: 'pass', summary: 'all good, honest' } : g
+    )
+    const b = buildEvidenceBundle(
+      input({ gates: lying, lineage_proof: { covered: [], gaps: ['fraud_incident'] } })
+    )
+    expect(b.quality_gates.find((g) => g.gate === 'Q4.5')?.status).toBe('fail')
+  })
+
+  // The bundle and the Q4.5 CI gate must not hold two definitions of "passed". evaluateLineageGate
+  // (packages/db) tolerates KNOWN_LINEAGE_GAPS; an earlier version of this derivation failed on
+  // ANY gap, which agreed only while the allowlist was empty. The first allowlisted table would
+  // have had CI print PASSED and the sealed bundle record fail.
+  it('honours the allowlist the CI gate honours (no second definition of the verdict)', () => {
+    const proof = { covered: ['risk_signal'], gaps: ['tpp_counterparty'] }
+    expect(deriveLineageGateStatus(proof, { tpp_counterparty: 'BACKOFFICE-71' }).status).toBe('pass')
+    // ...and an UNallowlisted gap still reds, so the allowlist cannot retire the gate.
+    expect(deriveLineageGateStatus(proof, { something_else: 'x' }).status).toBe('fail')
+  })
+
+  it('names allowlisted gaps in the summary rather than hiding them behind a pass', () => {
+    const s = deriveLineageGateStatus(
+      { covered: ['risk_signal'], gaps: ['tpp_counterparty'] },
+      { tpp_counterparty: 'BACKOFFICE-71' }
+    )
+    expect(s.status).toBe('pass')
+    expect(s.summary).toContain('tpp_counterparty')
+    expect(s.summary).toContain('allowlisted')
+  })
+
+  it('agrees with evaluateLineageGate on the same proof', () => {
+    for (const proof of [
+      { covered: ['a', 'b'], gaps: [] },
+      { covered: ['a'], gaps: ['b'] },
+      { covered: [], gaps: ['b'] }
+    ]) {
+      const expected = evaluateLineageGate(proof).ok ? 'pass' : 'fail'
+      expect(deriveLineageGateStatus(proof).status, JSON.stringify(proof)).toBe(expected)
+    }
+  })
+
+  it('leaves every other gate exactly as supplied', () => {
+    const b = buildEvidenceBundle(input({ lineage_proof: { covered: ['x'], gaps: ['y'] } }))
+    for (const g of b.quality_gates.filter((g) => g.gate !== 'Q4.5')) {
+      expect(g).toEqual(ALL_GATES.find((a) => a.gate === g.gate))
+    }
+    expect(b.quality_gates.map((g) => g.gate)).toEqual(ALL_GATES.map((g) => g.gate))
   })
 })
 
