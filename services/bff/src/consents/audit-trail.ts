@@ -21,14 +21,6 @@ export interface ConsentEventSource {
 }
 
 /** Degraded default (no DATABASE_URL): an empty, well-formed timeline. */
-export class InMemoryConsentEventSource implements ConsentEventSource {
-  async byConsent(): Promise<ConsentEventPage> {
-    return { events: [], next_cursor: null }
-  }
-  async byPsu(): Promise<ConsentEventPage> {
-    return { events: [], next_cursor: null }
-  }
-}
 
 export class ConsentAuditTrailService {
   constructor(private readonly source: ConsentEventSource) {}
@@ -79,3 +71,9 @@ export function consentAuditTrailRoutes(service: ConsentAuditTrailService): Reco
       respond(() => service.byPsu(c.get('principal'), params.psu_identifier!, pageQuery(c)), c)
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/consents-audit-trail.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryConsentEventSource
+} from '../../memory/consents-audit-trail.js'
