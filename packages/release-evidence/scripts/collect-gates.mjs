@@ -31,7 +31,13 @@ const out = {
     { gate: 'Q2', name: 'static analysis + SAST', status: q2 },
     { gate: 'Q3', name: 'integration + contract tests', status: q3 },
     { gate: 'Q4', name: 'security review + dependency scan', status: q4 },
-    { gate: 'Q4.5', name: 'BCBS 239 lineage validation (P7)', status: 'pass', summary: 'lineage proof collected live (see lineage_proof)' },
+    // HARNESS-15 — this entry exists only to satisfy the bundler's gate-completeness check.
+    // Q4.5's real verdict is DERIVED from the live lineage proof inside buildEvidenceBundle,
+    // which runs after this script (the proof is collected from DATABASE_URL by the CLI). This
+    // used to be a hardcoded 'pass' written before the proof existed. The placeholder is
+    // 'skipped' rather than 'pass' so that if the derivation were ever bypassed, the bundle
+    // would understate the gate instead of asserting one that never ran.
+    { gate: 'Q4.5', name: 'BCBS 239 lineage validation (P7)', status: 'skipped', summary: 'derived from the live lineage proof at bundle time' },
     { gate: 'Q5', name: 'manual approval to production', status: 'manual', summary: 'release published through the protected flow' }
   ],
   test_results: [unit],
