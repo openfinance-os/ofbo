@@ -349,6 +349,202 @@ milestones:
             asserted in tests; WCAG 2.1 AA on the new screens.
           - Token-only, OpenAPI-bound, DEMO-bannered, zero PII.
 
+  # Billing & monetization — LFI-side scheme billing as a product (the E6 extension).
+  # Derived from docs/research/lfi-billing-system-tier2.md (research baseline 4 Aug 2026;
+  # realizes its proposed BACKOFFICE-81..90 as BILL-01..10 pending a PRD uplift — new
+  # BACKOFFICE ids are reserved for PRD §7). Key inputs: Nebras Interaction Guide v5.0 §10
+  # (monthly cycle 3rd/5th/10th/30th/30th-5th; §10.16 LFI net settlement — resolves BD-15:
+  # both collection models co-exist; direct input to ADR 0007 and execution-plan item C5)
+  # and UAE e-invoicing Phase 1 (ASP appointed by 30 Oct 2026, PINT AE from 1 Jan 2027),
+  # which makes BILL-04 calendar-bound. New adopting-bank decisions BD-17..19 (ASP
+  # selection, collection rails, VAT posture) are defined in the research doc §10; the
+  # Starter/Growth/Scale packaging in §9 feeds execution-plan item C4 (pricing one-pager).
+  - name: BILLING
+    items:
+      - id: BILL-01
+        title: Scheme rate-card-as-code with upstream change watch
+        research: docs/research/lfi-billing-system-tier2.md
+        note: >-
+          The complete Commercial & Pricing Model v1.0 rate card as versioned,
+          effective-dated configuration (fee class x segment x schedule x conditions):
+          bps-with-cap (AED 50), the AED 200/day merchant exemption conditional on
+          Merchant ID (page edit 2 Jun 2026), batch caps, year-stepped schedules with a
+          configurable anchor (the scheme has never defined "Year 1" publicly), per-LFI
+          directory-published retail overage. A scheduled watcher diffs the upstream
+          C&P Confluence page and the Nebras pricing pages — the page mutated four times
+          Nov 2025 - Jun 2026 without a version bump — and raises a review task on change.
+        acceptance:
+          - A named, tested rate-card constant set replaces in-code fee references; the
+            BACKOFFICE-01 reconciliation schedule reads from it (no behaviour change).
+          - Rate-card changes are effective-dated, diff-audited High-class, and notify
+            Finance + Compliance; the year-step anchor is per-tenant configuration.
+          - The watcher demonstrably raises a review task on an injected upstream change.
+      - id: BILL-02
+        title: Independent billable-event metering feed (CloudEvents, exactly-once)
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0024-pre-stage-enterprise-adapters-kong-metering-boundary.md
+        note: >-
+          Gateway/Ozone Connect logs derived into idempotent CloudEvents billable events
+          on the platform metering boundary: chargeability per the 50-chargeable/26-free
+          endpoint classification, technically-successful-only, page aggregation (100
+          lines), attended/unattended, per-customer/day free-tier counters, the
+          payment-balance/CoP 2-hour discount pairing (one of each per payment),
+          Merchant-ID presence, quote-tier fan-out. Every metered line carries
+          x-fapi-interaction-id so an invoice line traces to a FAPI transaction.
+        acceptance:
+          - Re-metering from replayed logs is deterministic (same events in, same meters
+            out); ingestion is exactly-once under duplicate delivery.
+          - Simulator-injected traffic produces the expected meter set including pairing
+            and free-tier edge cases (tests-first per meter).
+          - Metering coverage (percent of gateway traffic classified) is exposed as a
+            metric for BILL-08.
+      - id: BILL-03
+        title: Receivables rating engine - the expected Collection Memo
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-01, BILL-02]
+        note: >-
+          Rates own metering per consuming TPP per fee class under BILL-01 and produces a
+          draft rated statement by the 3rd of each month; the emailed Nebras Collection
+          Memo (by the 5th) is auto-diffed against it on ingest, converting billing from
+          verify-what-arrived to compare-against-expected. Re-rating replays facts under
+          a corrected rate-card version - it never mutates metered events.
+        acceptance:
+          - Expected-memo statement generated per TPP by the 3rd against the simulator
+            month; memo ingest produces a line-level diff with variances above threshold
+            flowing into the standard E1 break workflow inside the 30-day query window.
+          - A rate-card correction re-rates a closed period by replay, producing a
+            documented delta - metered facts provably unchanged.
+      - id: BILL-04
+        title: PINT AE e-invoicing via Accredited Service Provider (statutory clock)
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-03]
+        note: >-
+          Invoice runs emit PINT AE Billing invoices (380) and credit notes (381) through
+          the institution's ASP under the UAE 5-corner DCTCE model; TIN/endpoint-0235
+          buyer identification; VAT extracted 5/105 from VAT-inclusive scheme amounts;
+          AED tax totals; foreign-TPP invoices flagged zero-rated export; Tax Data
+          Document reporting confirmed; human-readable PDF alongside. Calendar-bound:
+          ASP appointed by 30 Oct 2026 (BD-17), mandatory from 1 Jan 2027 (revenue >=
+          AED 50m); voluntary-window pilot mode before that. ASP port is a new adapter
+          seam (simulator first, per the ports discipline).
+        acceptance:
+          - An invoice run yields schema-valid PINT AE 380/381 documents (validated
+            against the v1.0.3 artifacts) plus rendered PDFs; disputed lines withheld.
+          - VAT derivation (5/105), AED totals, and zero-rated export flagging are
+            tested per counterparty class; BD-19 VAT posture is a named config input.
+          - TDD reporting acknowledgment is captured as evidence; pilot mode runs the
+            full flow against the ASP simulator with the mandate flag off.
+      - id: BILL-05
+        title: Collections, dunning and net-settlement decomposition
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-04]
+        note: >-
+          Two collection channels, decomposed rather than conflated. Scheme channel:
+          net-settlement remittances (30th-5th via the Nebras sponsoring bank) matched
+          invoice-by-invoice with cross-role netting (LFI receivables vs TPP-of-record
+          payables) explained line-by-line - unexplained residue becomes a break; the
+          IG v5.0 s10.16 model is the direct input to the ADR 0007 decision. Direct
+          channel: invoice-attached payment requests - OF Large Value/Invoice Collection
+          (AED 4 capped, invoices > AED 5,000), Aani request-to-pay below AED 50k,
+          UAEDDS mandate fallback - with a dunning ladder mirroring the scheme's own
+          late-payment regime and DSO tracked per TPP.
+        acceptance:
+          - A simulated settlement file decomposes to invoice level including a netted
+            dual-role period; an injected residue raises a break with both role ledgers
+            referenced.
+          - Dunning states progress on simulated non-payment and surface in the Finance
+            View; every collection action is High-class audited.
+      - id: BILL-06
+        title: Commissions and clawback sub-ledger (insurance now, FX at V2.2)
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [INS-01]
+        note: >-
+          The payables mirror of TPP billing: insurance commissions accrued at policy
+          sale, held through the 30-day cool-off, released or clawed back (5 years life /
+          2 years others) as negative accruals; bilateral-rate registry overriding scheme
+          defaults, reconciled against production-onboarding submissions; quote-tolerance
+          gating (premium within 17.5 percent, FX within 50 pips); FX/remittance
+          commissions (0.07/0.1 percent, min 50 fils) behind a V2.2 feature flag.
+          TPP-issued commission invoices are matched against the sub-ledger before
+          approval. Extends INS-01 line types to the money side for the 28 Tier 2
+          insurers arriving Mar 2027.
+        acceptance:
+          - Commission lifecycle (accrue, hold, release, clawback) is tested per line
+            type with cool-off and clawback windows enforced by the calendar, not by
+            operator memory.
+          - A TPP commission invoice that disagrees with the sub-ledger is blocked from
+            approval with a line-level diff; bilateral rates provably override defaults.
+      - id: BILL-07
+        title: GL and VAT posting via the P9 financial-system port
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-04]
+        note: >-
+          Journal instructions per fee class (payment fees, data fees, overage,
+          commissions payable, clawback recoveries, hub fees payable, Nebras service
+          fees, penalties) with the VAT ledger fed from invoice runs; month-close
+          sign-off (BACKOFFICE-06) extended to cover payables, receivables, commissions
+          and settlement decomposition as one pack.
+        acceptance:
+          - A simulator month produces balanced journal instructions per fee class
+            through the P9 port; the VAT position ties to the issued-invoice set.
+          - The month-close pack covers both sides plus commissions and settlement;
+            Finance sign-off locks it (existing BACKOFFICE-06 semantics).
+      - id: BILL-08
+        title: Revenue-assurance loop and leakage KPI
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-02, BILL-03]
+        note: >-
+          Monthly RA report: metering coverage percent, variance vs Nebras by fee class,
+          unbilled traffic (extends the BACKOFFICE-72 registration-gap alert to metering
+          gaps), silent-overage give-away quantified (retail pages above free tier billed
+          at zero where no directory rate is published), missed-dispute-window incidents
+          (target zero), leakage KPI with a below-1-percent target against the 2-5
+          percent unmanaged telco benchmark, and a recovered-revenue log - the
+          self-funding argument for the assurance tier (ADR 0026).
+        acceptance:
+          - The RA report renders from a seeded month with an injected leak of each
+            class (unmetered endpoint, rate drift, free-tier abuse, unbilled TPP) and
+            quantifies each in AED.
+          - Leakage KPI and recovered-revenue figures surface in the Finance View and
+            the VAL-01 ROI narrative.
+      - id: BILL-09
+        title: TPP profitability analytics and fee simulation
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-03]
+        note: >-
+          Per-TPP / per-product-family P&L combining receivables, hub costs
+          (TPP-of-record role), liability provisions (BACKOFFICE-36) and TPP-aaS margin
+          (BACKOFFICE-07); scenario engine for year-step transitions, annual CBUAE
+          rate-review outcomes and the directory overage-rate decision (publish a rate
+          or knowingly give overage away - only two LFIs publish one today); exports
+          feed the CBUAE annual-review submission and execution-plan item C4 pricing.
+        acceptance:
+          - P&L per TPP and product family renders from the seeded month and reconciles
+            to the invoice + payables sets; scenario runs are deterministic and
+            side-effect-free.
+          - An overage-rate scenario quantifies revenue at the tenant's chosen
+            directory rate vs the silent default of zero.
+      - id: BILL-10
+        title: Multi-tenant billing service enablement (Tier 2 BOaaS)
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [HOST-01]
+        note: >-
+          The billing pipeline as a per-tenant service on the HOST substrate: per-tenant
+          (bank_id) rate-card overlays and year-step anchors, invoice branding/templates,
+          ASP routing and collection-rail configuration (BD-18 per tenant), tenant-scoped
+          RA reports; cross-tenant benchmark aggregation only via the
+          query_purpose_registry preventative control; per-tenant exit/export path
+          documented for outsourcing compliance. This is the Starter/Growth/Scale
+          packaging seam from the research doc s9.3.
+        acceptance:
+          - Two tenants run distinct rate-card overlays and invoice templates through
+            one deployment with full RLS isolation proven across billing tables.
+          - A tenant-scoped RA report and a governance-gated cross-tenant benchmark
+            query coexist without widening any tenant's read surface.
+          - Tenant export produces a complete, portable billing dataset (metered events,
+            rated statements, invoices, settlement decomposition) for exit.
+
   # Build-harness improvements — the machinery that governs the autonomous build loop itself
   # (not a product feature). Researched against 2025-26 agentic-coding practice; ADR 0019 (01-04), ADR 0020 (05).
   - name: HARNESS
