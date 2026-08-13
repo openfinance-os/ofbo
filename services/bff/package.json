@@ -15,6 +15,7 @@
     "verify:contract": "tsx scripts/verify-contract.ts"
   },
   "dependencies": {
+    "@ofbo/billing": "workspace:*",
     "@ofbo/contracts": "workspace:*",
     "@ofbo/db": "workspace:*",
     "@ofbo/ports": "workspace:*",

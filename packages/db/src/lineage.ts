@@ -109,7 +109,7 @@ export async function validateLineageCoverage(
 ): Promise<{ covered: string[]; gaps: string[] }> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
-    const tables = ['reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case', 'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request', 'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run', 'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification', 'platform_outage', 'agent_registry']
+    const tables = ['reconciliation_log', 'reconciliation_break', 'reconciliation_threshold', 'dispute_case', 'audit_high_sensitivity', 'compliance_report', 'risk_signal', 'approval_request', 'query_purpose_registry', 'tpp_counterparty', 'billing_record_set', 'invoice_run', 'nebras_ingest_snapshot', 'nebras_report_aggregate', 'platform_certification', 'platform_outage', 'agent_registry', 'billing_rate_card_version', 'billing_source_snapshot', 'billing_rate_card_review', 'billing_event', 'billing_meter_run', 'billing_metered_line', 'billing_expected_memo', 'billing_expected_memo_line', 'billing_collection_memo_reconciliation', 'billing_memo_diff_line', 'billing_period_rerating', 'billing_einvoice_document', 'billing_asp_submission', 'billing_settlement_run', 'billing_settlement_line', 'billing_settlement_break', 'billing_collection_invoice', 'billing_collection_action', 'billing_accounting_batch', 'billing_journal_instruction', 'billing_journal_line', 'billing_journal_dispatch', 'billing_revenue_recovery', 'billing_revenue_assurance_report', 'billing_revenue_assurance_finding']
     const covered: string[] = []
     const gaps: string[] = []
     for (const t of tables) {

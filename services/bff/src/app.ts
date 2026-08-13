@@ -100,7 +100,12 @@ import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyS
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
 import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
 import { strDraftRoutes } from './str/routes.js'
-import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader } from './analytics/finance-view.js'
+import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
+import {
+  BillingCollectionsService,
+  InMemoryBillingCollectionsStore,
+  type BillingCollectionsStore
+} from './billing/collections.js'
 import {
   OperationsConsoleService,
   operationsConsoleRoutes,
@@ -289,11 +294,17 @@ export interface AppDeps {
   reconciliationLogStore?: ReconciliationLogStore
   reconciliationBreakStore?: ReconciliationBreakStore
   reconciliationThresholdStore?: ThresholdStore
+  /** BILL-07 — immutable balanced banking accounting pack included in month-close sign-off. */
+  accountingClosePackReader?: import('./reconciliation/service.js').MonthlyAccountingClosePackReader
   tppCounterpartyStore?: TppCounterpartyStore
   /** BACKOFFICE-71 — P6 Trust Framework Directory source (defaults to the P6 adapter). */
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
   billingRecordStore?: BillingRecordStore
   invoiceRunStore?: InvoiceRunStore
+  /** BILL-05 — append-only settlement decomposition and direct-collection action store. */
+  billingCollectionsStore?: BillingCollectionsStore
+  /** BILL-08 — latest immutable revenue-assurance report for Finance View/VAL-01 composition. */
+  revenueAssuranceReader?: FinanceRevenueAssuranceReader
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
   /** BACKOFFICE-75 — respondent-side Nebras dispute store (defaults in-memory; the
@@ -513,6 +524,7 @@ export function createApp(deps: AppDeps = {}) {
     egress: nebrasEgress,
     apm,
     reports: complianceReportStore,
+    accountingClose: deps.accountingClosePackReader,
     audit: highClassAudit
   })
   reconHolder.svc = reconciliationService // BACKOFFICE-06 — bind the monthly-signoff executor
@@ -531,6 +543,10 @@ export function createApp(deps: AppDeps = {}) {
     approvals,
     audit: highClassAudit
   })
+  const billingCollectionsService = new BillingCollectionsService({
+    store: deps.billingCollectionsStore ?? new InMemoryBillingCollectionsStore(),
+    audit: highClassAudit
+  })
   // BACKOFFICE-31 — Finance View composes persisted data under one read scope:
   // fee accrual (BACKOFFICE-32 aggregates), margin (BACKOFFICE-07), the open Nebras
   // dispute queue, and the unbilled-traffic signal (BACKOFFICE-72, aggregate count).
@@ -538,7 +554,9 @@ export function createApp(deps: AppDeps = {}) {
     feeAccrual: deps.nebrasAggregateReader ?? { feeAccrualForPeriod: async () => null },
     margin: reconciliationService,
     disputes: reconciliationService,
-    unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length }
+    unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length },
+    collections: billingCollectionsService,
+    assurance: deps.revenueAssuranceReader
   })
   // Shared analytics readers (BACKOFFICE-28/-29/-30/-27): the TPP onboarding pipeline
   // (registration-state counts), certification per role, the P8 onboarding-handover

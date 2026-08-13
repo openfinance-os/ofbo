@@ -3,7 +3,7 @@ import type { FinancialSystemPort } from '../../interfaces.js'
 /**
  * P9 — Financial management system enterprise adapter (pre-staged per ADR 0024, rung ③).
  *
- * BOUNDARY (ADR 0024 Decision B): this adapter is invoice-EXECUTION transport only. It hands
+ * BOUNDARY (ADR 0024 Decision B): this adapter is financial-EXECUTION transport only. It hands
  * the bank's ERP/AR system counterparty registrations + ALREADY-RECONCILED invoice
  * instructions and reads settlement status back. The regulated reconcile-before-invoice
  * pipeline — variance breaks, the 30-day Nebras dispute window, four-eyes invoice runs,
@@ -11,7 +11,7 @@ import type { FinancialSystemPort } from '../../interfaces.js'
  * here. (This is exactly why Kong Konnect billing must not replace P9.)
  *
  * Implements EXACTLY the P9 port contract (`registerCounterparty`, `issueInvoiceInstructions`,
- * `getSettlementStatus`) — nothing more. Transport injectable; fail-closed when unconfigured — tests inject a fake transport, exercising
+ * `getSettlementStatus`, `postJournalInstructions`) — nothing more. Transport injectable; fail-closed when unconfigured — tests inject a fake transport, exercising
  * the real call→parse path with no backend
  * (guardrail 4 / rung ②).
  */
@@ -77,6 +77,18 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
         throw new FinancialSystemError(0, false, `financial-system returned an unknown invoice_status: ${String(status)}`)
       }
       return { invoice_status: status as SettlementStatus }
+    },
+    async postJournalInstructions(batch, trace) {
+      const res = await call('/journal-batches', trace, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(batch)
+      })
+      const body = (await res.json()) as { accepted?: unknown; journal_batch_ref?: unknown }
+      if (body.accepted !== true || typeof body.journal_batch_ref !== 'string' || !body.journal_batch_ref.trim()) {
+        throw new FinancialSystemError(0, false, 'financial-system returned an invalid journal-batch acknowledgement')
+      }
+      return { accepted: true, journal_batch_ref: body.journal_batch_ref }
     }
   }
 }

@@ -22,6 +22,11 @@ import {
   PgRiskSignalEmitter,
   PgTppCounterpartyStore,
   PgBillingRecordStore,
+  PgBillingRateCardStore,
+  PgBillingMemoStore,
+  PgBillingCollectionsStore,
+  PgBillingAccountingStore,
+  PgBillingRevenueAssuranceStore,
   PgInvoiceRunStore,
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
@@ -47,6 +52,15 @@ import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profilin
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 import { LfiCadenceMonitor } from './lfi-reports/service.js'
 import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
+import { fils, SCHEME_RATE_CARD_2026_06_02 } from '@ofbo/billing'
+import {
+  BILLING_RATE_CARD_SOURCES,
+  BILLING_RATE_CARD_WATCH_CRON,
+  runBillingRateCardWatch
+} from './billing/rate-card-watch.js'
+import { BillingMemoReconciliationService } from './billing/memo-reconciliation.js'
+import { isExpectedMemoGenerationDay, previousUtcMonth } from './billing/pg-memo-reconciliation.js'
+import { RevenueAssuranceService } from './billing/revenue-assurance.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -103,9 +117,10 @@ interface WorkerContext {
   waitUntil(promise: Promise<unknown>): void
 }
 
-/** Cloudflare cron event — only `.cron` (the matched schedule string) is used here. */
+/** Cloudflare cron event — scheduledTime makes a retried billing projection deterministic. */
 interface ScheduledEvent {
   cron: string
+  scheduledTime?: number
 }
 
 /**
@@ -151,6 +166,9 @@ export default {
     const tppCounterpartyStore = url ? new PgTppCounterpartyStore(url, tenancy, lineage) : undefined
     const billingRecordStore = url ? new PgBillingRecordStore(url, tenancy, lineage) : undefined
     const invoiceRunStore = url ? new PgInvoiceRunStore(url, tenancy, lineage) : undefined
+    const billingCollectionsStore = url ? new PgBillingCollectionsStore(url, tenancy, lineage) : undefined
+    const billingAccountingStore = url ? new PgBillingAccountingStore(url, tenancy, lineage) : undefined
+    const billingRevenueAssuranceStore = url ? new PgBillingRevenueAssuranceStore(url, tenancy, lineage) : undefined
     const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, lineage) : undefined
     const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
     const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
@@ -184,6 +202,9 @@ export default {
       ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
       ...(billingRecordStore ? { billingRecordStore } : {}),
       ...(invoiceRunStore ? { invoiceRunStore } : {}),
+      ...(billingCollectionsStore ? { billingCollectionsStore } : {}),
+      ...(billingAccountingStore ? { accountingClosePackReader: billingAccountingStore } : {}),
+      ...(billingRevenueAssuranceStore ? { revenueAssuranceReader: billingRevenueAssuranceStore } : {}),
       ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {}),
       ...(nebrasSnapshotStore ? { nebrasConnectivityReader: nebrasSnapshotStore } : {}),
       ...(certificationStore ? { certificationReader: certificationStore } : {}),
@@ -199,7 +220,7 @@ export default {
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, billingCollectionsStore, billingAccountingStore, billingRevenueAssuranceStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
@@ -213,6 +234,21 @@ export default {
   async scheduled(event: ScheduledEvent, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     if (!url) return
+    const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+    if (event.cron === BILLING_RATE_CARD_WATCH_CRON) {
+      const itsm = getAdapter('p3-itsm', profileFromConfig(env as Record<string, string | undefined>))
+      const lineage = new PgLineageEmitter(url, tenancy)
+      ctx.waitUntil(runBillingRateCardWatch({
+        databaseUrl: url,
+        tenancy,
+        makeStore: (databaseUrl, config) => new PgBillingRateCardStore(databaseUrl, config, lineage),
+        makeAudit: (databaseUrl, config) => new PgAuditEmitter(databaseUrl, config, lineage),
+        itsm,
+        sources: BILLING_RATE_CARD_SOURCES,
+        rateCard: SCHEME_RATE_CARD_2026_06_02
+      }, crypto.randomUUID()).finally(() => lineage.close()))
+      return
+    }
     // DEMO-01 — demo-warmth ping. Any cron OTHER than the daily reconciliation is the frequent
     // keep-warm tick: a single cheap round-trip through the same Hyperdrive/Pg path the request
     // handler uses, so the Supabase free-tier DB never auto-pauses and the pool stays warm. This
@@ -226,7 +262,6 @@ export default {
       }
       return
     }
-    const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
     const lineage = new PgLineageEmitter(url, tenancy)
     const audit = new PgAuditEmitter(url, tenancy, lineage)
     const store = new PgReconciliationLogStore(url, tenancy, lineage)
@@ -238,6 +273,35 @@ export default {
     const apm = getAdapter('p5-apm', profile)
     const egress = getAdapter('p6-nebras-egress', profile)
     const service = new ReconciliationService({ store, breakStore, itsm, apm, audit })
+    const billingMemoStore = new PgBillingMemoStore(url, tenancy, lineage)
+    const billingMemoService = new BillingMemoReconciliationService({
+      store: billingMemoStore,
+      workflow: service,
+      audit
+    })
+    const revenueAssuranceStore = new PgBillingRevenueAssuranceStore(url, tenancy, lineage)
+    const revenueAssuranceService = new RevenueAssuranceService({ store: revenueAssuranceStore, evidence: revenueAssuranceStore, audit })
+    const billingRunAt = new Date(event.scheduledTime ?? Date.now())
+    const generateExpectedMemo = () => isExpectedMemoGenerationDay(billingRunAt)
+      ? billingMemoService.generateExpectedMemo(
+          previousUtcMonth(billingRunAt),
+          SCHEME_RATE_CARD_2026_06_02,
+          billingRunAt.toISOString(),
+          crypto.randomUUID()
+        )
+      : Promise.resolve(null)
+    // BILL-08 — refresh the prior month's immutable assurance projection from the
+    // latest meter/memo/rerating/counterparty evidence. Later evidence creates a new
+    // report version; identical daily retries resolve idempotently.
+    const generateRevenueAssurance = () => revenueAssuranceService.generatePeriod({
+      period: previousUtcMonth(billingRunAt), generatedAt: billingRunAt.toISOString(),
+      rateCard: SCHEME_RATE_CARD_2026_06_02, blindSpotValuationMilliFils: fils(2.5), freeTierExceptions: [],
+      overageOpportunity: {
+        publishedRateMilliFils: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageMilliFils,
+        valuationRateMilliFils: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageMilliFils,
+        valuationRef: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageSource
+      }
+    }, crypto.randomUUID())
     // BACKOFFICE-32: the daily ingestion polls the current month's Nebras
     // surfaces via P6 and refreshes the materialized aggregates the M4 views read.
     const period = new Date().toISOString().slice(0, 7)
@@ -287,6 +351,8 @@ export default {
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
+        generateExpectedMemo(),
+        generateRevenueAssurance(),
         ingestion.runIngestion(period, crypto.randomUUID()),
         runLiability(),
         recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
@@ -296,7 +362,7 @@ export default {
         lfiCadenceMonitor.check(crypto.randomUUID()),
         runForecast()
       ]).finally(async () => {
-        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
+        await Promise.all([store.close(), breakStore.close(), billingMemoStore.close(), revenueAssuranceStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
       })
     )
   }

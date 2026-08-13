@@ -10,6 +10,7 @@ import { openLineageFromEnv } from './adapters/enterprise/openlineage.js'
 import { onboardingHandoverFromEnv } from './adapters/enterprise/onboarding-handover.js'
 import { financialSystemFromEnv } from './adapters/enterprise/financial-system.js'
 import { strWorkflowFromEnv } from './adapters/enterprise/str-workflow.js'
+import { eInvoicingAspFromEnv } from './adapters/enterprise/einvoicing-asp.js'
 import { EnterpriseAdapterNotImplementedError, type DeployProfile } from './types.js'
 
 export type PortName = keyof PortMap
@@ -24,14 +25,15 @@ export const PORT_NAMES = [
   'p7-lineage',
   'p8-onboarding-handover',
   'p9-financial-system',
-  'p10-str-workflow'
+  'p10-str-workflow',
+  'p11-einvoicing-asp'
 ] as const satisfies readonly PortName[]
 
 /**
  * Enterprise adapters land port-by-port at bank adoption (M6), or are pre-staged ahead of it
  * (ADR 0024). Each passes EXACTLY the contract suite its simulator passes (the port-swap
- * acceptance gate). P2 — Microsoft Entra ID — is the reference template; the other eight are
- * pre-staged at fidelity rung ③ (ADR 0024). Factories are lazy (constructed from config on
+ * acceptance gate). P2 — Microsoft Entra ID — is the reference template; P1/P3–P10 are
+ * pre-staged under ADR 0024 and P11 follows the same fail-closed pattern. Factories are lazy (constructed from config on
  * first use) and memoized; a configuration error is never cached, so a fixed env retries
  * cleanly. Every factory is FAIL-CLOSED — an unconfigured enterprise adapter throws a clear
  * config error, never a silent demo/fake fallback (a fake IdP or egress gateway under
@@ -47,7 +49,8 @@ const ENTERPRISE_FACTORIES: Partial<{ [K in PortName]: () => PortMap[K] }> = {
   'p7-lineage': () => openLineageFromEnv(process.env),
   'p8-onboarding-handover': () => onboardingHandoverFromEnv(process.env),
   'p9-financial-system': () => financialSystemFromEnv(process.env),
-  'p10-str-workflow': () => strWorkflowFromEnv(process.env)
+  'p10-str-workflow': () => strWorkflowFromEnv(process.env),
+  'p11-einvoicing-asp': () => eInvoicingAspFromEnv(process.env)
 }
 const enterpriseCache = new Map<PortName, unknown>()
 

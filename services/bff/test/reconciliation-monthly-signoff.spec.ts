@@ -54,7 +54,14 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
   beforeAll(async () => {
     // a daily run in 2026-07 → run_id recon-2026-07-14-daily, 8 flagged breaks
     await new ReconciliationService({ store: logStore, breakStore, audit: new InMemoryHighClassAuditSink() }).runDaily('seed', { window: WINDOW })
-    app = createApp({ reconciliationLogStore: logStore, reconciliationBreakStore: breakStore, complianceReportStore: reports, highClassAudit: audit })
+    app = createApp({
+      reconciliationLogStore: logStore, reconciliationBreakStore: breakStore, complianceReportStore: reports, highClassAudit: audit,
+      accountingClosePackReader: { accountingClosePack: async (period) => ({
+        period, batchId: 'GL-2026-07-BANK-COA-2026-01', accountProfileRef: 'BANK-COA-2026-01', balanced: true,
+        journalCount: 4, debitFils: 20_500, creditFils: 20_500, outputVatFils: 500, settlementResidueFils: 0,
+        invoiceDocumentIds: ['INV-2026-07-TPP-1'], payableSourceIds: ['HUB-2026-07'], settlementReferences: ['SET-2026-08-001']
+      }) }
+    })
   })
 
   it('four-eyes: a maker requests (202 + approval_request, no inline lock); a different finance principal approves → the locked signed report', async () => {
@@ -80,13 +87,14 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
     expect(reports.created.length).toBe(1)
 
     // the persisted summary aggregates the month's runs + break dispositions
-    const content = reports.created[0]!.content as { period: string; run_count: number; breaks: { total: number; open: number }; open_nebras_disputes: number; tpp_aas_margin: { total_margin: number; by_fintech: Record<string, unknown> } }
+    const content = reports.created[0]!.content as { period: string; run_count: number; breaks: { total: number; open: number }; open_nebras_disputes: number; tpp_aas_margin: { total_margin: number; by_fintech: Record<string, unknown> }; accounting_close: { batchId: string; balanced: boolean; outputVatFils: number } }
     expect(content.period).toBe('2026-07')
     expect(content.run_count).toBe(1)
     expect(content.breaks.total).toBe(8)
     expect(content.breaks.open).toBe(8) // all flagged
     expect(content.tpp_aas_margin.total_margin).toBeGreaterThan(0) // BACKOFFICE-07 real margin
     expect(Object.keys(content.tpp_aas_margin.by_fintech).length).toBeGreaterThan(0)
+    expect(content.accounting_close).toMatchObject({ batchId: 'GL-2026-07-BANK-COA-2026-01', balanced: true, outputVatFils: 500 })
     // the execution is High-class logged, attributed to the initiator + flagged four-eyes-approved
     const ev = audit.events.find((e) => e.event_type === 'reconciliation_monthly_signoff')
     expect((ev?.request_body as { period: string; four_eyes_approved: boolean }).period).toBe('2026-07')
@@ -100,6 +108,19 @@ describe('POST /back-office/reconciliation/monthly-signoff', () => {
     const a2 = ((await replay.json()) as { data: { approval_request_id: string } }).data.approval_request_id
     expect(replay.status).toBe(202)
     expect(a2).toBe(a1) // same approval replayed, not a new one
+  })
+
+  it('fails closed rather than signing a month when the configured accounting pack is missing', async () => {
+    const localReports = new CapturingReportStore()
+    const service = new ReconciliationService({
+      store: new InMemoryReconciliationLogStore(), breakStore: new InMemoryReconciliationBreakStore(),
+      reports: localReports, audit: new InMemoryHighClassAuditSink(),
+      accountingClose: { accountingClosePack: async () => null }
+    })
+    await expect(service.executeMonthlySignoff('2026-07', 'finance-maker', 'finance-analyst', 'trace-no-accounting')).rejects.toMatchObject({
+      code: 'BACKOFFICE.ACCOUNTING_CLOSE_NOT_READY', status: 409
+    })
+    expect(localReports.created).toHaveLength(0)
   })
 
   it('400 invalid period; 400 missing Idempotency-Key; 403 without finance:reconciliation:write — all before any approval is created', async () => {

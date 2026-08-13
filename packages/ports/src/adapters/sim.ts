@@ -3,6 +3,7 @@ import type {
   CareSurfacePort,
   CoreBankingPort,
   FinancialSystemPort,
+  EInvoicingAspPort,
   IdentityProviderPort,
   ItsmPort,
   LineagePort,
@@ -328,6 +329,15 @@ const simFinancialSystem: FinancialSystemPort = {
   },
   async getSettlementStatus() {
     return { invoice_status: 'instructed' }
+  },
+  async postJournalInstructions(batch) {
+    const balanced = batch.journals.every((journal) => {
+      const debit = journal.lines.filter((line) => line.side === 'debit').reduce((sum, line) => sum + line.amount_fils, 0)
+      const credit = journal.lines.filter((line) => line.side === 'credit').reduce((sum, line) => sum + line.amount_fils, 0)
+      return debit === credit
+    })
+    if (!balanced) throw new Error(`financial-system simulator rejected unbalanced batch ${batch.batch_id}`)
+    return { accepted: true, journal_batch_ref: `fms-${batch.batch_id}` }
   }
 }
 
@@ -336,6 +346,20 @@ const simFinancialSystem: FinancialSystemPort = {
 const simStrWorkflow: StrWorkflowPort = {
   async handoffStrDraft({ str_draft_id }) {
     return { workflow_ref: `str-wf-${str_draft_id}`, accepted_at: new Date().toISOString() }
+  }
+}
+
+const simEInvoicingAsp: EInvoicingAspPort = {
+  async submitDocument(document) {
+    const valid = document.xml.includes(`<cbc:CustomizationID>${document.customization_id}</cbc:CustomizationID>`)
+      && document.xml.includes(document.document_type === '380' ? '<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>' : '<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>')
+      && new TextDecoder().decode(document.pdf.slice(0, 8)).startsWith('%PDF-1.')
+    return {
+      accepted: valid,
+      submission_ref: `asp-sim-${document.document_id}`,
+      document_status: valid ? 'accepted' : 'rejected',
+      tdd_status: valid ? 'reported' : 'rejected'
+    }
   }
 }
 
@@ -349,5 +373,6 @@ export const SIM_ADAPTERS: PortMap = {
   'p7-lineage': simLineage,
   'p8-onboarding-handover': simOnboardingHandover,
   'p9-financial-system': simFinancialSystem,
-  'p10-str-workflow': simStrWorkflow
+  'p10-str-workflow': simStrWorkflow,
+  'p11-einvoicing-asp': simEInvoicingAsp
 }

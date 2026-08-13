@@ -10,6 +10,44 @@ import { makePick, mulberry32 } from './rng.js'
 
 export const DEFAULT_SEED = 20260611
 
+/**
+ * BILL-02 deterministic gateway/Ozone fixture. IDs, PSUs and counterparties are
+ * synthetic by construction; the cases deliberately cross pairing, free-tier,
+ * merchant-allowance, unsuccessful and unknown-endpoint boundaries.
+ */
+export function billingMeteringFixture(): unknown[] {
+  const cloudEvent = (id: string, time: string, data: Record<string, unknown>) => ({
+    specversion: '1.0',
+    id,
+    source: 'urn:ofbo:gateway:alpha-bank:simulator',
+    type: 'com.ofbo.billing.gateway-call.v1',
+    subject: String(data.tppId ?? 'TPP-SIM-1'),
+    time,
+    datacontenttype: 'application/json',
+    fapiinteractionid: `sim-trace-${id}`,
+    data: {
+      outcome: 200,
+      direction: 'inbound',
+      tppId: 'TPP-SIM-1',
+      psuId: 'PSU-9999001',
+      ...data
+    }
+  })
+  const outbound = { direction: 'outbound', tppId: 'SELF', clientId: 'FIN-SIM-1' }
+  return [
+    cloudEvent('sim-balance', '2026-06-01T09:00:00Z', { ...outbound, endpoint: 'GET /accounts/{id}/balances' }),
+    cloudEvent('sim-cop', '2026-06-01T09:30:00Z', { ...outbound, endpoint: 'POST /confirmation' }),
+    cloudEvent('sim-payment', '2026-06-01T10:00:00Z', { ...outbound, endpoint: 'POST /payments', payment: { type: 'p2p_sme', amountMilliFils: 10_000_000 } }),
+    cloudEvent('sim-data-a', '2026-06-01T11:00:00Z', { endpoint: 'GET /accounts/{id}/transactions', data: { segment: 'retail', attended: false, lines: 600, ageSpanMonths: 13 } }),
+    cloudEvent('sim-data-b', '2026-06-01T11:05:00Z', { endpoint: 'GET /accounts/{id}/transactions', data: { segment: 'retail', attended: false, lines: 1, ageSpanMonths: 1 } }),
+    cloudEvent('sim-merchant-a', '2026-06-01T12:00:00Z', { endpoint: 'POST /payments', payment: { type: 'merchant_collection', amountMilliFils: 15_000_000, merchantId: 'MER-SIM-1' } }),
+    cloudEvent('sim-merchant-b', '2026-06-01T12:05:00Z', { endpoint: 'POST /payments', payment: { type: 'merchant_collection', amountMilliFils: 10_000_000, merchantId: 'MER-SIM-1' } }),
+    cloudEvent('sim-free', '2026-06-01T13:00:00Z', { endpoint: 'POST /par' }),
+    cloudEvent('sim-failed', '2026-06-01T13:05:00Z', { endpoint: 'POST /payments', outcome: 503, payment: { type: 'p2p_sme', amountMilliFils: 10_000_000 } }),
+    cloudEvent('sim-unknown', '2026-06-01T13:10:00Z', { endpoint: 'GET /new-scheme-resource' })
+  ]
+}
+
 export const DEMO_BANK_ID = '11111111-1111-4111-8111-111111111111'
 
 /**

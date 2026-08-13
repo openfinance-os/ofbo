@@ -134,7 +134,26 @@ export interface OnboardingHandoverPort {
   getOnboardingCases(window: { from: string; to: string }): Promise<OnboardingCase[]>
 }
 
-/** P9 — Financial management system: TPP counterparty registration + invoicing + settlement. */
+export interface FinancialJournalLine {
+  account: string
+  side: 'debit' | 'credit'
+  amount_fils: number
+}
+
+export interface FinancialJournalBatch {
+  batch_id: string
+  period: string
+  posting_date: string
+  account_profile_ref: string
+  journals: Array<{
+    journal_id: string
+    source_type: string
+    source_id: string
+    lines: FinancialJournalLine[]
+  }>
+}
+
+/** P9 — Financial management system: counterparty, invoice, settlement and GL execution. */
 export interface FinancialSystemPort {
   registerCounterparty(
     org: { organisation_id: string; legal_name: string },
@@ -148,6 +167,11 @@ export interface FinancialSystemPort {
     ref: string,
     trace: TraceContext
   ): Promise<{ invoice_status: 'instructed' | 'issued' | 'settled' | 'overdue' | 'credit_noted' }>
+  /** BILL-07 — execution transport only; OFBO has already validated and balanced every journal. */
+  postJournalInstructions(
+    batch: FinancialJournalBatch,
+    trace: TraceContext
+  ): Promise<{ accepted: boolean; journal_batch_ref: string }>
 }
 
 /** P10 — the bank's existing STR (Suspicious Transaction Report) workflow (ADR 0022,
@@ -163,6 +187,30 @@ export interface StrWorkflowPort {
   ): Promise<{ workflow_ref: string; accepted_at: string }>
 }
 
+export interface AspEInvoiceDocument {
+  document_id: string
+  document_type: '380' | '381'
+  customization_id: 'urn:peppol:pint:billing-1@ae-1'
+  profile_id: 'urn:peppol:bis:billing'
+  mode: 'voluntary_pilot' | 'mandatory'
+  xml: string
+  pdf: Uint8Array
+}
+
+/** P11 — UAE Accredited Service Provider: validation, delivery and Tax Data Document reporting.
+ * OFBO creates and reconciles the PINT AE artifact; the ASP transports it through DCTCE. */
+export interface EInvoicingAspPort {
+  submitDocument(
+    document: AspEInvoiceDocument,
+    trace: TraceContext
+  ): Promise<{
+    accepted: boolean
+    submission_ref: string
+    document_status: 'accepted' | 'rejected'
+    tdd_status: 'reported' | 'pending' | 'rejected'
+  }>
+}
+
 export interface PortMap {
   'p1-care-surface': CareSurfacePort
   'p2-identity-provider': IdentityProviderPort
@@ -174,4 +222,5 @@ export interface PortMap {
   'p8-onboarding-handover': OnboardingHandoverPort
   'p9-financial-system': FinancialSystemPort
   'p10-str-workflow': StrWorkflowPort
+  'p11-einvoicing-asp': EInvoicingAspPort
 }

@@ -136,6 +136,8 @@ importers:
         specifier: ^4.16.0
         version: 4.100.0
 
+  packages/billing: {}
+
   packages/contracts:
     dependencies:
       openapi-fetch:
@@ -160,6 +162,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@ofbo/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@ofbo/redaction':
         specifier: workspace:*
         version: link:../redaction
@@ -199,6 +204,9 @@ importers:
 
   services/bff:
     dependencies:
+      '@ofbo/billing':
+        specifier: workspace:*
+        version: link:../../packages/billing
       '@ofbo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

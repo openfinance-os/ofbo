@@ -481,15 +481,17 @@ milestones:
         depends_on: [BILL-04]
         note: >-
           Journal instructions per fee class (payment fees, data fees, overage,
-          commissions payable, clawback recoveries, hub fees payable, Nebras service
-          fees, penalties) with the VAT ledger fed from invoice runs; month-close
-          sign-off (BACKOFFICE-06) extended to cover payables, receivables, commissions
-          and settlement decomposition as one pack.
+          hub fees payable, Nebras service fees and penalties) with the VAT ledger fed
+          from invoice runs; month-close sign-off (BACKOFFICE-06) extended to cover
+          banking payables, receivables and settlement decomposition as one pack.
+          Insurance commissions and clawbacks are deliberately excluded: there is no
+          approved insurance commercial model, so those entries remain deferred with
+          BILL-06/INS-01 rather than being invented inside the banking GL implementation.
         acceptance:
           - A simulator month produces balanced journal instructions per fee class
             through the P9 port; the VAT position ties to the issued-invoice set.
-          - The month-close pack covers both sides plus commissions and settlement;
-            Finance sign-off locks it (existing BACKOFFICE-06 semantics).
+          - The month-close pack covers the established banking receivable/payable sides
+            plus settlement; Finance sign-off locks it (existing BACKOFFICE-06 semantics).
       - id: BILL-08
         title: Revenue-assurance loop and leakage KPI
         research: docs/research/lfi-billing-system-tier2.md
