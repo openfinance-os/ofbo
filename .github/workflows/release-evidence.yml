@@ -95,8 +95,18 @@ jobs:
             --commit "$RELEASE_SHA" ${PREV:+--prev "$PREV"} > provenance.json
           echo "provenance range prev=${PREV:-<none>}"
 
+      # --out is ANCHORED to the workspace: `pnpm --filter` runs the script with cwd set to
+      # packages/release-evidence, so the CLI's default `--out releases` resolved to
+      # packages/release-evidence/releases/<tag> while the commit step below does
+      # `git add "releases/$TAG"` from the repo root — a pathspec error on the first release.
       - name: Build + write evidence bundle
-        run: pnpm --filter @ofbo/release-evidence bundle -- --tag "$RELEASE_TAG" --commit "$RELEASE_SHA" --ref "refs/tags/$RELEASE_TAG" --input "$GITHUB_WORKSPACE/gate-input.json" --provenance "$GITHUB_WORKSPACE/provenance.json"
+        run: pnpm --filter @ofbo/release-evidence bundle -- --tag "$RELEASE_TAG" --commit "$RELEASE_SHA" --ref "refs/tags/$RELEASE_TAG" --input "$GITHUB_WORKSPACE/gate-input.json" --provenance "$GITHUB_WORKSPACE/provenance.json" --out "$GITHUB_WORKSPACE/releases"
+
+      # HARNESS-15 — recompute the seal before the bundle reaches git. verifyEvidenceBundle()
+      # was exported and unit-tested but never called, so the digest was written and never
+      # checked again. A bundle whose seal does not recompute must not be committed.
+      - name: Verify the sealed bundle
+        run: pnpm --filter @ofbo/release-evidence verify "$GITHUB_WORKSPACE/releases/$RELEASE_TAG/evidence-bundle.json"
 
       - name: Commit bundle to git
         env:

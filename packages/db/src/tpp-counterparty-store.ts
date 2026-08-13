@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-71 — consuming-TPP registry. The bank-side master list of TPPs
@@ -93,15 +94,6 @@ function toRow(r: Record<string, unknown>): StoredTppCounterparty {
   }
 }
 
-const encodeCursor = (createdAt: string, org: string) => Buffer.from(`${createdAt}|${org}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; org: string } | null {
-  try {
-    const [createdAt, org] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && org ? { createdAt, org } : null
-  } catch {
-    return null
-  }
-}
 
 export class PgTppCounterpartyStore {
   private readonly pool: pg.Pool
@@ -248,8 +240,7 @@ export class PgTppCounterpartyStore {
         where.push(`unbilled_traffic = $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.org)
-        where.push(`(date_trunc('milliseconds', created_at), organisation_id) > ($${params.length - 1}::timestamptz, $${params.length})`)
+        where.push(keysetClause(params, after, { column: 'organisation_id', cast: null }))
       }
       const res = await c.query(
         `SELECT ${SELECT_COLUMNS} FROM tpp_counterparty
@@ -263,7 +254,7 @@ export class PgTppCounterpartyStore {
     const hasMore = rows.length > limit
     const page = (hasMore ? rows.slice(0, limit) : rows).map(toRow)
     const last = page[page.length - 1]
-    return { rows: page, next_cursor: hasMore && last ? encodeCursor(last.created_at, last.organisation_id) : null }
+    return { rows: page, next_cursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.organisation_id }) : null }
   }
 
   async close(): Promise<void> {

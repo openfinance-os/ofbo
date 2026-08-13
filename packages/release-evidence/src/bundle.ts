@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { evaluateLineageGate } from '@ofbo/db'
 import { CONTROL_MAPPINGS, QUALITY_GATES, type ControlMapping, type QualityGateId } from './control-mappings.js'
 import { EMPTY_PROVENANCE, type BuildProvenance } from './provenance.js'
 
@@ -88,6 +89,48 @@ export function canonicalJson(value: unknown): string {
 export class EvidenceBundleError extends Error {}
 
 /**
+ * HARNESS-15 — Q4.5's verdict is DERIVED from the lineage proof, never taken from the caller.
+ *
+ * `collect-gates.mjs` writes a hardcoded `status: 'pass'` for Q4.5, and it writes it *before*
+ * the proof exists: the CLI collects the live coverage from DATABASE_URL afterwards. Nothing
+ * reconciled the two, so a sealed bundle could assert a passing BCBS 239 gate while the lineage
+ * section listed uncovered regulated tables — a control that cannot report its own failure,
+ * which is the class HARNESS-07 and HARNESS-09 exist to close.
+ *
+ * The verdict is delegated to `evaluateLineageGate` — the SAME function the Q4.5 CI gate uses
+ * (packages/db/src/lineage-gate.ts) — rather than re-deciding here. A second definition of
+ * "did Q4.5 pass" is how the bundle and the gate drift apart: this derivation once failed on
+ * ANY gap, which agreed with the gate only while KNOWN_LINEAGE_GAPS was empty. The first
+ * allowlisted table would have had CI print `Q4.5 PASSED` while the sealed bundle recorded
+ * `fail` — the same bundle-vs-gate disagreement this story exists to remove, merely inverted.
+ *
+ * Empty-and-no-gaps is `skipped`, not `pass`: `cli.ts` records `{ covered: [], gaps: [] }` when
+ * DATABASE_URL is unset, and "no proof was collected" must not read as "the gate passed".
+ */
+export function deriveLineageGateStatus(
+  proof: LineageProof,
+  allowlist?: Record<string, string>
+): { status: GateStatus; summary: string } {
+  if (proof.covered.length === 0 && proof.gaps.length === 0) {
+    return { status: 'skipped', summary: 'no lineage proof collected (DATABASE_URL unset or no regulated tables observed)' }
+  }
+  // Defaulting inside evaluateLineageGate (rather than here) keeps KNOWN_LINEAGE_GAPS the single
+  // source of the allowlist; the parameter exists so a test can prove the allowlist is honoured
+  // while the real one is legitimately empty.
+  const result = allowlist ? evaluateLineageGate(proof, allowlist) : evaluateLineageGate(proof)
+  if (!result.ok) {
+    return {
+      status: 'fail',
+      summary: `lineage gaps (${result.unexpectedGaps.length}): ${result.unexpectedGaps.join(', ')}`
+    }
+  }
+  const allowed = result.allowedGaps.length > 0
+    ? `, ${result.allowedGaps.length} allowlisted gap(s): ${result.allowedGaps.join(', ')}`
+    : ', no gaps'
+  return { status: 'pass', summary: `${proof.covered.length} regulated tables covered${allowed}` }
+}
+
+/**
  * Build and seal the bundle. Throws if a required gate is missing or the git
  * anchor is incomplete — an evidence bundle with holes is worse than none.
  */
@@ -101,11 +144,16 @@ export function buildEvidenceBundle(input: EvidenceBundleInput): EvidenceBundle 
     throw new EvidenceBundleError(`evidence bundle missing required quality gates: ${missing.join(', ')}`)
   }
 
+  // Q4.5 is re-stated from the proof (HARNESS-15). Every other gate is carried through exactly
+  // as the caller supplied it — CI step outcomes are the only witness those gates have.
+  const lineage = deriveLineageGateStatus(input.lineage_proof)
+  const gates = input.gates.map((g) => (g.gate === 'Q4.5' ? { ...g, ...lineage } : g))
+
   const content = {
     schema_version: EVIDENCE_SCHEMA_VERSION,
     release: input.release,
     control_mappings: CONTROL_MAPPINGS,
-    quality_gates: input.gates,
+    quality_gates: gates,
     test_results: input.test_results,
     scan_outputs: input.scan_outputs,
     lineage_proof: input.lineage_proof,

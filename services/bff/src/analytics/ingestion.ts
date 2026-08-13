@@ -44,19 +44,6 @@ export interface WarmTierExporter {
   export(snapshot: SnapshotRow): Promise<{ object_key: string } | null>
 }
 
-export class InMemoryWarmTierExporter implements WarmTierExporter {
-  readonly objects = new Map<string, string>()
-  async export(snapshot: SnapshotRow): Promise<{ object_key: string }> {
-    // Columnar-shaped blob (the format the enterprise adapter swaps for Parquet).
-    const columns: Record<string, unknown[]> = {}
-    for (const row of snapshot.rows) {
-      for (const [k, v] of Object.entries(row)) (columns[k] ??= []).push(v)
-    }
-    const objectKey = `nebras/${snapshot.source}/${snapshot.period}/${snapshot.snapshot_id}.parquet`
-    this.objects.set(objectKey, JSON.stringify({ row_count: snapshot.rows.length, columns }))
-    return { object_key: objectKey }
-  }
-}
 
 export interface BackoffPolicy {
   maxAttempts: number
@@ -210,3 +197,9 @@ export class NebrasIngestionService {
     return { name, trace_id: trace, span_id: crypto.randomUUID(), start_time: start, end_time: performance.now(), status_code: status, attributes }
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/analytics-ingestion.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryWarmTierExporter
+} from '../../memory/analytics-ingestion.js'

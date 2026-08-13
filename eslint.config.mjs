@@ -3,9 +3,10 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    // The billing prototype is a self-contained browser/Node reference artefact with its own
-    // executable verifier; production linting starts at the packages/services implementation.
-    ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**', 'docs/prototypes/billing/**']
+    // Worktrees are full nested checkouts and lint themselves. The billing prototype is a
+    // self-contained browser/Node reference artefact with its own executable verifier;
+    // production linting starts at the packages/services implementation.
+    ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**', '.claude/worktrees/**', 'docs/prototypes/billing/**']
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -42,5 +43,12 @@ export default tseslint.config(
     // grant Node globals.
     files: ['discovery/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' } }
+  },
+  {
+    // Harness gate scripts are plain-JS Node CLIs. They import `node:` builtins explicitly, so
+    // only `fetch` needs granting — it is a Node >=18 global with no importable module form,
+    // and package.json engines already require node >=22.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { fetch: 'readonly' } }
   }
 )

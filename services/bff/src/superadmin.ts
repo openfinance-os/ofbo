@@ -24,12 +24,6 @@ export interface RiskSignalSink {
   record(event: RiskSignalEvent): Promise<void>
 }
 
-export class InMemoryRiskSignalSink implements RiskSignalSink {
-  readonly signals: RiskSignalEvent[] = []
-  async record(event: RiskSignalEvent): Promise<void> {
-    this.signals.push(event)
-  }
-}
 
 export interface SuperAdminDeps {
   itsm: Pick<ItsmPort, 'createTicket'>
@@ -118,3 +112,9 @@ export function createJustificationMiddleware(audit: AuthAuditSink): MiddlewareH
     await next()
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/superadmin.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryRiskSignalSink
+} from '../memory/superadmin.js'

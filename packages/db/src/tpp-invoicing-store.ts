@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-73 — monthly TPP invoicing stores. billing_record_set (ingested
@@ -110,15 +111,6 @@ function toInvoiceRun(r: Record<string, unknown>): StoredInvoiceRun {
   }
 }
 
-const encodeCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && id ? { createdAt, id } : null
-  } catch {
-    return null
-  }
-}
 
 abstract class TenantStore {
   protected readonly pool: pg.Pool
@@ -200,8 +192,7 @@ export class PgBillingRecordStore extends TenantStore {
         where.push(`billing_period = $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after, { direction: 'desc' }))
       }
       return (
         await c.query(
@@ -216,7 +207,7 @@ export class PgBillingRecordStore extends TenantStore {
     const lastRaw = slice[slice.length - 1]
     return {
       rows: slice.map(toRecordSet),
-      next_cursor: hasMore && lastRaw ? encodeCursor(iso(lastRaw.created_at), lastRaw.id as string) : null
+      next_cursor: hasMore && lastRaw ? encodeCursor({ createdAt: iso(lastRaw.created_at), id: lastRaw.id as string }) : null
     }
   }
 }
@@ -272,8 +263,7 @@ export class PgInvoiceRunStore extends TenantStore {
       const params: unknown[] = []
       const where: string[] = []
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after, { direction: 'desc' }))
       }
       return (
         await c.query(
@@ -288,7 +278,7 @@ export class PgInvoiceRunStore extends TenantStore {
     const lastRaw = slice[slice.length - 1]
     return {
       rows: slice.map(toInvoiceRun),
-      next_cursor: hasMore && lastRaw ? encodeCursor(iso(lastRaw.created_at), lastRaw.id as string) : null
+      next_cursor: hasMore && lastRaw ? encodeCursor({ createdAt: iso(lastRaw.created_at), id: lastRaw.id as string }) : null
     }
   }
 }

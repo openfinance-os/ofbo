@@ -2,6 +2,10 @@
 
 - Status: **Accepted** — Option 1 approved by the user on 13 Aug 2026.
 - Date: 2026-07-21
+- Numbering: renumbered 0027 → 0028 on 2026-07-26. PR #294 (this ADR) and PR #295 (ADR 0027,
+  Ozone-as-channel) were open concurrently and both claimed 0027; #295 merged first, so this
+  record took the next free number. Caught by the Q2b duplicate-ADR-number check (ADR 0020) —
+  the same collision class that renumbered ADR 0018 → 0019 while PR #250 was open.
 - Related: `docs/proposals/multitenant-platform-blueprint.md` (decision **D-1**), **ADR 0026** (hosted-SaaS motion),
   **ADR 0015** (governed cross-fintech aggregation), **ADR 0006** (LFI/TPP wall), backlog **HOST-01/02/03**;
   migrations `0002_tables.sql`, `0003_rls.sql`, `0026_internal_view_role_membership.sql`; `packages/db/src/tenant-tx.ts`,

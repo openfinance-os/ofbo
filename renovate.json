@@ -1,0 +1,66 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommits"],
+  "_comment": [
+    "HARNESS-12. Dependency currency was manual, and manual is why main went red for four days in",
+    "July (docs/build-log.md, REPO HEALTH 22 Jul) and why the Q4 gate broke again on 2026-08-04 —",
+    "both times from advisories published while nothing was watching, not from anything a commit did.",
+    "",
+    "NO AUTOMERGE, anywhere, deliberately. Renovate opens the PR and CI judges it; a human merges.",
+    "HG-0001 (docs/governance/) makes non-self-merge a governance control, and a bot merging its own",
+    "PR is exactly the hole that control exists to close — convenience is not worth re-opening it.",
+    "",
+    "pnpm.overrides in package.json are NOT managed here: they are deliberate security FLOORS for",
+    "advisories a parent pins below the patch, each carrying a justification in overridesNote. Renovate",
+    "would happily churn them; they should be REMOVED by hand once the parent ships a patched range."
+  ],
+  "timezone": "Asia/Dubai",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
+  "postUpdateOptions": ["pnpmDedupe"],
+  "dependencyDashboardTitle": "Dependency Dashboard (Renovate) — HARNESS-12",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Non-major dev dependencies travel together — one PR, one CI run, one review.",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dev dependencies (non-major)",
+      "semanticCommitType": "chore"
+    },
+    {
+      "description": "Runtime dependencies ship to the demo and to an adopting bank — never grouped, so each is reviewable on its own diff.",
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": null,
+      "semanticCommitType": "chore"
+    },
+    {
+      "description": "Majors are a story, not a bump: they get their own PR and a human decision (vitest 3->4, tailwind 3->4, jsdom, next).",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "semanticCommitType": "chore"
+    },
+    {
+      "description": "The toolchain that runs the gates — pinned deliberately; surface changes but never sneak them in.",
+      "matchPackageNames": ["pnpm", "node", "typescript", "@stryker-mutator/core", "@stryker-mutator/vitest-runner"],
+      "dependencyDashboardApproval": true
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "description": "Security fixes bypass the weekly window and the major-approval gate — an advisory is not a scheduled chore. Still human-merged.",
+    "enabled": true,
+    "schedule": ["at any time"],
+    "prCreation": "immediate",
+    "semanticCommitType": "fix",
+    "labels": ["dependencies", "security"],
+    "minimumReleaseAge": null
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"],
+    "semanticCommitType": "chore"
+  }
+}

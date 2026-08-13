@@ -40,7 +40,7 @@ export function bffClient(deps: BffDeps = {}): BffClient {
 }
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §2.4, §6) — ride
+ * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §2.4, §6) — ride
  * the selected demo tenant on every BFF request as `x-ofbo-tenant`, read from the httpOnly cookie.
  * Injected here (the single fetch choke point) so no data-module call site changes. Outside a
  * request context (or with no cookie) it is a no-op; the BFF only honours the header when

@@ -2,6 +2,7 @@ export {
   EVIDENCE_SCHEMA_VERSION,
   EvidenceBundleError,
   buildEvidenceBundle,
+  deriveLineageGateStatus,
   verifyEvidenceBundle,
   serializeBundle,
   renderBundleMarkdown,

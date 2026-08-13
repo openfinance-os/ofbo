@@ -2,7 +2,7 @@
 
 A bank-neutral back office for the internal operations a UAE bank needs to run Open Finance as a regulated business — covering **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic). Built against the CBUAE / Al Tareq / Nebras scheme.
 
-> **Status:** M0–M5 delivered and demonstrable on the live demo. Milestones M0 (foundation) → M1 (substrate + demo live) → M2 (Customer Care) → M3 (Reconciliation) → M4 (Analytics) → M5 (hardening) are complete, including the full portal UI/UX-fidelity track (dark-navy institutional shell, real OFBO brand mark, demo-framed persona switch). **M6 (per-bank enterprise port-swaps) is the remaining milestone.** 127 of the 135 backlog items are done; the rest are human-gated decisions (ADRs / governance) or per-bank adoption work. The latest feature in flight is governed cross-fintech aggregation (BACKOFFICE-33 / ADR 0015 / BD-13).
+> **Status:** M0–M5 delivered and demonstrable on the live demo. Milestones M0 (foundation) → M1 (substrate + demo live) → M2 (Customer Care) → M3 (Reconciliation) → M4 (Analytics) → M5 (hardening) are complete, including the full portal UI/UX-fidelity track (dark-navy institutional shell, real OFBO brand mark, demo-framed persona switch). **M6 (per-bank enterprise port-swaps) is the remaining milestone.** 152 of the 160 backlog items are done; the remaining eight are 6 blocked on human decisions or per-bank engagement, 1 pending and 1 superseded. Seven ADRs are still **Proposed** and awaiting a human decision (0006–0011, 0027). The latest completed feature is the non-insurance LFI billing control plane and hosted tenant billing service (BILL-01–10, excluding deferred BILL-06).
 
 ## Understanding Open Finance (start here)
 
@@ -66,20 +66,20 @@ The demo profile (PRD §3.1) runs on free tiers with **synthetic data only** —
 | File | Purpose |
 |---|---|
 | `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
-| `specs/backoffice-openapi.yaml` | API contract — **76 paths, 10 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
+| `specs/backoffice-openapi.yaml` | API contract — **89 paths, 12 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
 | `CLAUDE.md` | Build conventions: stack defaults, ports model, API conventions, per-story workflow, regulatory hard stops |
-| `docs/architecture-overview.md` | Component architecture — system context, ports P1–P9, BFF feature modules, data layer, shared packages (+ `docs/diagrams/` SVGs) |
+| `docs/architecture-overview.md` | Component architecture — system context, ports P1–P10, BFF feature modules, data layer, shared packages (+ `docs/diagrams/` SVGs) |
 | `docs/backlog.yaml` | Machine-readable work queue (drives the autonomous build loop) |
 
 ## Architecture at a glance
 
-pnpm monorepo. The Next.js **portal** (dark-navy institutional shell, persona scope-gated, DEMO-bannered) calls the **BFF** (Hono) over an OpenAPI-generated client; the BFF reaches every external system through **port interfaces (P1–P9)** — each with a `sim` adapter (demo) and an `enterprise` adapter (M6) selected by config, never by branching in app code. Headless scheduled jobs (reconciliation engine, liability/cert/cadence monitors) run with no public ingress. Data lives in **Postgres with row-level security from day one**, INSERT-only audit, and BCBS 239 lineage emitted at write time. Cross-fintech aggregate reads run through a **governed path** (the `bank_internal_view` role gated by a four-eyes `query_purpose_registry` — ADR 0015 / BD-13), never the single-tenant app role. See `docs/architecture-overview.md` for the full map.
+pnpm monorepo. The Next.js **portal** (dark-navy institutional shell, persona scope-gated, DEMO-bannered) calls the **BFF** (Hono) over an OpenAPI-generated client; the BFF reaches every external system through **port interfaces (P1–P10)** — each with a `sim` adapter (demo) and an `enterprise` adapter (pre-staged ahead of M6, ADR 0024) selected by config, never by branching in app code. Headless scheduled jobs (reconciliation engine, liability/cert/cadence monitors) run with no public ingress. Data lives in **Postgres with row-level security from day one**, INSERT-only audit, and BCBS 239 lineage emitted at write time. Cross-fintech aggregate reads run through a **governed path** (the `bank_internal_view` role gated by a four-eyes `query_purpose_registry` — ADR 0015 / BD-13), never the single-tenant app role. See `docs/architecture-overview.md` for the full map.
 
 ```
 apps/portal        Next.js portal (Stitch design system, persona scope-gated)
 services/bff       Hono BFF — feature modules (E1/E2/E3) + headless worker
 services/nebras-sim  Nebras API Hub simulator (+ fault injection)
-packages/ports     P1–P9 port interfaces, registry, sim adapters
+packages/ports     P1–P10 port interfaces, registry, sim + enterprise adapters
 packages/db        Postgres stores, audit, lineage, retention, RLS (migrations 0001–0026)
 packages/contracts OpenAPI-generated types + routes
 packages/{redaction,synthetic-data,release-evidence}
@@ -124,4 +124,4 @@ Implement BACKOFFICE-<NN> from docs/PRD_Open_Finance_Back_Office.md §7.
 
 ## Adopting bank: the path to production
 
-M6 swaps each simulator for an enterprise adapter, port-by-port (P1–P9) — each swap must pass exactly the contract tests the simulator passed (the port-swap acceptance gate). Before M6, complete the Bank Profile: PRD §3 (ports) and §10 (decisions BD-01..16). UAE data residency, FAPI 2.0 posture (mTLS/PAR/PKCE via the egress gateway P6), and the retention/audit rules are non-negotiable hard stops.
+M6 swaps each simulator for an enterprise adapter, port-by-port (P1–P10) — each swap must pass exactly the contract tests the simulator passed (the port-swap acceptance gate). Before M6, complete the Bank Profile: PRD §3 (ports) and §10 (decisions BD-01..16). UAE data residency, FAPI 2.0 posture (mTLS/PAR/PKCE via the egress gateway P6), and the retention/audit rules are non-negotiable hard stops.

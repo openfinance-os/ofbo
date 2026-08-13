@@ -25,14 +25,14 @@ export interface HighClassAuditSink {
   emit(event: HighClassAuditEvent): Promise<void>
 }
 
-export class InMemoryHighClassAuditSink implements HighClassAuditSink {
-  readonly events: HighClassAuditEvent[] = []
-  async emit(event: HighClassAuditEvent): Promise<void> {
-    this.events.push(event)
-  }
-}
 
 /** True when a sink also exposes the High-class emit path (e.g. PgAuditEmitter). */
 export function hasHighClassEmit(sink: unknown): sink is HighClassAuditSink {
   return typeof (sink as { emit?: unknown })?.emit === 'function'
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/high-class-audit.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryHighClassAuditSink
+} from '../memory/high-class-audit.js'

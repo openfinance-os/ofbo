@@ -27,14 +27,6 @@ export interface LineageReader {
 }
 
 /** No-database default (tests / local dev). The worker wires PgLineageReader. */
-export class InMemoryLineageReader implements LineageReader {
-  constructor(private readonly events: Record<string, TableLineage> = {}) {}
-  async readTable(tableName: string): Promise<TableLineage> {
-    return (
-      this.events[tableName] ?? { table_name: tableName, columns: [], sources: [], event_count: 0, first_seen: null, last_seen: null, recent: [] }
-    )
-  }
-}
 
 export interface LineageServiceDeps {
   reader: LineageReader
@@ -66,3 +58,9 @@ export class LineageService {
     return lineage
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/lineage.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryLineageReader
+} from '../../memory/lineage.js'
