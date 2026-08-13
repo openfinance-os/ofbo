@@ -2,7 +2,11 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**'] },
+  {
+    // The billing prototype is a self-contained browser/Node reference artefact with its own
+    // executable verifier; production linting starts at the packages/services implementation.
+    ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**', 'docs/prototypes/billing/**']
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

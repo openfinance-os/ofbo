@@ -27,6 +27,8 @@ import {
   PgBillingCollectionsStore,
   PgBillingAccountingStore,
   PgBillingRevenueAssuranceStore,
+  PgBillingProfitabilityStore,
+  PgTenantBillingServiceStore,
   PgInvoiceRunStore,
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
@@ -38,8 +40,7 @@ import {
   PgQueryPurposeRegistrar,
   retentionStatus
 } from '@ofbo/db'
-import { getAdapter, profileFromConfig } from '@ofbo/ports'
-import { tenantBySlug } from '@ofbo/synthetic-data'
+import { getAdapter, profileFromConfig, type IdentityProviderPort } from '@ofbo/ports'
 import pg from 'pg'
 import { createApp } from './app.js'
 import { ReconciliationService } from './reconciliation/service.js'
@@ -52,7 +53,7 @@ import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profilin
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 import { LfiCadenceMonitor } from './lfi-reports/service.js'
 import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
-import { fils, SCHEME_RATE_CARD_2026_06_02 } from '@ofbo/billing'
+import { fils, SCHEME_RATE_CARD_2026_06_02, type RateCard } from '@ofbo/billing'
 import {
   BILLING_RATE_CARD_SOURCES,
   BILLING_RATE_CARD_WATCH_CRON,
@@ -61,6 +62,8 @@ import {
 import { BillingMemoReconciliationService } from './billing/memo-reconciliation.js'
 import { isExpectedMemoGenerationDay, previousUtcMonth } from './billing/pg-memo-reconciliation.js'
 import { RevenueAssuranceService } from './billing/revenue-assurance.js'
+import { BillingProfitabilityService } from './billing/profitability.js'
+import { BillingTenantService } from './billing/tenant-service.js'
 
 /**
  * Cloudflare Workers entry (demo profile, BD-14). The node entry stays in
@@ -89,28 +92,32 @@ interface WorkerEnv {
    *  audit sink, and a sandbox egress — so a trainee's action never reaches production data,
    *  the production audit trail, or the real scheme. */
   OFBO_TRAINING?: string
-  /** HOST-01 scaffold (ADR 0027) — 'true' enables the flagged three-tenant demo, in which the
-   *  request's tenant rides an `x-ofbo-tenant` slug header. OFF by default: the demo (and every
-   *  non-demo deployment) stays single-tenant on BANK_ID unless this is explicitly set. */
+  /** HOST-01 (ADR 0028) — enables verified P2 tenant claims for the shared demo. OFF by default:
+   *  single-tenant deployments remain pinned to BANK_ID. */
   MULTITENANT_DEMO?: string
 }
 
 const DEFAULT_BANK_ID = '11111111-1111-4111-8111-111111111111'
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §2.4, §6) —
- * resolve the request's tenant. In the flagged multi-tenant demo (MULTITENANT_DEMO=true) the
- * tenant rides an `x-ofbo-tenant` slug header — a DEMO STAND-IN for the production path, where
- * tenant is a verified claim on the authenticated principal (blueprint §2.4). Outside the demo
- * flag the header is ignored and the deployment's single BANK_ID is used, so the header can never
- * select a tenant in a non-demo deployment. An unknown slug falls back to the default tenant.
+ * Resolve the store tenancy only from an IdP-verified bearer claim. Invalid/unscoped credentials
+ * bind to the deployment fallback solely so the normal auth middleware can emit its 401 audit;
+ * they never select another tenant. No request header is an authority boundary.
  */
-function resolveRequestBankId(request: Request, env: WorkerEnv): string {
+async function resolveRequestBankId(request: Request, env: WorkerEnv, idp: IdentityProviderPort): Promise<string> {
   const fallback = env.BANK_ID ?? DEFAULT_BANK_ID
   if (env.MULTITENANT_DEMO !== 'true') return fallback
-  const slug = request.headers.get('x-ofbo-tenant')
-  if (!slug) return fallback
-  return tenantBySlug(slug)?.bank_id ?? fallback
+  const bearer = request.headers.get('authorization')
+  if (!bearer?.startsWith('Bearer ')) return fallback
+  const token = bearer.slice('Bearer '.length)
+  try {
+    const agent = await idp.verifyAgentSession(token)
+    if (agent) return agent.bank_id ?? fallback
+    const claims = await idp.verifyToken(token)
+    return claims.mfa ? claims.bank_id ?? fallback : fallback
+  } catch {
+    return fallback
+  }
 }
 
 interface WorkerContext {
@@ -131,6 +138,71 @@ interface ScheduledEvent {
  */
 const DAILY_RECON_CRON = '0 1 * * *'
 
+async function configuredBillingProfiles(url: string, env: WorkerEnv): Promise<Array<{ bankId: string; rateCard: RateCard }>> {
+  const fallbackBankId = env.BANK_ID ?? DEFAULT_BANK_ID
+  const store = new PgTenantBillingServiceStore(url)
+  try {
+    const bankIds = env.MULTITENANT_DEMO === 'true' ? await store.activeTenantBankIds() : [fallbackBankId]
+    if (bankIds.length === 0) return [{ bankId: fallbackBankId, rateCard: SCHEME_RATE_CARD_2026_06_02 }]
+    const tenantService = new BillingTenantService({ configurations: store })
+    return Promise.all(bankIds.map(async (bankId) => {
+      const configuration = await store.configuration(bankId)
+      if (!configuration) {
+        if (env.MULTITENANT_DEMO === 'true') throw new Error(`active billing tenant ${bankId} has no configuration`)
+        return { bankId, rateCard: SCHEME_RATE_CARD_2026_06_02 }
+      }
+      const profile = await tenantService.profile(bankId, SCHEME_RATE_CARD_2026_06_02)
+      return { bankId, rateCard: profile.rateCard }
+    }))
+  } finally {
+    await store.close()
+  }
+}
+
+/** BILL-10: run the monthly projection independently inside each tenant's RLS context. */
+async function runTenantBillingProjection(
+  url: string,
+  bankId: string,
+  rateCard: RateCard,
+  billingRunAt: Date
+): Promise<void> {
+  const tenancy = { bankId, channel: 'internal_retail' }
+  const lineage = new PgLineageEmitter(url, tenancy)
+  const audit = new PgAuditEmitter(url, tenancy, lineage)
+  const reconciliationStore = new PgReconciliationLogStore(url, tenancy, lineage)
+  const breakStore = new PgReconciliationBreakStore(url, tenancy, lineage)
+  const memoStore = new PgBillingMemoStore(url, tenancy, lineage)
+  const assuranceStore = new PgBillingRevenueAssuranceStore(url, tenancy, lineage)
+  const workflow = new ReconciliationService({ store: reconciliationStore, breakStore, audit })
+  const memoService = new BillingMemoReconciliationService({ store: memoStore, workflow, audit })
+  const assuranceService = new RevenueAssuranceService({ store: assuranceStore, evidence: assuranceStore, audit })
+  const period = previousUtcMonth(billingRunAt)
+  try {
+    const jobs: Promise<unknown>[] = [assuranceService.generatePeriod({
+      period,
+      generatedAt: billingRunAt.toISOString(),
+      rateCard,
+      blindSpotValuationMilliFils: fils(2.5),
+      freeTierExceptions: [],
+      overageOpportunity: {
+        publishedRateMilliFils: rateCard.receivable['data.retail_page'].overageMilliFils,
+        valuationRateMilliFils: rateCard.receivable['data.retail_page'].overageMilliFils,
+        valuationRef: rateCard.receivable['data.retail_page'].overageSource
+      }
+    }, crypto.randomUUID())]
+    if (isExpectedMemoGenerationDay(billingRunAt)) {
+      jobs.push(memoService.generateExpectedMemo(period, rateCard, billingRunAt.toISOString(), crypto.randomUUID()))
+    }
+    const results = await Promise.allSettled(jobs)
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failures.length > 0) throw new AggregateError(failures.map((failure) => failure.reason), `billing projection failed for ${bankId}`)
+  } finally {
+    await Promise.allSettled([
+      reconciliationStore.close(), breakStore.close(), memoStore.close(), assuranceStore.close(), audit.close(), lineage.close()
+    ])
+  }
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: WorkerContext): Promise<Response> {
     // BACKOFFICE-59 — a TRAINING Worker short-circuits to the isolated, in-memory training
@@ -140,8 +212,10 @@ export default {
     if (env.OFBO_TRAINING === 'true') {
       return await createApp({ training: true }).fetch(request)
     }
+    const profile = profileFromConfig(env as Record<string, string | undefined>)
+    const idp = getAdapter('p2-identity-provider', profile)
     const tenancy = {
-      bankId: resolveRequestBankId(request, env),
+      bankId: await resolveRequestBankId(request, env, idp),
       channel: 'internal_retail'
     }
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
@@ -169,6 +243,14 @@ export default {
     const billingCollectionsStore = url ? new PgBillingCollectionsStore(url, tenancy, lineage) : undefined
     const billingAccountingStore = url ? new PgBillingAccountingStore(url, tenancy, lineage) : undefined
     const billingRevenueAssuranceStore = url ? new PgBillingRevenueAssuranceStore(url, tenancy, lineage) : undefined
+    const billingProfitabilityStore = url ? new PgBillingProfitabilityStore(url, tenancy) : undefined
+    const tenantBillingStore = url ? new PgTenantBillingServiceStore(url) : undefined
+    const tenantConfiguration = tenantBillingStore
+      ? await tenantBillingStore.configuration(tenancy.bankId)
+      : null
+    const billingProfitabilityService = billingProfitabilityStore && audit
+      ? new BillingProfitabilityService({ source: billingProfitabilityStore, audit })
+      : undefined
     const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, lineage) : undefined
     const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
     const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
@@ -182,8 +264,12 @@ export default {
     const readinessProfileStore = url ? new PgReadinessProfileStore(url, tenancy) : undefined
 
     const app = createApp({
+      idp,
       ...(audit ? { audit } : {}),
-      ...(approvalStore ? { approvals: { store: approvalStore } } : {}),
+      ...(approvalStore ? { approvals: {
+        store: approvalStore,
+        ...(tenantConfiguration ? { expiryBusinessHours: tenantConfiguration.approvalExpiryBusinessHours } : {})
+      } } : {}),
       ...(idempotency ? { idempotency } : {}),
       ...(riskSignals ? { superadmin: { riskSignals } } : {}),
       ...(consentEvents ? { consentEventSource: consentEvents } : {}),
@@ -205,6 +291,7 @@ export default {
       ...(billingCollectionsStore ? { billingCollectionsStore } : {}),
       ...(billingAccountingStore ? { accountingClosePackReader: billingAccountingStore } : {}),
       ...(billingRevenueAssuranceStore ? { revenueAssuranceReader: billingRevenueAssuranceStore } : {}),
+      ...(billingProfitabilityService ? { profitabilityReader: billingProfitabilityService } : {}),
       ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {}),
       ...(nebrasSnapshotStore ? { nebrasConnectivityReader: nebrasSnapshotStore } : {}),
       ...(certificationStore ? { certificationReader: certificationStore } : {}),
@@ -220,7 +307,7 @@ export default {
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, billingCollectionsStore, billingAccountingStore, billingRevenueAssuranceStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, billingCollectionsStore, billingAccountingStore, billingRevenueAssuranceStore, billingProfitabilityStore, tenantBillingStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }
@@ -237,16 +324,20 @@ export default {
     const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
     if (event.cron === BILLING_RATE_CARD_WATCH_CRON) {
       const itsm = getAdapter('p3-itsm', profileFromConfig(env as Record<string, string | undefined>))
-      const lineage = new PgLineageEmitter(url, tenancy)
-      ctx.waitUntil(runBillingRateCardWatch({
-        databaseUrl: url,
-        tenancy,
-        makeStore: (databaseUrl, config) => new PgBillingRateCardStore(databaseUrl, config, lineage),
-        makeAudit: (databaseUrl, config) => new PgAuditEmitter(databaseUrl, config, lineage),
-        itsm,
-        sources: BILLING_RATE_CARD_SOURCES,
-        rateCard: SCHEME_RATE_CARD_2026_06_02
-      }, crypto.randomUUID()).finally(() => lineage.close()))
+      const billingProfiles = await configuredBillingProfiles(url, env)
+      ctx.waitUntil(Promise.allSettled(billingProfiles.map(({ bankId, rateCard }) => {
+        const tenant = { bankId, channel: 'internal_retail' }
+        const lineage = new PgLineageEmitter(url, tenant)
+        return runBillingRateCardWatch({
+          databaseUrl: url,
+          tenancy: tenant,
+          makeStore: (databaseUrl, config) => new PgBillingRateCardStore(databaseUrl, config, lineage),
+          makeAudit: (databaseUrl, config) => new PgAuditEmitter(databaseUrl, config, lineage),
+          itsm,
+          sources: BILLING_RATE_CARD_SOURCES,
+          rateCard
+        }, crypto.randomUUID()).finally(() => lineage.close())
+      })))
       return
     }
     // DEMO-01 — demo-warmth ping. Any cron OTHER than the daily reconciliation is the frequent
@@ -272,36 +363,11 @@ export default {
     const itsm = getAdapter('p3-itsm', profile)
     const apm = getAdapter('p5-apm', profile)
     const egress = getAdapter('p6-nebras-egress', profile)
+    const billingProfiles = await configuredBillingProfiles(url, env)
+    const tenantBillingJobs = billingProfiles.map(({ bankId, rateCard }) =>
+      runTenantBillingProjection(url, bankId, rateCard, new Date(event.scheduledTime ?? Date.now()))
+    )
     const service = new ReconciliationService({ store, breakStore, itsm, apm, audit })
-    const billingMemoStore = new PgBillingMemoStore(url, tenancy, lineage)
-    const billingMemoService = new BillingMemoReconciliationService({
-      store: billingMemoStore,
-      workflow: service,
-      audit
-    })
-    const revenueAssuranceStore = new PgBillingRevenueAssuranceStore(url, tenancy, lineage)
-    const revenueAssuranceService = new RevenueAssuranceService({ store: revenueAssuranceStore, evidence: revenueAssuranceStore, audit })
-    const billingRunAt = new Date(event.scheduledTime ?? Date.now())
-    const generateExpectedMemo = () => isExpectedMemoGenerationDay(billingRunAt)
-      ? billingMemoService.generateExpectedMemo(
-          previousUtcMonth(billingRunAt),
-          SCHEME_RATE_CARD_2026_06_02,
-          billingRunAt.toISOString(),
-          crypto.randomUUID()
-        )
-      : Promise.resolve(null)
-    // BILL-08 — refresh the prior month's immutable assurance projection from the
-    // latest meter/memo/rerating/counterparty evidence. Later evidence creates a new
-    // report version; identical daily retries resolve idempotently.
-    const generateRevenueAssurance = () => revenueAssuranceService.generatePeriod({
-      period: previousUtcMonth(billingRunAt), generatedAt: billingRunAt.toISOString(),
-      rateCard: SCHEME_RATE_CARD_2026_06_02, blindSpotValuationMilliFils: fils(2.5), freeTierExceptions: [],
-      overageOpportunity: {
-        publishedRateMilliFils: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageMilliFils,
-        valuationRateMilliFils: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageMilliFils,
-        valuationRef: SCHEME_RATE_CARD_2026_06_02.receivable['data.retail_page'].overageSource
-      }
-    }, crypto.randomUUID())
     // BACKOFFICE-32: the daily ingestion polls the current month's Nebras
     // surfaces via P6 and refreshes the materialized aggregates the M4 views read.
     const period = new Date().toISOString().slice(0, 7)
@@ -351,8 +417,7 @@ export default {
     ctx.waitUntil(
       Promise.allSettled([
         service.runDaily(crypto.randomUUID()),
-        generateExpectedMemo(),
-        generateRevenueAssurance(),
+        ...tenantBillingJobs,
         ingestion.runIngestion(period, crypto.randomUUID()),
         runLiability(),
         recordCaap().then(() => anomalyDetector.detect(crypto.randomUUID())),
@@ -362,7 +427,7 @@ export default {
         lfiCadenceMonitor.check(crypto.randomUUID()),
         runForecast()
       ]).finally(async () => {
-        await Promise.all([store.close(), breakStore.close(), billingMemoStore.close(), revenueAssuranceStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
+        await Promise.all([store.close(), breakStore.close(), snapshotStore.close(), aggregateStore.close(), riskSignals.close(), riskMetrics.close(), anomalyStore.close(), lfiReports.close(), audit.close(), lineage.close()])
       })
     )
   }

@@ -52,6 +52,8 @@ export interface Principal {
    *  the known-persona autocomplete while admitting agent persona ids. */
   persona: Persona | (string & {})
   scopes: string[]
+  /** HOST-01: verified P2 tenant claim. Undefined only in legacy single-tenant deployments. */
+  bankId?: string
   /** ADR 0018 — set when the caller is a registered automation agent (a verified agent
    *  session token, NOT a human OIDC token). Carries the server-verified identity + the
    *  registration's policy so the BFF can re-assert per-(agent_id, session_id) spend-control
@@ -207,7 +209,8 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
           session_id: agentClaims.session_id,
           allow_mutations: agentClaims.allow_mutations,
           spend_budget: agentClaims.spend_budget
-        }
+        },
+        ...(agentClaims.bank_id ? { bankId: agentClaims.bank_id } : {})
       })
       await next()
       return
@@ -256,7 +259,7 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       trace_id: traceId,
       superadmin_marker: scopes.includes('platform:superadmin')
     })
-    c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes })
+    c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes, ...(claims.bank_id ? { bankId: claims.bank_id } : {}) })
     if (scopes.includes('platform:superadmin') && hooks.onSuperAdminSession) {
       await hooks.onSuperAdminSession(claims.subject, token, traceId)
     }

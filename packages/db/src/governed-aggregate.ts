@@ -62,7 +62,7 @@ export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipa
 }
 
 /**
- * HOST-02 (ADR 0027) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
+ * HOST-02 (ADR 0028) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
  * (a bank sees only its own membership row). Returns `undefined` when the bank is not enrolled in
  * any group (single-tenant default / legacy) — the caller then runs the bypass unpinned and the
  * re-scoped policy falls back to the pre-HOST-02 behaviour. When a group IS returned, the governed
@@ -120,7 +120,7 @@ export async function runGovernedAggregate<T>(
     )
   }
 
-  // HOST-02 (ADR 0027): pin the caller's tenant group so the RLS bypass is scoped to ONE
+  // HOST-02 (ADR 0028): pin the caller's tenant group so the RLS bypass is scoped to ONE
   // customer. `undefined` (bank not enrolled in a group) keeps the legacy single-tenant path.
   const tenantGroupId = await resolveTenantGroup(ctx.pool, ctx.bankId)
 
@@ -161,7 +161,8 @@ export const SEED_QUERY_PURPOSES: { purpose_code: string; description: string }[
   { purpose_code: 'risk_monitoring', description: 'Platform-wide risk signals + liability monitor — BACKOFFICE-30' },
   { purpose_code: 'operations_monitoring', description: 'Platform health, certification pipeline, outages, recon SLO — BACKOFFICE-28' },
   { purpose_code: 'compliance_reporting', description: 'Consent volumes, retention posture, dispute/risk backlogs — BACKOFFICE-29' },
-  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' }
+  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' },
+  { purpose_code: 'billing_cross_tenant_benchmark', description: 'Aggregate-only multi-tenant billing profitability and assurance benchmark — BILL-10' }
 ]
 
 /** Columns written when seeding/registering a query purpose — for BCBS 239 lineage (Q4.5). */

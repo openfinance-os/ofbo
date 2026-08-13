@@ -62,6 +62,13 @@ describe('BACKOFFICE-47 — mandatory MFA sign-in + admin-scope minting', () => 
     expect(ok?.acting_persona).toBe('operations-analyst')
   })
 
+  it('accepts a verified demo tenant claim and rejects an unknown tenant claim', async () => {
+    await expect(idp.verifyToken('demo-token:finance-analyst@beta-bank')).resolves.toMatchObject({
+      persona: 'finance-analyst', bank_id: '22222222-2222-4222-8222-222222222222', mfa: true
+    })
+    await expect(idp.verifyToken('demo-token:finance-analyst@unknown-bank')).rejects.toThrow(/tenant/)
+  })
+
   it('mints exactly the PRD §2 scope matrix — no persona exceeds it', () => {
     // 9 = the 7 operational personas + platform-super-admin + platform-admin (BACKOFFICE-60).
     expect(ALL_PERSONAS).toHaveLength(9)

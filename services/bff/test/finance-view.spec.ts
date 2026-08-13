@@ -151,6 +151,23 @@ describe('FinanceViewService — composition', () => {
     ]))
   })
 
+  it('surfaces BILL-09 reconciled profitability by TPP and product family', async () => {
+    const report = {
+      period: PERIOD, currency: 'AED' as const,
+      totals: { receivableMilliFils: aed(100), hubCostMilliFils: aed(10), liabilityProvisionMilliFils: aed(5), tppAasMarginMilliFils: aed(2), profitMilliFils: aed(87) },
+      byTpp: [{ tppId: 'TPP-1', receivableMilliFils: aed(100), hubCostMilliFils: aed(10), liabilityProvisionMilliFils: aed(5), tppAasMarginMilliFils: aed(2), profitMilliFils: aed(87), sourceRefs: ['INV-1'], profitAed: 87 }],
+      byProductFamily: [{ productFamily: 'payments' as const, receivableMilliFils: aed(100), hubCostMilliFils: aed(10), liabilityProvisionMilliFils: aed(5), tppAasMarginMilliFils: aed(2), profitMilliFils: aed(87), sourceRefs: ['INV-1'], profitAed: 87 }],
+      reconciliation: { balanced: true, deltaMilliFils: 0 }
+    }
+    const { data } = await svc({ profitability: { latestReport: async () => report } }).view(finance, PERIOD)
+    expect(data.tpp_profitability).toEqual(expect.objectContaining({ totals: report.totals, reconciliation: { balanced: true, deltaMilliFils: 0 } }))
+    const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
+    expect(sections.find((section) => section.title === 'TPP Profitability')?.stats).toEqual(expect.arrayContaining([
+      { label: 'Receivables', value: 'AED 100.00' },
+      { label: 'Net contribution', value: 'AED 87.00' }
+    ]))
+  })
+
   it('defaults to the current month when no period is given', async () => {
     const { data } = await svc().view(finance)
     expect(data.period).toBe('2026-05')

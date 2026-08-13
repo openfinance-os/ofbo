@@ -23,7 +23,7 @@ export function beginAppTx(bankId: string): string {
  * through `runGovernedAggregate`, which first verifies a registered+approved
  * `query_purpose_registry` purpose and High-class logs the bypass. Never call this directly.
  *
- * HOST-02 (ADR 0027) — `tenantGroupId` scopes the bypass to ONE customer's tenant group. When
+ * HOST-02 (ADR 0028) — `tenantGroupId` scopes the bypass to ONE customer's tenant group. When
  * provided it pins `app.tenant_group`, and the re-scoped `internal_view_select` policies
  * (migration 0030) read only the bank_ids in that group — so a hosted deployment can never read
  * across CUSTOMER boundaries. When omitted (single-tenant default / legacy callers) no group is

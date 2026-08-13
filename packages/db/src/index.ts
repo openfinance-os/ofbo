@@ -221,6 +221,22 @@ export {
 } from './compliance-view-store.js'
 export { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
 export {
+  DEFAULT_TENANT_CONFIGURATION,
+  normalizeTenantConfiguration,
+  type TenantCollectionRail,
+  type TenantCollectionRailPolicy,
+  type TenantConfiguration,
+  type TenantConfigurationInput
+} from './tenant-configuration.js'
+export {
+  PgTenantBillingServiceStore,
+  type TenantProvisioningInput,
+  type TenantPortableBillingExport,
+  type BillingBenchmarkSnapshotInput,
+  type CrossTenantBillingBenchmark
+} from './tenant-billing-service-store.js'
+export { PgBillingProfitabilityStore } from './billing-profitability-store.js'
+export {
   GovernedQueryError,
   isPurposeApproved,
   resolveTenantGroup,

@@ -17,7 +17,7 @@ export interface CareSurfacePort {
 
 /** P2 — Enterprise IdP (OIDC): portal sign-in, MFA mandatory. */
 export interface IdentityProviderPort {
-  verifyToken(token: string): Promise<{ subject: string; persona: string; mfa: boolean }>
+  verifyToken(token: string): Promise<{ subject: string; persona: string; mfa: boolean; bank_id?: string }>
   personaLogins(): Promise<{ persona: string; display_name: string; demo_token: string }[]>
   /** ADR 0018 (Option 2) — mint a short-lived AGENT session token (token-exchange, RFC 8693)
    *  for an already-registered, ACTIVE automation. act = agent_id; scopes are the
@@ -27,7 +27,7 @@ export interface IdentityProviderPort {
    *  The demo (sim) mints an HMAC-signed token; the enterprise adapter (M6) mints a
    *  DCR client-credentials / mTLS token via the bank auth service (Option 1). */
   mintAgentSession(
-    input: { agent_id: string; persona: string; scopes: string[]; allow_mutations: boolean; spend_budget: number },
+    input: { agent_id: string; persona: string; scopes: string[]; allow_mutations: boolean; spend_budget: number; bank_id?: string },
     trace: TraceContext
   ): Promise<{ token: string; session_id: string; expires_at: string }>
   /** Verify an agent session token this port minted. Returns the claims, or null when the
@@ -41,6 +41,7 @@ export interface IdentityProviderPort {
     scopes: string[]
     allow_mutations: boolean
     spend_budget: number
+    bank_id?: string
     expires_at: string
   } | null>
 }

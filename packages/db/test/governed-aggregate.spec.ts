@@ -52,14 +52,15 @@ describe('beginInternalViewTx', () => {
 })
 
 describe('SEED_QUERY_PURPOSES (BD-13 starter set)', () => {
-  it('is exactly the six approved purposes', () => {
+  it('is exactly the approved purposes', () => {
     expect(SEED_QUERY_PURPOSES.map((p) => p.purpose_code)).toEqual([
       'executive_dashboard',
       'finance_view',
       'risk_monitoring',
       'operations_monitoring',
       'compliance_reporting',
-      'regulatory_periodic_report'
+      'regulatory_periodic_report',
+      'billing_cross_tenant_benchmark'
     ])
   })
 })

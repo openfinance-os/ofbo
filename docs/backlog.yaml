@@ -512,6 +512,7 @@ milestones:
             the VAL-01 ROI narrative.
       - id: BILL-09
         title: TPP profitability analytics and fee simulation
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [BILL-03]
         note: >-
@@ -529,6 +530,7 @@ milestones:
             directory rate vs the silent default of zero.
       - id: BILL-10
         title: Multi-tenant billing service enablement (Tier 2 BOaaS)
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [HOST-01]
         note: >-

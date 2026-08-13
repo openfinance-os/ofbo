@@ -36,6 +36,12 @@ const PERSONAS = [
   ['platform-super-admin', 'Platform Super Administrator']
 ] as const
 
+const DEMO_TENANT_BANK_IDS: Readonly<Record<string, string>> = Object.freeze({
+  'alpha-bank': '11111111-1111-4111-8111-111111111111',
+  'beta-bank': '22222222-2222-4222-8222-222222222222',
+  'gamma-takaful': '33333333-3333-4333-8333-333333333333'
+})
+
 const simCareSurface: CareSurfacePort = {
   async mintCareToken({ agent_id, psu_id }) {
     return {
@@ -77,6 +83,7 @@ interface AgentSessionClaims {
   scopes: string[]
   allow_mutations: boolean
   spend_budget: number
+  bank_id?: string
   /** Absolute expiry (epoch ms). Short TTL; registry revoke denylists earlier (BACKOFFICE-60). */
   exp: number
 }
@@ -126,16 +133,21 @@ const simIdentityProvider: IdentityProviderPort = {
     }))
   },
   async verifyToken(token) {
-    const persona = token.replace(/^demo-token:/, '')
+    const match = /^demo-token:([^@]+)(?:@([a-z0-9-]+))?$/.exec(token)
+    if (!match) throw new Error('unknown demo token')
+    const persona = match[1]!
+    const tenantSlug = match[2]
     if (!PERSONAS.some(([p]) => p === persona)) throw new Error('unknown demo token')
-    return { subject: `demo:${persona}`, persona, mfa: true }
+    const bank_id = tenantSlug ? DEMO_TENANT_BANK_IDS[tenantSlug] : undefined
+    if (tenantSlug && !bank_id) throw new Error('unknown demo tenant claim')
+    return { subject: `demo:${persona}${tenantSlug ? `@${tenantSlug}` : ''}`, persona, mfa: true, ...(bank_id ? { bank_id } : {}) }
   },
   // Token minting is non-deterministic by nature (fresh session_id + expiry per mint) — like
   // mintCareToken above. The signature makes the token unforgeable; the claims are verifiable.
-  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget }) {
+  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget, bank_id }) {
     const session_id = crypto.randomUUID()
     const exp = Date.now() + AGENT_SESSION_TTL_MS
-    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, exp })
+    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, ...(bank_id ? { bank_id } : {}), exp })
     return { token, session_id, expires_at: new Date(exp).toISOString() }
   },
   async verifyAgentSession(token) {
@@ -148,6 +160,7 @@ const simIdentityProvider: IdentityProviderPort = {
       scopes: claims.scopes,
       allow_mutations: claims.allow_mutations,
       spend_budget: claims.spend_budget,
+      ...(claims.bank_id ? { bank_id: claims.bank_id } : {}),
       expires_at: new Date(claims.exp).toISOString()
     }
   }

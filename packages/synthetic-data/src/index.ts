@@ -51,7 +51,7 @@ export function billingMeteringFixture(): unknown[] {
 export const DEMO_BANK_ID = '11111111-1111-4111-8111-111111111111'
 
 /**
- * HOST-01 scaffold (ADR 0027 / docs/proposals/multitenant-platform-blueprint.md §6) — the
+ * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the
  * flagged three-tenant demo. Each tenant is one customer's single-member tenant group (HOST-02),
  * proving the platform runs many institutions on one deployment, provably isolated. Names use the
  * same obviously-synthetic convention as "Alpha Bank" (no real institution). Zero-PII holds per

@@ -1,6 +1,6 @@
-# ADR 0027 — Multi-tenant tenancy model (operator → tenant-group → bank_id)
+# ADR 0028 — Multi-tenant tenancy model (operator → tenant-group → bank_id)
 
-- Status: **Proposed** — awaiting human decision (cross-cutting tenancy primitive; CLAUDE.md rule 6).
+- Status: **Accepted** — Option 1 approved by the user on 13 Aug 2026.
 - Date: 2026-07-21
 - Related: `docs/proposals/multitenant-platform-blueprint.md` (decision **D-1**), **ADR 0026** (hosted-SaaS motion),
   **ADR 0015** (governed cross-fintech aggregation), **ADR 0006** (LFI/TPP wall), backlog **HOST-01/02/03**;
@@ -106,11 +106,9 @@ for console-tier / long-tail / Tier-2; **silo/cell as a paid upgrade** for Tier-
   single-member tenant group and demonstrates the isolation on screen; the demo profile stays **single-tenant by
   default** (blueprint §6). Zero-PII and the DEMO banner hold per tenant.
 
-## Decision needed from the human
+## Decision
 
-Accept/reject the tenant-group-above-`bank_id` model (option 1) + tiered isolation. On acceptance: (a) HOST-02
-re-scope ships first; (b) HOST-01 provisioning + per-tenant §10 config follows; (c) the super-admin re-scope and
-HOST-03 cert-custody ADRs are raised (blueprint D-4/D-5). The three-tenant demo scaffold that accompanies this
-ADR implements the model additively behind a flag so the decision can be *seen* before it is ratified.
-
-_Pending._
+**Accepted by the user on 13 Aug 2026.** Implement Option 1: tenant-group above `bank_id`, shared-schema
+PostgreSQL RLS, group-scoped governed aggregation, and tiered physical isolation as an optional deployment
+posture. HOST-02 remains the prerequisite; HOST-01 and BILL-10 may now complete on this model. HOST-03
+certificate custody and operator break-glass remain separately governed follow-ups.

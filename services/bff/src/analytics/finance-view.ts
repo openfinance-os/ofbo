@@ -8,7 +8,7 @@ import { scopeDenied } from '../errors.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
 import type { CollectionsFinanceSummary } from '../billing/collections.js'
-import type { RevenueAssuranceReport } from '@ofbo/billing'
+import type { ProfitabilityReport, RevenueAssuranceReport } from '@ofbo/billing'
 
 /**
  * BACKOFFICE-31 — Finance View. A read-only analytics view (reconciliation:read,
@@ -43,6 +43,9 @@ export interface FinanceCollectionsReader {
 export interface FinanceRevenueAssuranceReader {
   latestReport(period: string): Promise<RevenueAssuranceReport | null>
 }
+export interface FinanceProfitabilityReader {
+  latestReport(period: string): Promise<ProfitabilityReport | null>
+}
 
 export interface FinanceViewDeps {
   feeAccrual: FinanceFeeAccrualReader
@@ -51,6 +54,7 @@ export interface FinanceViewDeps {
   unbilled: FinanceUnbilledReader
   collections?: FinanceCollectionsReader
   assurance?: FinanceRevenueAssuranceReader
+  profitability?: FinanceProfitabilityReader
   now?: () => Date
 }
 
@@ -75,7 +79,7 @@ export class FinanceViewService {
     if (!MONTH.test(p)) throw new FinanceViewError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
 
     const now = (this.deps.now ?? (() => new Date()))()
-    const [accrual, margin, openDisputes, unbilled, sourceTotals, collections, assurance] = await Promise.all([
+    const [accrual, margin, openDisputes, unbilled, sourceTotals, collections, assurance, profitability] = await Promise.all([
       this.deps.feeAccrual.feeAccrualForPeriod(p),
       this.deps.margin.marginForPeriod(principal, p),
       this.deps.disputes.openNebrasDisputeCount(principal, p),
@@ -91,7 +95,8 @@ export class FinanceViewService {
         dunningByState: {},
         dsoByTpp: []
       }),
-      this.deps.assurance?.latestReport(p) ?? Promise.resolve(null)
+      this.deps.assurance?.latestReport(p) ?? Promise.resolve(null),
+      this.deps.profitability?.latestReport(p) ?? Promise.resolve(null)
     ])
 
     // UIF (ADR 0016 D1) — typed sections the portal renders as bespoke panels (same shared
@@ -160,6 +165,16 @@ export class FinanceViewService {
         { label: 'Missed dispute windows', value: String(assurance.disputeWindow.missed) }
       ]
     })
+    if (profitability) sections.push({
+      kind: 'kpi-strip',
+      title: 'TPP Profitability',
+      stats: [
+        { label: 'Receivables', value: fmtMilliFils(profitability.totals.receivableMilliFils) },
+        { label: 'Hub costs', value: fmtMilliFils(profitability.totals.hubCostMilliFils) },
+        { label: 'Liability provisions', value: fmtMilliFils(profitability.totals.liabilityProvisionMilliFils) },
+        { label: 'Net contribution', value: fmtMilliFils(profitability.totals.profitMilliFils) }
+      ]
+    })
 
     const data = {
       sections,
@@ -198,6 +213,12 @@ export class FinanceViewService {
           code: finding.code, amount_milli_fils: finding.amountMilliFils,
           counterfactual_milli_fils: finding.counterfactualMilliFils, status: finding.status, owner: finding.owner
         }))
+      } : null,
+      tpp_profitability: profitability ? {
+        totals: profitability.totals,
+        by_tpp: profitability.byTpp,
+        by_product_family: profitability.byProductFamily,
+        reconciliation: profitability.reconciliation
       } : null,
       roi_narrative: {
         fee_variance_recovered_milli_fils: assurance?.roiContribution.feeVarianceRecoveredMilliFils ?? 0,

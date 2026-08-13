@@ -1757,3 +1757,26 @@ StrykerJS (`@stryker-mutator/vitest-runner`) scoped to the security core — `rb
 Honest baseline, not a vanity number. The 101 survivors are the hardening backlog — `StringLiteral` (audit/error text), `Regex` (code-format validation), and the highest-value `ConditionalExpression` flips in the four-eyes guards. Killing those + raising `break` is the intended ongoing ratchet.
 
 Adds two devDeps (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`); `test:mutation` script; `.stryker-tmp/` + `reports/mutation/` gitignored. Reviewers: pending PR. ADR 0021; backlog HARNESS-04 → done.
+
+---
+
+## 2026-08-13 — BILL-09/BILL-10: profitability and hosted tenant billing completion
+
+Completed the approved non-insurance billing plan. BILL-09 adds deterministic per-TPP and
+per-product-family profitability from persisted receivables/payables evidence, side-effect-free
+fee and overage simulations, a sha256-sealed CBUAE annual-review export, and a Finance View
+profitability block. Liability and TPP-aaS margin inputs remain explicit evidence seams; the
+implementation does not invent insurance commissions or an insurance commercial model.
+
+BILL-10 adds the billing-specific HOST-01 substrate accepted in ADR 0028: idempotent tenant
+provisioning, verified P2 tenant claims, per-tenant approval/rating/invoice/ASP/collection policy,
+multi-tenant scheduled projections, tenant-scoped assurance, aggregate-only k>=3 benchmarking
+behind `query_purpose_registry` with High-class audit, and a sha256-sealed portable export of the
+complete tenant billing dataset. Migration 0038 keeps tenant application reads RLS-pinned while
+reserving provisioning and aggregate computation for the operator control plane. The broader
+HOST-01 work outside billing remains separately scoped.
+
+Evidence: monorepo typecheck and ESLint clean; full unit suite 1,305/1,305 green; dedicated
+Postgres integration test added for migrations, billing-table
+RLS, tenant-only export, and governed three-tenant benchmark. The local environment did not expose
+a database connection, so the real-Postgres suite remains a CI gate.

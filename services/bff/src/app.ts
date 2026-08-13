@@ -100,7 +100,7 @@ import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyS
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
 import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
 import { strDraftRoutes } from './str/routes.js'
-import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
+import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceProfitabilityReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
 import {
   BillingCollectionsService,
   InMemoryBillingCollectionsStore,
@@ -305,6 +305,8 @@ export interface AppDeps {
   billingCollectionsStore?: BillingCollectionsStore
   /** BILL-08 — latest immutable revenue-assurance report for Finance View/VAL-01 composition. */
   revenueAssuranceReader?: FinanceRevenueAssuranceReader
+  /** BILL-09 — deterministic P&L by TPP/product family for the Finance View. */
+  profitabilityReader?: FinanceProfitabilityReader
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
   /** BACKOFFICE-75 — respondent-side Nebras dispute store (defaults in-memory; the
@@ -556,7 +558,8 @@ export function createApp(deps: AppDeps = {}) {
     disputes: reconciliationService,
     unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length },
     collections: billingCollectionsService,
-    assurance: deps.revenueAssuranceReader
+    assurance: deps.revenueAssuranceReader,
+    profitability: deps.profitabilityReader
   })
   // Shared analytics readers (BACKOFFICE-28/-29/-30/-27): the TPP onboarding pipeline
   // (registration-state counts), certification per role, the P8 onboarding-handover

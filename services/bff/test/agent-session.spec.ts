@@ -97,6 +97,23 @@ describe('ADR 0018 — agent session mint endpoint', () => {
     expect(minted?.acting_principal).toBe('agent-int-1')
   })
 
+  it('binds an agent session to the human administrator verified tenant claim', async () => {
+    const { app } = await appWith(seedAgent())
+    const res = await app.request('/back-office/agents/agent-int-1:mint-session', {
+      method: 'POST',
+      headers: {
+        ...FAPI_HEADERS,
+        authorization: 'Bearer demo-token:platform-admin@beta-bank',
+        'content-type': 'application/json',
+        'idempotency-key': 'tenant-agent-session'
+      },
+      body: '{}'
+    })
+    expect(res.status).toBe(200)
+    const claims = await idp.verifyAgentSession((await sessionOf(res)).session_token)
+    expect(claims?.bank_id).toBe('22222222-2222-4222-8222-222222222222')
+  })
+
   it('rejects mint for an unknown agent (404)', async () => {
     const { app } = await appWith(seedAgent())
     expect((await mint(app, 'nope')).status).toBe(404)

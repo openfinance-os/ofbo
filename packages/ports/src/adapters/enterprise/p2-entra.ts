@@ -45,6 +45,7 @@ export interface AgentSessionInput {
   scopes: string[]
   allow_mutations: boolean
   spend_budget: number
+  bank_id?: string
 }
 export interface AgentSessionClaims extends AgentSessionInput {
   session_id: string
@@ -63,6 +64,9 @@ export interface EntraIdpConfig {
   personaClaim: string
   /** claim value → OFBO persona key (e.g. an Entra app-role or group oid → 'compliance-officer'). */
   personaMapping: Record<string, string>
+  /** Optional verified token claim → OFBO bank_id map for shared multi-tenant deployments. */
+  tenantClaim?: string
+  tenantMapping?: Record<string, string>
   /** Optional friendly names for personaLogins() (documentation only — never used to log in). */
   personaDisplayNames?: Record<string, string>
   verifyJwt: JwtVerifier
@@ -98,7 +102,7 @@ function mapPersona(raw: unknown, mapping: Record<string, string>): string | nul
 export class EntraIdentityProviderAdapter implements IdentityProviderPort {
   constructor(private readonly cfg: EntraIdpConfig) {}
 
-  async verifyToken(token: string): Promise<{ subject: string; persona: string; mfa: boolean }> {
+  async verifyToken(token: string): Promise<{ subject: string; persona: string; mfa: boolean; bank_id?: string }> {
     const claims = await this.cfg.verifyJwt(token) // throws on bad signature / iss / aud / exp
     const mfa = hasMfa(claims)
     if ((this.cfg.requireMfa ?? true) && !mfa) {
@@ -108,7 +112,15 @@ export class EntraIdentityProviderAdapter implements IdentityProviderPort {
     if (!subject) throw new Error('P2: Entra token has no oid/sub subject claim')
     const persona = mapPersona(claims[this.cfg.personaClaim], this.cfg.personaMapping)
     if (!persona) throw new Error(`P2: no OFBO persona mapped from the "${this.cfg.personaClaim}" claim`)
-    return { subject, persona, mfa }
+    let bank_id: string | undefined
+    if (this.cfg.tenantClaim) {
+      const raw = claims[this.cfg.tenantClaim]
+      const values = Array.isArray(raw) ? raw : raw == null ? [] : [raw]
+      const mapped = new Set(values.map((value) => this.cfg.tenantMapping?.[String(value)]).filter((value): value is string => typeof value === 'string' && value.length > 0))
+      if (mapped.size !== 1) throw new Error(`P2: token tenant claim "${this.cfg.tenantClaim}" is missing, unmapped, or ambiguous`)
+      bank_id = [...mapped][0]
+    }
+    return { subject, persona, mfa, ...(bank_id ? { bank_id } : {}) }
   }
 
   /** Enterprise has no demo persona-picker — login is an OIDC redirect to Entra. This returns the
@@ -138,6 +150,7 @@ export class EntraIdentityProviderAdapter implements IdentityProviderPort {
       scopes: claims.scopes,
       allow_mutations: claims.allow_mutations,
       spend_budget: claims.spend_budget,
+      ...(claims.bank_id ? { bank_id: claims.bank_id } : {}),
       expires_at: claims.expires_at
     }
   }
@@ -268,11 +281,27 @@ export function entraIdpFromEnv(env: Record<string, string | undefined>): EntraI
     throw new EntraIdpConfigError('P2_AGENT_SIGNING_KEY must not be the demo simulator key — use a unique production secret')
   }
 
+  let tenantMapping: Record<string, string> | undefined
+  const tenantClaim = env.P2_TENANT_CLAIM
+  if (tenantClaim) {
+    try {
+      const raw = JSON.parse(env.P2_TENANT_MAPPING ?? '') as unknown
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('not an object')
+      tenantMapping = Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
+        if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) throw new Error('invalid bank UUID')
+        return [key, value]
+      }))
+    } catch {
+      throw new EntraIdpConfigError('P2_TENANT_MAPPING must map verified tenant-claim values to bank_id UUIDs')
+    }
+  }
+
   return new EntraIdentityProviderAdapter({
     issuer,
     clientId,
     personaClaim: env.P2_PERSONA_CLAIM ?? 'roles',
     personaMapping,
+    ...(tenantClaim ? { tenantClaim, tenantMapping } : {}),
     verifyJwt: joseJwksVerifier(issuer, clientId),
     agentTokens: hmacAgentTokenService(signingKey)
   })
