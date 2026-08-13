@@ -177,11 +177,18 @@ describe('BILL production billing console', () => {
     expect(consoleBody).toMatchObject({ data: { bank_id: BANK_ID, period: '2026-07' } })
     expect(buildResponseValidator().validate('get', '/back-office/billing/console', 200, consoleBody)).toMatchObject({ ok: true })
 
-    const simulation = await app.request('/back-office/billing/profitability:simulate', {
+    const simulationRequest = {
       method: 'POST',
-      headers: { ...financeHeaders, 'content-type': 'application/json' },
+      headers: { ...financeHeaders, 'content-type': 'application/json', 'idempotency-key': 'simulation-1' },
       body: JSON.stringify({ period: '2026-07', scenario: scenarioWire })
+    }
+    const missingKey = await app.request('/back-office/billing/profitability:simulate', {
+      ...simulationRequest,
+      headers: { ...financeHeaders, 'content-type': 'application/json' }
     })
+    expect(missingKey.status).toBe(400)
+
+    const simulation = await app.request('/back-office/billing/profitability:simulate', simulationRequest)
     expect(simulation.status).toBe(200)
     await expect(simulation.json()).resolves.toMatchObject({ data: { scenario_id: scenario.scenarioId } })
   })

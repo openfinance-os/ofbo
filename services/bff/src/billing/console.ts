@@ -242,12 +242,16 @@ export function billingConsoleRoutes(service: BillingConsoleService, idempotency
       }
     },
     'post /back-office/billing/profitability:simulate': async (c) => {
+      const key = c.req.header('idempotency-key')
+      if (!key) return c.json(missingIdempotencyKey(), 400)
       try {
         const body = await c.req.json<{ period: string; scenario: FeeScenarioWire }>()
-        return c.json({
-          ...dataEnvelope(toWire(await service.simulate(c.get('principal'), { period: body.period, scenario: toFeeScenario(body.scenario) }))),
-          freshness: liveFreshness(new Date())
-        }, 200)
+        const principal = c.get('principal')
+        const cacheKey = `billing:simulate|${principal.bankId ?? 'missing'}|${principal.subject}|${body.period}|${body.scenario.scenario_id}|${key}`
+        return replayCached(c, idempotency, cacheKey, async () => c.json({
+            ...dataEnvelope(toWire(await service.simulate(principal, { period: body.period, scenario: toFeeScenario(body.scenario) }))),
+            freshness: liveFreshness(new Date())
+          }, 200))
       } catch (error) {
         const response = billingError(c, error)
         if (response) return response

@@ -1767,6 +1767,7 @@ paths:
       x-required-scope: billing:read
       parameters:
         - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
         - $ref: '#/components/parameters/superAdminJustification'
       requestBody:
         required: true

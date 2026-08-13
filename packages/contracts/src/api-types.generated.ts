@@ -3104,6 +3104,8 @@ export interface paths {
                 header: {
                     /** @description Used as the OTel trace ID end-to-end (NFR-26) */
                     "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
                     /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
                     "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
                 };
