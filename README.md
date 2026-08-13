@@ -2,7 +2,7 @@
 
 A bank-neutral back office for the internal operations a UAE bank needs to run Open Finance as a regulated business — covering **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic). Built against the CBUAE / Al Tareq / Nebras scheme.
 
-> **Status:** M0–M5 delivered and demonstrable on the live demo. Milestones M0 (foundation) → M1 (substrate + demo live) → M2 (Customer Care) → M3 (Reconciliation) → M4 (Analytics) → M5 (hardening) are complete, including the full portal UI/UX-fidelity track (dark-navy institutional shell, real OFBO brand mark, demo-framed persona switch). **M6 (per-bank enterprise port-swaps) is the remaining milestone.** 152 of the 160 backlog items are done; the remaining eight are 6 blocked on human decisions or per-bank engagement, 1 pending and 1 superseded. Seven ADRs are still **Proposed** and awaiting a human decision (0006–0011, 0027). The latest completed feature is the non-insurance LFI billing control plane and hosted tenant billing service (BILL-01–10, excluding deferred BILL-06).
+> **Status:** M0–M5 delivered and demonstrable on the live demo. Milestones M0 (foundation) → M1 (substrate + demo live) → M2 (Customer Care) → M3 (Reconciliation) → M4 (Analytics) → M5 (hardening) are complete, including the full portal UI/UX-fidelity track (dark-navy institutional shell, real OFBO brand mark, demo-framed persona switch). **M6 (per-bank enterprise port-swaps) is the remaining milestone.** 159 backlog items are done; seven are blocked, three pending, two in progress and one superseded. BILL-06 is blocked until an approved insurance commercial model and INS-01 exist. Seven ADRs are still **Proposed** and awaiting a human decision (0006–0011, 0027). The latest completed feature is the non-insurance LFI billing control plane and hosted tenant billing service (BILL-01–10, excluding deferred BILL-06).
 
 ## Understanding Open Finance (start here)
 
@@ -66,7 +66,7 @@ The demo profile (PRD §3.1) runs on free tiers with **synthetic data only** —
 | File | Purpose |
 |---|---|
 | `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
-| `specs/backoffice-openapi.yaml` | API contract — **89 paths, 12 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
+| `specs/backoffice-openapi.yaml` | API contract — **93 paths, 12 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
 | `CLAUDE.md` | Build conventions: stack defaults, ports model, API conventions, per-story workflow, regulatory hard stops |
 | `docs/architecture-overview.md` | Component architecture — system context, ports P1–P10, BFF feature modules, data layer, shared packages (+ `docs/diagrams/` SVGs) |
 | `docs/backlog.yaml` | Machine-readable work queue (drives the autonomous build loop) |
