@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS billing_expected_memo_line (
   value_milli_fils      bigint NOT NULL CHECK (value_milli_fils >= 0),
   event_ids             text[] NOT NULL,
   fapi_interaction_ids  text[] NOT NULL,
+  created_at            timestamptz NOT NULL DEFAULT now(),
   classification        ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   FOREIGN KEY (bank_id, expected_memo_id) REFERENCES billing_expected_memo(bank_id, id),
   UNIQUE (bank_id, expected_memo_id, line_ref)
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS billing_memo_diff_line (
   presence              text NOT NULL CHECK (presence IN ('both','expected_only','memo_only')),
   event_ids             text[] NOT NULL,
   fapi_interaction_ids  text[] NOT NULL,
+  created_at            timestamptz NOT NULL DEFAULT now(),
   classification        ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   FOREIGN KEY (bank_id, memo_reconciliation_id)
     REFERENCES billing_collection_memo_reconciliation(bank_id, id),

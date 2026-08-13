@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS billing_event (
   tpp_id                text NOT NULL,
   psu_id                text,
   received_at           timestamptz NOT NULL DEFAULT now(),
+  created_at            timestamptz NOT NULL DEFAULT now(),
   classification        ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   UNIQUE (bank_id, event_id)
 );
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS billing_metered_line (
   units                 integer NOT NULL CHECK (units >= 0),
   free_units            integer CHECK (free_units >= 0),
   line_payload          jsonb NOT NULL,
+  created_at            timestamptz NOT NULL DEFAULT now(),
   classification        ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   FOREIGN KEY (bank_id, event_id) REFERENCES billing_event(bank_id, event_id),
   UNIQUE (bank_id, meter_run_id, event_id, side)

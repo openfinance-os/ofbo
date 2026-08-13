@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS billing_source_snapshot (
   etag             text,
   last_modified    text,
   captured_at      timestamptz NOT NULL,
+  created_at       timestamptz NOT NULL DEFAULT now(),
   classification   ofbo_classification NOT NULL DEFAULT 'internal-confidential',
   UNIQUE (bank_id, source_url, content_hash, captured_at)
 );
