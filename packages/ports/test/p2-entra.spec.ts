@@ -40,6 +40,22 @@ const withoutOid = (c: EntraClaims): EntraClaims => {
 }
 
 describe('P2 Entra adapter — verifyToken (human OIDC)', () => {
+  it('maps a verified tenant claim to the RLS bank_id in multi-tenant mode', async () => {
+    const a = adapter(async () => ({ ...VALID, tenant_key: 'beta' }), {
+      tenantClaim: 'tenant_key',
+      tenantMapping: { beta: '22222222-2222-4222-8222-222222222222' }
+    })
+    await expect(a.verifyToken('jwt')).resolves.toMatchObject({ bank_id: '22222222-2222-4222-8222-222222222222' })
+  })
+
+  it('fails closed when a configured tenant claim is absent or unmapped', async () => {
+    const a = adapter(async () => VALID, {
+      tenantClaim: 'tenant_key',
+      tenantMapping: { beta: '22222222-2222-4222-8222-222222222222' }
+    })
+    await expect(a.verifyToken('jwt')).rejects.toThrow(/tenant claim/)
+  })
+
   it('maps an MFA-satisfied Entra token to subject + OFBO persona', async () => {
     const r = await valid().verifyToken('jwt')
     expect(r.subject).toBe('entra-oid-abc') // oid preferred over sub

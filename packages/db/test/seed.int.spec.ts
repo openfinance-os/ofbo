@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
+import { DEMO_BANK_ID } from '@ofbo/synthetic-data'
 import { applyMigrations } from '../src/apply.js'
 import { seedDemoDataset } from '../src/seed.js'
 
@@ -49,7 +50,9 @@ describe('demo seed', () => {
   it('seeds the BD-13 cross-fintech query purposes pre-approved (so governed reads pass the gate)', async () => {
     const r = await admin.query(
       `SELECT count(*)::int AS n FROM query_purpose_registry WHERE approved_by IS NOT NULL
-         AND purpose_code IN ('executive_dashboard','finance_view','risk_monitoring','operations_monitoring','compliance_reporting','regulatory_periodic_report')`
+         AND bank_id = $1
+         AND purpose_code IN ('executive_dashboard','finance_view','risk_monitoring','operations_monitoring','compliance_reporting','regulatory_periodic_report')`,
+      [DEMO_BANK_ID]
     )
     expect(r.rows[0].n).toBe(6)
     // BCBS 239 lineage for the registry write (Q4.5 stays green on a seed-only DB)

@@ -161,7 +161,8 @@ export const SEED_QUERY_PURPOSES: { purpose_code: string; description: string }[
   { purpose_code: 'risk_monitoring', description: 'Platform-wide risk signals + liability monitor — BACKOFFICE-30' },
   { purpose_code: 'operations_monitoring', description: 'Platform health, certification pipeline, outages, recon SLO — BACKOFFICE-28' },
   { purpose_code: 'compliance_reporting', description: 'Consent volumes, retention posture, dispute/risk backlogs — BACKOFFICE-29' },
-  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' }
+  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' },
+  { purpose_code: 'billing_cross_tenant_benchmark', description: 'Aggregate-only multi-tenant billing profitability and assurance benchmark — BILL-10' }
 ]
 
 /** Columns written when seeding/registering a query purpose — for BCBS 239 lineage (Q4.5). */

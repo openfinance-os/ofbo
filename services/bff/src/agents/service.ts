@@ -183,7 +183,8 @@ export class AgentRegistryService {
         persona: agent.persona,
         scopes: [...agent.scopes],
         allow_mutations: agent.allow_mutations,
-        spend_budget: agent.spend_budget
+        spend_budget: agent.spend_budget,
+        ...(principal.bankId ? { bank_id: principal.bankId } : {})
       },
       { trace_id: traceId }
     )

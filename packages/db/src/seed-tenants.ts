@@ -3,9 +3,10 @@ import { resolve } from 'node:path'
 import pg from 'pg'
 import { generateDemoDataset, DEMO_TENANTS, DEMO_BANK_ID, tppDisplayName, type DemoTenant } from '@ofbo/synthetic-data'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
+import { normalizeTenantConfiguration } from './tenant-configuration.js'
 
 /**
- * HOST-01 scaffold (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged
+ * HOST-01 / BILL-10 (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged
  * THREE-TENANT demo. Additive and OPT-IN: run AFTER the normal `db:seed:demo` (which seeds the
  * Alpha Bank reference tenant). This:
  *   1. enrols every demo tenant into its own single-member tenant group (HOST-02, migration 0030)
@@ -14,8 +15,7 @@ import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
  *   2. seeds a COMPACT, bank-scoped, PII-safe, deterministic dataset for the two NEW tenants
  *      (Beta Bank, Gamma Takaful) so their consoles are populated when the demo switches tenant.
  *
- * It deliberately does NOT re-parameterise the rich single-tenant seed (that is HOST-01 proper) and
- * does NOT introduce insurance line types / policy shapes (that is INS-01 — spec-first, human-gated):
+ * It deliberately does NOT introduce insurance line types / policy shapes (that is INS-01 — spec-first):
  * the insurer tenant reuses the bank data model for the scaffold. Every write is keyed to the
  * tenant's own bank_id with tenant-distinct natural keys, so it never collides with Alpha's seed or
  * the integration fixtures. Idempotent. Synthetic-only (999/000 invariants hold per tenant).
@@ -32,6 +32,34 @@ async function seedTenantGroup(pool: pg.Pool, t: DemoTenant): Promise<void> {
        SET tenant_group_id = EXCLUDED.tenant_group_id, group_slug = EXCLUDED.group_slug,
            display_name = EXCLUDED.display_name, tier = EXCLUDED.tier`,
     [t.bank_id, t.tenant_group_id, t.slug, t.display_name, t.tier]
+  )
+}
+
+async function seedTenantConfiguration(pool: pg.Pool, t: DemoTenant): Promise<void> {
+  const config = normalizeTenantConfiguration({
+    bankId: t.bank_id,
+    yearAnchorDate: t.slug === 'beta-bank' ? '2026-01-01' : '2025-10-01',
+    retailOverageMilliFils: t.slug === 'beta-bank' ? 800_000 : t.slug === 'alpha-bank' ? 950_000 : null,
+    invoiceTemplateRef: `pint-ae:${t.slug}:v1`,
+    invoiceBrandKey: t.brand,
+    aspRouteProfile: `asp-${t.slug}`,
+    collectionRailPolicy: t.slug === 'beta-bank'
+      ? { preferred: 'aani_request_to_pay', fallback: 'uaedds' }
+      : { preferred: 'scheme_net_settlement', fallback: 'uaedds' }
+  })
+  await pool.query(
+    `INSERT INTO tenant_configuration
+       (bank_id,approval_expiry_business_hours,sla_weekend_pause,fraud_revoke_four_eyes,care_surface_residency,
+        year_anchor_date,retail_overage_milli_fils,invoice_template_ref,invoice_brand_key,asp_route_profile,collection_rail_policy)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+     ON CONFLICT (bank_id) DO UPDATE SET
+       year_anchor_date=EXCLUDED.year_anchor_date, retail_overage_milli_fils=EXCLUDED.retail_overage_milli_fils,
+       invoice_template_ref=EXCLUDED.invoice_template_ref, invoice_brand_key=EXCLUDED.invoice_brand_key,
+       asp_route_profile=EXCLUDED.asp_route_profile, collection_rail_policy=EXCLUDED.collection_rail_policy,
+       updated_at=now()`,
+    [config.bankId,config.approvalExpiryBusinessHours,config.slaWeekendPause,config.fraudRevokeFourEyes,
+      config.careSurfaceResidency,config.yearAnchorDate,config.retailOverageMilliFils,config.invoiceTemplateRef,
+      config.invoiceBrandKey,config.aspRouteProfile,JSON.stringify(config.collectionRailPolicy)]
   )
 }
 
@@ -166,8 +194,16 @@ export async function seedDemoTenants(databaseUrl: string): Promise<void> {
   try {
     for (const t of DEMO_TENANTS) {
       await seedTenantGroup(pool, t)
+      await seedTenantConfiguration(pool, t)
       // Alpha Bank keeps its existing rich seed (db:seed / db:seed:demo); only its group mapping is added here.
       if (t.bank_id !== DEMO_BANK_ID) await seedTenantData(pool, t)
+      const traceId = `seed-tenant-${t.slug}-tenant_configuration`
+      await pool.query(
+        `INSERT INTO lineage_events (bank_id,channel,table_name,columns,source,trace_id)
+         SELECT $1,$2,'tenant_configuration',$3::text[],'seed-tenant',$4
+          WHERE NOT EXISTS (SELECT 1 FROM lineage_events WHERE table_name='tenant_configuration' AND trace_id=$4)`,
+        [t.bank_id,CH,['bank_id','year_anchor_date','retail_overage_milli_fils','invoice_template_ref','invoice_brand_key','asp_route_profile','collection_rail_policy'],traceId]
+      )
     }
     await pool.query(`REFRESH MATERIALIZED VIEW consent_admin_event`)
   } finally {

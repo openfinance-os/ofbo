@@ -182,6 +182,16 @@ function describePortContract(
       expect(reg.financial_system_ref).toBeTruthy()
       const status = await p9.getSettlementStatus(reg.financial_system_ref, trace)
       expect(['instructed', 'issued', 'settled', 'overdue', 'credit_noted']).toContain(status.invoice_status)
+      const posted = await p9.postJournalInstructions({
+        batch_id: 'GL-2026-06', period: '2026-06', posting_date: '2026-07-31', account_profile_ref: 'DEMO-COA',
+        journals: [{ journal_id: 'JRN-1', source_type: 'pint_ae_invoice', source_id: 'INV-1', lines: [
+          { account: 'AR', side: 'debit', amount_fils: 105 },
+          { account: 'REV', side: 'credit', amount_fils: 100 },
+          { account: 'VAT', side: 'credit', amount_fils: 5 }
+        ] }]
+      }, trace)
+      expect(posted.accepted).toBe(true)
+      expect(posted.journal_batch_ref).toBeTruthy()
     })
 
     it('P10 hands an STR draft to the bank workflow and returns a workflow ref (never calls AML GO)', async () => {
@@ -192,6 +202,21 @@ function describePortContract(
       )
       expect(out.workflow_ref).toBeTruthy()
       expect(out.accepted_at).toBeTruthy()
+    })
+
+    it('P11 submits reconciled PINT AE artifacts and reports the Tax Data Document', async () => {
+      const p11 = get('p11-einvoicing-asp')
+      const out = await p11.submitDocument({
+        document_id: 'INV-2026-06-TPP-A',
+        document_type: '380',
+        customization_id: 'urn:peppol:pint:billing-1@ae-1',
+        profile_id: 'urn:peppol:bis:billing',
+        mode: 'voluntary_pilot',
+        xml: '<Invoice><cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode></Invoice>',
+        pdf: new TextEncoder().encode('%PDF-1.4 synthetic')
+      }, trace)
+      expect(out).toMatchObject({ accepted: true, document_status: 'accepted', tdd_status: 'reported' })
+      expect(out.submission_ref).toContain('INV-2026-06-TPP-A')
     })
   })
 }
@@ -232,8 +257,8 @@ describe('HARNESS-10 — the port-swap gate itself', () => {
 })
 
 describe('enterprise adapters land port-by-port (M6)', () => {
-  // ADR 0024: P2 (Entra ID) is the reference template; the other nine ports are pre-staged at
-  // rung ③. ALL ten are now WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
+  // P2 (Entra ID) is the reference template; P1/P3–P10 follow ADR 0024 and P11 follows the
+  // same port-swap discipline. ALL eleven are WIRED — none throws NotImplemented — and each is FAIL-CLOSED: an
   // unconfigured enterprise adapter throws a clear config error, never a silent demo/fake (their
   // own contract suites are the per-adapter *.spec.ts files, which inject fakes).
   const PRESTAGED = PORT_NAMES.filter((p) => p !== 'p2-identity-provider')

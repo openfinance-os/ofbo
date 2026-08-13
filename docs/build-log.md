@@ -2003,3 +2003,26 @@ They are the **worst branch-covered code in the BFF** — below both the 80% flo
 Net: 24 production files, **−893/+146** lines; `reconciliation/service.ts` 1068 → 929; zero `InMemory` classes left under `src/`. Verified unit 1241/1241, integration 144/144, lint + typecheck + build clean.
 
 **Aside, found while verifying:** `pnpm db:seed` is not idempotent. Re-seeding an already-seeded database inflates row counts and reds five assertions in `packages/db/test/seed-demo.int.spec.ts` (7 vs 5 cases, 5 vs 3 invoice runs, 4 vs 2 consoles). It cost a diagnosis here — the failures looked like the refactor until the diff was checked against `packages/`, which it never touches, and a pristine database went 144/144. CI never sees it because every run starts fresh. Left alone; worth a story if anyone ever seeds twice deliberately.
+
+---
+
+## 2026-08-13 — BILL-09/BILL-10: profitability and hosted tenant billing completion
+
+Completed the approved non-insurance billing plan. BILL-09 adds deterministic per-TPP and
+per-product-family profitability from persisted receivables/payables evidence, side-effect-free
+fee and overage simulations, a sha256-sealed CBUAE annual-review export, and a Finance View
+profitability block. Liability and TPP-aaS margin inputs remain explicit evidence seams; the
+implementation does not invent insurance commissions or an insurance commercial model.
+
+BILL-10 adds the billing-specific HOST-01 substrate accepted in ADR 0028: idempotent tenant
+provisioning, verified P2 tenant claims, per-tenant approval/rating/invoice/ASP/collection policy,
+multi-tenant scheduled projections, tenant-scoped assurance, aggregate-only k>=3 benchmarking
+behind `query_purpose_registry` with High-class audit, and a sha256-sealed portable export of the
+complete tenant billing dataset. Migration 0038 keeps tenant application reads RLS-pinned while
+reserving provisioning and aggregate computation for the operator control plane. The broader
+HOST-01 work outside billing remains separately scoped.
+
+Evidence: monorepo typecheck and ESLint clean; full unit suite 1,305/1,305 green; dedicated
+Postgres integration test added for migrations, billing-table RLS, tenant-only export, and governed
+three-tenant benchmark. The local environment did not expose a database connection, so the real-
+Postgres suite remains a CI gate.
