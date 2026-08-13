@@ -8,6 +8,7 @@ import {
 import {
   applyMigrations,
   PgBillingMeteringStore,
+  PgLineageEmitter,
   PgTenantBillingServiceStore,
   seedQueryPurposes
 } from '../src/index.js'
@@ -45,7 +46,16 @@ const BILLING_TABLES = [
 
 const pool = new pg.Pool({ connectionString: DATABASE_URL })
 const auditEvents: Record<string, unknown>[] = []
-const store = new PgTenantBillingServiceStore(DATABASE_URL!, undefined, {
+const lineageByBank = new Map<string, PgLineageEmitter>()
+const lineageFor = (bankId: string): PgLineageEmitter => {
+  let emitter = lineageByBank.get(bankId)
+  if (!emitter) {
+    emitter = new PgLineageEmitter(DATABASE_URL!, { bankId, channel: 'internal_retail' })
+    lineageByBank.set(bankId, emitter)
+  }
+  return emitter
+}
+const store = new PgTenantBillingServiceStore(DATABASE_URL!, lineageFor, {
   emit: async (event) => { auditEvents.push(structuredClone(event)) }
 })
 
@@ -123,6 +133,7 @@ describe('BILL-10 tenant billing service', () => {
 
   afterAll(async () => {
     await store.close()
+    await Promise.all([...lineageByBank.values()].map((lineage) => lineage.close()))
     await pool.end()
   })
 
@@ -207,6 +218,14 @@ describe('BILL-10 tenant billing service', () => {
         assurance: assurance(index)
       }, `benchmark-${index}`)).created).toBe(true)
     }
+    const lineage = await pool.query(
+      `SELECT DISTINCT table_name FROM lineage_events
+        WHERE table_name = ANY($1::text[])`,
+      [['tenant_configuration', 'billing_benchmark_snapshot']]
+    )
+    expect(new Set(lineage.rows.map((row) => row.table_name))).toEqual(
+      new Set(['tenant_configuration', 'billing_benchmark_snapshot'])
+    )
     const benchmark = await store.crossTenantBenchmark({
       authorizingBankId: BANKS[0],
       purposeCode: 'billing_cross_tenant_benchmark',
