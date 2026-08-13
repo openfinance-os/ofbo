@@ -3047,6 +3047,187 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/billing/console": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tenant-scoped LFI billing operations read model (BILL-01..10)
+         * @description Composes the resolved rate card, collections, accounting close pack, revenue assurance and profitability outputs for the internal billing console. This is a read surface only; metering, reconciliation, rating, dunning progression and journal posting remain headless scheduled jobs. Insurance commissions remain absent until an approved insurance commercial model exists (BILL-06).
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Calendar month; defaults to the current UTC month. */
+                    period?: string;
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["AnalyticsView"];
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/profitability:simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a non-persisted billing profitability scenario (BILL-09)
+         * @description Pure what-if calculation over persisted tenant evidence; it writes no billing facts.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BillingProfitabilityScenarioRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["AnalyticsView"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/exports:cbuae-fee-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate an integrity-hashed CBUAE annual fee-review export (BILL-09) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        period: string;
+                        scenarios: components["schemas"]["BillingProfitabilityScenario"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description Deterministic annual fee-review artifact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export all portable billing records for the authenticated tenant (BILL-10)
+         * @description Outsourcing exit/portability export. The tenant is derived only from the verified identity-provider claim; callers cannot select another bank by header or query.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Integrity-hashed tenant billing export */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/tpp-counterparties": {
         parameters: {
             query?: never;
@@ -4368,6 +4549,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BillingProfitabilityScenario: {
+            scenario_id: string;
+            /** Format: date */
+            effective_date: string;
+            receivable_multiplier_basis_points: number;
+            retail_overage: {
+                overage_units: number;
+                current_rate_milli_fils: number;
+                proposed_rate_milli_fils: number;
+            };
+        };
+        BillingProfitabilityScenarioRequest: {
+            period: string;
+            scenario: components["schemas"]["BillingProfitabilityScenario"];
+        };
         Envelope: {
             meta?: {
                 request_id?: string;
