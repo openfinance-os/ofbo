@@ -19,6 +19,7 @@ export interface RouteInfo {
   tag: string
   scope: string | null
   fourEyes: boolean
+  pure: boolean
   parameters: string[]
 }
 
@@ -56,6 +57,7 @@ export function listRoutes(): RouteInfo[] {
         tag: op.tags?.[0] ?? 'untagged',
         scope: op['x-required-scope'] ?? null,
         fourEyes: Boolean(op['x-four-eyes']),
+        pure: Boolean(op['x-pure']),
         parameters: params
       })
     }

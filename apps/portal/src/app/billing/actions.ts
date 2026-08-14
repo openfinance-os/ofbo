@@ -1,6 +1,5 @@
 'use server'
 
-import { idempotencyKey } from '../../lib/idempotency'
 import { SCOPES } from '../../lib/scopes'
 import { requireSession } from '../../lib/session'
 import {
@@ -72,8 +71,7 @@ export async function simulateBillingAction(
     }
     const simulation = await simulateProfitability(
       token,
-      { period, scenario },
-      idempotencyKey(formData)
+      { period, scenario }
     )
     return { ok: true, simulation, values }
   } catch (error) {

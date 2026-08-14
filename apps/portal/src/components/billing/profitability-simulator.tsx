@@ -3,7 +3,7 @@
 import { useActionState } from 'react'
 import type { BillingWriteResult } from '../../lib/billing-console'
 import { formatMilliFils } from '../../lib/billing-console'
-import { ErrorBanner, IdempotencyField, SubmitButton } from '../ui'
+import { ErrorBanner, SubmitButton } from '../ui'
 
 type SimulationAction = (previous: BillingWriteResult, formData: FormData) => Promise<BillingWriteResult>
 
@@ -20,7 +20,6 @@ export function ProfitabilitySimulator({ period, action }: { period: string; act
   return (
     <div className="grid grid-cols-1 gap-6 p-4 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" data-testid="profitability-simulator">
       <form action={formAction} className="space-y-4">
-        <IdempotencyField />
         <input type="hidden" name="period" value={period} />
         {state.ok === false && state.error ? (
           <ErrorBanner testid="simulation-error" remediation={state.remediation} docsUrl={state.docsUrl}>

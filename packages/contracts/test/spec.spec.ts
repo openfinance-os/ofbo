@@ -29,14 +29,21 @@ describe('contract canon', () => {
     }
   })
 
-  it('every mutating admin route requires Idempotency-Key (public routes exempt — ADR 0022)', () => {
+  it('every state-changing admin route requires Idempotency-Key (public and explicitly pure routes exempt)', () => {
     const mutating = listRoutes().filter(
-      (r) => ['post', 'put', 'patch', 'delete'].includes(r.method) && !isPublic(r.path)
+      (r) => ['post', 'put', 'patch', 'delete'].includes(r.method) && !isPublic(r.path) && !r.pure
     )
     expect(mutating.length).toBeGreaterThan(0)
     for (const r of mutating) {
       expect(r.parameters, `${r.method} ${r.path}`).toContain('Idempotency-Key')
     }
+  })
+
+  it('marks only the non-persisting billing simulation as a pure POST', () => {
+    const pureRoutes = listRoutes().filter((route) => route.pure)
+    expect(pureRoutes).toEqual([
+      expect.objectContaining({ method: 'post', path: '/back-office/billing/profitability:simulate' })
+    ])
   })
 
   it('four-eyes routes are flagged', () => {

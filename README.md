@@ -125,3 +125,5 @@ Implement BACKOFFICE-<NN> from docs/PRD_Open_Finance_Back_Office.md §7.
 ## Adopting bank: the path to production
 
 M6 swaps each simulator for an enterprise adapter, port-by-port (P1–P10) — each swap must pass exactly the contract tests the simulator passed (the port-swap acceptance gate). Before M6, complete the Bank Profile: PRD §3 (ports) and §10 (decisions BD-01..16). UAE data residency, FAPI 2.0 posture (mTLS/PAR/PKCE via the egress gateway P6), and the retention/audit rules are non-negotiable hard stops.
+
+The hosted Billing Control surface additionally requires the enterprise P2 adapter to set `P2_TENANT_CLAIM` and map every accepted claim value to exactly one RLS `bank_id` through `P2_TENANT_MAPPING`. The adapter fails closed on a missing, unmapped or ambiguous tenant claim; legacy single-tenant tokens without `bank_id` deliberately cannot reach tenant billing data.

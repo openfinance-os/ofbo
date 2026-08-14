@@ -1,10 +1,17 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { rateCardForTenant, SCHEME_RATE_CARD_2026_06_02, type FeeScenario, type ProfitabilityAmounts } from '@ofbo/billing'
+import { canonicalJson, rateCardForTenant, SCHEME_RATE_CARD_2026_06_02, type FeeScenario, type ProfitabilityAmounts } from '@ofbo/billing'
 import { getAdapter } from '@ofbo/ports'
 import { buildResponseValidator } from '@ofbo/contracts/testing'
 import { mintScopes, type Principal } from '../src/auth.js'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
-import { BillingConsoleError, BillingConsoleService } from '../src/billing/console.js'
+import {
+  BillingConsoleError,
+  BillingConsoleService,
+  type BillingConsoleProfitabilityPort,
+  type BillingConsoleTenantPort
+} from '../src/billing/console.js'
+import { TenantNotProvisionedError } from '../src/billing/tenant-service.js'
 import { createApp } from '../src/app.js'
 import { FAPI_HEADERS } from './helpers.js'
 
@@ -56,6 +63,21 @@ const profitabilityReport = {
   reconciliation: { balanced: true, deltaMilliFils: 0 }
 }
 
+function digestDelivered(data: Record<string, unknown>): string {
+  const body = { ...data }
+  delete body.sha256
+  return `sha256:${createHash('sha256').update(canonicalJson(body)).digest('hex')}`
+}
+
+async function suppressExpectedServerError<T>(operation: () => T | Promise<T>): Promise<T> {
+  const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  try {
+    return await operation()
+  } finally {
+    errorLog.mockRestore()
+  }
+}
+
 function harness() {
   const tenant = {
     profile: vi.fn(async () => ({
@@ -70,10 +92,19 @@ function harness() {
       bankId: BANK_ID,
       generatedAt: '2026-08-13T12:00:00.000Z',
       recordCounts: { billing_event: 3 },
-      tables: { billing_event: [] },
+      tables: {
+        billing_event: [{
+          bank_id: BANK_ID,
+          event_payload: {
+            AED: 125,
+            GLCode: 'GL-100',
+            cloudEventExtension: { TPPCode: 'TPP-A' }
+          }
+        }]
+      },
       sha256: 'sha256:portable'
     }))
-  }
+  } satisfies BillingConsoleTenantPort
   const profitability = {
     latestReport: vi.fn(async () => null),
     simulate: vi.fn(async () => scenarioResult),
@@ -86,7 +117,7 @@ function harness() {
       scenarios: [scenarioResult],
       sha256: 'sha256:review'
     }))
-  }
+  } satisfies BillingConsoleProfitabilityPort
   const audit = new InMemoryHighClassAuditSink()
   const service = new BillingConsoleService({
     tenant,
@@ -109,16 +140,23 @@ function harness() {
   return { service, tenant, profitability, audit }
 }
 
-function routeHarness() {
-  const { tenant, profitability, audit } = harness()
+function routeHarness(overrides: {
+  tenant?: BillingConsoleTenantPort
+  profitability?: BillingConsoleProfitabilityPort
+} = {}) {
+  const base = harness()
+  const tenant = overrides.tenant ?? base.tenant
+  const profitability = overrides.profitability ?? base.profitability
   return {
     app: createApp({
       idp: getAdapter('p2-identity-provider', 'demo'),
-      billingTenant: tenant as never,
-      billingProfitability: profitability as never,
-      highClassAudit: audit
+      billingTenant: tenant,
+      billingProfitability: profitability,
+      highClassAudit: base.audit
     }),
-    audit
+    audit: base.audit,
+    tenant,
+    profitability
   }
 }
 
@@ -134,7 +172,7 @@ describe('BILL production billing console', () => {
 
     expect(tenant.profile).toHaveBeenCalledWith(BANK_ID, SCHEME_RATE_CARD_2026_06_02)
     expect(result.data).toMatchObject({
-      bank_id: BANK_ID,
+      bankId: BANK_ID,
       period: '2026-07',
       insurance: { status: 'deferred', dependency: 'approved insurance commercial model' }
     })
@@ -179,15 +217,9 @@ describe('BILL production billing console', () => {
 
     const simulationRequest = {
       method: 'POST',
-      headers: { ...financeHeaders, 'content-type': 'application/json', 'idempotency-key': 'simulation-1' },
+      headers: { ...financeHeaders, 'content-type': 'application/json' },
       body: JSON.stringify({ period: '2026-07', scenario: scenarioWire })
     }
-    const missingKey = await app.request('/back-office/billing/profitability:simulate', {
-      ...simulationRequest,
-      headers: { ...financeHeaders, 'content-type': 'application/json' }
-    })
-    expect(missingKey.status).toBe(400)
-
     const simulation = await app.request('/back-office/billing/profitability:simulate', simulationRequest)
     expect(simulation.status).toBe(200)
     await expect(simulation.json()).resolves.toMatchObject({ data: { scenario_id: scenario.scenarioId } })
@@ -208,8 +240,156 @@ describe('BILL production billing console', () => {
     expect((await app.request('/back-office/billing/exports:cbuae-fee-review', request)).status).toBe(400)
 
     const withKey = { ...request, headers: { ...request.headers, 'idempotency-key': 'annual-review-1' } }
-    expect((await app.request('/back-office/billing/exports:cbuae-fee-review', withKey)).status).toBe(200)
+    const response = await app.request('/back-office/billing/exports:cbuae-fee-review', withKey)
+    expect(response.status).toBe(200)
+    const artifact = (await response.json() as { data: Record<string, unknown> }).data
+    expect(artifact.sha256).toBe(digestDelivered(artifact))
     expect((await app.request('/back-office/billing/exports:cbuae-fee-review', withKey)).status).toBe(200)
     expect(audit.events.filter((event) => event.event_type === 'billing_cbuae_fee_review_requested')).toHaveLength(1)
+  })
+
+  it('ships a verifiable portability export without rewriting opaque jsonb keys', async () => {
+    const { app } = routeHarness()
+    const response = await app.request('/back-office/billing/export', { headers: financeHeaders })
+
+    expect(response.status).toBe(200)
+    const artifact = (await response.json() as { data: Record<string, unknown> }).data
+    expect(artifact.sha256).toBe(digestDelivered(artifact))
+    expect(artifact).toMatchObject({
+      schema_version: 'ofbo.billing-export.v1',
+      bank_id: BANK_ID,
+      tables: {
+        billing_event: [{
+          event_payload: {
+            AED: 125,
+            GLCode: 'GL-100',
+            cloudEventExtension: { TPPCode: 'TPP-A' }
+          }
+        }]
+      }
+    })
+  })
+
+  it('does not replay a regulator artifact when the same key is reused with a different body', async () => {
+    const base = harness()
+    const { app } = routeHarness({ tenant: base.tenant, profitability: base.profitability })
+    const send = (proposedRate: number) => app.request('/back-office/billing/exports:cbuae-fee-review', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'content-type': 'application/json', 'idempotency-key': 'annual-review-reused' },
+      body: JSON.stringify({
+        period: '2026-07',
+        scenarios: [{
+          ...scenarioWire,
+          retail_overage: { ...scenarioWire.retail_overage, proposed_rate_milli_fils: proposedRate }
+        }]
+      })
+    })
+
+    expect((await send(950_000)).status).toBe(200)
+    expect((await send(975_000)).status).toBe(200)
+    expect(base.profitability.cbuaeAnnualReviewExport).toHaveBeenCalledTimes(2)
+  })
+
+  it('enforces the declared maximum of 20 regulator scenarios', async () => {
+    const base = harness()
+    const { app } = routeHarness({ tenant: base.tenant, profitability: base.profitability })
+    const response = await app.request('/back-office/billing/exports:cbuae-fee-review', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'content-type': 'application/json', 'idempotency-key': 'too-many' },
+      body: JSON.stringify({
+        period: '2026-07',
+        scenarios: Array.from({ length: 21 }, (_, index) => ({ ...scenarioWire, scenario_id: `scenario-${index}` }))
+      })
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'BACKOFFICE.INVALID_BODY' } })
+    expect(base.profitability.cbuaeAnnualReviewExport).not.toHaveBeenCalled()
+  })
+
+  it('keeps JSON parse failures at 400 and lets simulation service failures surface as 500', async () => {
+    const malformed = await routeHarness().app.request('/back-office/billing/profitability:simulate', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'content-type': 'application/json' },
+      body: '{'
+    })
+    expect(malformed.status).toBe(400)
+    await expect(malformed.json()).resolves.toMatchObject({ error: { code: 'BACKOFFICE.INVALID_BODY' } })
+
+    const base = harness()
+    const failing = {
+      ...base.profitability,
+      simulate: vi.fn(async () => { throw new Error('database connection failed') })
+    } satisfies BillingConsoleProfitabilityPort
+    const failed = await suppressExpectedServerError(() =>
+      routeHarness({ tenant: base.tenant, profitability: failing }).app.request(
+        '/back-office/billing/profitability:simulate', {
+        method: 'POST',
+        headers: { ...financeHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ period: '2026-07', scenario: scenarioWire })
+        }
+      )
+    )
+    expect(failed.status).toBe(500)
+    expect(await failed.text()).not.toContain('BACKOFFICE.INVALID_BODY')
+  })
+
+  it('distinguishes an unprovisioned tenant from an internal profile-store failure', async () => {
+    const base = harness()
+    const unprovisioned = {
+      ...base.tenant,
+      profile: vi.fn(async () => { throw new TenantNotProvisionedError(BANK_ID) })
+    } satisfies BillingConsoleTenantPort
+    const missing = await routeHarness({ tenant: unprovisioned }).app.request(
+      '/back-office/billing/console?period=2026-07',
+      { headers: financeHeaders }
+    )
+    expect(missing.status).toBe(503)
+    const missingBody = await missing.text()
+    expect(missingBody).toContain('BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED')
+    expect(missingBody).not.toContain(BANK_ID)
+
+    const broken = {
+      ...base.tenant,
+      profile: vi.fn(async () => { throw new Error('postgres password=internal-secret') })
+    } satisfies BillingConsoleTenantPort
+    const failed = await suppressExpectedServerError(() =>
+      routeHarness({ tenant: broken }).app.request(
+        '/back-office/billing/console?period=2026-07',
+        { headers: financeHeaders }
+      )
+    )
+    expect(failed.status).toBe(500)
+    expect(await failed.text()).not.toContain('internal-secret')
+  })
+
+  it('rejects invalid periods and personas without billing scope', async () => {
+    const { app } = routeHarness()
+    const invalidPeriod = await app.request('/back-office/billing/console?period=2026-13', { headers: financeHeaders })
+    expect(invalidPeriod.status).toBe(400)
+    await expect(invalidPeriod.json()).resolves.toMatchObject({ error: { code: 'BACKOFFICE.INVALID_PERIOD' } })
+
+    const deniedHeaders = {
+      ...FAPI_HEADERS,
+      authorization: 'Bearer demo-token:compliance-officer@alpha-bank'
+    }
+    for (const request of [
+      app.request('/back-office/billing/console', { headers: deniedHeaders }),
+      app.request('/back-office/billing/export', { headers: deniedHeaders }),
+      app.request('/back-office/billing/profitability:simulate', {
+        method: 'POST',
+        headers: { ...deniedHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ period: '2026-07', scenario: scenarioWire })
+      }),
+      app.request('/back-office/billing/exports:cbuae-fee-review', {
+        method: 'POST',
+        headers: { ...deniedHeaders, 'content-type': 'application/json', 'idempotency-key': 'denied' },
+        body: JSON.stringify({ period: '2026-07', scenarios: [scenarioWire] })
+      })
+    ]) {
+      const response = await request
+      expect(response.status).toBe(403)
+      await expect(response.json()).resolves.toMatchObject({ error: { code: 'BACKOFFICE.SCOPE_DENIED' } })
+    }
   })
 })

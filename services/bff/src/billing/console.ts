@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import {
   SCHEME_RATE_CARD_2026_06_02,
+  canonicalJson,
   type AccountingClosePack,
   type FeeScenario,
   type FeeScenarioResult,
@@ -18,7 +20,16 @@ import { liveFreshness, type FreshnessEnvelope } from '../analytics/freshness.js
 import { missingIdempotencyKey, replayCached, type IdempotencyStore } from '../idempotency.js'
 import type { CollectionsFinanceSummary } from './collections.js'
 import type { CbuaeFeeReviewExport } from './profitability.js'
-import type { TenantBillingProfile } from './tenant-service.js'
+import { TenantNotProvisionedError, type TenantBillingProfile } from './tenant-service.js'
+import {
+  billingConsoleOverviewWire,
+  cbuaeFeeReviewWire,
+  cbuaeFeeReviewWireBody,
+  feeScenarioResultWire,
+  portableBillingExportWire,
+  portableBillingExportWireBody,
+  type BillingConsoleOverview
+} from './wire.js'
 
 export const BILLING_CONSOLE_SCOPE = 'billing:read'
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -83,7 +94,7 @@ export class BillingConsoleService {
   }
 
   async overview(principal: Principal, period = this.now().toISOString().slice(0, 7)): Promise<{
-    data: Record<string, unknown>
+    data: BillingConsoleOverview
     freshness: FreshnessEnvelope
   }> {
     assertScope(principal, BILLING_CONSOLE_SCOPE)
@@ -95,11 +106,14 @@ export class BillingConsoleService {
     try {
       profile = await this.deps.tenant.profile(bankId, SCHEME_RATE_CARD_2026_06_02)
     } catch (error) {
-      throw new BillingConsoleError(
-        'BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED',
-        error instanceof Error ? error.message : 'The tenant is not provisioned for billing.',
-        503
-      )
+      if (error instanceof TenantNotProvisionedError) {
+        throw new BillingConsoleError(
+          'BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED',
+          'The verified tenant is not provisioned for billing.',
+          503
+        )
+      }
+      throw error
     }
 
     const [collections, accounting, assurance, profitability] = await Promise.all([
@@ -111,15 +125,12 @@ export class BillingConsoleService {
 
     return {
       data: {
-        bank_id: bankId,
+        bankId,
         period: p,
-        rate_card: profile.rateCard,
-        invoice: profile.invoice,
-        asp_route_profile: profile.aspRouteProfile,
-        collection_rail_policy: profile.collectionRailPolicy,
+        profile,
         collections,
-        accounting_close_pack: accounting,
-        revenue_assurance: assurance,
+        accountingClosePack: accounting,
+        revenueAssurance: assurance,
         profitability,
         insurance: {
           status: 'deferred',
@@ -142,17 +153,18 @@ export class BillingConsoleService {
     const bankId = tenantId(principal)
     const generatedAt = this.now().toISOString()
     const result = await this.deps.tenant.portableExport(bankId, generatedAt)
+    const normalized = { ...result, sha256: digest(portableBillingExportWireBody(result)) }
     await this.deps.audit.emit({
       event_type: 'billing_tenant_exported',
       acting_principal: principal.subject,
       acting_persona: principal.persona,
       scope_used: BILLING_CONSOLE_SCOPE,
       request_trace_id: traceId,
-      request_body: { bank_id: bankId, sha256: result.sha256, record_counts: result.recordCounts },
+      request_body: { bank_id: bankId, sha256: normalized.sha256, record_counts: normalized.recordCounts },
       response_status: 200,
       superadmin_marker: principal.scopes.includes('platform:superadmin')
     })
-    return result
+    return normalized
   }
 
   async cbuaeFeeReviewExport(
@@ -164,17 +176,18 @@ export class BillingConsoleService {
     const bankId = tenantId(principal)
     const period = periodOrThrow(input.period)
     const result = await requireProfitability(this.deps.profitability).cbuaeAnnualReviewExport(period, input.scenarios, traceId)
+    const normalized = { ...result, sha256: digest(cbuaeFeeReviewWireBody(result)) }
     await this.deps.audit.emit({
       event_type: 'billing_cbuae_fee_review_requested',
       acting_principal: principal.subject,
       acting_persona: principal.persona,
       scope_used: BILLING_CONSOLE_SCOPE,
       request_trace_id: traceId,
-      request_body: { bank_id: bankId, period, scenario_ids: input.scenarios.map((item) => item.scenarioId), sha256: result.sha256 },
+      request_body: { bank_id: bankId, period, scenario_ids: input.scenarios.map((item) => item.scenarioId), sha256: normalized.sha256 },
       response_status: 200,
       superadmin_marker: principal.scopes.includes('platform:superadmin')
     })
-    return result
+    return normalized
   }
 }
 
@@ -204,14 +217,8 @@ function toFeeScenario(input: FeeScenarioWire): FeeScenario {
   }
 }
 
-/** Domain billing types use TypeScript camelCase; the binding API convention is snake_case. */
-function toWire(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(toWire)
-  if (value === null || typeof value !== 'object') return value
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-    key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
-    toWire(item)
-  ]))
+function digest(value: unknown): string {
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`
 }
 
 function billingError(c: Context, error: unknown): Response | null {
@@ -234,7 +241,7 @@ export function billingConsoleRoutes(service: BillingConsoleService, idempotency
     'get /back-office/billing/console': async (c) => {
       try {
         const { data, freshness } = await service.overview(c.get('principal'), c.req.query('period'))
-        return c.json({ ...dataEnvelope(toWire(data)), freshness }, 200)
+        return c.json({ ...dataEnvelope(billingConsoleOverviewWire(data)), freshness }, 200)
       } catch (error) {
         const response = billingError(c, error)
         if (response) return response
@@ -242,20 +249,22 @@ export function billingConsoleRoutes(service: BillingConsoleService, idempotency
       }
     },
     'post /back-office/billing/profitability:simulate': async (c) => {
-      const key = c.req.header('idempotency-key')
-      if (!key) return c.json(missingIdempotencyKey(), 400)
+      let body: { period: string; scenario: FeeScenarioWire }
       try {
-        const body = await c.req.json<{ period: string; scenario: FeeScenarioWire }>()
+        body = await c.req.json()
+      } catch {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A valid profitability scenario body is required.', 'Send the BillingProfitabilityScenarioRequest schema.', DOCS_BASE), 400)
+      }
+      try {
         const principal = c.get('principal')
-        const cacheKey = `billing:simulate|${principal.bankId ?? 'missing'}|${principal.subject}|${body.period}|${body.scenario.scenario_id}|${key}`
-        return replayCached(c, idempotency, cacheKey, async () => c.json({
-            ...dataEnvelope(toWire(await service.simulate(principal, { period: body.period, scenario: toFeeScenario(body.scenario) }))),
-            freshness: liveFreshness(new Date())
-          }, 200))
+        return c.json({
+          ...dataEnvelope(feeScenarioResultWire(await service.simulate(principal, { period: body.period, scenario: toFeeScenario(body.scenario) }))),
+          freshness: liveFreshness(new Date())
+        }, 200)
       } catch (error) {
         const response = billingError(c, error)
         if (response) return response
-        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A valid profitability scenario body is required.', 'Send the BillingProfitabilityScenarioRequest schema.', DOCS_BASE), 400)
+        throw error
       }
     },
     'post /back-office/billing/exports:cbuae-fee-review': async (c) => {
@@ -267,15 +276,22 @@ export function billingConsoleRoutes(service: BillingConsoleService, idempotency
       } catch {
         return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A valid CBUAE fee-review export body is required.', 'Send period and scenarios.', DOCS_BASE), 400)
       }
+      if (!body || !Array.isArray(body.scenarios)) {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'A scenarios array is required.', 'Send period and no more than 20 scenarios.', DOCS_BASE), 400)
+      }
+      if (body.scenarios.length > 20) {
+        return c.json(errorEnvelope('BACKOFFICE.INVALID_BODY', 'At most 20 fee-review scenarios are allowed.', 'Reduce scenarios to 20 or fewer.', DOCS_BASE), 400)
+      }
       const principal = c.get('principal')
-      const cacheKey = `billing:cbuae-review|${principal.bankId ?? 'missing'}|${principal.subject}|${body.period}|${key}`
+      const requestDigest = digest(body)
+      const cacheKey = `billing:cbuae-review|${principal.bankId ?? 'missing'}|${principal.subject}|${requestDigest}|${key}`
       return replayCached(c, idempotency, cacheKey, async () => {
         try {
           const result = await service.cbuaeFeeReviewExport(principal, {
             period: body.period,
             scenarios: body.scenarios.map(toFeeScenario)
           }, c.req.header('x-fapi-interaction-id') ?? 'unknown')
-          return c.json(dataEnvelope(toWire(result)), 200)
+          return c.json(dataEnvelope(cbuaeFeeReviewWire(result)), 200)
         } catch (error) {
           const response = billingError(c, error)
           if (response) return response
@@ -286,7 +302,7 @@ export function billingConsoleRoutes(service: BillingConsoleService, idempotency
     'get /back-office/billing/export': async (c) => {
       try {
         const result = await service.portableExport(c.get('principal'), c.req.header('x-fapi-interaction-id') ?? 'unknown')
-        return c.json(dataEnvelope(toWire(result)), 200)
+        return c.json(dataEnvelope(portableBillingExportWire(result)), 200)
       } catch (error) {
         const response = billingError(c, error)
         if (response) return response

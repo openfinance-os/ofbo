@@ -25,7 +25,7 @@ export interface Route {
 }
 
 export const ROUTES: readonly Route[] = ${JSON.stringify(
-  routes.map(({ parameters: _p, ...r }) => r),
+  routes.map(({ parameters: _parameters, pure: _pure, ...route }) => route),
   null,
   2
 )} as const

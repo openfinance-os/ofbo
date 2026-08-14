@@ -40,13 +40,20 @@ export interface TenantBillingProfile {
   collectionRailPolicy: TenantCollectionRailPolicy
 }
 
+export class TenantNotProvisionedError extends Error {
+  constructor(readonly bankId: string) {
+    super(`tenant ${bankId} is not provisioned for billing`)
+    this.name = 'TenantNotProvisionedError'
+  }
+}
+
 /** BILL-10: the only application seam that turns tenant config into billing runtime policy. */
 export class BillingTenantService {
   constructor(private readonly deps: { configurations: TenantConfigurationReader; data?: TenantBillingDataPort; now?: () => Date }) {}
 
   async profile(bankId: string, baseRateCard: RateCard): Promise<TenantBillingProfile> {
     const config = await this.deps.configurations.configuration(bankId)
-    if (!config) throw new Error(`tenant ${bankId} is not provisioned for billing`)
+    if (!config) throw new TenantNotProvisionedError(bankId)
     const rateCard = rateCardForTenant(baseRateCard, {
       tenantId: bankId,
       yearAnchorDate: config.yearAnchorDate,
@@ -63,13 +70,13 @@ export class BillingTenantService {
   }
 
   async portableExport(bankId: string, generatedAt = (this.deps.now ?? (() => new Date()))().toISOString()): Promise<TenantPortableBillingExport> {
-    if (!(await this.deps.configurations.configuration(bankId))) throw new Error(`tenant ${bankId} is not provisioned for billing`)
+    if (!(await this.deps.configurations.configuration(bankId))) throw new TenantNotProvisionedError(bankId)
     if (!this.deps.data) throw new Error('tenant billing export store is not configured')
     return this.deps.data.portableExport(bankId, generatedAt)
   }
 
   async benchmark(input: Parameters<NonNullable<TenantBillingDataPort['crossTenantBenchmark']>>[0]): Promise<CrossTenantBillingBenchmark> {
-    if (!(await this.deps.configurations.configuration(input.authorizingBankId))) throw new Error(`tenant ${input.authorizingBankId} is not provisioned for billing`)
+    if (!(await this.deps.configurations.configuration(input.authorizingBankId))) throw new TenantNotProvisionedError(input.authorizingBankId)
     if (!this.deps.data) throw new Error('tenant billing benchmark store is not configured')
     return this.deps.data.crossTenantBenchmark(input)
   }

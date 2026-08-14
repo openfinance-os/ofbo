@@ -41,10 +41,10 @@ describe('billing console client — BILL-09/BILL-10', () => {
     })
   })
 
-  it('runs a pure profitability scenario with a stable idempotency key', async () => {
+  it('runs a pure profitability scenario without a mutating-route idempotency key', async () => {
     const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => json({ data: { scenario_id: scenario.scenario_id, delta_profit_milli_fils: 4_500_000 } }))
 
-    const result = await simulateProfitability(TOKEN, { period: '2026-07', scenario }, 'sim-key', {
+    const result = await simulateProfitability(TOKEN, { period: '2026-07', scenario }, {
       baseUrl: BASE,
       fetchImpl,
       traceId: 'trace-sim'
@@ -58,7 +58,6 @@ describe('billing console client — BILL-09/BILL-10', () => {
       headers: {
         authorization: `Bearer ${TOKEN}`,
         'x-fapi-interaction-id': 'trace-sim',
-        'idempotency-key': 'sim-key',
         'content-type': 'application/json'
       }
     })

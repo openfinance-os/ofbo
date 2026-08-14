@@ -196,6 +196,11 @@ const postHeaders = (token: string, trace: string, idempotencyKey: string) => ({
   'content-type': 'application/json'
 })
 
+const jsonPostHeaders = (token: string, trace: string) => ({
+  ...authHeaders(token, trace),
+  'content-type': 'application/json'
+})
+
 async function body<T>(res: Response): Promise<{ data: T; freshness?: BillingFreshness }> {
   const parsed = (await res.json().catch(() => ({}))) as {
     data?: T
@@ -228,17 +233,16 @@ export async function getBillingConsole(
   return { data: parsed.data, freshness: parsed.freshness ?? FALLBACK_FRESHNESS }
 }
 
-/** POST /back-office/billing/profitability:simulate — pure, deterministic and replay-safe. */
+/** POST /back-office/billing/profitability:simulate — pure and non-persisting. */
 export async function simulateProfitability(
   token: string,
   input: { period: string; scenario: BillingScenario },
-  idempotencyKey: string,
   deps: BillingConsoleApiDeps = {}
 ): Promise<BillingScenarioResult> {
   const { base, f, trace } = resolve(deps)
   const res = await f(`${base}/back-office/billing/profitability:simulate`, {
     method: 'POST',
-    headers: postHeaders(token, trace, idempotencyKey),
+    headers: jsonPostHeaders(token, trace),
     body: JSON.stringify(input)
   })
   return (await body<BillingScenarioResult>(res)).data

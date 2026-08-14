@@ -1763,11 +1763,11 @@ paths:
       tags: [tpp-billing]
       summary: Run a non-persisted billing profitability scenario (BILL-09)
       description: Pure what-if calculation over persisted tenant evidence; it writes no billing facts.
+      x-pure: true
       x-rate-limit-per-min: 60
       x-required-scope: billing:read
       parameters:
         - $ref: '#/components/parameters/fapiInteractionId'
-        - $ref: '#/components/parameters/idempotencyKey'
         - $ref: '#/components/parameters/superAdminJustification'
       requestBody:
         required: true
