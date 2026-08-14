@@ -13,6 +13,8 @@ import { RiskDashboard } from '../src/components/risk-dashboard.js'
 import { OperationsConsole } from '../src/components/operations-console.js'
 import { ComplianceView } from '../src/components/compliance-view.js'
 import { TppBilling } from '../src/components/tpp-billing.js'
+import { BillingConsole } from '../src/components/billing-console.js'
+import type { BillingWriteResult } from '../src/lib/billing-console.js'
 
 afterEach(cleanup)
 
@@ -76,6 +78,14 @@ describe('UX-01 accessibility gate', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Register failed.')
     cleanup()
     await expectNoViolations(<TppBilling notice="Invoice submitted." error="Register failed." />)
+  })
+
+  it('billing control plane: no violations + alert banner', async () => {
+    const action = async (_previous: BillingWriteResult, _form: FormData): Promise<BillingWriteResult> => ({ ok: true })
+    render(<main><BillingConsole error="Billing evidence unavailable." simulateAction={action} /></main>)
+    expect(screen.getByRole('alert')).toHaveTextContent('Billing evidence unavailable.')
+    cleanup()
+    await expectNoViolations(<BillingConsole error="Billing evidence unavailable." simulateAction={action} />)
   })
 
   it('analytics dashboard: no violations + alert banner', async () => {

@@ -65,7 +65,7 @@ test.describe('auth + session (app/page.tsx, api/login, dashboard/page.tsx)', ()
 test.describe('scope-aware navigation (the §2 matrix, app-shell + page gates)', () => {
   test('super-admin sees every module', async ({ page }) => {
     await login(page, SUPER)
-    for (const key of ['dashboard', 'approvals', 'customer-care', 'finance', 'analytics', 'billing', 'compliance', 'risk', 'operations', 'agents', 'guide']) {
+    for (const key of ['dashboard', 'approvals', 'customer-care', 'finance', 'analytics', 'billing-console', 'billing', 'compliance', 'risk', 'operations', 'agents', 'guide']) {
       await expect(page.getByTestId(`nav-${key}`)).toBeVisible()
     }
   })
@@ -74,6 +74,7 @@ test.describe('scope-aware navigation (the §2 matrix, app-shell + page gates)',
     await login(page, 'finance-analyst')
     await expect(page.getByTestId('nav-finance')).toBeVisible()
     await expect(page.getByTestId('nav-analytics')).toBeVisible()
+    await expect(page.getByTestId('nav-billing-console')).toBeVisible()
     await expect(page.getByTestId('nav-billing')).toBeVisible()
     await expect(page.getByTestId('nav-risk')).toHaveCount(0)
     await expect(page.getByTestId('nav-customer-care')).toHaveCount(0)
@@ -97,6 +98,7 @@ test.describe('every console screen renders for super-admin (each page.tsx)', ()
     ['/approvals', 'approvals-portal'],
     ['/analytics', 'analytics-dashboard'],
     ['/risk', 'risk-dashboard'],
+    ['/billing', 'billing-console'],
     ['/tpp-billing', 'tpp-billing'],
     ['/operations', 'operations-console'],
     ['/compliance', 'compliance-view']

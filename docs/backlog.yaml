@@ -573,6 +573,11 @@ milestones:
           rate-review outcomes and the directory overage-rate decision (publish a rate
           or knowingly give overage away - only two LFIs publish one today); exports
           feed the CBUAE annual-review submission and execution-plan item C4 pricing.
+          The scope-gated portal control plane at apps/portal/src/app/billing renders
+          these tenant-period outputs, runs the pure replay-safe scenario action and
+          downloads the integrity-hashed CBUAE fee-review artifact through a server-only
+          proxy; the httpOnly Bearer never reaches browser storage. Appearance reuses
+          Stitch billing screen 3d6d14a3 and all figures bind to the OpenAPI response.
         acceptance:
           - P&L per TPP and product family renders from the seeded month and reconciles
             to the invoice + payables sets; scenario runs are deterministic and
@@ -592,6 +597,10 @@ milestones:
           query_purpose_registry preventative control; per-tenant exit/export path
           documented for outsourcing compliance. This is the Starter/Growth/Scale
           packaging seam from the research doc s9.3.
+          The portal billing console exposes the resolved tenant rate card, invoice/ASP
+          and collection-rail policy and an explicit audited portability download. Tenant
+          identity remains derived from the verified principal; no bank selector is sent
+          by the browser.
         acceptance:
           - Two tenants run distinct rate-card overlays and invoice templates through
             one deployment with full RLS isolation proven across billing tables.
