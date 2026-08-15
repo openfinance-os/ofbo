@@ -2058,12 +2058,29 @@ status check, per HG-0001's "AI reviewers remain as *advisory* PR checks". This 
 **not** separation of duties — same model family reviewing the same agent's output, and
 HG-0001:58 already says "AI reviewing AI is not four-eyes". Human merge is untouched.
 
+**The first live run found a real defect — in the reporting, not the design.**
+`claude-code-action` withholds its GitHub App token from any run whose own workflow file
+differs from the default branch (anti-exfiltration: a PR must not be able to rewrite the
+workflow *and* get the token). On the PR that introduces this workflow that condition always
+holds, so the action skipped. The design behaved correctly under it — no review file, so the
+three-way parse refused green and reported DID NOT COMPLETE, which is the intended failure
+mode observed live rather than argued for. But the message named the *symptom* ("produced no
+review file") rather than the cause, leaving a future control-plane PR to debug it blind.
+Preflight now detects the condition by diffing this workflow against the default branch and
+says so, including that it self-resolves on merge. Verified: the guard fires on this branch
+and stays silent for an unrelated workflow file (negative control). The same pass also closed
+a second gap — structural non-runs previously left no PR comment at all, so a fork PR would
+have shown a bare green check with nothing to explain it.
+
+Consequence worth knowing: **a PR that edits `ai-review.yml` cannot exercise the reviewers on
+itself.** The first real review will be on the PR after this one merges.
+
 Evidence: workflow YAML parses and its structure verified (2 matrix legs, `fail-fast: false`,
-7 steps, guarded permissions); verdict parse 12/12 against the edge cases above; ADR 0029
-filed as **Proposed** — a control-plane change needs `control-plane-owners`, not the agent's
-own say-so. Not yet observed running: the first PR run is the live confirmation, and the
-injected-violation self-test (proving the check goes red on a real finding) is recorded in
-ADR 0029 as the acceptance step still owed.
+7 steps, guarded permissions); verdict parse 12/12 against the edge cases above;
+workflow-validation guard verified with a negative control; ADR 0029 filed as **Proposed** —
+a control-plane change needs `control-plane-owners`, not the agent's own say-so. Still owed
+and recorded in ADR 0029: the injected-violation self-test proving the check goes red against
+a real finding, which cannot run until the workflow is on the default branch.
 
 Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the environment is
 synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or

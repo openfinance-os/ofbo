@@ -51,10 +51,36 @@ pull request, in a fresh session on GitHub's infrastructure, and posts each verd
   engineering against is not a wrong verdict, it is a *missing* verdict that reads as a pass.
   Verified against twelve parse cases including a review with no verdict, `VERDICT: MAYBE`,
   and `VERDICT: PASS` appearing mid-prose — all three land on red.
-- **Structural non-runs report loudly and are explicitly not passes.** A fork PR (GitHub
-  withholds secrets) or an absent credential emits a `::notice` and a step-summary block
-  saying **"This is not a pass"**, mirroring the q1b handling at `ci.yml:67-78`. Neither
-  reds the job — a fork PR would otherwise be permanently red through no fault of its author.
+- **Structural non-runs report loudly and are explicitly not passes.** Three conditions make
+  the review impossible rather than merely failing: a fork PR (GitHub withholds secrets), an
+  absent credential, and **a PR that edits this workflow file** (see below). Each emits a
+  `::notice`, a step-summary block, and a PR comment saying **"This is not a pass"**,
+  mirroring the q1b handling at `ci.yml:67-78`. None of them reds the job — each is a
+  property of the situation rather than of the diff, and a fork PR would otherwise be
+  permanently red through no fault of its author. Red stays reserved for "the review ran and
+  had something to say". The PR comment is the load-bearing part: a structural non-run that
+  left no trace on the PR would be a green check with nothing to explain it, which is the
+  "absent control looks like a passing one" class this whole workflow exists to close.
+
+### The workflow-validation skip (found by running it)
+
+`claude-code-action` refuses to hand its GitHub App token to a run whose own workflow file
+differs from the version on the default branch — an anti-exfiltration control, so a PR cannot
+rewrite the workflow *and* obtain the token. The first run of this workflow, on the PR that
+introduces it, therefore skipped with *"Workflow validation failed… your workflow will begin
+working once you merge your PR."*
+
+Two things followed. First, the design behaved correctly under it: the action's skip produced
+no review file, and the three-way parse refused to show green, reporting DID NOT COMPLETE.
+That is the intended failure mode, observed live rather than argued for. Second, it exposed a
+real defect — the check reported the *symptom* ("the reviewer produced no review file") rather
+than the cause, so a future control-plane PR editing this file would hit the same wall with no
+idea why. Preflight now detects the condition directly by diffing this workflow against the
+default branch, and reports the actual reason and that it self-resolves on merge.
+
+The practical consequence for reviewers: **any PR that edits `ai-review.yml` cannot exercise
+the reviewers on itself.** That is a genuine limitation, not a workaround — the first real
+review this workflow performs will be on the PR *after* the one that merges it.
 
 ### What this explicitly does not claim
 

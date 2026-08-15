@@ -76,28 +76,62 @@ jobs:
             agent: .claude/agents/contract-conformance-reviewer.md
     steps:
       # ---------------------------------------------------------------------------------
-      # Preflight. Two conditions make the review structurally impossible rather than
-      # failing. Both report loudly and explicitly are NOT a pass, mirroring the q1b
-      # "NOT RUN" handling at ci.yml:67-78. Neither reds the job: a fork PR would otherwise
-      # be permanently red through no fault of its author.
+      # Preflight. THREE conditions make the review structurally impossible rather than
+      # merely failing — a fork PR, an absent credential, and a PR that edits this very
+      # workflow. All three report loudly and say explicitly that they are NOT a pass, both
+      # in the step summary and as a comment on the PR, mirroring the q1b "NOT RUN" handling
+      # at ci.yml:67-78. None of them reds the job: each is a property of the *situation*
+      # rather than of the diff, and a fork PR would otherwise be permanently red through no
+      # fault of its author. Red stays reserved for "the review ran and had something to say".
       # ---------------------------------------------------------------------------------
-      - name: Preflight — fork and credential guards
+      # Checkout FIRST: it carries no secrets, and preflight needs the tree to compare this
+      # workflow against the default branch (third guard below).
+      - uses: actions/checkout@v7
+        with:
+          # Full history. Both agent definitions diff against the base branch, so the merge
+          # base must resolve. The shipped claude-code-action review example uses
+          # fetch-depth: 1, which silently yields an empty or wrong diff here.
+          fetch-depth: 0
+
+      - name: Fetch the base and default branches
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if [ "$DEFAULT_REF" != "$BASE_REF" ]; then
+            git fetch --no-tags origin "+refs/heads/${DEFAULT_REF}:refs/remotes/origin/${DEFAULT_REF}"
+          fi
+          echo "Merge base: $(git merge-base "origin/${BASE_REF}" HEAD)"
+
+      - name: Preflight — fork, credential, and workflow-validation guards
         id: preflight
         env:
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          DEFAULT_REF: ${{ github.event.repository.default_branch }}
           LABEL: ${{ matrix.reviewer.label }}
         run: |
           set -euo pipefail
+          self='.github/workflows/ai-review.yml'
           if [ "$IS_FORK" = "true" ]; then
             reason="fork PR — GitHub withholds secrets from fork-triggered runs"
           elif [ "$HAS_TOKEN" != "true" ]; then
             reason="credential absent — the CLAUDE_CODE_OAUTH_TOKEN secret is not set"
+          elif ! git diff --quiet "origin/${DEFAULT_REF}" HEAD -- "$self"; then
+            # claude-code-action refuses to hand its app token to a run whose own workflow
+            # file differs from the default branch — an anti-exfiltration control, so a PR
+            # cannot rewrite the workflow AND obtain the token. Detected here rather than
+            # left to surface as the far more confusing "the reviewer produced no review
+            # file". Self-resolves the moment this PR merges.
+            reason="this PR modifies ${self}, which differs from origin/${DEFAULT_REF} — claude-code-action withholds its token from a run that changes its own workflow (anti-exfiltration). This resolves once the PR merges"
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "run=false" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
           echo "::notice title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
           {
             echo "### AI review — ${LABEL}: NOT RUN"
@@ -109,23 +143,6 @@ jobs:
             echo "agent's session, but that run is self-attested — which is the gap this"
             echo "check exists to close."
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/checkout@v7
-        if: steps.preflight.outputs.run == 'true'
-        with:
-          # Full history. Both agent definitions diff against the base branch, so the merge
-          # base must resolve. The shipped claude-code-action review example uses
-          # fetch-depth: 1, which silently yields an empty or wrong diff here.
-          fetch-depth: 0
-
-      - name: Make the base branch resolvable
-        if: steps.preflight.outputs.run == 'true'
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          set -euo pipefail
-          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
-          echo "Merge base: $(git merge-base "origin/${BASE_REF}" HEAD)"
 
       # ---------------------------------------------------------------------------------
       # The review itself.
@@ -201,52 +218,72 @@ jobs:
       # One comment per reviewer per PR, updated in place on every push. A story takes many
       # pushes; without the marker lookup this would be a wall of stale review comments.
       - name: Post or update the review comment
-        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
-        uses: actions/github-script@v7
+        # Runs for the NOT-RUN cases too. A structural non-run that left no trace on the PR
+        # would be a green check with nothing to explain it — "the absent control looks like
+        # a passing one", which is the whole class this workflow exists to close.
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@v8
         env:
           REVIEW_FILE: ${{ matrix.reviewer.key }}-review.md
           MARKER_KEY: ${{ matrix.reviewer.key }}
+          NOT_RUN_REASON: ${{ steps.preflight.outputs.reason }}
           LABEL: ${{ matrix.reviewer.label }}
           STATUS: ${{ steps.verdict.outputs.status }}
           DETAIL: ${{ steps.verdict.outputs.detail }}
         with:
           script: |
             const fs = require('fs');
-            const { REVIEW_FILE, MARKER_KEY, LABEL, STATUS, DETAIL } = process.env;
+            const { REVIEW_FILE, MARKER_KEY, LABEL, STATUS, DETAIL, NOT_RUN_REASON } = process.env;
             const marker = `<!-- ofbo-ai-review:${MARKER_KEY} -->`;
 
-            let review = '';
-            try {
-              review = fs.readFileSync(REVIEW_FILE, 'utf8').trim();
-            } catch {
-              review = '_The reviewer produced no review file._';
-            }
+            const preamble = [
+              'Advisory check (HG-0001) — it does not gate merge, and it is not separation',
+              'of duties. See `docs/adrs/0029-ai-review-as-advisory-ci-check.md`.',
+            ];
 
-            // GitHub rejects comment bodies over 65536 chars.
-            const LIMIT = 60000;
-            if (review.length > LIMIT) {
-              review = review.slice(0, LIMIT) +
-                '\n\n_…truncated. See the workflow run log for the full review._';
-            }
+            let heading;
+            let detailBlock;
 
-            const heading = {
-              clean:      `✅ **AI review — ${LABEL}:** no findings.`,
-              findings:   `❌ **AI review — ${LABEL}:** findings below.`,
-              incomplete: `⚠️ **AI review — ${LABEL}: DID NOT COMPLETE** — ${DETAIL || 'no verdict produced'}. **This is not a pass.**`,
-            }[STATUS] || `**AI review — ${LABEL}**`;
+            if (NOT_RUN_REASON) {
+              // Structural non-run: the review was impossible for a reason outside this
+              // diff. Say so on the PR rather than leaving a bare green check behind.
+              heading = `⏭️ **AI review — ${LABEL}: NOT RUN.** **This is not a pass.**`;
+              detailBlock = [
+                `**Reason:** ${NOT_RUN_REASON}.`,
+                '',
+                'No review was performed, so this check says nothing about the diff.',
+              ];
+            } else {
+              let review = '';
+              try {
+                review = fs.readFileSync(REVIEW_FILE, 'utf8').trim();
+              } catch {
+                review = '_The reviewer produced no review file._';
+              }
+
+              // GitHub rejects comment bodies over 65536 chars.
+              const LIMIT = 60000;
+              if (review.length > LIMIT) {
+                review = review.slice(0, LIMIT) +
+                  '\n\n_…truncated. See the workflow run log for the full review._';
+              }
+
+              heading = {
+                clean:      `✅ **AI review — ${LABEL}:** no findings.`,
+                findings:   `❌ **AI review — ${LABEL}:** findings below.`,
+                incomplete: `⚠️ **AI review — ${LABEL}: DID NOT COMPLETE** — ${DETAIL || 'no verdict produced'}. **This is not a pass.**`,
+              }[STATUS] || `**AI review — ${LABEL}**`;
+
+              detailBlock = ['<details><summary>Full review</summary>', '', review, '', '</details>'];
+            }
 
             const body = [
               marker,
               heading,
               '',
-              'Advisory check (HG-0001) — it does not gate merge, and it is not separation',
-              'of duties. See `docs/adrs/0029-ai-review-as-advisory-ci-check.md`.',
+              ...preamble,
               '',
-              '<details><summary>Full review</summary>',
-              '',
-              review,
-              '',
-              '</details>',
+              ...detailBlock,
               '',
               '---',
               '_Generated by [Claude Code](https://claude.ai/code)_',
