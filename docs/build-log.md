@@ -2026,3 +2026,46 @@ Evidence: monorepo typecheck and ESLint clean; full unit suite 1,305/1,305 green
 Postgres integration test added for migrations, billing-table RLS, tenant-only export, and governed
 three-tenant benchmark. The local environment did not expose a database connection, so the real-
 Postgres suite remains a CI gate.
+
+---
+
+## 2026-08-15 — HARNESS-16: the two OFBO reviewers now run independently in CI
+
+AI review was already part of every story — but only pre-PR, inside the build agent's own
+session. `next-story/SKILL.md:35` dispatches `hard-stop-reviewer` and
+`contract-conformance-reviewer`, HG-0001 counts their verdicts toward the merge criteria,
+and this log records them per story. Nothing in GitHub ever verified that the review ran, or
+that the verdict written here matched what the reviewer actually said. That is
+self-attestation, and it was the one control not enforced outside the agent's write scope.
+Before this change CI had no model-based review at all: Q4 is named "security review" but is
+`pnpm audit` + `semgrep p/secrets`, and PRs #313 and #311 carried zero reviews and zero
+comments.
+
+`.github/workflows/ai-review.yml` runs both reviewers on every code-touching PR as two
+independent check runs, in a fresh session, and posts each verdict to the PR as a sticky
+comment. The prompt reads `.claude/agents/*.md` rather than restating the checklists — those
+files are CODEOWNERS-protected, and a copy inlined into the workflow would be a second,
+unprotected version of the canon free to drift from the one the pre-PR reviewers use.
+
+The load-bearing case is not a wrong verdict but a **missing** one. A missing review file, a
+missing `VERDICT:` line, or a malformed one all report DID NOT COMPLETE and go red: a review
+that never ran must never be indistinguishable from a passing one. The parse was verified
+against 12 cases before being wired in — a review with no verdict, `VERDICT: MAYBE`, and
+`VERDICT: PASS` appearing mid-prose all land on red; two verdict lines take the last.
+
+Advisory by design: red on FAIL/DRIFT so a finding is visible, but deliberately not a required
+status check, per HG-0001's "AI reviewers remain as *advisory* PR checks". This is explicitly
+**not** separation of duties — same model family reviewing the same agent's output, and
+HG-0001:58 already says "AI reviewing AI is not four-eyes". Human merge is untouched.
+
+Evidence: workflow YAML parses and its structure verified (2 matrix legs, `fail-fast: false`,
+7 steps, guarded permissions); verdict parse 12/12 against the edge cases above; ADR 0029
+filed as **Proposed** — a control-plane change needs `control-plane-owners`, not the agent's
+own say-so. Not yet observed running: the first PR run is the live confirmation, and the
+injected-violation self-test (proving the check goes red on a real finding) is recorded in
+ADR 0029 as the acceptance step still owed.
+
+Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the environment is
+synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or
+`ANTHROPIC_BASE_URL` — but the OAuth token pins the job to the first-party API, so that swap
+is two changes, not one. ADR 0029 records both.

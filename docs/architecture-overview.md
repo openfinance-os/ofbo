@@ -220,8 +220,13 @@ every session and Edit/Write: `worktree-policy` (SessionStart reminder),
 (locks `specs/backoffice-openapi.yaml` mid-feature — the contract changes only via a
 dedicated spec PR). Pre-PR, two subagents review the diff: `contract-conformance-reviewer`
 (spec fidelity) and `hard-stop-reviewer` (scope matrix, audit immutability, PII,
-egress, four-eyes, profile branching). `Q5` (manual prod approval) is evidenced at
-release time via `release-evidence.yml`, not on every PR.
+egress, four-eyes, profile branching). Those same two reviewers also run
+**independently in CI** on every code-touching PR (`ai-review.yml`, HARNESS-16), reading
+the same CODEOWNERS-protected agent definitions and posting their verdicts to the PR.
+The pre-PR run is self-attested — the agent reports its own verdict — so the CI run is
+the tamper-evident one; both are **advisory** under HG-0001 and neither gates merge.
+`Q5` (manual prod approval) is evidenced at release time via `release-evidence.yml`, not
+on every PR.
 
 ## 8. The regulated-entity brain — training the model on the institution
 

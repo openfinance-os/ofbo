@@ -1,0 +1,304 @@
+# HARNESS-16 — the two OFBO reviewers, run independently in CI as ADVISORY PR checks.
+#
+# WHY THIS EXISTS: `.claude/skills/next-story/SKILL.md` already dispatches these same two
+# reviewers before a PR is opened, and HG-0001 counts their verdicts toward the merge
+# criteria. But that run happens INSIDE the build agent's own session: the agent runs its
+# own reviewers, reports its own verdicts, and writes them into its own build log. Nothing
+# in GitHub verifies the review ran or that the verdict was honest. That is self-attestation,
+# and it is the one place the harness lacked the control independence that HG-0002 and
+# CODEOWNERS establish everywhere else. This workflow moves the step onto a surface the
+# agent cannot fake.
+#
+# WHAT IT IS NOT: the same model family reviewing the same agent's output is NOT separation
+# of duties. It runs in a fresh session with no shared context, which removes "grades its own
+# homework in the same conversation" and makes the verdict externally observable — nothing
+# more. HG-0001's human-merge requirement is untouched, and HG-0001 already names this exact
+# posture: "AI reviewers remain as advisory PR checks", "AI review is an aid, not a control
+# of record". See docs/adrs/0029-ai-review-as-advisory-ci-check.md.
+#
+# ADVISORY MEANS ADVISORY: these jobs go red on FAIL/DRIFT so a finding is visible, but they
+# are deliberately NOT registered as required status checks. A human can merge over them.
+#
+# DELIBERATELY NOT NAMED Q*: the Q namespace in ci.yml means "deterministic merge gate".
+# A model call is neither deterministic nor a gate, so it stays out of that namespace and
+# out of that file.
+name: ai-review
+
+on:
+  # Default types (opened, synchronize, reopened). Draft PRs are NOT excluded: the build
+  # agent opens its PRs as drafts, so skipping drafts would skip precisely the output this
+  # check exists to review.
+  #
+  # No workflow_dispatch. Both reviewers diff a PR against its base and post to that PR, so
+  # a manual dispatch would have neither — the same "no merge base" problem q1b reports at
+  # ci.yml:67. Re-run a review from the PR's Checks tab instead; that preserves PR context.
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'discovery/**'
+      - '**/*.md'
+
+# paths-ignore skips a run only when EVERY changed file matches, so a mixed docs+code PR
+# still gets reviewed. specs/**.yaml is deliberately absent from the list — contract
+# conformance must see spec changes.
+
+concurrency:
+  group: ai-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # One check run per reviewer, each independently pass/fail.
+    name: AI review — ${{ matrix.reviewer.label }} (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # The sticky-comment step posts through the issue-comments API (a PR is an issue).
+      # Both scopes are granted because that endpoint is documented inconsistently across
+      # the two; this token is ephemeral and repo-scoped, and the job writes nothing else.
+      pull-requests: write
+      issues: write
+      # Required for claude-code-action's default GitHub App authentication.
+      id-token: write
+    strategy:
+      # LOAD-BEARING (HARNESS-07). A failing hard-stop review must never cancel the
+      # contract-conformance leg — an absent result is indistinguishable, on the checks
+      # tab, from a passing one. Same doctrine as ci.yml:125-129 and ci.yml:298-301.
+      fail-fast: false
+      matrix:
+        reviewer:
+          - key: hard-stop
+            label: hard-stop
+            agent: .claude/agents/hard-stop-reviewer.md
+          - key: contract-conformance
+            label: contract conformance
+            agent: .claude/agents/contract-conformance-reviewer.md
+    steps:
+      # ---------------------------------------------------------------------------------
+      # Preflight. Two conditions make the review structurally impossible rather than
+      # failing. Both report loudly and explicitly are NOT a pass, mirroring the q1b
+      # "NOT RUN" handling at ci.yml:67-78. Neither reds the job: a fork PR would otherwise
+      # be permanently red through no fault of its author.
+      # ---------------------------------------------------------------------------------
+      - name: Preflight — fork and credential guards
+        id: preflight
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          LABEL: ${{ matrix.reviewer.label }}
+        run: |
+          set -euo pipefail
+          if [ "$IS_FORK" = "true" ]; then
+            reason="fork PR — GitHub withholds secrets from fork-triggered runs"
+          elif [ "$HAS_TOKEN" != "true" ]; then
+            reason="credential absent — the CLAUDE_CODE_OAUTH_TOKEN secret is not set"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          {
+            echo "### AI review — ${LABEL}: NOT RUN"
+            echo ""
+            echo "**Reason:** ${reason}."
+            echo ""
+            echo "**This is not a pass.** No review was performed, so this check says"
+            echo "nothing about the diff. The reviewer still runs pre-PR in the build"
+            echo "agent's session, but that run is self-attested — which is the gap this"
+            echo "check exists to close."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v7
+        if: steps.preflight.outputs.run == 'true'
+        with:
+          # Full history. Both agent definitions diff against the base branch, so the merge
+          # base must resolve. The shipped claude-code-action review example uses
+          # fetch-depth: 1, which silently yields an empty or wrong diff here.
+          fetch-depth: 0
+
+      - name: Make the base branch resolvable
+        if: steps.preflight.outputs.run == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          echo "Merge base: $(git merge-base "origin/${BASE_REF}" HEAD)"
+
+      # ---------------------------------------------------------------------------------
+      # The review itself.
+      #
+      # The prompt POINTS AT the agent definition rather than restating its checklist. Those
+      # files are CODEOWNERS-protected (/.claude/ -> control-plane-owners); a copy of their
+      # rules inlined here would be a second, unprotected copy of the canon, free to drift
+      # from the one the pre-PR reviewers use. That drift is exactly what Q2b exists to catch.
+      # ---------------------------------------------------------------------------------
+      - name: Run the reviewer
+        if: steps.preflight.outputs.run == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read `${{ matrix.reviewer.agent }}` and act as exactly that reviewer for this
+            pull request. Its instructions are the specification for this task: follow its
+            checklist, its scope limits, and its output format precisely, including the
+            final `VERDICT:` line.
+
+            The diff under review is this PR's head against its base branch. Where the agent
+            definition says to diff against `main`, use:
+
+                git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+
+            Report EVERY candidate finding, each with file:line. Do not filter for severity
+            or for your own confidence — the agent definition's scope already narrows what
+            counts as a finding, and a second filter on top of it silently drops real ones.
+            If you are unsure about a finding, report it and say why you are unsure.
+
+            Write the complete review to `${{ matrix.reviewer.key }}-review.md` in the
+            repository root. Write that file even when you find nothing. Its final line must
+            be the `VERDICT:` line, exactly as the agent definition specifies it.
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 30
+            --allowedTools "Read,Grep,Glob,Bash,Write"
+
+      # ---------------------------------------------------------------------------------
+      # Verdict -> status. Parsed from the review file rather than from any action output,
+      # so this does not depend on undocumented internals.
+      #
+      # THE THIRD BRANCH IS THE POINT: a review that never produced a verdict must never be
+      # indistinguishable from a passing one. Same rule the q1b / Q2 / Q4 comments in ci.yml
+      # were written to enforce.
+      # ---------------------------------------------------------------------------------
+      - name: Parse verdict
+        id: verdict
+        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
+        env:
+          REVIEW_FILE: ${{ matrix.reviewer.key }}-review.md
+        run: |
+          set -euo pipefail
+          if [ ! -f "$REVIEW_FILE" ]; then
+            echo "status=incomplete" >> "$GITHUB_OUTPUT"
+            echo "detail=the reviewer produced no review file ($REVIEW_FILE)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Last VERDICT: line wins — the agent definitions put it at the end, and this also
+          # tolerates the word appearing earlier in prose.
+          verdict="$(grep -E '^VERDICT:' "$REVIEW_FILE" | tail -n 1 || true)"
+          echo "verdict_line=${verdict}" >> "$GITHUB_OUTPUT"
+          if printf '%s' "$verdict" | grep -qE '^VERDICT:[[:space:]]*(PASS|CONFORMANT)[[:space:]]*$'; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$verdict" | grep -qE '^VERDICT:[[:space:]]*(FAIL|DRIFT)\b'; then
+            echo "status=findings" >> "$GITHUB_OUTPUT"
+          else
+            # Includes a missing, empty, or malformed verdict line. Conservative by design.
+            echo "status=incomplete" >> "$GITHUB_OUTPUT"
+            echo "detail=no parseable VERDICT: line in $REVIEW_FILE" >> "$GITHUB_OUTPUT"
+          fi
+
+      # One comment per reviewer per PR, updated in place on every push. A story takes many
+      # pushes; without the marker lookup this would be a wall of stale review comments.
+      - name: Post or update the review comment
+        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
+        uses: actions/github-script@v7
+        env:
+          REVIEW_FILE: ${{ matrix.reviewer.key }}-review.md
+          MARKER_KEY: ${{ matrix.reviewer.key }}
+          LABEL: ${{ matrix.reviewer.label }}
+          STATUS: ${{ steps.verdict.outputs.status }}
+          DETAIL: ${{ steps.verdict.outputs.detail }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { REVIEW_FILE, MARKER_KEY, LABEL, STATUS, DETAIL } = process.env;
+            const marker = `<!-- ofbo-ai-review:${MARKER_KEY} -->`;
+
+            let review = '';
+            try {
+              review = fs.readFileSync(REVIEW_FILE, 'utf8').trim();
+            } catch {
+              review = '_The reviewer produced no review file._';
+            }
+
+            // GitHub rejects comment bodies over 65536 chars.
+            const LIMIT = 60000;
+            if (review.length > LIMIT) {
+              review = review.slice(0, LIMIT) +
+                '\n\n_…truncated. See the workflow run log for the full review._';
+            }
+
+            const heading = {
+              clean:      `✅ **AI review — ${LABEL}:** no findings.`,
+              findings:   `❌ **AI review — ${LABEL}:** findings below.`,
+              incomplete: `⚠️ **AI review — ${LABEL}: DID NOT COMPLETE** — ${DETAIL || 'no verdict produced'}. **This is not a pass.**`,
+            }[STATUS] || `**AI review — ${LABEL}**`;
+
+            const body = [
+              marker,
+              heading,
+              '',
+              'Advisory check (HG-0001) — it does not gate merge, and it is not separation',
+              'of duties. See `docs/adrs/0029-ai-review-as-advisory-ci-check.md`.',
+              '',
+              '<details><summary>Full review</summary>',
+              '',
+              review,
+              '',
+              '</details>',
+              '',
+              '---',
+              '_Generated by [Claude Code](https://claude.ai/code)_',
+            ].join('\n');
+
+            const issue_number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Enforce verdict
+        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
+        env:
+          LABEL: ${{ matrix.reviewer.label }}
+          STATUS: ${{ steps.verdict.outputs.status }}
+          DETAIL: ${{ steps.verdict.outputs.detail }}
+          VERDICT_LINE: ${{ steps.verdict.outputs.verdict_line }}
+        run: |
+          set -euo pipefail
+          case "$STATUS" in
+            clean)
+              echo "::notice title=AI review (${LABEL})::${VERDICT_LINE}"
+              echo "### AI review — ${LABEL}: ${VERDICT_LINE}" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            findings)
+              echo "::error title=AI review (${LABEL})::${VERDICT_LINE} — see the PR comment for detail."
+              {
+                echo "### AI review — ${LABEL}: ${VERDICT_LINE}"
+                echo ""
+                echo "Findings are in the PR comment. This check is **advisory** — it does"
+                echo "not block merge, but it will not show green next to a finding."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+            *)
+              echo "::error title=AI review (${LABEL}) DID NOT COMPLETE::${DETAIL:-no verdict produced}. This is not a pass."
+              {
+                echo "### AI review — ${LABEL}: DID NOT COMPLETE"
+                echo ""
+                echo "${DETAIL:-No verdict was produced.}"
+                echo ""
+                echo "**This is not a pass.** A review that did not run must never be"
+                echo "indistinguishable from one that found nothing."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac

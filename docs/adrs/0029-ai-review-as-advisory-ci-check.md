@@ -1,0 +1,128 @@
+# ADR 0029 — Run the two OFBO reviewers in CI as advisory PR checks (HARNESS-16)
+
+- Status: **Proposed** — this is a control-plane change (HG-0002). It needs
+  `control-plane-owners` approval, not the build agent's own say-so.
+- Date: 2026-08-15
+- Realises the "AI reviewers remain as *advisory* PR checks" posture already chosen in
+  HG-0001 (line 39). Follows ADR 0020 (Q2b doc-drift) and ADR 0021 (mutation testing) as
+  precedent for adding a non-Q CI surface in its own workflow file.
+
+## Context
+
+AI review already happens on every story — but only **pre-PR, inside the build agent's own
+session**. `.claude/skills/next-story/SKILL.md:35` dispatches `hard-stop-reviewer` (must
+return `VERDICT: PASS`) and `contract-conformance-reviewer` (must return
+`VERDICT: CONFORMANT`); HG-0001 counts those verdicts toward the merge criteria and
+`docs/build-log.md` records them per story.
+
+**The gap is self-attestation, not absence.** The agent runs its own reviewers, reports its
+own verdicts, and writes them into its own build log. Nothing in GitHub verifies that the
+review ran, or that the reported verdict matched what the reviewer actually said. Every other
+control in this harness is enforced outside the agent's write scope — CODEOWNERS (HG-0002),
+the Q gates, the branch protections. This one was not. Before this change, the CI pipeline
+contained no model-based review of any kind: Q4 is named "security review" but is
+`pnpm audit` + `semgrep p/secrets`.
+
+## Decision
+
+A new workflow, `.github/workflows/ai-review.yml`, runs both reviewers on every code-touching
+pull request, in a fresh session on GitHub's infrastructure, and posts each verdict to the PR.
+
+- **Own workflow file, not a job in `ci.yml`.** Same reasoning as `mutation.yml`: a
+  non-universal, cost-bearing check, and the deterministic Q-gate file stays free of model
+  calls. Deliberately **not** named `Q*` — that namespace means "deterministic merge gate",
+  and a model call is neither.
+- **Two independent check runs** (`fail-fast: false` matrix legs). A failing hard-stop review
+  must never cancel the contract-conformance leg; an absent result is indistinguishable, on
+  the checks tab, from a passing one. Same HARNESS-07 doctrine as `ci.yml:125-129`.
+- **The prompt points at the agent definitions; it does not restate them.**
+  `.claude/agents/hard-stop-reviewer.md` and `.claude/agents/contract-conformance-reviewer.md`
+  are CODEOWNERS-protected and already specify a machine-parseable `VERDICT:` line. Inlining
+  their checklists into the workflow would create a second, drifting copy of the canon — the
+  exact failure Q2b exists to catch — so the workflow reads the same files the pre-PR
+  reviewers read.
+- **Red on a finding, but never a required check.** The job exits non-zero on `FAIL`/`DRIFT`
+  so the finding is visible, and it is deliberately **not** added to branch protection. A
+  human can merge over it. That is what HG-0001's "advisory" means: it will not block you,
+  but it will not show green next to a finding either.
+- **A review that did not complete is red, not green.** The verdict is parsed from the review
+  file — a missing file, a missing `VERDICT:` line, or a malformed one all report
+  "DID NOT COMPLETE" and fail. This is the whole point of the design: the failure mode worth
+  engineering against is not a wrong verdict, it is a *missing* verdict that reads as a pass.
+  Verified against twelve parse cases including a review with no verdict, `VERDICT: MAYBE`,
+  and `VERDICT: PASS` appearing mid-prose — all three land on red.
+- **Structural non-runs report loudly and are explicitly not passes.** A fork PR (GitHub
+  withholds secrets) or an absent credential emits a `::notice` and a step-summary block
+  saying **"This is not a pass"**, mirroring the q1b handling at `ci.yml:67-78`. Neither
+  reds the job — a fork PR would otherwise be permanently red through no fault of its author.
+
+### What this explicitly does not claim
+
+The CI reviewer is the same model family reviewing the same agent's output. It runs with no
+shared context, which removes "grades its own homework in the same conversation" and makes
+the verdict externally observable. It is **not** separation of duties, and HG-0001 already
+says so directly: *"AI reviewing AI is not four-eyes"* (line 58). The human-merge requirement
+is untouched. Anyone reading a green check here should read it as "an independent run of the
+same reviewer found nothing", not as an approval.
+
+## Consequences
+
+- The verdicts that HG-0001 counts toward merge are now produced on a surface the build agent
+  cannot write to, and are visible on the PR rather than only in the agent's own build log.
+- **Cost.** Opus 5 at $5/$25 per MTok, roughly 100–200k input and 5–10k output per reviewer,
+  is about **$0.50–$1.25 per reviewer** — **~$1–$2.50 per PR** for both. Billed to the Claude
+  subscription behind `CLAUDE_CODE_OAUTH_TOKEN`. It runs on every push to a PR
+  (`synchronize`), so a story with many pushes multiplies that; `concurrency.cancel-in-progress`
+  limits the waste from rapid successive pushes. If this proves expensive in practice, the
+  cheaper knob is narrowing the trigger to `opened` + `ready_for_review`, at the cost of the
+  check no longer reflecting current HEAD.
+- **A path-filtered PR shows no check at all**, rather than a skipped one. `paths-ignore`
+  omits docs-only and discovery-only PRs. Acceptable for an advisory check, but stated here
+  rather than left to be discovered. Note the consequence that a PR touching *only*
+  `.claude/agents/*.md` — a change to the reviewers themselves — is not reviewed by them;
+  that path is covered by CODEOWNERS and human review instead.
+- **Residency (HG-0011).** A GitHub-hosted runner calling `api.anthropic.com` is cross-border
+  inference over repository content. This is HG-0011 **Option 3 (status quo provider proxy)**,
+  which that policy permits only "while the environment is synthetic-only and non-prod"
+  (line 48) — true of this repo, which is permanently non-prod with zero real PII. It is
+  **not** compliant for real or confidential context, and must move at the M6 enterprise swap.
+- **The M6 swap path is config, not a rewrite** — `use_bedrock` / `use_vertex` / `use_foundry`
+  inputs, or `ANTHROPIC_BASE_URL` pointed at the bank's onshore gateway. **One caveat that
+  bites:** `CLAUDE_CODE_OAUTH_TOKEN` is bound to one person's Claude subscription and pins the
+  job to the first-party API. The M6 move therefore also requires replacing it with an API key
+  or, better, workload identity federation (`anthropic_federation_rule_id` +
+  `anthropic_organization_id`, which stores no long-lived secret). Recording it here so the
+  swap is not discovered to be two changes instead of one.
+- **HG-0006 (AI model risk governance).** The reviewer prompts are model configuration. They
+  remain under `/.claude/` and therefore under `control-plane-owners`; this workflow adds no
+  new prompt surface, which is precisely why it reads the agent files instead of inlining them.
+- **Known coverage gap.** Both reviewers are deliberately narrow — "review ONLY for the
+  hard-stop list" and "only contract fidelity". Neither hunts general correctness bugs, so no
+  PR check does. Anthropic's hosted Code Review is the obvious candidate, and was rejected for
+  *this* job (below) but not for that one. Revisit at M6, when the ZDR and onshore-gateway
+  constraints that rule it out today are decided either way.
+
+## Alternatives considered
+
+- **Anthropic's hosted Code Review** (managed service, no workflow file, enabled in admin
+  settings). Rejected for this job on three counts. First, it **cannot source its rules from
+  the agent files**: `REVIEW.md` is injected verbatim, `@` imports are not expanded and
+  referenced files are not read, so both checklists would have to be duplicated into a second
+  copy free to drift from the CODEOWNERS-protected originals. Second, it **forecloses the
+  HG-0011 M6 path** — it runs only on Anthropic infrastructure, with no Bedrock/Vertex/onshore
+  option, and is unavailable to organizations with Zero Data Retention enabled; a
+  CBUAE-regulated adopting bank may require both. Third, its check run always completes with a
+  neutral conclusion and cannot go red, and it costs $15–25 per review against ~$1–2.50 here.
+  It remains the right tool for the general bug-hunting gap noted above.
+- **Making the check required in branch protection.** Rejected — it contradicts HG-0001's
+  explicit "advisory" posture and would let a model's false positive block a merge with no
+  human override short of an admin bypass.
+- **Inlining the checklists into the workflow prompt.** Rejected — it is the drift Q2b exists
+  to catch, and it would move model configuration out from under the `/.claude/` CODEOWNERS
+  rule that HG-0006 relies on.
+- **One job running both reviewers.** Rejected — HARNESS-07. A failing first review would hide
+  whether the second one ran.
+- **Reusing the action's own PR-comment behaviour** (`--comment` on the packaged code-review
+  skill). Rejected — it reviews for general correctness against its own criteria, not against
+  the OFBO hard-stop and contract checklists, and it gives no machine-readable verdict to
+  gate on.
