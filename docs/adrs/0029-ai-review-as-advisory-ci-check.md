@@ -1,7 +1,9 @@
 # ADR 0029 — Run the two OFBO reviewers in CI as advisory PR checks (HARNESS-16)
 
-- Status: **Proposed** — this is a control-plane change (HG-0002). It needs
-  `control-plane-owners` approval, not the build agent's own say-so.
+- Status: **Accepted** — approved by the user (2026-08-16). A control-plane change under
+  HG-0002, so it needed a human control-plane owner rather than the build agent's own say-so;
+  `@michartmann` is the resolvable owner on `/docs/adrs/` and `/.github/` under the interim
+  CODEOWNERS arrangement.
 - Date: 2026-08-15
 - Realises the "AI reviewers remain as *advisory* PR checks" posture already chosen in
   HG-0001 (line 39). Follows ADR 0020 (Q2b doc-drift) and ADR 0021 (mutation testing) as

@@ -2077,10 +2077,11 @@ itself.** The first real review will be on the PR after this one merges.
 
 Evidence: workflow YAML parses and its structure verified (2 matrix legs, `fail-fast: false`,
 7 steps, guarded permissions); verdict parse 12/12 against the edge cases above;
-workflow-validation guard verified with a negative control; ADR 0029 filed as **Proposed** —
-a control-plane change needs `control-plane-owners`, not the agent's own say-so. Still owed
-and recorded in ADR 0029: the injected-violation self-test proving the check goes red against
-a real finding, which cannot run until the workflow is on the default branch.
+workflow-validation guard verified with a negative control. ADR 0029 was filed as **Proposed**
+— a control-plane change needs `control-plane-owners`, not the agent's own say-so — and was
+**Accepted by the user on 2026-08-16**. Still owed and recorded in ADR 0029: the
+injected-violation self-test proving the check goes red against a real finding, which cannot
+run until the workflow is on the default branch.
 
 Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the environment is
 synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or
@@ -2138,3 +2139,23 @@ against the `@openai/codex` CLI surface verified against v0.147.0 (`codex exec` 
 exist — but it ships `enabled: false` with no `CODEX_API_KEY`, and its first run must be
 treated as unproven. It fails loudly if wrong: no review file written, so the core reports
 DID NOT COMPLETE.
+
+---
+
+## 2026-08-16 — ADR 0029 accepted (control-plane approval)
+
+The user approved ADR 0029 (AI review as an advisory CI check, incl. the swappable engine
+port). Status flipped **Proposed → Accepted**.
+
+Recording the authority rather than just the outcome: this is a control-plane change under
+HG-0002, which requires approval from a human control-plane owner who is not the build agent.
+`@michartmann` is the resolvable CODEOWNER on `/docs/adrs/` and `/.github/` under the interim
+arrangement documented in `.github/CODEOWNERS`, so the approval came from the right authority.
+
+**This is not a merge.** HG-0001 keeps merge as a separate human act and the agent never
+self-merges; PR #314 stays open for the user. Accepting the ADR settles the decision record,
+not the code review of the change that implements it.
+
+Still owed, unchanged by the acceptance: the injected-violation self-test proving the check
+goes red against a real finding, which cannot run until the workflow is on the default branch;
+and the Codex adapter's first real execution, which has never happened.
