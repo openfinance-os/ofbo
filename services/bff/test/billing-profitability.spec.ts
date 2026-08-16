@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { aed, type FeeScenario, type ProfitabilityInput } from '@ofbo/billing'
+import { aed, canonicalJson, type FeeScenario, type ProfitabilityInput } from '@ofbo/billing'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
 import { BillingProfitabilityService, InMemoryBillingProfitabilitySource } from '../src/billing/profitability.js'
+import { cbuaeFeeReviewWireBody } from '../src/billing/wire.js'
 
 const input: ProfitabilityInput = {
   period: '2026-06',
@@ -29,7 +31,7 @@ describe('BILL-09 profitability orchestration', () => {
 
     const exported = await service.cbuaeAnnualReviewExport('2026-06', [scenario], 'trace-export')
     expect(exported).toMatchObject({ schemaVersion: 'ofbo.cbuae-fee-review.v1', period: '2026-06', generatedAt: '2026-08-13T00:00:00.000Z' })
-    expect(exported.sha256).toMatch(/^sha256:[0-9a-f]{64}$/)
+    expect(exported.sha256).toBe(`sha256:${createHash('sha256').update(canonicalJson(cbuaeFeeReviewWireBody(exported))).digest('hex')}`)
     expect(audit.events.at(-1)?.event_type).toBe('billing_cbuae_fee_review_exported')
   })
 

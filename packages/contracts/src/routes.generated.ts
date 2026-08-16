@@ -501,6 +501,34 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/billing/console",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/profitability:simulate",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/exports:cbuae-fee-review",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/billing/export",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/tpp-counterparties",
     "tag": "tpp-billing",
     "scope": "billing:read",

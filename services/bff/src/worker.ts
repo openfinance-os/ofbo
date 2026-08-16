@@ -251,6 +251,9 @@ export default {
     const billingProfitabilityService = billingProfitabilityStore && audit
       ? new BillingProfitabilityService({ source: billingProfitabilityStore, audit })
       : undefined
+    const billingTenantService = tenantBillingStore
+      ? new BillingTenantService({ configurations: tenantBillingStore, data: tenantBillingStore })
+      : undefined
     const nebrasAggregateStore = url ? new PgNebrasAggregateStore(url, tenancy, lineage) : undefined
     const nebrasSnapshotStore = url ? new PgNebrasSnapshotStore(url, tenancy, lineage) : undefined
     const certificationStore = url ? new PgCertificationStore(url, tenancy) : undefined
@@ -292,6 +295,8 @@ export default {
       ...(billingAccountingStore ? { accountingClosePackReader: billingAccountingStore } : {}),
       ...(billingRevenueAssuranceStore ? { revenueAssuranceReader: billingRevenueAssuranceStore } : {}),
       ...(billingProfitabilityService ? { profitabilityReader: billingProfitabilityService } : {}),
+      ...(billingProfitabilityService ? { billingProfitability: billingProfitabilityService } : {}),
+      ...(billingTenantService ? { billingTenant: billingTenantService } : {}),
       ...(nebrasAggregateStore ? { nebrasAggregateReader: nebrasAggregateStore } : {}),
       ...(nebrasSnapshotStore ? { nebrasConnectivityReader: nebrasSnapshotStore } : {}),
       ...(certificationStore ? { certificationReader: certificationStore } : {}),

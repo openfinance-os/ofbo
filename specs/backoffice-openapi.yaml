@@ -1735,6 +1735,110 @@ paths:
               schema: { $ref: '#/components/schemas/Envelope' }
         default: { $ref: '#/components/responses/Error' }
 
+  # ---------- LFI billing operations (BILL-01..10) ----------
+  /back-office/billing/console:
+    get:
+      tags: [tpp-billing]
+      summary: Tenant-scoped LFI billing operations read model (BILL-01..10)
+      description: >
+        Composes the resolved rate card, collections, accounting close pack, revenue
+        assurance and profitability outputs for the internal billing console. This is
+        a read surface only; metering, reconciliation, rating, dunning progression and
+        journal posting remain headless scheduled jobs. Insurance commissions remain
+        absent until an approved insurance commercial model exists (BILL-06).
+      x-rate-limit-per-min: 100
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: period
+          in: query
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+          description: Calendar month; defaults to the current UTC month.
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/profitability:simulate:
+    post:
+      tags: [tpp-billing]
+      summary: Run a non-persisted billing profitability scenario (BILL-09)
+      description: Pure what-if calculation over persisted tenant evidence; it writes no billing facts.
+      x-pure: true
+      x-rate-limit-per-min: 60
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProfitabilityScenarioRequest'
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/exports:cbuae-fee-review:
+    post:
+      tags: [tpp-billing]
+      summary: Generate an integrity-hashed CBUAE annual fee-review export (BILL-09)
+      x-rate-limit-per-min: 20
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period, scenarios]
+              additionalProperties: false
+              properties:
+                period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+                scenarios:
+                  type: array
+                  maxItems: 20
+                  items: { $ref: '#/components/schemas/BillingProfitabilityScenario' }
+      responses:
+        '200':
+          description: Deterministic annual fee-review artifact
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/export:
+    get:
+      tags: [tpp-billing]
+      summary: Export all portable billing records for the authenticated tenant (BILL-10)
+      description: >
+        Outsourcing exit/portability export. The tenant is derived only from the verified
+        identity-provider claim; callers cannot select another bank by header or query.
+      x-rate-limit-per-min: 5
+      x-required-scope: billing:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200':
+          description: Integrity-hashed tenant billing export
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/Error' }
+
   # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------
   /back-office/tpp-counterparties:
     get:
@@ -2805,6 +2909,29 @@ components:
                   freshness: { $ref: '#/components/schemas/Freshness' }
 
   schemas:
+    BillingProfitabilityScenario:
+      type: object
+      additionalProperties: false
+      required: [scenario_id, effective_date, receivable_multiplier_basis_points, retail_overage]
+      properties:
+        scenario_id: { type: string, minLength: 1, maxLength: 100 }
+        effective_date: { type: string, format: date }
+        receivable_multiplier_basis_points: { type: integer, minimum: 0, maximum: 100000 }
+        retail_overage:
+          type: object
+          additionalProperties: false
+          required: [overage_units, current_rate_milli_fils, proposed_rate_milli_fils]
+          properties:
+            overage_units: { type: integer, minimum: 0 }
+            current_rate_milli_fils: { type: integer, minimum: 0 }
+            proposed_rate_milli_fils: { type: integer, minimum: 0 }
+    BillingProfitabilityScenarioRequest:
+      type: object
+      additionalProperties: false
+      required: [period, scenario]
+      properties:
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        scenario: { $ref: '#/components/schemas/BillingProfitabilityScenario' }
     Envelope:
       type: object
       properties:

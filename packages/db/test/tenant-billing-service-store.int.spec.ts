@@ -1,8 +1,9 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
 import {
   buildProfitabilityReport,
+  canonicalJson,
   type RevenueAssuranceReport
 } from '../../billing/src/index.js'
 import {
@@ -194,7 +195,15 @@ describe('BILL-10 tenant billing service', () => {
       expect(exported.recordCounts.billing_event).toBeGreaterThanOrEqual(1)
       expect(serialized).toContain(`bill-10-A-${suffix}`)
       expect(serialized).not.toContain(`bill-10-B-${suffix}`)
-      expect(exported.sha256).toMatch(/^sha256:[0-9a-f]{64}$/)
+      const tenantEvent = exported.tables.billing_event?.find((row) => row.event_id === `bill-10-A-${suffix}`)
+      expect(tenantEvent?.event_payload).toMatchObject({ tenantMarker: 'A' })
+      expect(exported.sha256).toBe(`sha256:${createHash('sha256').update(canonicalJson({
+        schema_version: exported.schemaVersion,
+        bank_id: exported.bankId,
+        generated_at: exported.generatedAt,
+        record_counts: exported.recordCounts,
+        tables: exported.tables
+      })).digest('hex')}`)
     } finally {
       await tenantA.close()
       await tenantB.close()

@@ -402,6 +402,7 @@ milestones:
     items:
       - id: BILL-01
         title: Scheme rate-card-as-code with upstream change watch
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         note: >-
           The complete Commercial & Pricing Model v1.0 rate card as versioned,
@@ -420,6 +421,7 @@ milestones:
           - The watcher demonstrably raises a review task on an injected upstream change.
       - id: BILL-02
         title: Independent billable-event metering feed (CloudEvents, exactly-once)
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0024-pre-stage-enterprise-adapters-kong-metering-boundary.md
         note: >-
@@ -439,6 +441,7 @@ milestones:
             metric for BILL-08.
       - id: BILL-03
         title: Receivables rating engine - the expected Collection Memo
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [BILL-01, BILL-02]
         note: >-
@@ -455,6 +458,7 @@ milestones:
             documented delta - metered facts provably unchanged.
       - id: BILL-04
         title: PINT AE e-invoicing via Accredited Service Provider (statutory clock)
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [BILL-03]
         note: >-
@@ -475,6 +479,7 @@ milestones:
             full flow against the ASP simulator with the mandate flag off.
       - id: BILL-05
         title: Collections, dunning and net-settlement decomposition
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-04]
@@ -496,6 +501,11 @@ milestones:
             View; every collection action is High-class audited.
       - id: BILL-06
         title: Commissions and clawback sub-ledger (insurance now, FX at V2.2)
+        status: blocked
+        reason: >-
+          No approved insurance commercial model exists and INS-01 is not implemented.
+          The billing console reports this dependency explicitly; no commission,
+          clawback, or insurance ledger semantics are inferred from the prototype.
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [INS-01]
         note: >-
@@ -516,6 +526,7 @@ milestones:
             approval with a line-level diff; bilateral rates provably override defaults.
       - id: BILL-07
         title: GL and VAT posting via the P9 financial-system port
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [BILL-04]
         note: >-
@@ -533,6 +544,7 @@ milestones:
             plus settlement; Finance sign-off locks it (existing BACKOFFICE-06 semantics).
       - id: BILL-08
         title: Revenue-assurance loop and leakage KPI
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         depends_on: [BILL-02, BILL-03]
         note: >-
@@ -561,6 +573,11 @@ milestones:
           rate-review outcomes and the directory overage-rate decision (publish a rate
           or knowingly give overage away - only two LFIs publish one today); exports
           feed the CBUAE annual-review submission and execution-plan item C4 pricing.
+          The scope-gated portal control plane at apps/portal/src/app/billing renders
+          these tenant-period outputs, runs the pure replay-safe scenario action and
+          downloads the integrity-hashed CBUAE fee-review artifact through a server-only
+          proxy; the httpOnly Bearer never reaches browser storage. Appearance reuses
+          Stitch billing screen 3d6d14a3 and all figures bind to the OpenAPI response.
         acceptance:
           - P&L per TPP and product family renders from the seeded month and reconciles
             to the invoice + payables sets; scenario runs are deterministic and
@@ -580,6 +597,10 @@ milestones:
           query_purpose_registry preventative control; per-tenant exit/export path
           documented for outsourcing compliance. This is the Starter/Growth/Scale
           packaging seam from the research doc s9.3.
+          The portal billing console exposes the resolved tenant rate card, invoice/ASP
+          and collection-rail policy and an explicit audited portability download. Tenant
+          identity remains derived from the verified principal; no bank selector is sent
+          by the browser.
         acceptance:
           - Two tenants run distinct rate-card overlays and invoice templates through
             one deployment with full RLS isolation proven across billing tables.
