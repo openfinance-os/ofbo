@@ -152,7 +152,19 @@ export class BillingConsoleService {
     assertScope(principal, BILLING_CONSOLE_SCOPE)
     const bankId = tenantId(principal)
     const generatedAt = this.now().toISOString()
-    const result = await this.deps.tenant.portableExport(bankId, generatedAt)
+    let result: TenantPortableBillingExport
+    try {
+      result = await this.deps.tenant.portableExport(bankId, generatedAt)
+    } catch (error) {
+      if (error instanceof TenantNotProvisionedError) {
+        throw new BillingConsoleError(
+          'BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED',
+          'The verified tenant is not provisioned for billing.',
+          503
+        )
+      }
+      throw error
+    }
     const normalized = { ...result, sha256: digest(portableBillingExportWireBody(result)) }
     await this.deps.audit.emit({
       event_type: 'billing_tenant_exported',

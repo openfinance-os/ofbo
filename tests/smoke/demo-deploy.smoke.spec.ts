@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import pg from 'pg'
 
 /**
@@ -17,6 +17,38 @@ const SIM = process.env.DEMO_SIM_URL ?? 'https://nebras-sim-production.up.railwa
 const DATABASE_URL = process.env.DATABASE_URL
 
 const fapi = () => randomUUID()
+const billingToken = 'Bearer demo-token:finance-analyst@alpha-bank'
+const period = () => new Date().toISOString().slice(0, 7)
+
+function canonicalJson(value: unknown): string {
+  const normalize = (current: unknown): unknown => {
+    if (current === null || typeof current !== 'object') return current
+    if (Array.isArray(current)) return current.map(normalize)
+    return Object.fromEntries(
+      Object.keys(current as Record<string, unknown>).sort()
+        .map((key) => [key, normalize((current as Record<string, unknown>)[key])])
+    )
+  }
+  return JSON.stringify(normalize(value))
+}
+
+function expectDigest(data: Record<string, unknown>): void {
+  const { sha256, ...body } = data
+  expect(sha256).toBe(`sha256:${createHash('sha256').update(canonicalJson(body)).digest('hex')}`)
+}
+
+function scenario(month: string): Record<string, unknown> {
+  return {
+    scenario_id: `deploy-smoke-${month}`,
+    effective_date: `${month}-01`,
+    receivable_multiplier_basis_points: 10000,
+    retail_overage: {
+      overage_units: 1000,
+      current_rate_milli_fils: 950000,
+      proposed_rate_milli_fils: 975000
+    }
+  }
+}
 
 describe('demo BFF (Cloudflare Worker)', () => {
   it('rejects requests missing x-fapi-interaction-id with the binding 400 envelope', async () => {
@@ -67,6 +99,51 @@ describe('demo BFF (Cloudflare Worker)', () => {
     const body = (await res.json()) as { error: { code: string } }
     expect(body.error.code).toBe('BACKOFFICE.MISSING_IDEMPOTENCY_KEY')
   })
+
+  it('serves the provisioned tenant billing console and pure profitability scenario', async () => {
+    const month = period()
+    const consoleResponse = await fetch(`${BFF}/back-office/billing/console?period=${month}`, {
+      headers: { 'x-fapi-interaction-id': fapi(), authorization: billingToken }
+    })
+    expect(consoleResponse.status).toBe(200)
+    const overview = (await consoleResponse.json()) as { data: { bank_id: string; period: string; profitability: unknown } }
+    expect(overview.data.bank_id).toBe('11111111-1111-4111-8111-111111111111')
+    expect(overview.data.period).toBe(month)
+    expect(overview.data.profitability).not.toBeNull()
+
+    const simulationResponse = await fetch(`${BFF}/back-office/billing/profitability:simulate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-fapi-interaction-id': fapi(), authorization: billingToken },
+      body: JSON.stringify({ period: month, scenario: scenario(month) })
+    })
+    expect(simulationResponse.status).toBe(200)
+    const simulation = (await simulationResponse.json()) as { data: { scenario_id: string } }
+    expect(simulation.data.scenario_id).toBe(`deploy-smoke-${month}`)
+  })
+
+  it('ships verifiable tenant-portability and CBUAE fee-review artifacts', async () => {
+    const month = period()
+    const portableResponse = await fetch(`${BFF}/back-office/billing/export`, {
+      headers: { 'x-fapi-interaction-id': fapi(), authorization: billingToken }
+    })
+    expect(portableResponse.status).toBe(200)
+    const portable = (await portableResponse.json()) as { data: Record<string, unknown> }
+    expectDigest(portable.data)
+
+    const reviewResponse = await fetch(`${BFF}/back-office/billing/exports:cbuae-fee-review`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-fapi-interaction-id': fapi(),
+        'idempotency-key': `deploy-smoke-${randomUUID()}`,
+        authorization: billingToken
+      },
+      body: JSON.stringify({ period: month, scenarios: [scenario(month)] })
+    })
+    expect(reviewResponse.status).toBe(200)
+    const review = (await reviewResponse.json()) as { data: Record<string, unknown> }
+    expectDigest(review.data)
+  }, 30_000)
 
   it.skipIf(!DATABASE_URL)(
     'persists a High-class audit record for the sign-in (request_trace_id = x-fapi-interaction-id)',
