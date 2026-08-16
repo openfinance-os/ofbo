@@ -21,12 +21,12 @@ const ok = () => true;
 /** A minimal valid registry; tests mutate a clone of it. */
 function validConfig() {
   return {
+    active: 'claude',
     reviewers: [{ key: 'hard-stop', label: 'hard-stop', agent: '.claude/agents/hs.md' }],
     engines: [
       {
         key: 'claude',
         label: 'Claude',
-        enabled: true,
         model: 'claude-opus-5',
         secret: 'TOK',
         attribution: '_by someone_',
@@ -50,10 +50,10 @@ test('the real repository registry builds a matrix', () => {
   for (const r of matrix.reviewer) assert.ok(existsSync(r.agent), `${r.agent} exists`);
 });
 
-test('every engine in the registry — enabled or not — has an adapter step', () => {
-  // Stricter than buildMatrix, which only requires it for ENABLED engines. A disabled engine
-  // shipped without an adapter is a trap: enabling it later looks like a one-line config
-  // change and silently is not.
+test('every engine in the registry — active or not — has an adapter step', () => {
+  // Stricter than buildMatrix, which only requires it for the ACTIVE engine. An engine
+  // registered without an adapter is a trap: swapping `active` to it later looks like a
+  // one-string change and silently would not be one. This keeps every swap safe.
   const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
   const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
   for (const e of config.engines) {
@@ -64,35 +64,83 @@ test('every engine in the registry — enabled or not — has an adapter step', 
   }
 });
 
-test('an ENABLED engine with no adapter step is rejected', () => {
+test('the ACTIVE engine having no adapter step is rejected', () => {
   const config = validConfig();
   assert.throws(
     () => buildMatrix(config, workflowWith('some-other-engine'), { fileExists: ok }),
-    /enabled but .* has no adapter step/s,
+    /has no adapter step/s,
   );
 });
 
-test('a DISABLED engine with no adapter step is allowed through buildMatrix', () => {
+test('a registered but NON-ACTIVE engine is simply not used', () => {
   const config = validConfig();
   config.engines.push({
-    key: 'not-built-yet',
-    label: 'Nope',
-    enabled: false,
+    key: 'codex',
+    label: 'Codex',
     model: null,
     secret: 'X',
     attribution: '_by nobody_',
     requires_workflow_parity: false,
   });
-  const matrix = buildMatrix(config, workflowWith('claude'), { fileExists: ok });
-  assert.deepEqual(matrix.engine.map((e) => e.key), ['claude'], 'disabled engine is excluded');
+  const matrix = buildMatrix(config, workflowWith('claude', 'codex'), { fileExists: ok });
+  assert.deepEqual(matrix.engine.map((e) => e.key), ['claude']);
 });
 
-test('no enabled engine at all is rejected — every review would be a non-review', () => {
+test('swapping the reviewing model is the single `active` string', () => {
   const config = validConfig();
-  config.engines[0].enabled = false;
+  config.engines.push({
+    key: 'codex',
+    label: 'Codex',
+    model: null,
+    secret: 'CODEX_API_KEY',
+    attribution: '_by codex_',
+    requires_workflow_parity: false,
+  });
+  const wf = workflowWith('claude', 'codex');
+
+  assert.equal(buildMatrix(config, wf, { fileExists: ok }).engine[0].key, 'claude');
+  config.active = 'codex';
+  const swapped = buildMatrix(config, wf, { fileExists: ok });
+  assert.equal(swapped.engine[0].key, 'codex');
+  assert.equal(swapped.engine[0].secret, 'CODEX_API_KEY', 'the secret swaps with the engine');
+  assert.equal(swapped.engine[0].model, '', 'null model becomes empty — adapter omits the flag');
+});
+
+test('EXACTLY ONE engine is in the matrix, whatever the registry holds — the cost ceiling', () => {
+  // Structural, not conventional: `active` is one key, so no combination of registry entries
+  // can produce a second review leg and quietly double the spend.
+  const config = validConfig();
+  for (const key of ['codex', 'gemini', 'another']) {
+    config.engines.push({
+      key,
+      label: key,
+      model: null,
+      secret: 'S',
+      attribution: '_x_',
+      requires_workflow_parity: false,
+    });
+  }
+  const matrix = buildMatrix(config, workflowWith('claude', 'codex', 'gemini', 'another'), {
+    fileExists: ok,
+  });
+  assert.equal(matrix.engine.length, 1, 'four engines registered, one reviews');
+});
+
+test('an `active` naming an unregistered engine is rejected', () => {
+  const config = validConfig();
+  config.active = 'nonexistent';
   assert.throws(
     () => buildMatrix(config, workflowWith('claude'), { fileExists: ok }),
-    /no engine is enabled/,
+    /not a registered engine/,
+  );
+});
+
+test('a missing `active` is rejected — nothing would review', () => {
+  const config = validConfig();
+  delete config.active;
+  assert.throws(
+    () => buildMatrix(config, workflowWith('claude'), { fileExists: ok }),
+    /"active" must name the engine/,
   );
 });
 
@@ -122,14 +170,22 @@ test('duplicate keys are rejected', () => {
 
 test('malformed engine fields are rejected, and every problem is reported at once', () => {
   const config = validConfig();
-  config.engines[0] = { key: 'claude', label: '', enabled: 'yes', model: 42, secret: '' };
+  config.engines[0] = {
+    key: 'claude',
+    label: '',
+    model: 42,
+    secret: '',
+    attribution: '',
+    requires_workflow_parity: 'yes',
+  };
   assert.throws(
     () => buildMatrix(config, workflowWith('claude'), { fileExists: ok }),
     (err) => {
       assert.match(err.message, /missing or empty "label"/);
-      assert.match(err.message, /"enabled" must be true or false/);
-      assert.match(err.message, /"model" must be a non-empty string or null/);
       assert.match(err.message, /missing or empty "secret"/);
+      assert.match(err.message, /missing or empty "attribution"/);
+      assert.match(err.message, /"requires_workflow_parity" must be true or false/);
+      assert.match(err.message, /"model" must be a non-empty string or null/);
       return true;
     },
   );

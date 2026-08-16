@@ -68,14 +68,13 @@ export function buildMatrix(config, workflowText, opts = {}) {
   }
 
   const seenEngine = new Set();
-  const enabled = [];
   for (const [i, e] of engines.entries()) {
     const at = `engines[${i}]`;
     for (const field of ['key', 'label', 'secret', 'attribution']) {
       if (!isNonEmptyString(e?.[field])) problems.push(`${at}: missing or empty "${field}"`);
     }
-    for (const flag of ['enabled', 'requires_workflow_parity']) {
-      if (typeof e?.[flag] !== 'boolean') problems.push(`${at}: "${flag}" must be true or false`);
+    if (typeof e?.requires_workflow_parity !== 'boolean') {
+      problems.push(`${at}: "requires_workflow_parity" must be true or false`);
     }
     // null is meaningful: "let the engine choose its own default model".
     if (!(e?.model === null || isNonEmptyString(e?.model))) {
@@ -84,21 +83,30 @@ export function buildMatrix(config, workflowText, opts = {}) {
     if (isNonEmptyString(e?.key)) {
       if (seenEngine.has(e.key)) problems.push(`${at}: duplicate engine key "${e.key}"`);
       seenEngine.add(e.key);
-      if (e.enabled === true) {
-        enabled.push(e);
-        if (!workflowText.includes(adapterGuard(e.key))) {
-          problems.push(
-            `${at}: engine "${e.key}" is enabled but ${WORKFLOW_PATH} has no adapter step ` +
-              `guarded by \`${adapterGuard(e.key)}\`. An enabled engine with no adapter would ` +
-              `produce no review at all — add the adapter step, or set "enabled": false.`,
-          );
-        }
-      }
     }
   }
 
-  if (engines.length > 0 && enabled.length === 0) {
-    problems.push('no engine is enabled — every review would be a non-review');
+  // EXACTLY ONE engine reviews, by construction rather than by convention. `active` is a
+  // single key, so there is no combination of flags that quietly doubles the spend — the
+  // cost ceiling is structural. Swapping the reviewing model is this one string.
+  const active = config?.active;
+  let activeEngine = null;
+  if (!isNonEmptyString(active)) {
+    problems.push('"active" must name the engine that reviews');
+  } else {
+    activeEngine = engines.find((e) => e?.key === active) ?? null;
+    if (!activeEngine) {
+      problems.push(
+        `"active" is "${active}", which is not a registered engine ` +
+          `(have: ${engines.map((e) => e?.key).filter(Boolean).join(', ') || 'none'})`,
+      );
+    } else if (!workflowText.includes(adapterGuard(active))) {
+      problems.push(
+        `"active" is "${active}" but ${WORKFLOW_PATH} has no adapter step guarded by ` +
+          `\`${adapterGuard(active)}\`. That would run a review leg that executes nothing ` +
+          `and writes no review — add the adapter step, or point "active" elsewhere.`,
+      );
+    }
   }
 
   if (problems.length > 0) {
@@ -109,15 +117,18 @@ export function buildMatrix(config, workflowText, opts = {}) {
 
   return {
     reviewer: reviewers.map((r) => ({ key: r.key, label: r.label, agent: r.agent })),
-    engine: enabled.map((e) => ({
-      key: e.key,
-      label: e.label,
-      model: e.model ?? '',
-      secret: e.secret,
-      attribution: e.attribution,
-      // Stringified: GitHub Actions expressions compare matrix values as strings.
-      requires_workflow_parity: String(e.requires_workflow_parity),
-    })),
+    // Always exactly one — see above.
+    engine: [
+      {
+        key: activeEngine.key,
+        label: activeEngine.label,
+        model: activeEngine.model ?? '',
+        secret: activeEngine.secret,
+        attribution: activeEngine.attribution,
+        // Stringified: GitHub Actions expressions compare matrix values as strings.
+        requires_workflow_parity: String(activeEngine.requires_workflow_parity),
+      },
+    ],
   };
 }
 
@@ -129,14 +140,12 @@ if (process.argv[1] && process.argv[1].endsWith('ai-review-matrix.mjs')) {
     const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
     const workflowText = readFileSync(WORKFLOW_PATH, 'utf8');
     const matrix = buildMatrix(config, workflowText);
-    const legs = matrix.reviewer.length * matrix.engine.length;
+    const [engine] = matrix.engine;
     // stderr for the human summary, stdout for the `matrix=` line the job redirects into
     // $GITHUB_OUTPUT — mixing them would corrupt the output file.
     process.stderr.write(
-      `ai-review-matrix: ${matrix.reviewer.length} reviewer(s) x ${matrix.engine.length} ` +
-        `enabled engine(s) = ${legs} check run(s): ` +
-        matrix.engine.map((e) => e.label).join(', ') +
-        '\n',
+      `ai-review-matrix: engine "${engine.label}" (${engine.key}) reviewing for ` +
+        `${matrix.reviewer.length} reviewer(s) = ${matrix.reviewer.length} check run(s)\n`,
     );
     process.stdout.write(`matrix=${JSON.stringify(matrix)}\n`);
   } catch (err) {

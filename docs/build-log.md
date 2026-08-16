@@ -2159,3 +2159,50 @@ not the code review of the change that implements it.
 Still owed, unchanged by the acceptance: the injected-violation self-test proving the check
 goes red against a real finding, which cannot run until the workflow is on the default branch;
 and the Codex adapter's first real execution, which has never happened.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): one active engine, three registered, swap by one string
+
+Requirement clarified by the user: one model reviews (cost minimum), and it must be swappable
+among several as better review models appear. That is a different shape from what shipped in
+the previous entry, which allowed N enabled engines crossed with reviewers.
+
+Replaced the per-engine `enabled` booleans with a single `active` key. **Exactly one engine
+reviews, by construction rather than by convention** — `active` is one string, so no
+combination of registry entries can produce a second review leg and double the recurring
+bill. A test asserts the invariant holds with four engines registered. Swapping the reviewing
+model is now that one string, and a test drives claude→codex end to end asserting the secret
+and model swap with it.
+
+Cross-checking two engines was dropped deliberately, not lost: it doubles cost for a check
+that is advisory anyway. Re-adding it is a change to the matrix builder, not a config flag —
+the right friction for a decision that doubles a recurring bill.
+
+THREE ENGINES REGISTERED, EVERY SURFACE PROBED RATHER THAN ASSUMED. A fabricated action
+reference or wrong auth variable produces a silently broken CI job, so none of this came from
+documentation or a research summary alone:
+- claude — anthropics/claude-code-action@v1; CLAUDE_CODE_OAUTH_TOKEN. Proven in CI.
+- codex — @openai/codex v0.147.0, `codex exec --model --sandbox --color`; CODEX_API_KEY
+  confirmed read (a dummy key reached the API rather than a "not logged in" error); exits 1 on
+  failure. An `openai/codex-action` was reported by a research pass but could NOT be verified
+  from this environment, so the adapter uses the npm CLI — which also means a `run:` step that
+  cannot break job setup the way an unresolvable `uses:` would.
+- gemini — @google/gemini-cli v0.55.1, `gemini -p --model --approval-mode yolo --skip-trust`;
+  GEMINI_API_KEY confirmed read.
+
+THE GEMINI PROBE RETIRED AN ASSUMPTION. Without `--skip-trust` the CLI reports it is "not
+running in a trusted directory", silently downgrades `--approval-mode yolo` back to `default`,
+does nothing — AND EXITS 0. It also exits 0 on a critical API error. A `set -e` adapter step
+sails past both. Only the missing review file catches it. The rule that an adapter is never
+trusted to set the job's status started as a principle in the previous entry and is now an
+observed necessity, with a named CLI behind it.
+
+Evidence: registry tests 13 (33/33 in scripts/test); eslint clean; workflow parses with 9
+steps and three adapters; CLI swap probe run against all three engines — each yields exactly 2
+check runs, never 4 — and the config restored to `active: claude` afterwards.
+
+UNCHANGED AND STILL OWED: neither CLI adapter has produced a real review. Swapping to codex or
+gemini needs its secret added first; without it preflight reports NOT RUN — explicitly not a
+pass — rather than silently reviewing nothing. And the injected-violation self-test still
+cannot run until the workflow is on the default branch.

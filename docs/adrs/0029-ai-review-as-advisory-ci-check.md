@@ -79,14 +79,32 @@ is the same acceptance rule ADR 0024 sets for the enterprise port adapters — a
 adapter must pass exactly the tests the simulator passes. An engine that cannot produce a
 parseable verdict fails as DID NOT COMPLETE rather than being quietly accepted.
 
-**Which engines run is configuration** — `.github/ai-review.config.json`. One enabled engine
-is a swap; two is a cross-check at twice the cost and twice the check runs. Adding an engine
-is a registry entry plus one guarded adapter step; everything after the `ADAPTERS END` marker
-in the workflow is engine-blind, and `scripts/test/ai-review-matrix.test.mjs` asserts that the
-core never names a provider. Engine-specific facts that would otherwise leak into the core
-live in the registry instead: the comment attribution (attributing a Codex review to Claude
-Code would misstate which model produced the verdict) and `requires_workflow_parity` (the
-anti-exfiltration rule below belongs to one engine's tooling, not to the port).
+**Which engine runs is configuration** — the `active` key in `.github/ai-review.config.json`.
+Swapping the reviewing model is that one string, so replacing today's model with a better one
+later is a one-line control-plane PR rather than a rewrite.
+
+**Exactly one engine reviews, by construction.** `active` is a single key, not a set of
+`enabled` booleans, so no combination of registry entries can produce a second review leg and
+quietly double the spend — the cost ceiling is structural rather than conventional, and a test
+asserts it holds with four engines registered. Cross-checking two engines was considered and
+dropped: it doubles cost for a check that is advisory anyway. Re-introducing it would be a
+deliberate change to the matrix builder, not a config flag — which is the right friction for a
+decision that doubles a recurring bill.
+
+Adding an engine is a registry entry plus one guarded adapter step; everything after the
+`ADAPTERS END` marker in the workflow is engine-blind, and
+`scripts/test/ai-review-matrix.test.mjs` asserts that the core never names a provider.
+Engine-specific facts that would otherwise leak into the core live in the registry instead:
+the comment attribution (attributing a Codex review to Claude Code would misstate which model
+produced the verdict) and `requires_workflow_parity` (the anti-exfiltration rule below belongs
+to one engine's tooling, not to the port).
+
+**Adapters are not trusted for status — and probing the CLIs proved why.** `@google/gemini-cli`
+exits **0** both when its trusted-folder gate silently downgrades `--approval-mode yolo` back
+to `default` and refuses to act, and when it hits a critical API error, having written nothing
+either way. A `set -e` adapter step sails past both. Only the missing review file catches it,
+which is exactly the "third branch" this design already turns red. The rule that an adapter
+never sets the job's status started as a principle and is now an observed necessity.
 
 **The failure mode worth engineering against** is a half-added engine: a registry entry with
 no adapter step would produce a matrix leg that runs, executes nothing, writes no review, and
@@ -101,13 +119,27 @@ model serving them are model configuration, and HG-0002 puts model configuration
 outside CODEOWNERS review. Changing which model reviews the agent's work is a control-plane
 PR, by design — the convenience is not worth the hole.
 
-**Claude is the only engine enabled.** A Codex adapter ships alongside it at `enabled: false`.
-It is a real adapter, not a stub — written against the `@openai/codex` CLI surface verified
-against v0.147.0 (`codex exec` with `--model`, `--sandbox`, `-o`) rather than against an
-action reference that could not be confirmed to exist. It has **never executed end to end**,
-because no `CODEX_API_KEY` is configured; its first run must be treated as unproven. It fails
-loudly rather than silently: a wrong invocation writes no review file, and the core reports
-DID NOT COMPLETE.
+**Three engines are registered; `active` is `claude`.** Every surface below was probed
+directly rather than taken from documentation or a research summary, because a fabricated
+action reference or a wrong auth variable would produce a silently broken CI job:
+
+| engine | invocation | auth | state |
+| --- | --- | --- | --- |
+| `claude` | `anthropics/claude-code-action@v1`, `--model` in `claude_args` | `CLAUDE_CODE_OAUTH_TOKEN` | **proven in CI** |
+| `codex` | `@openai/codex` v0.147.0 — `codex exec --model --sandbox --color` | `CODEX_API_KEY` (confirmed read) | never run end to end |
+| `gemini` | `@google/gemini-cli` v0.55.1 — `gemini -p --model --approval-mode yolo --skip-trust` | `GEMINI_API_KEY` (confirmed read) | never run end to end |
+
+`--skip-trust` is not optional for Gemini: without it the CLI refuses to act in a headless
+directory, and does so while exiting 0. An `openai/codex-action` was reported to exist by a
+research pass but could not be verified from this environment, so the Codex adapter uses the
+npm CLI — which also means a `run:` step rather than a `uses:`, and therefore cannot break job
+setup if the reference is ever wrong.
+
+Neither CLI adapter has produced a real review. Both fail loudly rather than silently: a wrong
+invocation writes no review file, and the core reports DID NOT COMPLETE. Their first run must
+be treated as unproven, and swapping `active` to either requires its secret to exist — if it
+does not, preflight reports NOT RUN, explicitly not a pass, rather than reviewing nothing in
+silence.
 
 ### The workflow-validation skip (found by running it)
 
@@ -168,9 +200,15 @@ same reviewer found nothing", not as an approval.
   swap is not discovered to be two changes instead of one. The engine port makes this a
   narrower change than it would otherwise be: an onshore-routed engine is a new registry entry
   and a new adapter step, and the reviewers, prompt, verdict parse, and reporting are untouched.
-- **A second enabled engine doubles the cost and the check runs**, since engines are crossed
-  with reviewers. Two engines on two reviewers is four check runs at ~$1–2.50 each per push.
-  Cross-checking is a deliberate spend, not a default.
+- **Cost is bounded by construction at one engine × two reviewers.** There is no config that
+  makes it two engines, so the recurring bill cannot be doubled by a flag flip. The trade is
+  that cross-checking two models — where disagreement between them would itself be signal — is
+  no longer available without a code change. That was the explicit instruction: one model, at
+  minimum cost, swappable when a better one appears.
+- **Swapping to an engine whose secret is missing yields no review at all**, where previously
+  Claude was always present as a floor. Preflight reports this as NOT RUN with the secret named
+  and "This is not a pass" stated, on the check and on the PR — but it is a louder failure mode
+  than before, and worth knowing before a swap.
 - **HG-0006 (AI model risk governance).** The reviewer prompts are model configuration. They
   remain under `/.claude/` and therefore under `control-plane-owners`; this workflow adds no
   new prompt surface, which is precisely why it reads the agent files instead of inlining them.

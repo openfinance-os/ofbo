@@ -24,10 +24,17 @@
 # equally — an engine that cannot produce a parseable verdict fails as DID NOT COMPLETE
 # rather than being quietly accepted, exactly as a port-swap acceptance gate should behave.
 #
-# Which engines run is CONFIG: .github/ai-review.config.json. Adding one is a registry entry
-# plus one guarded adapter step between the ADAPTERS START/END markers below. Everything
-# after ADAPTERS END is engine-blind and must stay that way —
-# scripts/test/ai-review-matrix.test.mjs asserts it.
+# WHICH engine runs is CONFIG: the `active` key in .github/ai-review.config.json. Swapping the
+# reviewing model is that one string. EXACTLY ONE engine reviews, by construction rather than
+# by convention — `active` is a single key, so no combination of flags can quietly double the
+# spend. Adding an engine is a registry entry plus one guarded adapter step between the
+# ADAPTERS START/END markers below. Everything after ADAPTERS END is engine-blind and must stay
+# that way — scripts/test/ai-review-matrix.test.mjs asserts it.
+#
+# ADAPTERS ARE NOT TRUSTED FOR STATUS. Observed while probing the CLIs: gemini exits 0 both
+# when its trust gate blocks it and on a critical API error, having written nothing. An
+# adapter's exit code therefore proves nothing; the review FILE and its VERDICT line are the
+# only evidence the core accepts.
 #
 # ADVISORY MEANS ADVISORY: these jobs go red on FAIL/DRIFT so a finding is visible, but they
 # are deliberately NOT registered as required status checks. A human can merge over them.
@@ -254,6 +261,28 @@ jobs:
             args+=(--model "$ENGINE_MODEL")
           fi
           codex "${args[@]}" "$REVIEW_PROMPT"
+
+      # NOT YET EXERCISED. Written against @google/gemini-cli v0.55.1, probed rather than
+      # assumed. Two findings baked in here:
+      #   --skip-trust is REQUIRED. Without it the CLI reports "not running in a trusted
+      #   directory", silently downgrades --approval-mode yolo back to "default", and then
+      #   does nothing.
+      #   It EXITS 0 anyway — on that refusal AND on a critical API error. This adapter is
+      #   therefore the concrete case for why the core never trusts an adapter's exit status:
+      #   `set -e` would sail straight past both, and only the missing review file catches it.
+      - name: Review — Gemini engine
+        if: ${{ steps.preflight.outputs.run == 'true' && matrix.engine.key == 'gemini' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets[matrix.engine.secret] }}
+          ENGINE_MODEL: ${{ matrix.engine.model }}
+        run: |
+          set -euo pipefail
+          npm install -g @google/gemini-cli
+          args=(--approval-mode yolo --skip-trust)
+          if [ -n "$ENGINE_MODEL" ]; then
+            args+=(--model "$ENGINE_MODEL")
+          fi
+          gemini "${args[@]}" -p "$REVIEW_PROMPT"
       # ADAPTERS END
       # =================================================================================
       # Everything below is ENGINE-BLIND. It reads only $REVIEW_FILE and matrix metadata,
