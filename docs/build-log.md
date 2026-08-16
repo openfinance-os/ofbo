@@ -2294,3 +2294,51 @@ Also corrected: the Claude legs on this PR have never reviewed either. They repo
 green checks earlier in this branch's history were preflight short-circuits, not reviews.
 That resolves only on merge, and is why codex — which carries requires_workflow_parity:
 false — is the only engine that can review this particular PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): parity enforced by the harness, for every engine
+
+Maintainer decision: stay on claude, and make workflow parity universal rather than
+per-engine. Both done.
+
+THE DEFECT. Parity was a per-engine flag, true only for claude because claude-code-action
+enforces an equivalent rule itself. `on: pull_request` hands repository secrets to SAME-REPO
+PRs while running the workflow file FROM THE PR HEAD. claude-code-action refuses that; the
+CLI adapters authenticate with a plain repository secret and have no such rule. So pointing
+`active` at a CLI engine removed a security control silently — a PR could have rewritten the
+reviewer and collected its credential in the same run. Swapping a model is meant to be a
+one-string change; it must not also swap a guard in or out.
+
+Not spotted by reasoning. Spotted because the previous entry justified flipping `active` to
+codex on the grounds that codex COULD review the workflow-modifying PR when claude could not.
+That ability was the hole, written up as a feature.
+
+THE FIX. Preflight gates on the diff alone, for every engine, over the whole review control
+plane — each of these can decide what the reviewer executes or which secret it is handed:
+  .github/workflows/ai-review.yml   arbitrary `run:` steps with the secret in scope
+  .github/ai-review.config.json     names the secret; secrets[matrix.engine.secret] indexes
+                                    by it, so editing it redirects which secret is exposed
+  scripts/ai-review-matrix.mjs      produces that registry value, so it can do the same
+`requires_workflow_parity` is deleted from the registry, the validator, the matrix output and
+the workflow. Two tests hold the line: no per-engine flag survives anywhere in the workflow
+and all three paths are guarded; neither the registry nor the built matrix reintroduces one.
+
+VERIFIED BEFORE COMMITTING, not after. The preflight decision block was simulated across all
+seven paths with a stubbed git — fork, missing credential, each control-plane file alone, two
+files together, and the clean case that must RUN. All correct, no `set -u` unbound failures.
+That simulation also caught a cosmetic bug: `paste -sd', '` treats a multi-char delimiter as a
+CYCLING list, so three changed files rendered as "a,b c". Now `paste -sd',' | sed 's/,/, /g'`.
+
+A second latent bug surfaced writing the test: `indexOf('# ADAPTERS START')` matches the
+header prose "ADAPTERS START/END markers" at offset 2196, not the real marker at 13972,
+yielding an empty slice and a test that asserts nothing. Anchored to the newline. The existing
+ADAPTERS END test was checked and is unambiguous either way.
+
+DELIBERATE CONSEQUENCE, stated plainly: no engine reviews the PR that changes how reviews run,
+this harness included. It cannot review its own control-plane changes. That is correct and
+self-resolves on merge, but it means THIS PR gets NOT RUN on both reviewers — as will any
+future PR touching those three paths, which are then reviewed by humans only.
+
+Evidence: 15 registry tests, 35/35 across scripts/test; eslint clean; preflight simulation
+7/7. Still owed, unchanged: claude has never produced a review — it cannot until this merges.

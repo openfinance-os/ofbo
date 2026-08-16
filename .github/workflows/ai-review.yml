@@ -180,25 +180,46 @@ jobs:
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
           # Indexed by the registry's secret name — the core never names a provider's secret.
           HAS_TOKEN: ${{ secrets[matrix.engine.secret] != '' }}
-          NEEDS_PARITY: ${{ matrix.engine.requires_workflow_parity }}
           SECRET_NAME: ${{ matrix.engine.secret }}
           DEFAULT_REF: ${{ github.event.repository.default_branch }}
           LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
         run: |
           set -euo pipefail
-          self='.github/workflows/ai-review.yml'
+          # THE REVIEW CONTROL PLANE. Anything here can decide what the reviewer executes or
+          # which credential it is handed, so all of it is in the parity boundary:
+          #   the workflow    — arbitrary `run:` steps, with the secret in scope
+          #   the registry    — names the secret; `secrets[matrix.engine.secret]` is indexed
+          #                     by it, so editing it redirects which secret is exposed
+          #   the matrix builder — produces that registry value, so it can do the same
+          control_plane=(
+            '.github/workflows/ai-review.yml'
+            '.github/ai-review.config.json'
+            'scripts/ai-review-matrix.mjs'
+          )
           if [ "$IS_FORK" = "true" ]; then
             reason="fork PR — GitHub withholds secrets from fork-triggered runs"
           elif [ "$HAS_TOKEN" != "true" ]; then
             reason="credential absent — the ${SECRET_NAME} secret is not set"
-          elif [ "$NEEDS_PARITY" = "true" ] && ! git diff --quiet "origin/${DEFAULT_REF}" HEAD -- "$self"; then
-            # This engine's tooling refuses to run when the workflow differs from the
-            # default branch — claude-code-action's anti-exfiltration rule, so a PR cannot
-            # rewrite the workflow AND obtain the app token. Detected here rather than left
-            # to surface as the far more confusing "the reviewer produced no review file".
-            # Self-resolves the moment this PR merges.
-            reason="this PR modifies ${self}, which differs from origin/${DEFAULT_REF} — this engine withholds its token from a run that changes its own workflow (anti-exfiltration). This resolves once the PR merges"
           else
+            # ENFORCED HERE FOR EVERY ENGINE, BY THIS HARNESS — never delegated to the
+            # engine's own tooling. claude-code-action happens to enforce an equivalent rule
+            # itself, but the CLI adapters authenticate with a plain repository secret and
+            # have no such rule, so relying on the vendor would leave the guard present on
+            # one engine and absent on the next. `on: pull_request` hands secrets to
+            # same-repo PRs while running the workflow FROM THE PR HEAD, so without this a
+            # PR could rewrite the reviewer and collect its credential in the same run.
+            #
+            # Deliberate consequence: no engine reviews the PR that changes how reviews run.
+            # This harness cannot review its own control-plane changes — that is the correct
+            # behaviour, and it self-resolves the moment such a PR merges.
+            # paste -sd',' then space out: a multi-char -d is a CYCLING delimiter list, so
+            # `-d', '` would join three files as "a,b c".
+            changed="$(git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
+          fi
+          if [ -z "${reason:-}" ] && [ -n "${changed:-}" ]; then
+            reason="this PR modifies the review control plane (${changed}), which differs from origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
+          fi
+          if [ -z "${reason:-}" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

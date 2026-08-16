@@ -73,9 +73,6 @@ export function buildMatrix(config, workflowText, opts = {}) {
     for (const field of ['key', 'label', 'secret', 'attribution']) {
       if (!isNonEmptyString(e?.[field])) problems.push(`${at}: missing or empty "${field}"`);
     }
-    if (typeof e?.requires_workflow_parity !== 'boolean') {
-      problems.push(`${at}: "requires_workflow_parity" must be true or false`);
-    }
     // null is meaningful: "let the engine choose its own default model".
     if (!(e?.model === null || isNonEmptyString(e?.model))) {
       problems.push(`${at}: "model" must be a non-empty string or null`);
@@ -125,8 +122,6 @@ export function buildMatrix(config, workflowText, opts = {}) {
         model: activeEngine.model ?? '',
         secret: activeEngine.secret,
         attribution: activeEngine.attribution,
-        // Stringified: GitHub Actions expressions compare matrix values as strings.
-        requires_workflow_parity: String(activeEngine.requires_workflow_parity),
       },
     ],
   };

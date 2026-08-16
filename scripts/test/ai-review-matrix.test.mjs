@@ -30,7 +30,6 @@ function validConfig() {
         model: 'claude-opus-5',
         secret: 'TOK',
         attribution: '_by someone_',
-        requires_workflow_parity: true,
       },
     ],
   };
@@ -80,7 +79,6 @@ test('a registered but NON-ACTIVE engine is simply not used', () => {
     model: null,
     secret: 'X',
     attribution: '_by nobody_',
-    requires_workflow_parity: false,
   });
   const matrix = buildMatrix(config, workflowWith('claude', 'codex'), { fileExists: ok });
   assert.deepEqual(matrix.engine.map((e) => e.key), ['claude']);
@@ -94,7 +92,6 @@ test('swapping the reviewing model is the single `active` string', () => {
     model: null,
     secret: 'CODEX_API_KEY',
     attribution: '_by codex_',
-    requires_workflow_parity: false,
   });
   const wf = workflowWith('claude', 'codex');
 
@@ -117,7 +114,6 @@ test('EXACTLY ONE engine is in the matrix, whatever the registry holds — the c
       model: null,
       secret: 'S',
       attribution: '_x_',
-      requires_workflow_parity: false,
     });
   }
   const matrix = buildMatrix(config, workflowWith('claude', 'codex', 'gemini', 'another'), {
@@ -176,7 +172,6 @@ test('malformed engine fields are rejected, and every problem is reported at onc
     model: 42,
     secret: '',
     attribution: '',
-    requires_workflow_parity: 'yes',
   };
   assert.throws(
     () => buildMatrix(config, workflowWith('claude'), { fileExists: ok }),
@@ -184,7 +179,6 @@ test('malformed engine fields are rejected, and every problem is reported at onc
       assert.match(err.message, /missing or empty "label"/);
       assert.match(err.message, /missing or empty "secret"/);
       assert.match(err.message, /missing or empty "attribution"/);
-      assert.match(err.message, /"requires_workflow_parity" must be true or false/);
       assert.match(err.message, /"model" must be a non-empty string or null/);
       return true;
     },
@@ -196,6 +190,49 @@ test('model: null is preserved as an empty string so the adapter can omit the fl
   config.engines[0].model = null;
   const matrix = buildMatrix(config, workflowWith('claude'), { fileExists: ok });
   assert.equal(matrix.engine[0].model, '');
+});
+
+test('workflow parity is enforced for EVERY engine, not per-engine', () => {
+  // Regression guard for a real defect. Parity used to be a per-engine flag, true only for
+  // claude because claude-code-action enforces an equivalent rule itself. That made swapping
+  // `active` silently swap a security control in or out: the CLI engines authenticate with a
+  // plain repository secret and have no such rule of their own, so codex ran happily on a PR
+  // that rewrote this very workflow. Preflight must gate on the diff alone.
+  const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
+  // '# ADAPTERS START\n' anchored to the newline on purpose: the header prose says
+  // "ADAPTERS START/END markers", so a bare '# ADAPTERS START' matches that comment first
+  // and silently yields an empty slice.
+  const preflight = workflow.slice(
+    workflow.indexOf('- name: Preflight'),
+    workflow.indexOf('# ADAPTERS START\n'),
+  );
+  assert.ok(preflight.length > 0, 'the preflight step was found');
+  assert.ok(
+    !/requires_workflow_parity|NEEDS_PARITY/.test(workflow),
+    'no per-engine parity flag survives anywhere in the workflow',
+  );
+  // The whole control plane, not just the workflow: each of these can decide what the
+  // reviewer executes or which secret it is handed.
+  for (const path of [
+    '.github/workflows/ai-review.yml',
+    '.github/ai-review.config.json',
+    'scripts/ai-review-matrix.mjs',
+  ]) {
+    assert.ok(preflight.includes(path), `preflight guards ${path} for parity`);
+  }
+});
+
+test('the registry carries no per-engine parity flag', () => {
+  // The matrix must not re-introduce it as a matrix value either.
+  const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
+  for (const e of config.engines) {
+    assert.ok(
+      !('requires_workflow_parity' in e),
+      `engine "${e.key}" carries no parity flag — parity is a harness rule, not an engine property`,
+    );
+  }
+  const matrix = buildMatrix(config, readFileSync(WORKFLOW_PATH, 'utf8'), { fileExists: existsSync });
+  assert.ok(!('requires_workflow_parity' in matrix.engine[0]), 'nor does the built matrix');
 });
 
 test('the engine-agnostic core carries no provider-specific identifiers', () => {

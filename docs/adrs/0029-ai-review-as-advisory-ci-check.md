@@ -94,10 +94,14 @@ decision that doubles a recurring bill.
 Adding an engine is a registry entry plus one guarded adapter step; everything after the
 `ADAPTERS END` marker in the workflow is engine-blind, and
 `scripts/test/ai-review-matrix.test.mjs` asserts that the core never names a provider.
-Engine-specific facts that would otherwise leak into the core live in the registry instead:
-the comment attribution (attributing a Codex review to Claude Code would misstate which model
-produced the verdict) and `requires_workflow_parity` (the anti-exfiltration rule below belongs
-to one engine's tooling, not to the port).
+Engine-specific facts that would otherwise leak into the core live in the registry instead —
+notably the comment attribution, since attributing a Codex review to Claude Code would
+misstate which model produced the verdict.
+
+**Workflow parity is a property of the harness, not of the engine.** It was briefly modelled
+as a per-engine flag, true only for `claude` because `claude-code-action` enforces an
+equivalent rule itself. That was a design error, corrected below: it made swapping `active`
+silently swap a security control in or out.
 
 **Adapters are not trusted for status — and probing the CLIs proved why.** `@google/gemini-cli`
 exits **0** both when its trusted-folder gate silently downgrades `--approval-mode yolo` back
@@ -156,6 +160,39 @@ real defect — the check reported the *symptom* ("the reviewer produced no revi
 than the cause, so a future control-plane PR editing this file would hit the same wall with no
 idea why. Preflight now detects the condition directly by diffing this workflow against the
 default branch, and reports the actual reason and that it self-resolves on merge.
+
+### Parity is enforced by this harness, for every engine (the second correction)
+
+Mirroring one vendor's rule was not enough, and the gap was live rather than theoretical.
+`on: pull_request` hands repository secrets to **same-repo** PRs while running the workflow
+file **from the PR head**. `claude-code-action` refuses that; the CLI adapters authenticate
+with a plain repository secret and have no such rule. So while parity was a per-engine flag,
+pointing `active` at a CLI engine removed the control silently — and a PR could have rewritten
+the reviewer and collected its credential in the same run.
+
+This was not spotted by reasoning. It was spotted because flipping `active` to `codex` was
+justified, in a previous revision of this ADR, on the grounds that codex *could* review the PR
+that modifies this workflow when claude could not. That ability was the hole, described as a
+feature.
+
+Preflight now enforces parity for every engine, over the whole **review control plane**:
+
+| path | why it is in the boundary |
+| --- | --- |
+| `.github/workflows/ai-review.yml` | arbitrary `run:` steps, with the secret in scope |
+| `.github/ai-review.config.json` | names the secret; `secrets[matrix.engine.secret]` is indexed by it, so editing it redirects which secret is exposed |
+| `scripts/ai-review-matrix.mjs` | produces that registry value, so it can do the same |
+
+The registry no longer carries a parity field at all, and two tests hold the line: one asserts
+no per-engine flag survives anywhere in the workflow and that all three paths are guarded, the
+other that neither the registry nor the built matrix reintroduces one.
+
+**The deliberate consequence is that no engine reviews the PR that changes how reviews run —
+this harness included.** It cannot review its own control-plane changes. That is correct, it
+self-resolves on merge, and it is strictly better than the alternative of a reviewer that can
+be rewritten by the diff it is reviewing. The practical cost is real and worth stating: a PR
+touching any of the three paths gets NOT RUN on both reviewers, so control-plane changes are
+reviewed by humans only.
 
 The practical consequence for reviewers: **any PR that edits `ai-review.yml` cannot exercise
 the reviewers on itself.** That is a genuine limitation, not a workaround — the first real
