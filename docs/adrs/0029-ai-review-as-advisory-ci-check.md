@@ -62,6 +62,51 @@ pull request, in a fresh session on GitHub's infrastructure, and posts each verd
   left no trace on the PR would be a green check with nothing to explain it, which is the
   "absent control looks like a passing one" class this whole workflow exists to close.
 
+### The review engine is a port, not a hardcoded vendor
+
+PRD §3 says institution-specific systems are ports: code against the interface, keep the
+mapping in configuration, never hardcode a vendor. That rule applies to the model reviewing
+the bank's code at least as much as it applies to the bank's ITSM. So the engine is a port.
+
+**The contract** is fixed and engine-agnostic: read a CODEOWNERS-protected reviewer
+definition, diff the PR against its base, write a review to `$REVIEW_FILE` whose last line is
+a `VERDICT:` line. An adapter is never trusted to set the job's status.
+
+**The verdict parse is the port's contract test.** It binds every adapter identically, which
+is the same acceptance rule ADR 0024 sets for the enterprise port adapters — an enterprise
+adapter must pass exactly the tests the simulator passes. An engine that cannot produce a
+parseable verdict fails as DID NOT COMPLETE rather than being quietly accepted.
+
+**Which engines run is configuration** — `.github/ai-review.config.json`. One enabled engine
+is a swap; two is a cross-check at twice the cost and twice the check runs. Adding an engine
+is a registry entry plus one guarded adapter step; everything after the `ADAPTERS END` marker
+in the workflow is engine-blind, and `scripts/test/ai-review-matrix.test.mjs` asserts that the
+core never names a provider. Engine-specific facts that would otherwise leak into the core
+live in the registry instead: the comment attribution (attributing a Codex review to Claude
+Code would misstate which model produced the verdict) and `requires_workflow_parity` (the
+anti-exfiltration rule below belongs to one engine's tooling, not to the port).
+
+**The failure mode worth engineering against** is a half-added engine: a registry entry with
+no adapter step would produce a matrix leg that runs, executes nothing, writes no review, and
+surfaces as the generic DID NOT COMPLETE — a real non-review wearing the costume of a
+transient failure. `scripts/ai-review-matrix.mjs` refuses to build such a matrix, so the
+`config` job fails loudly and specifically before a single token is spent. Verified: an
+enabled engine without an adapter exits 1 with an `::error`; a disabled one is simply excluded.
+
+**No repository-variable override, deliberately.** Under HG-0006 the reviewer prompts and the
+model serving them are model configuration, and HG-0002 puts model configuration under
+`control-plane-owners`. An admin-settable `vars.` override would move part of that decision
+outside CODEOWNERS review. Changing which model reviews the agent's work is a control-plane
+PR, by design — the convenience is not worth the hole.
+
+**Claude is the only engine enabled.** A Codex adapter ships alongside it at `enabled: false`.
+It is a real adapter, not a stub — written against the `@openai/codex` CLI surface verified
+against v0.147.0 (`codex exec` with `--model`, `--sandbox`, `-o`) rather than against an
+action reference that could not be confirmed to exist. It has **never executed end to end**,
+because no `CODEX_API_KEY` is configured; its first run must be treated as unproven. It fails
+loudly rather than silently: a wrong invocation writes no review file, and the core reports
+DID NOT COMPLETE.
+
 ### The workflow-validation skip (found by running it)
 
 `claude-code-action` refuses to hand its GitHub App token to a run whose own workflow file
@@ -118,7 +163,12 @@ same reviewer found nothing", not as an approval.
   job to the first-party API. The M6 move therefore also requires replacing it with an API key
   or, better, workload identity federation (`anthropic_federation_rule_id` +
   `anthropic_organization_id`, which stores no long-lived secret). Recording it here so the
-  swap is not discovered to be two changes instead of one.
+  swap is not discovered to be two changes instead of one. The engine port makes this a
+  narrower change than it would otherwise be: an onshore-routed engine is a new registry entry
+  and a new adapter step, and the reviewers, prompt, verdict parse, and reporting are untouched.
+- **A second enabled engine doubles the cost and the check runs**, since engines are crossed
+  with reviewers. Two engines on two reviewers is four check runs at ~$1–2.50 each per push.
+  Cross-checking is a deliberate spend, not a default.
 - **HG-0006 (AI model risk governance).** The reviewer prompts are model configuration. They
   remain under `/.claude/` and therefore under `control-plane-owners`; this workflow adds no
   new prompt surface, which is precisely why it reads the agent files instead of inlining them.

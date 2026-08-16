@@ -2086,3 +2086,55 @@ Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the e
 synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or
 `ANTHROPIC_BASE_URL` — but the OAuth token pins the job to the first-party API, so that swap
 is two changes, not one. ADR 0029 records both.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): the review engine becomes a swappable port
+
+Follow-up to the entry above, on request: make the reviewing model swappable rather than
+hardcoded — Claude now, other engines later.
+
+PRD §3 already says institution-specific systems are ports — code against the interface, keep
+the mapping in configuration, never hardcode a vendor. That rule applies to the model
+reviewing the bank's code at least as much as to the bank's ITSM, so the engine is now a port
+rather than a vendor baked into a workflow step.
+
+The contract is fixed and engine-agnostic: read a CODEOWNERS-protected reviewer definition,
+diff the PR against its base, write a review to `$REVIEW_FILE` whose last line is the
+`VERDICT:` line. **The verdict parse is the port's contract test** — the same acceptance rule
+ADR 0024 sets for the enterprise adapters (an adapter must pass exactly the tests the
+simulator passes). Which engines run is `.github/ai-review.config.json`; one enabled engine is
+a swap, two is a cross-check at twice the cost.
+
+The failure mode worth engineering against is a HALF-ADDED engine: a registry entry with no
+adapter step would produce a matrix leg that runs, executes nothing, writes no review, and
+surfaces as the generic DID NOT COMPLETE — a real non-review wearing the costume of a
+transient failure. `scripts/ai-review-matrix.mjs` refuses to build such a matrix, so the new
+`config` job fails loudly and specifically before a single token is spent.
+
+Two engine-specific facts were moved OUT of the core into the registry, because leaving them
+in would have made "swap the engine" untrue: the comment attribution (attributing a Codex
+review to Claude Code would misstate which model produced the verdict) and
+`requires_workflow_parity` (the anti-exfiltration rule from the entry above belongs to one
+engine's tooling, not to the port — the Codex CLI adapter uses a plain secret and has no such
+constraint, so it could review workflow-editing PRs that the Claude engine cannot).
+
+No repository-variable override, deliberately: HG-0006 makes the reviewer prompts and the
+model serving them model configuration, and HG-0002 puts that under control-plane-owners. An
+admin-settable override would move part of that decision outside CODEOWNERS. Changing which
+model reviews the agent's work is a control-plane PR.
+
+Evidence: 10 new guard tests (30/30 total in `scripts/test`), covering enabled-without-adapter
+rejected, disabled-without-adapter allowed, no-enabled-engine rejected, missing agent
+definition rejected, duplicate keys, all problems reported at once, and an assertion that the
+engine-agnostic core names no provider. Proved the CLI FAILS CLOSED end to end on a scratch
+tree: enabled-with-adapter exit 0, enabled-without-adapter exit 1 with an `::error`, two
+enabled engines produce the cross product. Workflow YAML re-parsed (2 jobs, dynamic matrix,
+`fail-fast: false`, 8 steps). Claude-only output is unchanged at 2 check runs.
+
+NOT PROVEN: the Codex adapter has never executed. It is real rather than a stub — written
+against the `@openai/codex` CLI surface verified against v0.147.0 (`codex exec` with
+`--model`/`--sandbox`/`-o`) rather than an action reference that could not be confirmed to
+exist — but it ships `enabled: false` with no `CODEX_API_KEY`, and its first run must be
+treated as unproven. It fails loudly if wrong: no review file written, so the core reports
+DID NOT COMPLETE.

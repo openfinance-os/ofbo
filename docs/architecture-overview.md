@@ -225,6 +225,10 @@ egress, four-eyes, profile branching). Those same two reviewers also run
 the same CODEOWNERS-protected agent definitions and posting their verdicts to the PR.
 The pre-PR run is self-attested — the agent reports its own verdict — so the CI run is
 the tamper-evident one; both are **advisory** under HG-0001 and neither gates merge.
+The reviewing model is a **port** (§3 doctrine): the contract is engine-agnostic and the
+verdict parse is its contract test, so which engine reviews is configuration
+(`.github/ai-review.config.json`) rather than a vendor baked into the workflow. Claude is
+the only engine enabled today.
 `Q5` (manual prod approval) is evidenced at release time via `release-evidence.yml`, not
 on every PR.
 
