@@ -349,6 +349,19 @@ describe('BILL production billing console', () => {
     expect(missingBody).toContain('BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED')
     expect(missingBody).not.toContain(BANK_ID)
 
+    const missingExport = {
+      ...base.tenant,
+      portableExport: vi.fn(async () => { throw new TenantNotProvisionedError(BANK_ID) })
+    } satisfies BillingConsoleTenantPort
+    const exportResponse = await routeHarness({ tenant: missingExport }).app.request(
+      '/back-office/billing/export',
+      { headers: financeHeaders }
+    )
+    expect(exportResponse.status).toBe(503)
+    const exportBody = await exportResponse.text()
+    expect(exportBody).toContain('BACKOFFICE.BILLING_TENANT_NOT_PROVISIONED')
+    expect(exportBody).not.toContain(BANK_ID)
+
     const broken = {
       ...base.tenant,
       profile: vi.fn(async () => { throw new Error('postgres password=internal-secret') })
