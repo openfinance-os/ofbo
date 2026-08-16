@@ -2232,3 +2232,65 @@ first time. Both keys were added by the maintainer this session.
 
 Whatever `active` holds at merge time becomes the steady state — that is a maintainer decision,
 not this session's, and it is called out on the PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): codex adapter fixed — the runner is the sandbox
+
+The first real codex run FAILED, and the harness caught it exactly as designed: two
+DID NOT COMPLETE checks, red, with "This is not a pass." on the PR. No silent green.
+
+Root cause, from the job log rather than a guess:
+
+    warning: Codex could not find bubblewrap on PATH ... using the bundled bubblewrap
+    The execution sandbox is failing before process startup
+    (`bwrap: loopback: Failed RTM_NEWADDR`), including for a plain `pwd`
+    Failed to write file .../hard-stop-codex-review.md
+
+Auth was never the problem — codex authenticated, selected gpt-5.6-sol and spent 14,443
+tokens. Its OWN sandbox is bubblewrap, which cannot create a network namespace inside the
+Actions runner. The failure is at sandbox SETUP, so it takes out every mode equally,
+read-only included: reads, writes and a plain `pwd` all failed.
+
+Candidate fix IDENTIFIED BUT DELIBERATELY NOT APPLIED: selecting the CLI's no-OS-sandbox
+mode. It is the only mode that runs, since bubblewrap cannot initialise at all — so the
+real choice is "codex runs" vs "codex does not run", not "sandboxed" vs "unsandboxed".
+
+It was not committed, because it is a security decision belonging to a human rather than to
+this session. Two things weigh against it, and the second is the larger:
+
+1. The containment layer is real. The reviewer's job is reading a PR diff — semi-untrusted
+   input — so prompt injection is the live threat. With the sandbox, an injected command is
+   confined to a workspace with no network. Without it, CODEX_API_KEY and the job's
+   GITHUB_TOKEN are reachable. Blast radius is still bounded (contents: read,
+   pull-requests: write — it can comment, it cannot push), but it is not nil.
+2. CODEX LACKS THE WORKFLOW-PARITY PROTECTION, AND THAT IS THE BIGGER HOLE. `on:
+   pull_request` hands secrets to same-repo PRs while running the workflow file FROM THE PR
+   HEAD. Claude's parity rule refuses exactly that. Codex carries
+   requires_workflow_parity: false, so a PR that edits ai-review.yml still runs it with the
+   key — sandbox or no sandbox. In a repo where autonomous agents push branches, "requires
+   write access" is a low bar.
+
+CORRECTION TO THE PREVIOUS ENTRY. It framed codex's ability to review this PR — the one
+that modifies ai-review.yml — as the reason to flip `active` to it. That was backwards:
+that ability IS the hole described above, not a feature. Parity ought to be enforced by
+this harness for EVERY engine rather than left to whichever vendor happens to implement it,
+and the correct consequence of doing so is that no engine can review the PR that changes
+its own workflow.
+
+`active` is therefore restored to claude — the last known-good state, not a verdict on the
+open question. Flipping it back is one string whenever the maintainer decides.
+
+TWO DESIGN RULES EARNED THEIR KEEP THIS RUN:
+- `Parse verdict` runs on `!cancelled()`, so the adapter's exit code was never load-bearing.
+  Whether codex exited 0 or 1 is still unknown and did not matter — the missing review file
+  is what produced the red.
+- Reporting DID NOT COMPLETE distinctly from PASS is the only reason this was visible at
+  all. A harness that treated "no findings file" as "no findings" would have shown two
+  green checks over a reviewer that read nothing.
+
+Also corrected: the Claude legs on this PR have never reviewed either. They report NOT RUN
+(workflow-parity anti-exfiltration) because the PR modifies ai-review.yml. The 7-second
+green checks earlier in this branch's history were preflight short-circuits, not reviews.
+That resolves only on merge, and is why codex — which carries requires_workflow_parity:
+false — is the only engine that can review this particular PR.
