@@ -222,6 +222,41 @@ test('workflow parity is enforced for EVERY engine, not per-engine', () => {
   }
 });
 
+test('only a missing credential is a fatal non-run — structural ones stay green', () => {
+  // A fork PR and a control-plane PR are not the author's fault and are not fixable in the
+  // PR; a permanently red check is one everyone learns to scroll past. A missing credential
+  // is a repository misconfiguration that disables review on EVERY PR, and green is exactly
+  // how that goes unnoticed.
+  const workflow = readFileSync(WORKFLOW_PATH, 'utf8');
+  const preflight = workflow.slice(
+    workflow.indexOf('- name: Preflight'),
+    workflow.indexOf('# ADAPTERS START\n'),
+  );
+
+  // `fatal=true` is assigned exactly once, and in the credential branch.
+  const assignments = preflight.match(/^\s*fatal=true$/gm) ?? [];
+  assert.equal(assignments.length, 1, 'exactly one branch marks the non-run fatal');
+  const credentialBranch = preflight.slice(
+    preflight.indexOf('credential absent'),
+    preflight.indexOf('else'),
+  );
+  assert.match(credentialBranch, /fatal=true/, 'it is the missing-credential branch');
+
+  // Ordering is load-bearing: a fork PR legitimately has no secret, so the fork test must
+  // come FIRST or every fork PR would be misreported as a repository misconfiguration.
+  assert.ok(
+    preflight.indexOf('IS_FORK') < preflight.indexOf('credential absent'),
+    'the fork check precedes the credential check',
+  );
+
+  // Something must actually act on the flag, or it is decoration.
+  assert.match(
+    workflow,
+    /if: \$\{\{ !cancelled\(\) && steps\.preflight\.outputs\.fatal == 'true' \}\}/,
+    'a step is gated on the fatal output',
+  );
+});
+
 test('the registry carries no per-engine parity flag', () => {
   // The matrix must not re-introduce it as a matrix value either.
   const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));

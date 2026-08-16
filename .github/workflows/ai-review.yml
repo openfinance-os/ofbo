@@ -200,6 +200,8 @@ jobs:
             reason="fork PR — GitHub withholds secrets from fork-triggered runs"
           elif [ "$HAS_TOKEN" != "true" ]; then
             reason="credential absent — the ${SECRET_NAME} secret is not set"
+            # The one non-run that is NOT a fact of life. See "Enforce preflight" below.
+            fatal=true
           else
             # ENFORCED HERE FOR EVERY ENGINE, BY THIS HARNESS — never delegated to the
             # engine's own tooling. claude-code-action happens to enforce an equivalent rule
@@ -225,7 +227,12 @@ jobs:
           fi
           echo "run=false" >> "$GITHUB_OUTPUT"
           echo "reason=${reason}" >> "$GITHUB_OUTPUT"
-          echo "::notice title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          echo "fatal=${fatal:-false}" >> "$GITHUB_OUTPUT"
+          if [ "${fatal:-false}" = "true" ]; then
+            echo "::error title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          else
+            echo "::notice title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          fi
           {
             echo "### AI review — ${LABEL}: NOT RUN"
             echo ""
@@ -235,6 +242,14 @@ jobs:
             echo "nothing about the diff. The reviewer still runs pre-PR in the build"
             echo "agent's session, but that run is self-attested — which is the gap this"
             echo "check exists to close."
+            if [ "${fatal:-false}" = "true" ]; then
+              echo ""
+              echo "This one is a **repository misconfiguration**, not a property of the PR:"
+              echo "set the \`${SECRET_NAME}\` Actions secret, or point \`active\` in"
+              echo ".github/ai-review.config.json at an engine whose credential exists."
+              echo "Until then EVERY PR goes unreviewed, which is why this fails the job"
+              echo "rather than passing quietly."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       # =================================================================================
@@ -434,6 +449,29 @@ jobs:
             } else {
               await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
+
+      # NOT ALL NON-RUNS ARE EQUAL, and the check colour should say which kind this is.
+      #
+      # A STRUCTURAL non-run stays green: a fork PR cannot have secrets, and a control-plane
+      # PR must not be reviewed by the reviewer it edits. Neither is the author's fault and
+      # neither is fixable in the PR, so reddening them would put a permanent red on work
+      # that is behaving correctly — and a check that is always red is a check everyone
+      # learns to scroll past. The PR comment still says NOT RUN, in full, either way.
+      #
+      # A MISSING CREDENTIAL is not that. It is a repository misconfiguration that silently
+      # disables review on EVERY PR until somebody notices, and green is precisely how
+      # nobody notices. This one fails the job.
+      #
+      # Runs after the comment step on purpose: the PR gets the explanation before the job dies.
+      - name: Enforce preflight — a missing credential is a misconfiguration, not a fact of life
+        if: ${{ !cancelled() && steps.preflight.outputs.fatal == 'true' }}
+        env:
+          LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
+          REASON: ${{ steps.preflight.outputs.reason }}
+        run: |
+          set -euo pipefail
+          echo "::error title=AI review (${LABEL}) NOT RUN::${REASON}. This is a repository misconfiguration — every PR goes unreviewed until it is fixed."
+          exit 1
 
       - name: Enforce verdict
         if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}

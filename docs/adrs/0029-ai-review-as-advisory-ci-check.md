@@ -187,8 +187,29 @@ The registry no longer carries a parity field at all, and two tests hold the lin
 no per-engine flag survives anywhere in the workflow and that all three paths are guarded, the
 other that neither the registry nor the built matrix reintroduces one.
 
-**The deliberate consequence is that no engine reviews the PR that changes how reviews run —
-this harness included.** It cannot review its own control-plane changes. That is correct, it
+### Not all non-runs are equal
+
+A NOT RUN is always stated in full on the PR comment and never reads as a pass. The *check
+colour* then says which kind of non-run it was:
+
+| non-run | check | why |
+| --- | --- | --- |
+| fork PR | green | a fork cannot have secrets; not the author's fault, not fixable in the PR |
+| control-plane PR | green | the reviewer must not review the diff that edits it; self-resolves on merge |
+| **missing credential** | **red** | a repository misconfiguration that silently disables review on **every** PR |
+
+The first two are permanent facts about the PR, and a check that is always red on them is a
+check people learn to scroll past — the failure mode where a real finding gets missed because
+the reviewer cried wolf. The third is a bug in the repository: green is exactly how nobody
+notices that reviews stopped happening.
+
+Ordering is load-bearing and tested: the fork check runs **before** the credential check, so a
+fork PR — which legitimately has no secret — is reported as a fork, not as a misconfiguration.
+The enforcing step also runs *after* the comment step, so the PR gets the explanation before
+the job fails.
+
+**The deliberate consequence of parity is that no engine reviews the PR that changes how
+reviews run — this harness included.** It cannot review its own control-plane changes. That is correct, it
 self-resolves on merge, and it is strictly better than the alternative of a reviewer that can
 be rewritten by the diff it is reviewing. The practical cost is real and worth stating: a PR
 touching any of the three paths gets NOT RUN on both reviewers, so control-plane changes are

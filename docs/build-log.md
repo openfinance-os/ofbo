@@ -2342,3 +2342,32 @@ future PR touching those three paths, which are then reviewed by humans only.
 
 Evidence: 15 registry tests, 35/35 across scripts/test; eslint clean; preflight simulation
 7/7. Still owed, unchanged: claude has never produced a review — it cannot until this merges.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): a missing credential now fails the job
+
+Maintainer decision, implemented: missing credential goes RED, structural non-runs stay GREEN.
+
+The distinction is about which failures are worth a colour. A fork PR cannot have secrets and
+a control-plane PR must not be reviewed by the reviewer it edits — neither is the author's
+fault, neither is fixable in the PR, and a check that is permanently red on them is a check
+people learn to scroll past. That is the failure mode where a real finding gets missed because
+the reviewer cried wolf. A missing credential is not that: it is a repository misconfiguration
+that silently disables review on EVERY PR, and green is exactly how nobody notices reviews
+stopped happening.
+
+Implementation: preflight emits a `fatal` output, set only in the credential branch, and a new
+`Enforce preflight` step is gated on it. It sits AFTER the comment step so the PR gets the
+full explanation before the job dies, and the step summary tells the reader how to fix it
+(set the secret, or point `active` at an engine whose credential exists).
+
+ORDERING IS LOAD-BEARING, and the simulation is what made that concrete. The case worth
+naming: a fork PR that also has no credential. Because the fork test runs FIRST, it reports as
+a fork and stays green — correct, since a fork legitimately has no secret and calling that a
+misconfiguration would be wrong. Reverse the two branches and every fork PR turns red with a
+misleading reason. A test now pins the ordering rather than trusting it.
+
+Evidence: preflight simulation extended to assert the `fatal` output, 8/8 including the
+fork-without-credential case; 16 registry tests, 36/36 across scripts/test; eslint clean;
+workflow parses with 10 steps in the intended order (comment before enforcement).
