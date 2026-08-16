@@ -16,6 +16,7 @@
 // scripts/test/ai-review-matrix.test.mjs, which runs in the discovery-gates job.
 
 import { readFileSync, existsSync } from 'node:fs';
+import process from 'node:process';
 
 export const CONFIG_PATH = '.github/ai-review.config.json';
 export const WORKFLOW_PATH = '.github/workflows/ai-review.yml';
@@ -129,15 +130,18 @@ if (process.argv[1] && process.argv[1].endsWith('ai-review-matrix.mjs')) {
     const workflowText = readFileSync(WORKFLOW_PATH, 'utf8');
     const matrix = buildMatrix(config, workflowText);
     const legs = matrix.reviewer.length * matrix.engine.length;
-    console.error(
+    // stderr for the human summary, stdout for the `matrix=` line the job redirects into
+    // $GITHUB_OUTPUT — mixing them would corrupt the output file.
+    process.stderr.write(
       `ai-review-matrix: ${matrix.reviewer.length} reviewer(s) x ${matrix.engine.length} ` +
         `enabled engine(s) = ${legs} check run(s): ` +
-        matrix.engine.map((e) => e.label).join(', '),
+        matrix.engine.map((e) => e.label).join(', ') +
+        '\n',
     );
-    console.log(`matrix=${JSON.stringify(matrix)}`);
+    process.stdout.write(`matrix=${JSON.stringify(matrix)}\n`);
   } catch (err) {
-    console.error(`::error title=AI review registry::${err.message.split('\n')[0]}`);
-    console.error(err.message);
+    process.stderr.write(`::error title=AI review registry::${err.message.split('\n')[0]}\n`);
+    process.stderr.write(`${err.message}\n`);
     process.exit(1);
   }
 }
