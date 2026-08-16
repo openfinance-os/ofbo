@@ -2206,3 +2206,29 @@ UNCHANGED AND STILL OWED: neither CLI adapter has produced a real review. Swappi
 gemini needs its secret added first; without it preflight reports NOT RUN — explicitly not a
 pass — rather than silently reviewing nothing. And the injected-violation self-test still
 cannot run until the workflow is on the default branch.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): first real review — active flipped to codex
+
+Discovered while inspecting job logs: the Claude review legs on PR #314 have NEVER produced
+a review. Every push reports NOT RUN, with the reason
+
+    this PR modifies .github/workflows/ai-review.yml, which differs from origin/main —
+    this engine withholds its token from a run that changes its own workflow
+    (anti-exfiltration). This resolves once the PR merges
+
+That is the workflow-parity rule working exactly as designed, and it is a chicken-and-egg:
+the PR that introduces the review workflow can never be reviewed by an engine that demands
+parity with the default branch. The 7-second green check runs were preflight short-circuits,
+not reviews — which is precisely why NOT RUN is reported loudly on the check and the PR
+rather than being allowed to read as a pass.
+
+Codex and Gemini carry `requires_workflow_parity: false` — they authenticate with a plain
+repository secret rather than a GitHub App token, so the anti-exfiltration rule is not theirs
+to apply. Flipping `active` to codex therefore produces the FIRST real review this harness has
+ever emitted, on this PR, and simultaneously exercises the codex adapter end to end for the
+first time. Both keys were added by the maintainer this session.
+
+Whatever `active` holds at merge time becomes the steady state — that is a maintainer decision,
+not this session's, and it is called out on the PR.

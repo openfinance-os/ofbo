@@ -55,7 +55,7 @@
     "          core never trusts an adapter's exit code and checks for the review file",
     "          instead. NEVER RUN END TO END."
   ],
-  "active": "claude",
+  "active": "codex",
   "reviewers": [
     {
       "key": "hard-stop",
