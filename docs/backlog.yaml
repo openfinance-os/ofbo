@@ -956,6 +956,21 @@ milestones:
             or the spec-change workflow must land first. The values are expensive to move once
             rows exist, so a divergence discovered here is a spec-change PR, never a widened
             CHECK.
+          - BLOCKING - this story cannot emit a spec-conformant Money object per LINE without
+            a decision on the open milli-fils question, and must not invent one. Precise
+            position, measured - the spec's Money schema (specs/backoffice-openapi.yaml:3028)
+            states the binding rule verbatim and cites CLAUDE.md - integer minor units, "fils
+            for AED" - so the spec and CLAUDE.md AGREE; the outliers are two bare
+            *_milli_fils integer fields at spec:2926-2927 plus roughly thirty milli-fils
+            columns added by migration 0039. Separately, only billing_tpp_cost_statement and
+            _document carry a currency column at all (0039:69,156), so the line-level tables
+            (_statement_line, _diff_line, _ap_dispatch, _rerating) hold amounts with no
+            currency and a conformant per-line Money requires joining the parent. Two viable
+            resolutions, both needing a human - convert milli-fils to Money at the wire
+            boundary and keep the finer precision in storage only (nothing requires storage
+            precision to equal wire precision, and this leaves Money as declared), or ratify
+            milli-fils - which means amending BOTH CLAUDE.md and the Money schema description,
+            not just adding an ADR.
 
   # Dual-role Chinese wall enforcement (ADR 0006, accepted 2026-08-17) — E4-class substrate.
   - name: SEGREGATION

@@ -2969,3 +2969,55 @@ constraints in an INSERT-only family with no OpenAPI counterpart. The reviewer's
 values are expensive to move once rows exist. **BILL-17**, which owns the endpoints that first expose them,
 now carries a blocking criterion that its schemas mirror the sets exactly or the spec-change lands first,
 never a widened CHECK.
+
+### BILL-13 addendum 7 — first hard-stop PASS, and it found a test that could not fail
+
+Hard-stop on `e582b7a`: **VERDICT PASS** — the first on this track. It recorded seven candidates and
+scored none as a violation, six being forward obligations on schema no code writes, each now carried as a
+BLOCKING acceptance criterion on the story that owns the write path. Its own summary of the two hard stops
+this change could most plausibly have broken is the fair one: audit immutability and PII are "not merely
+un-breached but affirmatively tested".
+
+Its one genuine defect (C2) was a **test of mine that could not fail for the reason it claimed**, and it is
+the sharpest finding of the whole track:
+
+> the insert supplies `gen_random_uuid()` for both `statement_id` and `reconciliation_id`, neither of which
+> exists — so it violates this table's statement and reconciliation foreign keys as well as the approval
+> FK. The assertion `rejects.toThrow(/violates foreign key constraint/i)` matches **any** of the three. The
+> test therefore passes identically whether or not the tenant-composite approval FK exists at all.
+
+Exactly right. The control was real; the evidence for it was worthless. Worse, it was the test I cited in
+addendum 4 as proving the cross-tenant fix.
+
+The obvious repair — create real parents so only the approval FK can fail — turns out to be **wrong here**,
+and the reason is worth recording: `billing_tpp_cost_reconciliation` requires a
+`billing_tpp_cost_document` row, and writing that table would make the Q4.5 lineage gate demand lineage
+BILL-13 does not emit for it, because the gate skips only *empty* tables. The behavioural route would fix
+one gate by breaking another. So the assertion now reads the constraint's own definition out of
+`pg_constraint`: that the FK is `(bank_id, approval_request_id) REFERENCES approval_request(bank_id,
+approval_request_id)`, that **no** FK references the approval by its global id alone, and that
+`approval_request` carries the matching `UNIQUE (bank_id, approval_request_id)` without which the composite
+FK could not exist.
+
+Proven to discriminate, not assumed: degrading the schema back to the pre-fix single-column FK turns the
+new test RED (1 failed / 14 passed) and it passes again on restore. The old assertion would have stayed
+green throughout.
+
+The two four-eyes CHECK tests were left as they are, having checked why they are sound where C2 was not:
+they assert `/violates check constraint/`, and Postgres evaluates CHECKs during the row insert but FKs as
+AFTER-ROW triggers, so the CHECK error is what surfaces. Crucially they fail *safe* — if that order ever
+changed, an FK error would not match the assertion and the tests would go red rather than silently pass.
+
+Also this round, from the contract review, a correction to how the money question has been escalated. I had
+been describing it as "CLAUDE.md and the spec disagree, pick one". Measured, that is wrong: the spec's own
+`Money` schema (`specs/backoffice-openapi.yaml:3028`) states the rule verbatim and cites CLAUDE.md —
+"integer minor units", "fils for AED" — so **the spec and CLAUDE.md agree**, and the outliers are two bare
+`*_milli_fils` fields at spec:2926-2927 plus the columns migration 0039 adds. A second measured fact
+sharpens it further: only `billing_tpp_cost_statement` and `_document` carry a `currency` column at all
+(0039:69,156), so the line-level tables hold amounts with no currency and a conformant per-line `Money`
+requires joining the parent. Both facts, and the two viable resolutions — convert at the wire boundary and
+keep the finer precision in storage only, or ratify milli-fils by amending *both* CLAUDE.md and the `Money`
+description — are now recorded on BILL-17, which is the story that cannot ship without the answer.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.

@@ -485,25 +485,40 @@ describe('PgBillingTppCostStore', () => {
     expect(names).toContain('billing_tpp_cost_statement_line')
   })
 
-  it('refuses a payable dispatch citing ANOTHER bank\'s approval request', async () => {
-    // The four-eyes FK is tenant-composite, so an approval cannot be borrowed across the tenant
-    // boundary — a single-column FK against a globally-unique key would have allowed exactly that.
-    const otherBank = randomUUID()
-    const reference = await seedApprovalRequest(otherBank)
-    const client = await admin.connect()
-    try {
-      await expect(client.query(
-        `INSERT INTO billing_tpp_cost_ap_dispatch
-           (bank_id, channel, statement_id, reconciliation_id, approval_request_id, initiated_by,
-            approved_by, approved_at, dispatch_state, idempotency_key, payable_net_milli_fils,
-            evidence_hash)
-         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),$2,'finance.initiator',
-                 'finance.approver',now(),'pending',$3,0,'sha256:x')`,
-        [TENANCY.bankId, reference, randomUUID()]
-      )).rejects.toThrow(/violates foreign key constraint/i)
-    } finally {
-      client.release()
-    }
+  it('binds the four-eyes approval reference to the tenant, not just to a global id', async () => {
+    // The control: an approval cannot be borrowed across the tenant boundary. A single-column FK
+    // against approval_request's globally-unique approval_request_id would have allowed exactly that.
+    //
+    // Asserted on the constraint's DEFINITION rather than by a rejected insert, deliberately. An
+    // insert would have to satisfy this table's statement_id and reconciliation_id foreign keys
+    // first, and those reference billing_tpp_cost_statement and billing_tpp_cost_reconciliation —
+    // so a dispatch row with fabricated parents fails on whichever FK Postgres checks first, and
+    // `/violates foreign key constraint/` matches all three indiscriminately. That assertion would
+    // pass whether or not the composite approval FK existed at all, which is no evidence.
+    //
+    // Nor can the parents simply be created here: billing_tpp_cost_reconciliation requires a
+    // billing_tpp_cost_document row, and writing that table would make the Q4.5 lineage gate demand
+    // lineage BILL-13 does not emit for it (the gate skips only empty tables). The catalogue is
+    // therefore both the precise and the safe place to assert the shape.
+    const fks = await admin.query(
+      `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+        WHERE conrelid = 'billing_tpp_cost_ap_dispatch'::regclass AND contype = 'f'`
+    )
+    const defs = fks.rows.map((row) => (row.def as string).replace(/\s+/g, ' '))
+
+    expect(defs).toContain(
+      'FOREIGN KEY (bank_id, approval_request_id) REFERENCES approval_request(bank_id, approval_request_id)'
+    )
+    // And nothing references the approval by its global id alone.
+    expect(defs.some((def) => /FOREIGN KEY \(approval_request_id\)/.test(def))).toBe(false)
+
+    // The composite FK is only enforceable because approval_request carries the matching key.
+    const unique = await admin.query(
+      `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint
+        WHERE conrelid = 'approval_request'::regclass AND contype = 'u'`
+    )
+    expect(unique.rows.map((row) => (row.def as string).replace(/\s+/g, ' ')))
+      .toContain('UNIQUE (bank_id, approval_request_id)')
   })
 
   it('emits BCBS 239 lineage for every cost table it writes', async () => {
