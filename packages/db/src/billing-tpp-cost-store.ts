@@ -137,6 +137,18 @@ export class PgBillingTppCostStore {
     }
   }
 
+  /** Latest meter run for a period: the immutable facts a statement projects. */
+  async latestMeterRun(period: string): Promise<{ id: string; period: string; rateCardVersion: string } | null> {
+    const row = await this.asApp(async (client) => (await client.query(
+      `SELECT id, period, rate_card_version FROM billing_meter_run
+        WHERE period = $1 ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [period]
+    )).rows[0] as Record<string, unknown> | undefined)
+    return row
+      ? { id: row.id as string, period: row.period as string, rateCardVersion: row.rate_card_version as string }
+      : null
+  }
+
   /** The metered facts a statement was priced from, for a re-rating replay. */
   async meteredLinesForRun(meterRunId: string): Promise<MeteredLine[]> {
     return this.asApp(async (client) => {

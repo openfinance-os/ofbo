@@ -693,7 +693,7 @@ milestones:
             are effective-dated and snapshot-evidenced.
       - id: BILL-13
         title: Durable payable ledger + closed-period re-rating
-        status: pending
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-12]
@@ -709,6 +709,34 @@ milestones:
           trigger path (idempotent, resumable, sleep-tolerant demo) - no new jobs runner.
           billing_tpp_cost_rerating mirrors billing_period_rerating: closed-period
           corrections replay into immutable delta statements, never mutation.
+        outcome: >-
+          Landed 2026-08-17. Migration 0039 creates all eight tables with the 0032/0033 control
+          posture (RLS ENABLED+FORCED, SELECT+INSERT only for ofbo_app, group-scoped internal-view
+          reads, 24/60 retention and confidential-restricted floors) and no PSU column anywhere.
+          The schema is self-reconciling: a statement's three streams must sum to its net total,
+          gross must equal net+VAT on statements and lines, every line must carry an event id, a
+          rerating delta must equal corrected minus previous, and AP dispatch is unique per
+          idempotency key so P9 cannot be double-paid.
+          PgBillingTppCostStore writes the three tables this story owns, idempotent on (meter run,
+          rate card version, rate snapshot hash) so a corrected directory rate becomes a NEW
+          immutable statement rather than an overwrite; it refuses a rerating unless both statements
+          project the same meter run (a different run is a re-meter, not a re-rate). tppCostLineRef
+          derives line identity from cost dimensions, which is what BILL-15 will match documents on.
+          Generation rides the existing monthly billing trigger beside the receivable expected-memo
+          projection - no new scheduler. It SKIPS with an audited reason rather than throwing when a
+          chargeable overage line cannot be priced, so the fail-closed pricing refusal inherited from
+          BILL-12 cannot take the regulated receivable projections down with it. The payable dataset
+          now travels with the tenant portable export.
+          Five tables (documents, document lines, reconciliation, diff lines, AP dispatch) are
+          created but unwritten until BILL-14/15/16; they stay empty, which the Q4.5 gate skips, so
+          nothing may seed them ahead of their story.
+          NOT closed: the OverLimitFees unit criterion below - the egress policy still denies
+          data.directory.openfinance.ae. It is enforced structurally rather than procedurally: rating
+          fails closed, so a statement carrying chargeable overage cannot be produced at all without
+          a snapshot stating its unit, and the criterion carries forward to BILL-14.
+          Evidence: unit 1421/1421; integration 162/162 across 77 files on a pristine PostgreSQL
+          16.13; Q4.5 lineage gate PASSED with the three written tables covered, allowed gaps none;
+          typecheck, ESLint and the coverage gate clean.
         acceptance:
           - The OverLimitFees unit is confirmed from a live directory snapshot and recorded in
             ADR 0007 BEFORE statements are persisted. Carried forward from BILL-12, whose egress

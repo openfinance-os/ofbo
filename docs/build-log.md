@@ -2600,3 +2600,62 @@ unchanged, so no client sees a new value today.
 Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm the OverLimitFees unit
 from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
 statements — so it blocks where it is actionable instead of lapsing with a `done` status.
+
+## 2026-08-17 — BILL-13: durable payable ledger + closed-period re-rating
+
+Second slice of TPP Cost Management. Unlike BILL-12, this ran against a **local PostgreSQL 16.13
+matching CI's `postgres:16-alpine`**, so the RLS grants, CHECK constraints and lineage coverage are
+proven rather than discovered downstream — which matters for a story that is almost entirely
+database controls.
+
+**Migration 0039 — eight tables, controls mirroring 0032/0033.** RLS ENABLED and FORCED,
+SELECT+INSERT only for `ofbo_app` (no UPDATE or DELETE grant at all), group-scoped internal-view
+reads, 24/60 retention and confidential-restricted floors registered for all eight. TPP-domain data
+under ADR 0006: its own table family rather than shared with the LFI receivables, which is what makes
+the dual-role wall enforceable rather than nominal. **No PSU identifier in any table** — drill-down
+runs through `event_ids` into `billing_event`, where `psu_id` is already governed.
+
+The schema is **self-reconciling**, so unstorable states are actually unstorable: a statement's three
+streams must sum to its net total; gross must equal net + VAT on both statements and lines; every
+line must carry at least one event id; a re-rating's delta must equal corrected − previous and cannot
+reference the same statement twice; AP dispatch is unique per idempotency key so P9 cannot be
+double-paid; and a document line's `fee_class` is null exactly when `mapped` is false, so an unmapped
+provider category cannot masquerade as mapped.
+
+**Store.** `PgBillingTppCostStore` writes the three tables this story owns and never attempts an
+update — immutability is a grant, not a convention. Idempotent on (meter run, rate card version, rate
+snapshot hash), so re-projecting unchanged inputs re-reads the existing statement while a *corrected*
+directory rate becomes a NEW immutable statement. A re-rating is refused unless both statements
+project the same meter run: a meter run is immutable, so sharing one is the proof that a correction
+re-priced unchanged facts; re-pricing a different run is a re-meter and is rejected rather than
+recorded as a rate correction. `tppCostLineRef` derives line identity from cost dimensions rather
+than generating one, which is what BILL-15 will match provider document lines against.
+
+**Generation rides the existing monthly trigger** beside the receivable expected-memo projection —
+no new scheduler, per the story note. It **skips with an audited reason rather than throwing** when a
+chargeable overage line cannot be priced: the fail-closed pricing refusal inherited from BILL-12 is
+correct, but letting it escape would take the regulated receivable projections down with the payable
+one, which is exactly the availability trap the BILL-12 review caught. A genuine defect (an
+unreachable database, say) still propagates — only the pricing refusal is a skip, and the tests pin
+both halves of that distinction. The payable dataset also now travels with the tenant portable
+export, so a tenant exit carries its payable evidence as well as its receivable evidence.
+
+**Five tables are created but unwritten** until BILL-14/15/16 own them. They stay empty, which the
+Q4.5 gate skips (it requires lineage only for tables holding rows) — so the migration header states
+the constraint explicitly: nothing may seed them ahead of their story, or they become lineage gaps
+immediately. I checked this before designing rather than assuming it; the alternative reading would
+have forced the story down to three tables.
+
+**Still not closed:** the OverLimitFees unit criterion. The egress policy still denies
+`data.directory.openfinance.ae`, so no live snapshot has been observed. It is enforced structurally
+rather than procedurally — rating fails closed, so a statement carrying chargeable overage cannot be
+produced without a snapshot that states its unit — and the criterion carries forward to BILL-14.
+Consequently no directory snapshot source is wired into the worker yet: a demo period with overage
+traffic will report `skipped` with an audited reason, which is the honest state rather than a
+statement priced on a guess.
+
+Evidence: unit 1421/1421 (14 new); integration **162/162 across 77 files on a pristine database**;
+Q4.5 lineage gate PASSED with `billing_tpp_cost_statement`, `_statement_line` and `_rerating` covered,
+allowed gaps none, unexpected none; typecheck, ESLint and the coverage gate clean. Note the
+integration suite fails on a *re-seeded* database for the pre-existing non-idempotent-seed reason
+recorded under CODE-02 — verified by re-running on a fresh database, which is how CI runs it.

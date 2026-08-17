@@ -59,7 +59,13 @@ const EXPORT_TABLES = [
   'billing_collection_invoice', 'billing_collection_action',
   'billing_accounting_batch', 'billing_journal_instruction', 'billing_journal_line', 'billing_journal_dispatch',
   'billing_revenue_recovery', 'billing_revenue_assurance_report', 'billing_revenue_assurance_finding',
-  'billing_benchmark_snapshot'
+  'billing_benchmark_snapshot',
+  // BILL-13 — the TPP-of-record payable ledger travels with a tenant exit exactly as the
+  // receivable ledger does; a tenant that cannot take its payable evidence has not been exported.
+  'billing_tpp_cost_statement', 'billing_tpp_cost_statement_line',
+  'billing_tpp_cost_document', 'billing_tpp_cost_document_line',
+  'billing_tpp_cost_reconciliation', 'billing_tpp_cost_diff_line',
+  'billing_tpp_cost_ap_dispatch', 'billing_tpp_cost_rerating'
 ] as const
 
 function hash(value: unknown): string {
