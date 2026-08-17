@@ -3187,3 +3187,30 @@ rather than editing `pg_hba.conf`, an action the harness correctly refused.
 Verified after the change, on a database built from scratch: the CHECK is present in the applied schema;
 unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
 clean; doc-link-check clean.
+
+### BILL-13 addendum 13 — the code was citing CLAUDE.md as authority for departing from CLAUDE.md
+
+Contract review on `8df9cc0` confirms the `product_family` CHECK and the BILL-15 criterion landed;
+its eleven findings are the dispositioned set. One aside was not, and it is a defect of mine:
+
+> `packages/billing/src/tpp-cost.ts:80` documents the milli-fils unit as "(CLAUDE.md money convention)".
+> CLAUDE.md does not state that convention; the comment mis-cites it.
+
+Correct, and it is the mechanism behind something the same reviewer noted a round earlier — that the
+milli-fils choice "looks sanctioned when it is not". The comment cited the very document that says the
+opposite (integer minor units, "fils for AED") as the *source* of the deviation. I wrote that line in
+BILL-12, and it has been sitting on `main` asserting a settled position on the question I have been
+escalating as open in every report since.
+
+Fixed here rather than deferred to "whenever the decision lands", because the mis-citation is a factual
+error independent of the decision: the comment now states that milli-fils deviates and is unratified, why
+it was chosen (ADR 0007 prices tariffs at 2.5 and 0.5 fils, which minor units cannot hold without rounding
+the payable), that the earlier citation was wrong, and that BILL-17 owns the resolution. No behaviour
+changes — it is a comment — and correcting it does not pre-judge the decision either way. Grepped for
+other authority claims of the same shape: none.
+
+This touches a file outside the story's diff, which is deliberate and worth justifying: leaving a false
+claim of authority on `main` while asking a human to decide the same question would undermine the
+escalation. One comment line, in the story that surfaced it.
+
+Verified: typecheck 0; unit 1423/1423; ESLint clean.
