@@ -258,14 +258,22 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   channel                ofbo_channel NOT NULL,
   statement_id           uuid NOT NULL,
   reconciliation_id      uuid NOT NULL,
-  -- The four-eyes approval that authorised this dispatch. Text, matching approval_request's own
-  -- approval_request_id (0002_tables.sql), so BILL-16 can reference it without a type change.
-  approval_request_id    text NOT NULL,
-  -- Initiator recorded alongside approver so the self-approval prohibition is ENFORCED here rather
-  -- than asserted in prose, mirroring approval_request's CHECK (0002_tables.sql).
+  -- The four-eyes approval that authorised this dispatch, referencing approval_request's own
+  -- approval_request_id (0002_tables.sql). The FK makes the approval's EXISTENCE enforced rather
+  -- than asserted. What the schema cannot enforce, and what BILL-16 must therefore check at write
+  -- time: that the referenced request is in state 'approved', that its expires_at had not passed
+  -- (2-hour adopting-bank default, PRD section 10), and that it belongs to this bank_id — the FK is
+  -- single-column because approval_request_id is globally unique, so it does not by itself constrain
+  -- the tenant.
+  approval_request_id    text NOT NULL REFERENCES approval_request(approval_request_id),
+  -- Initiator recorded alongside approver so self-approval is refused by the CHECK below rather
+  -- than only by the approvals service, mirroring approval_request's own constraint.
   initiated_by           text NOT NULL,
   approved_by            text NOT NULL,
   approved_at            timestamptz NOT NULL,
+  -- Each transition is a NEW row, not an update: this family is INSERT-only, so a dispatch is an
+  -- append-only state log whose latest row by created_at is the current state. Modelling it as a
+  -- mutable row would have required an UPDATE grant and broken the family's immutability posture.
   dispatch_state         text NOT NULL CHECK (dispatch_state IN (
                            'pending','dispatched','accepted','rejected','failed')),
   financial_system_ref   text,
@@ -280,8 +288,10 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   FOREIGN KEY (bank_id, reconciliation_id) REFERENCES billing_tpp_cost_reconciliation(bank_id, id),
   -- Four eyes, not one: whoever approved a payable dispatch cannot be whoever initiated it.
   CHECK (approved_by <> initiated_by),
-  -- Retry-safe: the same instruction dispatched twice is one row, so P9 cannot be double-paid.
-  UNIQUE (bank_id, idempotency_key)
+  -- Retry-safe AND progressable: one row per (instruction, state), so re-dispatching the same
+  -- instruction in the same state stays a single row — P9 still cannot be double-paid — while the
+  -- outcome of that dispatch can be appended as the next state.
+  UNIQUE (bank_id, idempotency_key, dispatch_state)
 );
 
 -- ---------------------------------------------------------------------------------------------

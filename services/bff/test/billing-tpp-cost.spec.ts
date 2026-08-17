@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   SCHEME_RATE_CARD_2026_06_02,
@@ -7,7 +8,7 @@ import {
   type MeteredLine
 } from '@ofbo/billing'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
-import { TppCostStatementService, type TppCostStatementStore } from '../src/billing/tpp-cost.js'
+import { TppCostStatementService, rateSnapshotHash, type TppCostStatementStore } from '../src/billing/tpp-cost.js'
 
 /**
  * BILL-13 — generation of the expected TPP cost statement on the monthly billing trigger.
@@ -81,6 +82,19 @@ describe('BILL-13 expected TPP cost statement generation', () => {
       directory_snapshot_id: 'dir-2026-06-01',
       nebras_hub_net_milli_fils: fils(2.5)
     })
+  })
+
+  it('chains the pricing sources into a digest an auditor can actually recompute', () => {
+    const expected = `sha256:${createHash('sha256')
+      .update('ofbo.tpp-cost.rate-snapshot.v1\nrate-card:2026.06.02\ndirectory:sha256:dir-fixture')
+      .digest('hex')}`
+
+    expect(rateSnapshotHash('2026.06.02', 'sha256:dir-fixture')).toBe(expected)
+    // 64 hex characters — a real digest, not a `sha256:`-prefixed concatenation of the inputs.
+    expect(rateSnapshotHash('2026.06.02', null)).toMatch(/^sha256:[0-9a-f]{64}$/)
+    // Distinct sources must not collide.
+    expect(rateSnapshotHash('2026.06.02', null)).not.toBe(rateSnapshotHash('2026.06.02', 'sha256:dir-fixture'))
+    expect(rateSnapshotHash('2026.07.01', 'sha256:dir-fixture')).not.toBe(rateSnapshotHash('2026.06.02', 'sha256:dir-fixture'))
   })
 
   it('is idempotent on a replayed or resumed run', async () => {

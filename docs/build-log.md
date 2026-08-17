@@ -2710,3 +2710,48 @@ milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields 
 
 Re-verified after the fixes: unit 1422/1422; integration 164/164 across 77 files on a pristine
 database; Q4.5 PASSED, allowed gaps none; typecheck and ESLint clean.
+
+### BILL-13 addendum 2 — contract review, second round
+
+`contract-conformance` reviewer, re-run after the hard-stop fixes: **one finding, fixed in-branch.**
+
+**A `sha256:`-prefixed string that was not a digest.** `services/bff/src/billing/tpp-cost.ts` composed the
+statement's `rate_snapshot_hash` as `` `sha256:${rateCard.version}+${snapshot?.digest ?? '…'}` `` — a
+concatenation of the two pricing sources wearing a hash's prefix. On an evidence-chain identifier that is
+worse than an honest opaque string: an auditor reconstructing the pricing basis will try to recompute it,
+and cannot. There is no precedent for the shape anywhere in the repo; every other `sha256:` value on main
+is a real digest. Replaced with `rateSnapshotHash()`, an actual SHA-256 over a canonical, documented
+pre-image (`ofbo.tpp-cost.rate-snapshot.v1` \ `rate-card:<version>` \ `directory:<digest|none>`), with a
+unit test that recomputes the digest independently, asserts the `^sha256:[0-9a-f]{64}$` shape, and proves
+differing sources do not collide.
+
+Three structural fixes also landed in this round, ahead of the stories that depend on them:
+
+1. **The approval link is now a foreign key.** `billing_tpp_cost_ap_dispatch.approval_request_id` was a
+   free-text column; it now `REFERENCES approval_request(approval_request_id)`, so a dispatch cannot cite
+   an approval that does not exist. The accompanying comment states plainly what the schema still cannot
+   enforce — that the referenced approval is *for this dispatch* — rather than implying the FK covers it.
+2. **`billing_tpp_cost_ap_dispatch` is an append-only state log.** The table was INSERT-only yet modelled
+   a mutable lifecycle, so advancing a dispatch's state had no legal write path. `UNIQUE (bank_id,
+   idempotency_key, dispatch_state)` makes each transition its own immutable row — one shape that is both
+   INSERT-only and able to progress, which is what BILL-16 needs.
+3. **`EXPORT_TABLES` narrowed to what this story writes.** The tenant portable export had been widened to
+   all eight payable tables; five of them BILL-13 never writes, so the entry was a claim about future
+   stories' data. It now lists only `billing_tpp_cost_statement`, `_statement_line` and `_rerating`.
+
+Re-verified on a pristine database in CI's exact order (`db:apply` → `db:seed` → integration → gate):
+unit 1423/1423 across 211 files; integration 164/164 across 77 files; Q4.5 PASSED with the three
+row-bearing payable tables covered and allowed gaps none; typecheck 0 errors; ESLint clean; doc-link-check
+59 docs / 29 ADRs clean.
+
+Carried forward unresolved, both needing a human decision rather than more code:
+
+- **Milli-fils vs the CLAUDE.md integer-minor-units money rule** — flagged by every contract review on
+  this track that has looked at it (BILL-12, and both rounds of BILL-13) with no ADR ratifying it. Either
+  CLAUDE.md names milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go
+  through spec-change.
+- **BILL-13's first acceptance criterion** (persist statements priced from a live directory snapshot)
+  remains unmet, because the directory host is unreachable from this environment. It is enforced
+  structurally rather than procedurally — rating fails closed, so no statement can be written from a
+  guessed rate or unit — but the criterion itself carries forward to whichever story first obtains a
+  snapshot.

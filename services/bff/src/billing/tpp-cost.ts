@@ -6,6 +6,7 @@ import {
   type ExpectedTppCostStatement,
   type RateCard
 } from '@ofbo/billing'
+import { createHash } from 'node:crypto'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 
 /**
@@ -54,6 +55,24 @@ export interface TppCostStatementDeps {
   overage?: DirectoryOverageSource
 }
 
+/**
+ * Chain the two pricing sources a statement was priced from into one recomputable digest: the rate
+ * card version and the directory snapshot's own digest.
+ *
+ * It is an actual SHA-256 over a canonical pre-image, not a `sha256:`-prefixed concatenation of the
+ * inputs — an evidence-chain identifier that merely looks like a digest is worse than one that does
+ * not, because an auditor will try to recompute it. The pre-image is stable and documented here so
+ * they can.
+ */
+export function rateSnapshotHash(rateCardVersion: string, directoryDigest: string | null): string {
+  const preimage = [
+    'ofbo.tpp-cost.rate-snapshot.v1',
+    `rate-card:${rateCardVersion}`,
+    `directory:${directoryDigest ?? 'none'}`
+  ].join('\n')
+  return `sha256:${createHash('sha256').update(preimage).digest('hex')}`
+}
+
 export class TppCostStatementService {
   constructor(private readonly deps: TppCostStatementDeps) {}
 
@@ -84,7 +103,7 @@ export class TppCostStatementService {
         generatedAt,
         ratingRunAt: generatedAt,
         pricingEffectiveFrom: rateCard.effectiveFrom,
-        rateSnapshotHash: `sha256:${rateCard.version}+${snapshot?.digest ?? 'no-directory-snapshot'}`,
+        rateSnapshotHash: rateSnapshotHash(rateCard.version, snapshot?.digest ?? null),
         ...(snapshot ? { directorySnapshotId: snapshot.snapshotId } : {})
       })
     } catch (error) {
