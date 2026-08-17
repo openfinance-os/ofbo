@@ -17,6 +17,9 @@ const input: ProfitabilityInput = {
     { tppId: 'TPP-A', productFamily: 'payments', amountMilliFils: aed(10), sourceRefs: ['HUB-A'] },
     { tppId: 'TPP-B', productFamily: 'payments', amountMilliFils: aed(8), sourceRefs: ['HUB-B'] }
   ],
+  // BILL-09's own scenario carries no underlying-LFI cost; that dimension (added in BILL-12) is
+  // exercised in payable-projection.spec.ts. Kept empty here so every figure below is unchanged.
+  lfiCosts: [],
   liabilityProvisions: [
     { tppId: 'TPP-A', productFamily: 'payments', amountMilliFils: aed(5), sourceRefs: ['LIAB-A'] }
   ],
@@ -29,8 +32,8 @@ describe('BILL-09 profitability analytics', () => {
   it('reconciles per-TPP and product-family P&L to the invoice and payable inputs', () => {
     const report = buildProfitabilityReport(input)
     expect(report.totals).toEqual({
-      receivableMilliFils: aed(230), hubCostMilliFils: aed(18), liabilityProvisionMilliFils: aed(5),
-      tppAasMarginMilliFils: aed(3), profitMilliFils: aed(210)
+      receivableMilliFils: aed(230), hubCostMilliFils: aed(18), lfiCostMilliFils: 0,
+      liabilityProvisionMilliFils: aed(5), tppAasMarginMilliFils: aed(3), profitMilliFils: aed(210)
     })
     expect(report.byTpp.find((row) => row.tppId === 'TPP-A')).toMatchObject({
       receivableMilliFils: aed(150), hubCostMilliFils: aed(10),

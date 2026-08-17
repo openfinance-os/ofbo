@@ -1,5 +1,5 @@
 import { fils } from './money.js'
-import { rateUsage, type MeteredLine, type RatingResult } from './rating.js'
+import { rateUsage, receivableMeteredLines, type MeteredLine, type RatingResult } from './rating.js'
 import type { BillingFeeClass, RateCard } from './rate-card.js'
 
 export const COLLECTION_MEMO_QUERY_WINDOW_DAYS = 30
@@ -290,8 +290,11 @@ export function rerateClosedPeriod(
 ): ClosedPeriodRerating {
   if (!correctionReference.trim()) throw new TypeError('correctionReference must be non-empty')
   const beforeFingerprint = factFingerprint(meteredLines)
-  const previous = buildExpectedCollectionMemo(rateUsage(meteredLines, previousCard, period), reratedAt)
-  const corrected = buildExpectedCollectionMemo(rateUsage(meteredLines, correctedCard, period), reratedAt)
+  // Re-rating is a receivable correction; payable lines are not part of the memo and must not be
+  // able to fail it (they need directory evidence the replay does not carry).
+  const receivable = receivableMeteredLines(meteredLines)
+  const previous = buildExpectedCollectionMemo(rateUsage(receivable, previousCard, period), reratedAt)
+  const corrected = buildExpectedCollectionMemo(rateUsage(receivable, correctedCard, period), reratedAt)
   const afterFingerprint = factFingerprint(meteredLines)
   const previousByRef = new Map(previous.lines.map((line) => [line.lineRef, line]))
   const correctedByRef = new Map(corrected.lines.map((line) => [line.lineRef, line]))

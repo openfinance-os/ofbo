@@ -69,6 +69,11 @@ export class PgBillingProfitabilityStore {
           amountMilliFils: Number(row.amount_fils) * MF_PER_FIL,
           sourceRefs: [String(row.source_id), ...(row.source_refs as string[])]
         })),
+        // Underlying-LFI cost has no persisted accounting evidence yet: the journal source types
+        // that carry it (lfi_payment_fee_payable / lfi_data_fee_payable) arrive with BILL-16, and
+        // 0036's source_type CHECK still admits only the hub_payable side. Until then this reader
+        // reports no LFI cost rather than inventing one; BILL-16 extends the constraint and this query.
+        lfiCosts: [],
         liabilityProvisions: [],
         tppAasMargins: []
       }

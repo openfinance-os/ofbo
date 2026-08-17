@@ -64,6 +64,32 @@ export interface MeteringResult {
   }
 }
 
+/**
+ * Version of the metering PROJECTION itself — the rules turning raw events into metered lines.
+ *
+ * Meter runs are deduplicated on (bank_id, period, rate_card_version, input_hash), and the input
+ * hash covers only the raw CloudEvents. So a change to these rules — the BILL-12 corporate-page
+ * and per-serving-LFI free-tier corrections, for instance — produces different lines from
+ * byte-identical inputs and would otherwise collide with the stale run and never be written:
+ * a silently wrong projection that no gate could see. Folding this version into the hash makes a
+ * rules change yield a NEW immutable run instead, leaving the earlier one intact for audit.
+ *
+ * BUMP THIS whenever meterBillableEvents changes what it emits for unchanged input.
+ */
+export const METERING_PROJECTION_VERSION = '2026.08.17'
+
+/**
+ * Pre-image for a meter run's input hash: the projection version followed by the period's
+ * canonical events. Pure, so the ordering and prefix are testable without a hash implementation.
+ */
+export function meteringInputPreimage(
+  canonicalEvents: readonly string[],
+  projectionVersion: string = METERING_PROJECTION_VERSION
+): string {
+  if (!projectionVersion.trim()) throw new RangeError('projectionVersion is required')
+  return [`metering-projection:${projectionVersion}`, ...[...canonicalEvents].sort()].join('\n')
+}
+
 const PAYMENT_TYPES = new Set<PaymentType>(['merchant_collection', 'p2p_sme', 'me_to_me', 'sme_bulk', 'large_value', 'corporate'])
 const DIRECTIONS = new Set<BillingDirection>(['inbound', 'outbound'])
 const PAIRABLE_ENDPOINTS = ['GET /accounts/{id}/balances', 'POST /confirmation'] as const
@@ -316,13 +342,26 @@ export function meterBillableEvents(deliveries: readonly unknown[], card: RateCa
       } else if (kind === 'data') {
         const data = requireData(event)
         const pages = Math.ceil(data.lines / 100)
-        const mode = data.attended ? 'attended' : 'unattended'
-        const key = `OUT|${call.psuId ?? ''}|${day(event.time)}|${mode}`
-        const allowance = card.receivable['data.retail_page'].freeTier[mode]
-        const used = freeTierUsed.get(key) ?? 0
-        const freePages = Math.max(0, Math.min(allowance - used, pages))
-        freeTierUsed.set(key, used + pages)
-        lines.push({ ...base, side: 'payable_lfi', feeClass: 'data.retail_page', units: pages - freePages, freeUnits: freePages, ...(data.ageSpanMonths !== undefined ? { dataAgeSpanMonths: data.ageSpanMonths } : {}) })
+        const ageSpan = data.ageSpanMonths !== undefined ? { dataAgeSpanMonths: data.ageSpanMonths } : {}
+        if (data.segment === 'corporate') {
+          // Corporate data is a scheme-uniform 40 fils/page with NO free allowance, mirroring the
+          // inbound branch. Rating it as retail overage understated the payable and wrongly spent a
+          // retail free-tier allowance on traffic that has none.
+          lines.push({ ...base, side: 'payable_lfi', feeClass: 'data.corporate_page', units: pages, ...ageSpan })
+        } else {
+          const mode = data.attended ? 'attended' : 'unattended'
+          const retail = card.receivable['data.retail_page']
+          // Whether each serving LFI grants its own allowance is a rate-card statement, not a
+          // metering assumption: the default pools one allowance per customer per day, which is the
+          // reading that cannot understate the payable.
+          const scope = retail.freeTier.per === 'psu_per_serving_lfi_per_day' ? call.counterpartyLfiId ?? '' : 'ALL_SERVING_LFI'
+          const key = `OUT|${scope}|${call.psuId ?? ''}|${day(event.time)}|${mode}`
+          const allowance = retail.freeTier[mode]
+          const used = freeTierUsed.get(key) ?? 0
+          const freePages = Math.max(0, Math.min(allowance - used, pages))
+          freeTierUsed.set(key, used + pages)
+          lines.push({ ...base, side: 'payable_lfi', feeClass: 'data.retail_page', units: pages - freePages, freeUnits: freePages, ...ageSpan })
+        }
       }
       continue
     }

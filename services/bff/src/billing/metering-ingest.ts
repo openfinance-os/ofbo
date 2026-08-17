@@ -1,6 +1,7 @@
 import {
   canonicalBillingCloudEvent,
   meterBillableEvents,
+  meteringInputPreimage,
   parseBillingCloudEvent,
   type MeteredLine,
   type MeteringResult,
@@ -109,8 +110,10 @@ export class BillingMeteringIngestService {
     for (const period of periods) {
       const periodEvents = await this.store.eventsForPeriod(period)
       const metered = meterBillableEvents(periodEvents, this.card)
-      const canonicalInputs = periodEvents.map(canonicalBillingCloudEvent).sort()
-      const inputHash = await sha256(canonicalInputs.join('\n'))
+      // The hash covers the projection version as well as the events, so a change to the metering
+      // rules creates a new immutable run instead of colliding with a stale one (BILL-12).
+      const canonicalInputs = periodEvents.map(canonicalBillingCloudEvent)
+      const inputHash = await sha256(meteringInputPreimage(canonicalInputs))
       const runInput: MeterRunWrite = {
         period,
         rateCardVersion: this.card.version,
