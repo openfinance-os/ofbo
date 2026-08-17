@@ -9,6 +9,24 @@
   HG-0001 (line 39). Follows ADR 0020 (Q2b doc-drift) and ADR 0021 (mutation testing) as
   precedent for adding a non-Q CI surface in its own workflow file.
 
+### Amendments after acceptance
+
+The **decision** below is unchanged since acceptance. These are corrections to statements of
+*fact* about what had been built and run — recorded here rather than left to git history,
+because an accepted ADR edited in place should say so on its face.
+
+| date | amendment |
+| --- | --- |
+| 2026-08-16 | Parity reworked from a per-engine flag to a harness rule over the whole review control plane; `requires_workflow_parity` removed. A missing credential now fails the job while structural non-runs stay green. |
+| 2026-08-17 | Engine status table corrected — `claude` had been marked "proven in CI" when that meant only "resolves and preflights", and `codex` had been marked "never run end to end" when it had run and failed. The Codex bubblewrap finding was recorded here for the first time, and a verification record added. |
+
+Whether a factual correction to an accepted ADR should instead be a superseding ADR is a
+**governance question for a control-plane owner**, not one the build agent should settle. It was
+raised by the hard-stop reviewer on PR #318, at low confidence, and is flagged rather than
+assumed: the retention hard stop in `CLAUDE.md` binds `audit_high_sensitivity` and regulated
+data stores, not decision records, and no convention in `docs/adrs/` requires supersession for
+factual corrections. If that is wrong, this table is the place a reviewer will notice it.
+
 ## Context
 
 AI review already happens on every story — but only **pre-PR, inside the build agent's own
@@ -129,8 +147,8 @@ action reference or a wrong auth variable would produce a silently broken CI job
 
 | engine | invocation | auth | state |
 | --- | --- | --- | --- |
-| `claude` | `anthropics/claude-code-action@v1`, `--model` in `claude_args` | `CLAUDE_CODE_OAUTH_TOKEN` | **proven in CI** |
-| `codex` | `@openai/codex` v0.147.0 — `codex exec --model --sandbox --color` | `CODEX_API_KEY` (confirmed read) | never run end to end |
+| `claude` | `anthropics/claude-code-action@v1`, `--model` in `claude_args` | `CLAUDE_CODE_OAUTH_TOKEN` | **proven end to end** — see the verification record below |
+| `codex` | `@openai/codex` v0.147.0 — `codex exec --model --sandbox --color` | `CODEX_API_KEY` (confirmed read) | **ran, and does not work as written** |
 | `gemini` | `@google/gemini-cli` v0.55.1 — `gemini -p --model --approval-mode yolo --skip-trust` | `GEMINI_API_KEY` (confirmed read) | never run end to end |
 
 `--skip-trust` is not optional for Gemini: without it the CLI refuses to act in a headless
@@ -139,11 +157,56 @@ research pass but could not be verified from this environment, so the Codex adap
 npm CLI — which also means a `run:` step rather than a `uses:`, and therefore cannot break job
 setup if the reference is ever wrong.
 
-Neither CLI adapter has produced a real review. Both fail loudly rather than silently: a wrong
-invocation writes no review file, and the core reports DID NOT COMPLETE. Their first run must
-be treated as unproven, and swapping `active` to either requires its secret to exist — if it
-does not, preflight reports NOT RUN, explicitly not a pass, rather than reviewing nothing in
-silence.
+**The Codex adapter ran and failed, and cannot work without a security concession.** Its first
+real run authenticated fine (model `gpt-5.6-sol`, 14,443 tokens) but every tool call failed:
+codex's own sandbox is bubblewrap, which cannot create a network namespace inside the Actions
+runner — `bwrap: loopback: Failed RTM_NEWADDR`. That fails at sandbox *setup*, so it takes out
+every mode equally, `read-only` included; reads, writes and a plain `pwd` all failed and no
+review file was written. The only mode that runs is the one with no OS sandbox, which removes
+real containment against prompt injection carried in a reviewed diff. **That is a security
+decision for a human and is deliberately not applied**; the registry says so at the point of
+use. Neither CLI adapter has therefore produced a review, and both fail loudly rather than
+silently — a wrong invocation writes no review file and the core reports DID NOT COMPLETE.
+
+Swapping `active` to either still requires its secret to exist. If it does not, preflight
+reports NOT RUN and **fails the job** (a missing credential is a misconfiguration, not a fact
+of life), rather than reviewing nothing in silence.
+
+### Verification record — the reviewing path, proven
+
+Everything above describes a harness whose central path had never executed: every run on the
+PR that introduced it reported NOT RUN, because that PR modified the control plane. PR #318 was
+opened for the sole purpose of exercising it — the smallest change that touches none of the
+three parity paths and is not excluded by `paths-ignore`.
+
+Both reviewers ran and returned verdicts:
+
+| leg | verdict |
+| --- | --- |
+| `AI review — contract conformance · Claude` | `VERDICT: CONFORMANT` |
+| `AI review — hard-stop · Claude` | `VERDICT: PASS` |
+
+The reviews were substantive rather than nominal, which matters more than the verdicts: each
+walked its full checklist recording *why* each item was unreachable by a comment-only diff
+instead of asserting a pass; contract-conformance ran its own `git diff` against `specs/`,
+`services/`, `apps/` and `packages/` to verify emptiness, and separated the *port* contract
+from the OpenAPI contract it owns; and hard-stop independently observed that a comment-only
+change to a **test** file is the shape a Q1b test-integrity evasion would take, checked that no
+assertion or matcher had been weakened, and verified the comment's factual claims against the
+source rather than taking the prose at face value. Contract-conformance also found a real flaw
+in the diff — a "here" that pointed at the wrong file — and correctly declined to file it as a
+finding while recording the omission, so the judgement was stated rather than silent.
+
+**Still owed, and unchanged by this:** the injected-violation self-test. A comment-only diff
+cannot show that a reviewer *catches* a violation, only that the path runs and that the
+reviewers reason about scope. A green verdict here is weak evidence by construction.
+
+Also observed during verification, and worth recording because the design's central claim was
+tested harder by accident than by design: a GitHub Actions runner-availability failure left
+jobs undispatched (`runner_id: 0`, no steps, logs 404). Those checks went **red**, not green.
+Across four distinct failure modes now — the workflow-validation skip, Codex's broken sandbox,
+control-plane parity non-runs, and total runner starvation — a review that never ran has not
+once been mistaken for a review that found nothing.
 
 ### The workflow-validation skip (found by running it)
 
