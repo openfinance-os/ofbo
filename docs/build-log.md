@@ -3126,3 +3126,23 @@ HTTP-shaped-field-on-a-headless-emitter defect as `scope_used`.
 
 Verified on a pristine database: unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed
 gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 11 — the third home of the double-paid claim, and the most-read one
+
+Gating CI is green on `9fb2db1` and on every prior head of this branch. Both advisory reviews report
+failure, which is non-gating (ADR 0029); their check-runs endpoint returned 403 and issue comments 404 on
+this attempt, so their bodies were not retrievable — not guessed at either.
+
+While confirming the PR state, the **PR description** turned out to still assert "AP dispatch is unique per
+idempotency key so P9 cannot be double-paid". Addendum 6 corrected that claim in `docs/backlog.yaml` and
+annotated it in this log, because the review named those two locations. Nobody named the third, and it is
+the one a reviewer reads first. Its evidence block was also stale — 1421 unit / 162 integration, from
+before six rounds of fixes.
+
+Fourth instance of the same pattern, and the cleanest illustration of it: a correction is not applied until
+it is applied *everywhere the claim appears*, and searching for the claim beats waiting to be told where it
+lives. The description now states what the constraint actually carries, records what the review rounds
+changed and why, carries the current evidence (unit 1423/1423, integration 170/170, Q4.5 PASSED), and names
+the two decisions that need a human rather than implying they are settled.
+
+No code changed in this addendum.
