@@ -965,7 +965,7 @@ milestones:
           Money-shaped variance is written.
       - id: BILL-16
         title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
-        status: pending
+        status: in_progress
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-15]
@@ -1020,6 +1020,38 @@ milestones:
             with no deletion path; redact P9 responses before the first INSERT, asserted by
             test, and only then consider the cross-tenant bank_internal_view SELECT grant
             that BILL-13 deliberately withheld on billing_tpp_cost_ap_dispatch.
+        progress: >-
+          PARTIAL - domain, service and port layers built; the STORE layer is not, so no
+          criterion is deliverable end to end yet and criterion 5 is entirely unstarted.
+          Done: (1) payable-accounting.ts implements ADR 0007 D4's accrual -> acceptance ->
+          settlement. The exact-reversal property is designed for rather than hoped for -
+          the reversal reads the fils actually POSTED rather than recomputing from
+          milli-fils, because two half-up roundings of different inputs need not agree and
+          any disagreement strands a balance in accrued payable that nothing later clears.
+          A 400-sample deterministic sweep (fixed seed, asserts its own sample count)
+          proves every journal balances with the VAT leg and that accrued payable nets to
+          zero. Accepting the same accrual twice is refused. (2) payable-close.ts registers
+          the close as a GatedOperation on the EXISTING ApprovalsService - no parallel close
+          mechanism - refusing 409 while unresolved material breaks exist and RE-CHECKING at
+          execution, since approval is a separate act up to two business hours later. This
+          also supplies the refusal BILL-15 criterion 3 was waiting on. (3) P9 gained
+          dispatchPayableInstruction + getPayableStatus on both adapters with contract tests
+          binding BOTH through the HARNESS-10 bench (idempotent replay + a no-approval
+          rejection); payable-dispatch.ts adds the audited service half, whose store surface
+          is exactly two methods so 'cannot mutate billing evidence' holds structurally. The
+          enterprise bench needed a stateful fake because the replay guarantee belongs to
+          the vendor's idempotency dedupe - a fixed-body fake would pass the assertion while
+          proving nothing. (4) settlementResidueBreaks raises an E1 break beside the suspense
+          line; its own test caught a real defect - rounding residueMilliFils directly does
+          NOT agree with the ledger, which derives residue as a difference of separately
+          rounded totals (-1500 milli-fils rounds to -2 while the ledger posts -1), so the
+          break is now derived exactly as the ledger derives it.
+          NOT DONE: the store + migration (close table, AP dispatch table writes), the
+          OpenAPI endpoints and app wiring, IG 10.16 netting, and ALL of criterion 5 - the
+          three write-path obligations (approval state/expiry check, initiated_by and
+          approved_by stamped from one normalised P2 claim AND equal to the cited approval's
+          own principals, and P9 response_payload redaction before the first INSERT) live in
+          the store write path that does not exist yet.
           - Dispatch state advances by APPENDING a row, never by UPDATE — the table is
             INSERT-only with UNIQUE (bank_id, idempotency_key, dispatch_state). The schema
             does not constrain transition ORDER, so this story owns rejecting an illegal
