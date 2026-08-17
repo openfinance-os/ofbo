@@ -2862,3 +2862,54 @@ and an owned acceptance criterion) are what this round added.
 Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration **169/169**
 across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; the live
 privilege catalogue confirms six of eight tables granted to `bank_internal_view`.
+
+### BILL-13 addendum 5 — corrections to my own claims, and the real size of the scope-label drift
+
+Both reviews re-ran on `c578dbe`. Hard-stop went **FAIL (6) → FAIL (4)** and now cites each addendum-4
+fix as the reason its earlier findings are mitigated: the withheld grant and its test, the BLOCKING
+acceptance criteria on BILL-14/BILL-16, and CODE-03. The cross-tenant `internal_view_select` concern
+dropped from a finding to an observation ("verbatim the ratified HOST-02 pattern … not new here, so not
+raised"). Contract returned **DRIFT (4)** — two DRIFT, two SPEC DEFECTS — all pre-existing exceptions or
+the escalated money-unit decision. The four remaining hard-stop findings are the same created-but-unwritten
+deferrals, each flagged uncertain by the reviewer and each now owned by an acceptance criterion.
+
+For the second round running, the genuinely actionable items were in the *observations*, and this time
+both were **my own claims being wrong**:
+
+1. **"P9 cannot be double-paid" overstated what the constraint carries.** When addendum 2 converted the
+   dispatch table to an append-only state log, the comment kept its old retry-safety claim. But
+   `UNIQUE (bank_id, idempotency_key, dispatch_state)` is unique per (key, **state**), not per key: it
+   bounds each state to one row per instruction — an instruction cannot be recorded as `dispatched`
+   twice — and that is all. It does not by itself make double payment impossible, and it constrains no
+   transition order. The comment now says exactly that, and names where the actual guarantee lives
+   (BILL-16 dispatching once under the key, plus P9's own idempotency).
+2. **CODE-03 understated its own surface by more than half.** I recorded "four call sites, one token".
+   Measured against the spec rather than estimated, it is **six undeclared tokens across fourteen
+   `scope_used` emissions**: `billing:rate` ×4, `billing:post` ×3, `reconciliation:run` ×3,
+   `billing:assure` ×2, `billing:reconcile` ×1, `billing:collect` ×1 — none of which appears anywhere in
+   `specs/backoffice-openapi.yaml`, against `billing:read` (10), `billing:write` (4) and
+   `platform:operations:read` (8) which do. The ticket now carries that inventory with file:line for each.
+   It also carries a scoping fact I checked so the next agent need not: `BILLING_POST_SCOPE` and
+   `BILLING_ASSURANCE_SCOPE` are exported constants, which looked like they might gate access — they do
+   not. Neither is ever passed to `assertScope` or any middleware; all fourteen are audit values only. So
+   no privilege is granted anywhere and this is an audit-trail resolvability defect, not an authorisation
+   one. That distinction is what makes it a tidy one-pass fix rather than a security incident.
+
+One further fix from the hard-stop findings themselves. Its third FAIL 5 observed that
+`initiated_by`/`approved_by` are **denormalised copies** with nothing binding them to the
+`approval_request` row they cite — so the recorded four-eyes evidence could name two people unconnected
+to the referenced approval. The reviewer rated its own confidence low (the authoritative
+`CHECK (approver IS NULL OR approver <> initiator)` on `approval_request` still blocks self-approval), but
+the point about *evidence correspondence* is sound and cannot be expressed as a foreign key. BILL-16's
+criterion (b) now requires both columns to equal the cited request's own `initiator`/`approver`.
+
+Not changed: the camelCase-inside-jsonb export exception (pre-existing, ratified in code and build log,
+and rewriting keys would break the digest the evidence chain depends on — the reviewer's own recommended
+close is a CLAUDE.md carve-out or ADR, i.e. spec-change, not code). The contract reviewer also proposed a
+concrete minimum envelope for `GET /back-office/billing/export` — `schema_version`, `bank_id`,
+`generated_at`, `record_counts`, `sha256` declared, with `tables` left opaque — which would have made this
+class of payload drift contract-detectable at all. That is a genuine spec gap and a good proposal; it is
+recorded here rather than actioned, because it is a spec-change PR and not BILL-13's.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423; integration 169/169 across 77 files;
+Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.

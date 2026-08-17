@@ -322,9 +322,16 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   -- Four eyes, not one: whoever approved a payable dispatch cannot be whoever initiated it.
   -- Normalised, so trivial variants of one identifier (case, padding) do not slip past a raw <>.
   CHECK (lower(btrim(approved_by)) <> lower(btrim(initiated_by))),
-  -- Retry-safe AND progressable: one row per (instruction, state), so re-dispatching the same
-  -- instruction in the same state stays a single row — P9 still cannot be double-paid — while the
-  -- outcome of that dispatch can be appended as the next state.
+  -- Retry-safe AND progressable: at most one row per (instruction, state), so re-recording the same
+  -- instruction in the same state stays a single row, while the outcome of that dispatch can be
+  -- appended as the next state.
+  --
+  -- Stated precisely, because the earlier wording here claimed more than this constraint carries:
+  -- uniqueness is per (key, STATE), not per key. It bounds each state to one row per instruction —
+  -- so an instruction cannot be recorded as 'dispatched' twice — but it does NOT by itself make
+  -- double payment impossible, and nothing here constrains the ORDER of states. Not double-paying
+  -- rests on BILL-16 dispatching under this key exactly once and on P9's own idempotency; refusing
+  -- an illegal transition (an 'accepted' appended after a 'rejected') is BILL-16's write path too.
   UNIQUE (bank_id, idempotency_key, dispatch_state)
 );
 
