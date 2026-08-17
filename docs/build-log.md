@@ -2622,6 +2622,12 @@ reference the same statement twice; AP dispatch is unique per idempotency key so
 double-paid; and a document line's `fee_class` is null exactly when `mapped` is false, so an unmapped
 provider category cannot masquerade as mapped.
 
+> **Correction (addendum 5, same PR).** The AP-dispatch clause above is wrong and is left in place only
+> because this log is append-only. The constraint that shipped is `UNIQUE (bank_id, idempotency_key,
+> dispatch_state)` — unique per (key, **state**), not per key. It bounds each state to one row per
+> instruction, so an instruction cannot be recorded as `dispatched` twice; it does **not** by itself make
+> double payment impossible, and it constrains no transition order. See addendum 5 below.
+
 **Store.** `PgBillingTppCostStore` writes the three tables this story owns and never attempts an
 update — immutability is a grant, not a convention. Idempotent on (meter run, rate card version, rate
 snapshot hash), so re-projecting unchanged inputs re-reads the existing statement while a *corrected*
@@ -2913,3 +2919,53 @@ recorded here rather than actioned, because it is a spec-change PR and not BILL-
 
 Re-verified on a pristine database in CI's order: unit 1423/1423; integration 169/169 across 77 files;
 Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 6 — the correction that was only half-applied
+
+Hard-stop re-ran on `f37f323`: **FAIL (5)**, and its own summary is the fair reading — four of the five
+are the created-but-unwritten deferrals, each now credited as "carried by a BLOCKING acceptance criterion
+rather than prose alone, which is the strongest available mitigation short of not creating the tables
+yet". It also confirmed test integrity explicitly, noting the `UnpriceableOverageError` change preserves
+existing `rejects.toThrow` assertions and that the new BFF spec guards against the type-vs-message
+shortcut.
+
+The fifth finding was a real defect and it was mine, in a way worth recording: **addendum 5 corrected the
+"P9 cannot be double-paid" overclaim in the migration comment and explained it at length here — and left
+the original false claim standing in the two places a reader reaches first.** The reviewer put it
+precisely: "the diff simultaneously ships the correction and leaves the incorrect claim standing in the
+backlog outcome, which is the artifact a reader reaches first." Correcting the code comment while the
+summary that gets read still asserts a payment-duplication control the schema does not carry is worse
+than not having noticed at all.
+
+Fixed in the two places, differently, because they are different kinds of document:
+
+- `docs/backlog.yaml` is current-state metadata, so the claim is corrected outright — uniqueness is per
+  (key, state), what that does and does not bound is stated, and the sentence notes that an earlier draft
+  overstated it.
+- `docs/build-log.md` is append-only history, so the original line stays and carries an inline correction
+  block pointing at addendum 5. Silently rewriting a historical entry to make a past claim look right is
+  not a fix; annotating it is.
+
+Also closed the loop on the reviewer's final observation: `billing_tpp_cost_document.verified_by` /
+`verified_at` are `NOT NULL` but bound to nothing — the same denormalised-evidence weakness as the
+AP-dispatch principal columns, on a table BILL-14 owns. BILL-14 now carries a criterion requiring them to
+correspond to the principal who actually performed the verified-manual-upload check, stamped from the P2
+claim, with verifier ≠ uploader refused.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+The generalisable lesson from rounds 3–6, since it recurred four times: **every actionable defect this
+track produced was in a review's "observations" or non-finding notes, never in its verdict.** The verdicts
+were dominated by documented deferrals the reviewers themselves rated uncertain. Reading only the
+FAIL/PASS line would have missed a resumability bug that would have failed the whole billing projection,
+a cross-tenant grant on unconstrained payload columns, and two false claims in the release record.
+
+Contract review on the same head returned **DRIFT (6)** — the two pre-existing exceptions (camelCase
+inside exported jsonb, `approval_request_id text` mirroring 0002), the two escalated items (`billing:rate`
+now owned by CODE-03, milli-fils), the dual-domain export already routed to SEG-01, and one genuinely new
+*forward* obligation worth acting on: nine state and reason vocabularies are hard-committed as CHECK
+constraints in an INSERT-only family with no OpenAPI counterpart. The reviewer's framing is right — those
+values are expensive to move once rows exist. **BILL-17**, which owns the endpoints that first expose them,
+now carries a blocking criterion that its schemas mirror the sets exactly or the spec-change lands first,
+never a widened CHECK.

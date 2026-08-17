@@ -716,7 +716,11 @@ milestones:
           The schema is self-reconciling: a statement's three streams must sum to its net total,
           gross must equal net+VAT on statements and lines, every line must carry an event id, a
           rerating delta must equal corrected minus previous, and AP dispatch is unique per
-          idempotency key so P9 cannot be double-paid.
+          (idempotency key, dispatch state) - which bounds each state to one row per instruction,
+          so an instruction cannot be recorded as dispatched twice, but does NOT by itself make
+          double payment impossible and constrains no transition order. Not double-paying rests on
+          BILL-16 dispatching once under the key plus P9's own idempotency. An earlier draft of this
+          entry claimed uniqueness per idempotency key alone; that overstated the constraint.
           PgBillingTppCostStore writes the three tables this story owns, idempotent on (meter run,
           rate card version, rate snapshot hash) so a corrected directory rate becomes a NEW
           immutable statement rather than an overwrite; it refuses a rerating unless both statements
@@ -799,6 +803,12 @@ milestones:
             cannot enforce this; BILL-13 deliberately withheld the cross-tenant
             bank_internal_view SELECT grant on billing_tpp_cost_document until it exists.
             Granting that read is part of THIS story only once redaction is proven.
+          - verified_by and verified_at (migration 0039) are NOT NULL but bound to nothing —
+            denormalised second-person-verification evidence, the same weakness the AP-dispatch
+            principal columns carry. This story owns making them correspond to the principal
+            who actually performed the verified-manual-upload check, stamped from the P2
+            subject claim and never from operator-supplied input, and must refuse an upload
+            whose verifier equals its uploader.
       - id: BILL-15
         title: Three-way payable reconciliation + dispute-window management
         status: pending
@@ -937,6 +947,15 @@ milestones:
             per-LFI overage effective-dating.
           - Hosted smoke recomputes the export digest independently; a11y and browser E2E
             pass.
+          - BLOCKING, a forward obligation from BILL-13's migration 0039 — nine state and
+            reason vocabularies are already hard-committed as CHECK constraints in an
+            INSERT-only, no-deletion-path family with NO counterpart in the OpenAPI
+            (cost_recipient_type, fee_stream, customer_segment, vat_treatment, document_type,
+            query_window_status, break_type, presence, dispatch_state). This story owns the
+            endpoints that first expose them, so its schemas MUST mirror those sets exactly,
+            or the spec-change workflow must land first. The values are expensive to move once
+            rows exist, so a divergence discovered here is a spec-change PR, never a widened
+            CHECK.
 
   # Dual-role Chinese wall enforcement (ADR 0006, accepted 2026-08-17) — E4-class substrate.
   - name: SEGREGATION
