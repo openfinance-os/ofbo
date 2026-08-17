@@ -880,7 +880,7 @@ milestones:
           resolves the four unmapped categories.
       - id: BILL-15
         title: Three-way payable reconciliation + dispute-window management
-        status: pending
+        status: in_progress
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-14]
@@ -933,6 +933,36 @@ milestones:
             (c) reconcile variance shape - ReconciliationBreak.variance_amount is a Money
             object while billing_tpp_cost_diff_line stores variance_milli_fils bare, so this
             depends on the milli-fils decision recorded on BILL-17.
+        progress: >-
+          Criteria 1, 2, 4, 5 and 6(a)+(b) built. reconcilePayable (packages/billing/
+          tpp-cost-reconciliation.ts) matches at (costRecipientType, costRecipientId, feeClass)
+          under DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS = fils(1), discriminating quantity ->
+          rate -> VAT in that precedence (units first because a rate argument built on the
+          wrong volume wastes the 10.13 window). wrong_recipient pairs an expectation and a
+          document line into ONE break and REFUSES to guess when two candidates share a fee
+          class. duplicate_charge is detected across documents only (within one document a
+          provider may legitimately split a category over rows) and its amount counts toward
+          actualTotalNetMilliFils - it is money genuinely billed. unmatched_expected_line
+          distinguishes OUR mapping gap (a fee class the Hub could never name) from their
+          omission, so it is never queried with them. 6(b) landed as migration 0041:
+          UNIQUE (bank_id, id) on reconciliation_break + composite FK, ON DELETE deliberately
+          absent (NO ACTION = refuse) because CASCADE would propagate a delete into the
+          payables ledger and SET NULL would sever the audit trail while reporting success;
+          MATCH SIMPLE keeps the reference optional. 6(a) maps break_type -> LineType by cost
+          RECIPIENT (nebras -> nebras_fees, underlying_lfi -> lfi_access_log); break_type is a
+          guard that throws on an unknown value rather than a routing input, and
+          payment_settlement is deliberately unused because it means money movement, not fee
+          liability. buildBillingQueryBundle refuses three ways - missing 10.11.3 field, closed
+          window, identifier-shaped transaction detail (reusing BILL-14's refusal guard rather
+          than adding a second redaction path). Three self-found defects fixed with tests: an
+          off-period document anchored the query deadline a month early; a duplicated charge
+          reported netVariance 0; the wrong_recipient pairing guessed among candidates.
+          STILL OPEN - criterion 3 (a disputed line cannot reach an APPROVED payable) is
+          half-built: openPayableBreaks() is the gate query and is tested tenant-scoped, but
+          the refusal it feeds lives in BILL-16, so the end-to-end blocked path cannot be
+          tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the money-unit
+          decision (BILL-17); diff lines still store variance_milli_fils bare and no
+          Money-shaped variance is written.
       - id: BILL-16
         title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
         status: pending

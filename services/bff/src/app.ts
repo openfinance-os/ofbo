@@ -104,6 +104,12 @@ import {
   type RawDocumentArchive,
   type TppCostDocumentStore
 } from './billing/tpp-cost-document.js'
+import {
+  TppCostReconcileService,
+  tppCostReconcileRoutes,
+  type LatePaymentSource,
+  type TppCostReconcileStore
+} from './billing/tpp-cost-reconcile.js'
 import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
 import { strDraftRoutes } from './str/routes.js'
 import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceProfitabilityReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
@@ -240,6 +246,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/billing/exports:cbuae-fee-review',
   'get /back-office/billing/export',
   'post /back-office/billing/tpp-cost-documents',
+  'post /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
@@ -320,6 +327,8 @@ export interface AppDeps {
   invoiceRunStore?: InvoiceRunStore
   /** BILL-14 — provider cost-document ledger writer. */
   tppCostDocumentStore?: TppCostDocumentStore
+  tppCostReconcileStore?: TppCostReconcileStore
+  tppCostLatePayments?: LatePaymentSource
   /** BILL-14 — retention of the raw provider artifact, outside the ledger. */
   rawDocumentArchive?: RawDocumentArchive
   /** BILL-05 — append-only settlement decomposition and direct-collection action store. */
@@ -586,6 +595,18 @@ export function createApp(deps: AppDeps = {}) {
     },
     audit: highClassAudit
   })
+  // BILL-15 — payable reconciliation. Fails closed the same way: with no store there is no evidence
+  // to compare, and a reconciliation over nothing would report a clean period.
+  const tppCostReconcileService = new TppCostReconcileService({
+    store: deps.tppCostReconcileStore ?? {
+      documentPeriod: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      reconcilableDocumentsForPeriod: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      latestStatement: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      saveReconciliation: async () => { throw new Error('TPP cost reconciliation store is not configured') }
+    },
+    ...(deps.tppCostLatePayments ? { latePayments: deps.tppCostLatePayments } : {}),
+    audit: highClassAudit
+  })
   const billingConsoleService = new BillingConsoleService({
     tenant: deps.billingTenant ?? {
       profile: async () => { throw new Error('billing tenant store is not configured') },
@@ -748,6 +769,7 @@ export function createApp(deps: AppDeps = {}) {
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
     ...billingConsoleRoutes(billingConsoleService, idempotencyStore),
     ...tppCostDocumentRoutes(tppCostDocumentService, idempotencyStore),
+    ...tppCostReconcileRoutes(tppCostReconcileService, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),

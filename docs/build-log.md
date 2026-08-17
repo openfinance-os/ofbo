@@ -3434,3 +3434,93 @@ and worth a tidy when the spec is next reorganised.
 Re-verified on a pristine database: unit **1464/1464**; integration **180/180**; Q4.5 PASSED; typecheck
 0; ESLint clean. PostgreSQL died a fifth time mid-verification and was restarted before the run was
 repeated — noted because five crashes in one story is an environment signal, not a code one.
+
+## 2026-08-17 — BILL-15: three-way payable reconciliation + dispute-window management
+
+Own metering ↔ expected statement ↔ provider document. The comparison itself is a pure function in
+`packages/billing/src/tpp-cost-reconciliation.ts` — no clock, no store, no I/O, every timestamp
+arriving on the input — so a reconciliation is reproducible from its inputs alone. That mattered
+immediately: three of this story's defects were only findable because the function could be probed
+directly.
+
+**Matching.** At the `(costRecipientType, costRecipientId, feeClass)` grain under a configurable
+tolerance defaulting to `fils(1)`. Expectations are milli-fils and documents state fils, so exact
+equality is never the test and the tolerance is what makes a match mean anything. Variance class is
+decided in a deliberate precedence — units, then net, then VAT. Units first because a volume
+difference is settled against metering and a rate argument built on the wrong volume wastes the
+§10.13 window; VAT last because it is the residual once net agrees, a treatment error rather than a
+pricing dispute, and it goes to a different desk.
+
+**One difference, one break.** An expectation and a document line disagreeing on the counterparty
+produce a single `wrong_recipient`, not a missing charge plus an unexpected one — two half-truths
+would open two queries against two counterparties for a single charge and neither would be
+answerable. The pairing REFUSES when two document lines share the fee class: nothing in the evidence
+says which one our expectation meant, and a guessed pairing names the wrong counterparty in the query.
+
+`duplicate_charge` is detected across documents only. Within one document a provider may legitimately
+split a category over several rows, so those aggregate; the same charge on the Nebras invoice and an
+LFI self-invoice is a different claim, because the Nebras invoice reconciles both cost components
+(IG §10.2).
+
+`unmatched_expected_line` earns its place in the taxonomy by distinguishing our mapping gap from
+their omission: a fee class the Hub could never name on an invoice is not a missing charge and must
+not be queried with them. It is fixed by extending the category map, not by writing to Nebras.
+
+**Three defects I found in my own first implementation**, each now pinned by a test proven to fail
+without the fix:
+
+- An **off-period document anchored the query deadline a month early**. A 2026-05 invoice issued in
+  June dragged the 2026-06 deadline from 2026-08-02 back to 2026-07-03. My own comment had warned
+  about overstating the time remaining; this understated it, which is just as wrong — abandoning a
+  live query early loses the same right as missing a dead one.
+- A **duplicated charge reported a net variance of zero**. `actualTotalNetMilliFils` was accumulated
+  only on the matched, wrong-recipient and unexpected paths, so an invoice pair over-billing us by a
+  full line showed no exposure on the one number BILL-16 decides what to pay from.
+- The **wrong-recipient pairing guessed** via `.find()` among several candidates.
+
+**Criterion 6(a) — `break_type` → `LineType`.** The line class follows the cost RECIPIENT, not the
+break class: `line_type` names which stream a break belongs to, and a rate variance is the same kind
+of line whether over- or under-rated. IG §10.2's two payable components map one-to-one — Hub fees to
+`nebras_fees`, underlying-LFI API access to `lfi_access_log`. `payment_settlement` is deliberately
+unused because it means money movement, not fee liability. That leaves `breakType` as a guard rather
+than a routing input, and it is used as one: it validates against the frozen ten-value taxonomy and
+throws, so an eleventh break class added without revisiting this mapping fails loudly instead of
+being silently filed as a Hub fee.
+
+**Criterion 6(b) — the deferred foreign key**, landed as migration `0041`. `UNIQUE (bank_id, id)` on
+`reconciliation_break` (additive; `id` is already the primary key, so it constrains nothing new and
+exists only to give the composite FK a target) plus the tenant-composite FK BILL-13 deferred.
+`ON DELETE` is deliberately absent — NO ACTION, meaning a delete of a referenced break is refused.
+For a table with a 5-year immutable retention obligation the alternatives are both wrong: CASCADE
+would let one delete propagate into the payables ledger, and SET NULL would sever the link between a
+payable variance and the break it was raised as while reporting success. `MATCH SIMPLE` is
+load-bearing and easy to misread: the nullable break id keeps the reference optional, and the FK is
+enforced in full only when it is set.
+
+**Criterion 5 — the billing-query bundle** refuses three ways, and refusal is the point since the
+bundle crosses the bank boundary through P6. A missing §10.11.3 field produces a query Nebras rejects
+for incompleteness and the days it consumed do not come back. A closed window means asserting a claim
+we no longer hold. Identifier-shaped `transactionDetail` would export PSU data to the scheme —
+§10.11.3 asks for "payment/transaction detail" and the tempting reading is to attach the payment, so
+the guard reuses BILL-14's `assertIdentifierFieldsClean` rather than adding a second redaction path.
+A test pins that the refusal does not eat the invoice number and interaction id the query is useless
+without.
+
+**Not done, stated plainly.** Criterion 3 is half-built: `openPayableBreaks()` is the gate query and
+is tested tenant-scoped over a real database, but the refusal it feeds lives in BILL-16, so the
+end-to-end blocked path cannot be tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the
+money-unit decision — `ReconciliationBreak.variance_amount` is a `Money` object while
+`billing_tpp_cost_diff_line` stores `variance_milli_fils` bare, and reconciling those shapes needs
+the answer BILL-17 owns. No Money-shaped variance is written in the meantime.
+
+Contract: `POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile` added spec-first
+(94 → 95 paths) on `finance:reconciliation:write`, mirroring `billing-records:reconcile` because
+judging a counterparty's figures against our own is one capability regardless of which way the money
+flows. It runs synchronously rather than returning 202 like its receivable twin: it compares stored
+evidence rather than fetching from the Hub, so there is nothing to wait on. A route test was written
+alongside the service tests — a `:reconcile` suffix on a path parameter is exactly the shape a router
+silently fails to match, and `pnpm verify:contract` probes only parameter-less GETs.
+
+Verified on a pristine database: unit **1512/1512**; integration **187/187** across 79 files; Q4.5
+**PASSED** with `billing_tpp_cost_reconciliation` and `billing_tpp_cost_diff_line` now covered;
+typecheck 0; ESLint clean.

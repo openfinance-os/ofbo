@@ -5,7 +5,10 @@ import {
   type ExpectedTppCostStatement,
   type ExpectedTppCostStatementLine,
   type MeteredLine,
-  type ParsedTppCostDocument
+  type ParsedTppCostDocument,
+  type ParsedTppCostDocumentLine,
+  type PayableBreak,
+  type PayableReconciliation
 } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
@@ -25,6 +28,27 @@ import type { LineageSink } from './lineage.js'
 export interface BillingTppCostStatementInput {
   meterRunId: string
   statement: ExpectedTppCostStatement
+}
+
+/** A stored document rebuilt into the shape `reconcilePayable` consumes. */
+export interface ReconcilableStoredDocument {
+  documentId: string
+  documentType: ParsedTppCostDocument['documentType']
+  issuerId: string
+  documentReference: string
+  billingPeriod: string
+  issuedAt: string
+  receivedAt: string
+  lines: ParsedTppCostDocumentLine[]
+}
+
+export interface BillingTppCostReconciliationInput {
+  statementId: string
+  /** Groups the per-document rows of one run; part of the idempotency key. */
+  reconciliationRunId: string
+  result: Omit<PayableReconciliation, 'breaks'> & {
+    breaks: ReadonlyArray<PayableBreak & { reconciliationBreakId?: string }>
+  }
 }
 
 export interface StoredBillingTppCostStatement {
@@ -129,6 +153,18 @@ const STATEMENT_LINE_LINEAGE = [
   'fee_stream', 'fee_class', 'product_family', 'api_family', 'customer_segment', 'internal_product',
   'cost_centre_ref', 'units', 'event_count', 'vat_treatment', 'expected_net_milli_fils',
   'vat_milli_fils', 'expected_gross_milli_fils', 'event_ids', 'fapi_interaction_ids'
+]
+const RECONCILIATION_LINEAGE = [
+  'bank_id', 'channel', 'statement_id', 'document_id', 'billing_period', 'tolerance_milli_fils',
+  'query_deadline', 'query_window_status', 'reconciliation_run_id', 'matched_line_count',
+  'break_count', 'expected_total_net_milli_fils', 'actual_total_net_milli_fils',
+  'net_variance_milli_fils', 'gross_variance_milli_fils', 'evidence_hash'
+]
+const DIFF_LINE_LINEAGE = [
+  'bank_id', 'channel', 'reconciliation_id', 'line_ref', 'break_type', 'cost_recipient_type',
+  'cost_recipient_id', 'fee_class', 'expected_milli_fils', 'actual_milli_fils',
+  'variance_milli_fils', 'variance_basis_points', 'material', 'presence', 'reason_code',
+  'reconciliation_break_id'
 ]
 const RERATING_LINEAGE = [
   'bank_id', 'channel', 'meter_run_id', 'previous_statement_id', 'corrected_statement_id', 'period',
@@ -634,6 +670,196 @@ export class PgBillingTppCostStore {
       documentType: row.document_type as string,
       documentReference: row.document_reference as string
     }))
+  }
+
+  /**
+   * Persist a payable reconciliation and its diff lines.
+   *
+   * One row per document judged, sharing a `reconciliation_run_id`: the table carries a single
+   * `document_id` with a foreign key, so a multi-document run cannot be a single row, and each row
+   * states what that document was judged against rather than repeating the run aggregate.
+   *
+   * Idempotent on the table's own UNIQUE (bank_id, statement_id, document_id, reconciliation_run_id).
+   * Re-running the same reconciliation returns the rows already written. That matters more here than
+   * on a mutable table: these are INSERT-only with no deletion path, so a duplicate written by a
+   * retried scheduled job could never be cleaned up afterwards.
+   */
+  async saveReconciliation(
+    input: BillingTppCostReconciliationInput,
+    traceId: string
+  ): Promise<{ reconciliationIds: string[]; created: boolean }> {
+    const { result } = input
+    const byDocument = new Map(result.perDocument.map((entry) => [entry.documentId, entry]))
+
+    const outcome = await this.asApp(async (client) => {
+      const ids: string[] = []
+      let created = false
+      for (const documentId of result.documentIds) {
+        const totals = byDocument.get(documentId)
+        if (!totals) throw new Error(`reconciliation result has no per-document totals for ${documentId}`)
+        const evidenceHash = tppCostEvidenceHash({
+          statement: input.statementId,
+          document: documentId,
+          run: input.reconciliationRunId,
+          totals,
+          breaks: result.breaks.filter((entry) => entry.documentId === documentId)
+        })
+
+        const inserted = await client.query(
+          `INSERT INTO billing_tpp_cost_reconciliation
+             (bank_id, channel, statement_id, document_id, billing_period, tolerance_milli_fils,
+              query_deadline, query_window_status, reconciliation_run_id, matched_line_count,
+              break_count, expected_total_net_milli_fils, actual_total_net_milli_fils,
+              net_variance_milli_fils, gross_variance_milli_fils, evidence_hash)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+           ON CONFLICT (bank_id, statement_id, document_id, reconciliation_run_id) DO NOTHING
+           RETURNING id`,
+          [this.config.bankId, this.config.channel, input.statementId, documentId, result.period,
+            result.toleranceMilliFils, result.queryDeadline, result.queryWindowStatus,
+            input.reconciliationRunId, totals.matchedLineCount, totals.breakCount,
+            totals.expectedNetMilliFils, totals.actualNetMilliFils, totals.netVarianceMilliFils,
+            totals.grossVarianceMilliFils, evidenceHash]
+        )
+        let row = inserted.rows[0] as Record<string, unknown> | undefined
+        const insertedNow = Boolean(row)
+        if (!row) {
+          row = (await client.query(
+            `SELECT id FROM billing_tpp_cost_reconciliation
+              WHERE statement_id = $1 AND document_id = $2 AND reconciliation_run_id = $3`,
+            [input.statementId, documentId, input.reconciliationRunId]
+          )).rows[0] as Record<string, unknown> | undefined
+        }
+        if (!row) throw new Error('payable reconciliation could not be read after insert')
+        const reconciliationId = row.id as string
+        ids.push(reconciliationId)
+        if (!insertedNow) continue
+        created = true
+
+        for (const entry of result.breaks.filter((b) => b.documentId === documentId)) {
+          await client.query(
+            `INSERT INTO billing_tpp_cost_diff_line
+               (bank_id, channel, reconciliation_id, line_ref, break_type, cost_recipient_type,
+                cost_recipient_id, fee_class, expected_milli_fils, actual_milli_fils,
+                variance_milli_fils, variance_basis_points, material, presence, reason_code,
+                reconciliation_break_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+            [this.config.bankId, this.config.channel, reconciliationId, entry.lineRef, entry.breakType,
+              entry.costRecipientType, entry.costRecipientId, entry.feeClass,
+              entry.expectedNetMilliFils, entry.actualNetMilliFils, entry.varianceMilliFils,
+              entry.varianceBasisPoints, entry.material, entry.presence, entry.reasonCode,
+              entry.reconciliationBreakId ?? null]
+          )
+        }
+      }
+      return { ids, created }
+    })
+
+    if (outcome.created) {
+      await this.emit('billing_tpp_cost_reconciliation', RECONCILIATION_LINEAGE, traceId)
+      if (result.breaks.length) await this.emit('billing_tpp_cost_diff_line', DIFF_LINE_LINEAGE, traceId)
+    }
+    return { reconciliationIds: outcome.ids, created: outcome.created }
+  }
+
+  /**
+   * Unresolved payable breaks for a period — the gate BILL-16's payable approval reads.
+   *
+   * "Unresolved" here means "raised and not yet linked to a settled E1 break". The diff-line table is
+   * INSERT-only and carries no status of its own, so resolution lives on the E1 `reconciliation_break`
+   * this row points at: a line with no break id has been raised and not yet worked, and a line whose
+   * break is still open is being worked. Either way the payable is not clear.
+   */
+  async openPayableBreaks(period: string): Promise<Array<{
+    reconciliationId: string
+    lineRef: string
+    breakType: string
+    costRecipientType: string
+    costRecipientId: string
+    varianceMilliFils: number
+    reconciliationBreakId: string | null
+  }>> {
+    const rows = await this.asApp(async (client) => (await client.query(
+      `SELECT d.reconciliation_id, d.line_ref, d.break_type, d.cost_recipient_type,
+              d.cost_recipient_id, d.variance_milli_fils, d.reconciliation_break_id
+         FROM billing_tpp_cost_diff_line d
+         JOIN billing_tpp_cost_reconciliation r ON r.id = d.reconciliation_id
+         LEFT JOIN reconciliation_break b ON b.id = d.reconciliation_break_id
+        WHERE r.billing_period = $1
+          AND d.material
+          AND (d.reconciliation_break_id IS NULL
+               OR b.status NOT IN ('resolved_matched','resolved_internal_correction'))
+        ORDER BY d.created_at ASC, d.line_ref ASC`,
+      [period]
+    )).rows as Array<Record<string, unknown>>)
+    return rows.map((row) => ({
+      reconciliationId: row.reconciliation_id as string,
+      lineRef: row.line_ref as string,
+      breakType: row.break_type as string,
+      costRecipientType: row.cost_recipient_type as string,
+      costRecipientId: row.cost_recipient_id as string,
+      varianceMilliFils: Number(row.variance_milli_fils),
+      reconciliationBreakId: (row.reconciliation_break_id as string | null) ?? null
+    }))
+  }
+
+  /**
+   * The period a document bills, or null when it is not this tenant's.
+   *
+   * Null rather than a throw because the caller answers 404 with it: RLS already scopes the read, so
+   * a document belonging to another tenant is indistinguishable from one that does not exist — which
+   * is the correct disclosure.
+   */
+  async documentPeriod(documentId: string): Promise<string | null> {
+    const row = await this.asApp(async (client) => (await client.query(
+      'SELECT billing_period FROM billing_tpp_cost_document WHERE id = $1', [documentId]
+    )).rows[0] as Record<string, unknown> | undefined)
+    return row ? (row.billing_period as string) : null
+  }
+
+  /** A period's documents with their lines, in the shape `reconcilePayable` consumes. */
+  async reconcilableDocumentsForPeriod(period: string): Promise<ReconcilableStoredDocument[]> {
+    return this.asApp(async (client) => {
+      const documents = (await client.query(
+        `SELECT id, document_type, issuer_id, document_reference, billing_period, issued_at, received_at
+           FROM billing_tpp_cost_document WHERE billing_period = $1 ORDER BY issued_at ASC, id ASC`,
+        [period]
+      )).rows as Array<Record<string, unknown>>
+      const out: ReconcilableStoredDocument[] = []
+      for (const document of documents) {
+        const lines = (await client.query(
+          `SELECT line_ref, source_category, fee_class, mapped, cost_recipient_type, cost_recipient_id,
+                  units, unit_price_milli_fils, actual_net_milli_fils, vat_milli_fils,
+                  actual_gross_milli_fils
+             FROM billing_tpp_cost_document_line WHERE document_id = $1 ORDER BY line_ref ASC`,
+          [document.id]
+        )).rows as Array<Record<string, unknown>>
+        const asIso = (value: unknown): string =>
+          value instanceof Date ? value.toISOString() : String(value)
+        out.push({
+          documentId: document.id as string,
+          documentType: document.document_type as ParsedTppCostDocument['documentType'],
+          issuerId: document.issuer_id as string,
+          documentReference: document.document_reference as string,
+          billingPeriod: document.billing_period as string,
+          issuedAt: asIso(document.issued_at),
+          receivedAt: asIso(document.received_at),
+          lines: lines.map((line) => ({
+            lineRef: line.line_ref as string,
+            sourceCategory: line.source_category as string,
+            feeClass: line.fee_class as ParsedTppCostDocumentLine['feeClass'],
+            mapped: line.mapped as boolean,
+            costRecipientType: line.cost_recipient_type as ParsedTppCostDocumentLine['costRecipientType'],
+            costRecipientId: line.cost_recipient_id as string,
+            units: Number(line.units),
+            unitPriceMilliFils: Number(line.unit_price_milli_fils),
+            actualNetMilliFils: Number(line.actual_net_milli_fils),
+            vatMilliFils: Number(line.vat_milli_fils),
+            actualGrossMilliFils: Number(line.actual_gross_milli_fils)
+          }))
+        })
+      }
+      return out
+    })
   }
 
   async close(): Promise<void> {

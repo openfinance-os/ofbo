@@ -3315,6 +3315,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/billing/tpp-cost-documents/{document_id}:reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Three-way reconcile a provider cost document against own metering (BILL-15)
+         * @description The payable twin of `/back-office/billing-records/{record_set_id}:reconcile`, and it carries the same scope for the same reason: judging a counterparty's figures against our own is one capability regardless of which direction the money flows.
+         *
+         *     Matches own metering against the expected statement and the provider document at the invoice category grain, under a configurable tolerance — expected values are milli-fils and documents state fils, so exact equality is never the test. Every difference becomes exactly one break: an expectation and a document line disagreeing on the counterparty produce a single `wrong_recipient` rather than a missing plus an unexpected charge, and a charge appearing on both the Nebras invoice and an LFI self-invoice is a `duplicate_charge` rather than a second cost. IG §10.17 late-payment penalties are accepted only against a recorded late payment for the same period.
+         *
+         *     Runs synchronously and returns the result, unlike the billing-records twin: this compares stored evidence rather than fetching from the Hub, so there is nothing to wait on. The response carries the IG §10.13 query deadline and the Nebras response clocks, because a break found outside the window is not actionable and the caller must see that with the finding.
+         *
+         *     Reconciling is not approving. Unresolved breaks withhold the period from payable approval (BILL-16); this endpoint records what was found and never settles it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    document_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reconciliation complete. Returned for both a first run and a replay of the same reconciliation run, which writes nothing further — the ledger is INSERT-only with no deletion path, so a retried scheduled job must not double it. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostReconciliation"];
+                        };
+                    };
+                };
+                /** @description No such cost document for this tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No expected cost statement exists for the document's billing period, so there is nothing to reconcile against. Refused rather than reported as an all-unexpected-charges result, which would look like a provider fault when it is a missing projection on our side. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/tpp-counterparties": {
         parameters: {
             query?: never;
@@ -5408,6 +5483,69 @@ export interface components {
             /** @description How many provider fields were redacted at parse time. Key paths are audited; the removed values are never stored or logged. */
             redacted_field_count: number;
             lines: components["schemas"]["TppCostDocumentLine"][];
+        };
+        /**
+         * @description Payable break taxonomy (BILL-13 migration 0039). Narrower than the reconciliation `LineType`, which classifies WHICH STREAM a break belongs to rather than what went wrong; every value here maps onto a LineType via the cost recipient — Hub fees to nebras_fees, underlying-LFI API access to lfi_access_log.
+         * @enum {string}
+         */
+        PayableBreakType: "quantity_variance" | "rate_variance" | "unexpected_charge" | "missing_charge" | "wrong_recipient" | "duplicate_charge" | "vat_variance" | "period_variance" | "unmatched_document_line" | "unmatched_expected_line";
+        TppCostDiffLine: {
+            line_ref: string;
+            break_type: components["schemas"]["PayableBreakType"];
+            /** @description The contract class this break is shown as on GET /back-office/reconciliation/breaks. */
+            line_type: components["schemas"]["LineType"];
+            /** @enum {string} */
+            presence: "both" | "expected_only" | "document_only";
+            /** @enum {string} */
+            cost_recipient_type: "nebras" | "underlying_lfi";
+            cost_recipient_id: string;
+            fee_class?: string | null;
+            /** @description The provider's own wording, retained because a billing query cites it back to them. */
+            source_category?: string | null;
+            expected_net_milli_fils: number;
+            actual_net_milli_fils: number;
+            variance_milli_fils: number;
+            variance_basis_points: number;
+            /** @description Exceeds the tolerance. A wrong recipient is material at zero variance. */
+            material: boolean;
+            reason_code: string;
+            /**
+             * Format: uuid
+             * @description The E1 break this was escalated as; null until it is escalated.
+             */
+            reconciliation_break_id?: string | null;
+        };
+        TppCostReconciliation: {
+            /** @description YYYY-MM */
+            period: string;
+            /** @description Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute. Configurable; defaults to one fil. */
+            tolerance_milli_fils: number;
+            /** @description IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21). */
+            query_window_days: number;
+            /** Format: date-time */
+            query_deadline: string;
+            /** @enum {string} */
+            query_window_status: "open" | "expired";
+            /** @description Negative once the window closed. Measured at ingest, not at read time, so it is reproducible. */
+            days_remaining_at_ingest: number;
+            /** @description IG v5.0 §10.13 obligations Nebras owes on an open query. */
+            response_clocks: {
+                first_response_minutes: number;
+                final_response_days: number;
+                escalation_review_days: number;
+            };
+            matched_line_count: number;
+            break_count: number;
+            expected_total_net_milli_fils: number;
+            /** @description What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
+            actual_total_net_milli_fils: number;
+            /** @description Signed, so opposing errors net. The headline exposure. */
+            net_variance_milli_fils: number;
+            /** @description Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
+            gross_variance_milli_fils: number;
+            /** @description IG §10.17 penalties matched to a recorded late payment for this period. */
+            penalty_lines_accepted: number;
+            breaks: components["schemas"]["TppCostDiffLine"][];
         };
         InvoiceRun: {
             /** Format: uuid */
