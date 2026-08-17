@@ -1,8 +1,8 @@
 # ADR 0006 — LFI ↔ TPP-of-record data segregation (dual-role Chinese wall)
 
-- Status: **Proposed** — awaiting human decision (new cross-cutting control + role-domain taxonomy; likely a PRD addition)
-- Date: 2026-06-20
-- Related: PRD §2 persona scope matrix; BACKOFFICE-43 (RBAC), BACKOFFICE-54 (data classification), BACKOFFICE-45/-49 (audit + lineage); the OF-UAE dual-role gap analysis (2026-06-20)
+- Status: **Accepted — Option 1** (user decision, 2026-08-17, recorded via BILL-11 alongside ADR 0007)
+- Date: 2026-06-20 (proposed) · 2026-08-17 (accepted)
+- Related: PRD §2 persona scope matrix; BACKOFFICE-43 (RBAC), BACKOFFICE-54 (data classification), BACKOFFICE-45/-49 (audit + lineage); the OF-UAE dual-role gap analysis (2026-06-20); ADR 0007 / BILL-11..17 (TPP Cost Management — the first TPP-domain data family); BD-22 (PRD §10); SEG-01 (enforcement build)
 
 ## Context
 
@@ -88,9 +88,23 @@ shared — which should be captured as a BD-style decision and, given its weight
 
 ## Decision
 
-_Pending._ Once chosen: if Option 1, (a) record the role-domain taxonomy (BD decision),
-(b) amend PRD §2 + raise a BACKOFFICE requirement, (c) implement the role-domain guard
-in the scope layer + RLS + classification + the `cross_domain_access` audit, tests-first.
+**Accepted — Option 1** (user decision, 2026-08-17). The `role_domain` dimension
+(**LFI | TPP | shared**) is adopted for personas, scopes, and data classification, enforced
+at both layers with the `cross_domain_access` High-class audit event, per Option 1. Staged:
+
+- **Initial taxonomy — billing/commercial family, decided now (with ADR 0007):** the
+  receivable billing family (collection memos, invoice runs, TPP counterparty registry) is
+  **LFI-domain**; the payable family (all `billing_tpp_cost_*` tables, BILL-13..16) is
+  **TPP-domain** and is classification-tagged from day one; scheme reference data, rate
+  cards, and settlement/sign-off aggregates are **shared** (deliberately not over-walled —
+  net settlement legitimately reads both sides).
+- **Platform-wide taxonomy** (remaining personas + non-billing data classes) is the bank
+  decision **BD-22** (PRD §10). The enforcement build — role-domain guard in the scope
+  layer, RLS predicate on role-owned tables, classification threading, and the
+  `cross_domain_access` audit seam — is backlog item **SEG-01** (E4-class substrate,
+  tests-first), **blocked on BD-22**.
+- PRD §2 carries the role-domain note; the full BACKOFFICE requirement is raised when
+  SEG-01 unblocks.
 
 ## Consequences
 
