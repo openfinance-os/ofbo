@@ -199,9 +199,24 @@ price), reinforcing the per-LFI overage decision and the BILL-12 unit check.
   only) and payables carry no over-billing control — the gap BILL-12..17 closes.
 - Composes existing primitives only — **no new approval mechanism, gateway, or auth path**
   (the P9 port is extended, not bypassed; close feeds the existing -06 sign-off).
+- **BILL-12 outcome (2026-08-17).** The expected-cost domain, per-LFI rate resolution and both
+  projection corrections landed. Three things the story could NOT close, recorded rather than
+  assumed: (a) the **live directory is unreachable** from the build environment (egress policy
+  denies `data.directory.openfinance.ae`), so no snapshot has been observed and the `unit` is a
+  required, never-defaulted field on every snapshot — rating **fails closed** on a chargeable
+  overage line with no snapshot rather than mirroring the receivable card; (b) the **retail
+  free-tier granularity** is a new open question (below); (c) **existing meter runs are not
+  backfilled** — runs dedupe on `(bank_id, period, rate_card_version, input_hash)`, so the
+  corrected projection is bound into the hash via `METERING_PROJECTION_VERSION`, meaning a
+  corrected period yields a NEW immutable run; already-processed periods keep their original run
+  until re-ingested, which is a deliberate append-only choice, not a silent no-op.
 - **Open verification items tracked here until closed:** directory `OverLimitFees` unit
-  (per call vs per page — BILL-12 pre-task; the sample Collection Memo's LFI-set
-  "Customer Data" rate confirms per-LFI pricing but not the unit) · Nebras Hub-fee VAT
+  (per call vs per page — BILL-12 pre-task, BLOCKED on directory reachability; the sample
+  Collection Memo's LFI-set "Customer Data" rate confirms per-LFI pricing but not the unit) ·
+  **retail free-tier granularity** — the C&P model says "15 pages/customer/day" without stating
+  whether each serving LFI grants its own allowance; per-serving-LFI is the likelier reading but
+  grants MORE free pages and so understates the payable, so the conservative `psu_per_day` is the
+  rate-card default and the alternative is an explicit, tenant-selectable value · Nebras Hub-fee VAT
   posture (**narrowed by IG v5.0 §10.9**: the sample invoice shows VAT-exclusive + 5% —
   BD-20 now only confirms this on the first *real* invoice, which also resolves the
   sample's CoP-discounted unit anomaly, 0.25 vs 0.005) · query-window **anchor semantics**

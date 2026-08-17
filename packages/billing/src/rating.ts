@@ -1,3 +1,4 @@
+import { resolveLfiOverageRate, type DirectoryOverageSnapshot } from './lfi-overage.js'
 import { MF_PER_FIL, bpsOfFils, divideHalfUp } from './money.js'
 import {
   steppedValue,
@@ -98,7 +99,77 @@ export interface RatingResult {
   tppAsServiceMarginMilliFils: number
 }
 
+/**
+ * Receivable-only view of metered lines, for projections about what the institution is OWED:
+ * the expected collection memo, revenue assurance, and closed-period re-rating.
+ *
+ * Those projections all discard payable lines anyway, but rating one requires directory evidence
+ * they neither hold nor read — so passing them the whole set would let an unrelated payable line
+ * fail a regulated receivable report. Filtering at the boundary keeps the payable fail-closed
+ * strict where it matters without making it an availability risk where it does not.
+ */
+export function receivableMeteredLines(lines: readonly MeteredLine[]): MeteredLine[] {
+  return lines.filter((line) => line.side === 'receivable')
+}
+
+export interface RatingOptions {
+  /**
+   * Directory snapshot used to price retail data overage the institution owes a serving LFI.
+   * Required whenever a chargeable `payable_lfi` / `data.retail_page` line is present: those rates
+   * are LFI-published, not scheme-uniform, so there is nothing to fall back on (ADR 0007 D3).
+   */
+  overageSnapshot?: DirectoryOverageSnapshot
+}
+
+interface PricingContext extends RatingOptions {
+  step: number
+}
+
 type RateSpec = RateCard['receivable'][keyof RateCard['receivable']] | RateCard['payableHub'][keyof RateCard['payableHub']]
+
+/**
+ * Retail data overage owed to the LFI that served the data. Priced from the effective-dated
+ * directory snapshot for that specific LFI — never from the institution's own receivable card,
+ * which would assume every counterparty charges what this bank charges.
+ */
+function priceServingLfiOverage(line: MeteredLine, snapshot: DirectoryOverageSnapshot | undefined): PricedLine {
+  if (line.units === 0) {
+    // Entirely inside the serving LFI's free threshold: no rate is needed to know it is free.
+    return { ...line, amountMilliFils: 0, rateDetail: { overageSource: 'within_free_threshold', charges: false } }
+  }
+  if (!snapshot) {
+    throw new Error(
+      `${line.eventId}: a chargeable retail data overage line needs a directory overage snapshot to price it — `
+      + 'the serving LFI publishes its own rate and the receivable card must not be mirrored for it'
+    )
+  }
+  if (!line.counterpartyLfiId) {
+    throw new Error(`${line.eventId}: retail data overage cannot be priced without the serving LFI (counterpartyLfiId)`)
+  }
+
+  // Normalise to a UTC calendar day: an offset-form timestamp sliced raw would resolve the wrong
+  // effective-dated window near a boundary, silently pricing at a superseded rate.
+  const occurredAt = new Date(line.occurredAt)
+  if (Number.isNaN(occurredAt.valueOf())) throw new RangeError(`${line.eventId}: occurredAt is not a valid timestamp`)
+  const resolved = resolveLfiOverageRate(snapshot, line.counterpartyLfiId, occurredAt.toISOString().slice(0, 10))
+  // A per-call rate bills the chargeable call once; a per-page rate bills each overage page.
+  const chargedUnits = resolved.unit === 'per_call' ? 1 : line.units
+  return {
+    ...line,
+    amountMilliFils: multiplyMoney(resolved.rateMilliFils, chargedUnits),
+    rateDetail: {
+      overageSource: 'directory_snapshot',
+      lfiId: resolved.lfiId,
+      unit: resolved.unit,
+      charges: resolved.charges,
+      chargedUnits,
+      rateMilliFils: resolved.rateMilliFils,
+      effectiveFrom: resolved.effectiveFrom,
+      snapshotId: resolved.snapshotId,
+      snapshotDigest: resolved.snapshotDigest
+    }
+  }
+}
 
 function assertSafeNonNegativeInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 0) throw new RangeError(`${label} must be a non-negative safe integer`)
@@ -112,7 +183,8 @@ function multiplyMoney(unitAmount: number, units: number): number {
   return amount
 }
 
-function priceLine(line: MeteredLine, card: RateCard, step: number): PricedLine {
+function priceLine(line: MeteredLine, card: RateCard, context: PricingContext): PricedLine {
+  const { step } = context
   assertSafeNonNegativeInteger(line.units, 'units')
   if (line.side === 'free_to_lfi') {
     return {
@@ -120,6 +192,9 @@ function priceLine(line: MeteredLine, card: RateCard, step: number): PricedLine 
       amountMilliFils: 0,
       rateDetail: { reason: 'Hub-side fee borne by the consuming TPP; the institution charges nothing' }
     }
+  }
+  if (line.side === 'payable_lfi' && line.feeClass === 'data.retail_page') {
+    return priceServingLfiOverage(line, context.overageSnapshot)
   }
 
   let spec: RateSpec | undefined
@@ -241,11 +316,12 @@ export function rateUsage(
   meteredLines: readonly MeteredLine[],
   card: RateCard,
   period: string,
-  clients: readonly ClientConfig[] = []
+  clients: readonly ClientConfig[] = [],
+  options: RatingOptions = {}
 ): RatingResult {
   if (!/^\d{4}-\d{2}$/.test(period)) throw new RangeError('period must be YYYY-MM')
   const step = yearStep(card, `${period}-15`)
-  const priced = meteredLines.map((line) => priceLine(line, card, step))
+  const priced = meteredLines.map((line) => priceLine(line, card, { step, ...options }))
   const batchAdjustments = applyBatchCaps(priced, card)
 
   const receivableByTpp = new Map<string, PricedLine[]>()

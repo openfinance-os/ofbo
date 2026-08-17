@@ -107,6 +107,7 @@ function profitability(bankIndex: number) {
     period: PERIOD,
     receivables: [{ tppId: `TPP-${bankIndex}`, productFamily: 'data', amountMilliFils: BASE_RECEIVABLE + bankIndex * 10_000_000, sourceRefs: [`invoice:${bankIndex}:${RUN_OFFSET}`] }],
     hubCosts: [{ tppId: `TPP-${bankIndex}`, productFamily: 'tpp_aas', amountMilliFils: 10_000_000, sourceRefs: [`payable:${bankIndex}`] }],
+    lfiCosts: [],
     liabilityProvisions: [],
     tppAasMargins: []
   })

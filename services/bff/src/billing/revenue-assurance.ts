@@ -1,6 +1,7 @@
 import {
   buildRevenueAssuranceReport,
   rateUsage,
+  receivableMeteredLines,
   type CollectionMemoDiff,
   type ClosedPeriodRerating,
   type FreeTierException,
@@ -117,7 +118,8 @@ export class RevenueAssuranceService {
     if (!evidence) throw new Error(`no metering run exists for ${input.period}`)
     return this.generate({
       period: input.period, generatedAt: input.generatedAt, metering: evidence.metering,
-      rating: rateUsage(evidence.metering.lines, input.rateCard, input.period),
+      // Assurance reports on receivables only; see receivableMeteredLines.
+      rating: rateUsage(receivableMeteredLines(evidence.metering.lines), input.rateCard, input.period),
       memoDiffs: evidence.memoDiffs, reratings: evidence.reratings, registeredTppIds: evidence.registeredTppIds,
       blindSpotValuationMilliFils: input.blindSpotValuationMilliFils,
       freeTierExceptions: input.freeTierExceptions, overageOpportunity: input.overageOpportunity
