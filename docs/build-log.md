@@ -2027,6 +2027,353 @@ Postgres integration test added for migrations, billing-table RLS, tenant-only e
 three-tenant benchmark. The local environment did not expose a database connection, so the real-
 Postgres suite remains a CI gate.
 
+---
+
+## 2026-08-15 — HARNESS-16: the two OFBO reviewers now run independently in CI
+
+AI review was already part of every story — but only pre-PR, inside the build agent's own
+session. `next-story/SKILL.md:35` dispatches `hard-stop-reviewer` and
+`contract-conformance-reviewer`, HG-0001 counts their verdicts toward the merge criteria,
+and this log records them per story. Nothing in GitHub ever verified that the review ran, or
+that the verdict written here matched what the reviewer actually said. That is
+self-attestation, and it was the one control not enforced outside the agent's write scope.
+Before this change CI had no model-based review at all: Q4 is named "security review" but is
+`pnpm audit` + `semgrep p/secrets`, and PRs #313 and #311 carried zero reviews and zero
+comments.
+
+`.github/workflows/ai-review.yml` runs both reviewers on every code-touching PR as two
+independent check runs, in a fresh session, and posts each verdict to the PR as a sticky
+comment. The prompt reads `.claude/agents/*.md` rather than restating the checklists — those
+files are CODEOWNERS-protected, and a copy inlined into the workflow would be a second,
+unprotected version of the canon free to drift from the one the pre-PR reviewers use.
+
+The load-bearing case is not a wrong verdict but a **missing** one. A missing review file, a
+missing `VERDICT:` line, or a malformed one all report DID NOT COMPLETE and go red: a review
+that never ran must never be indistinguishable from a passing one. The parse was verified
+against 12 cases before being wired in — a review with no verdict, `VERDICT: MAYBE`, and
+`VERDICT: PASS` appearing mid-prose all land on red; two verdict lines take the last.
+
+Advisory by design: red on FAIL/DRIFT so a finding is visible, but deliberately not a required
+status check, per HG-0001's "AI reviewers remain as *advisory* PR checks". This is explicitly
+**not** separation of duties — same model family reviewing the same agent's output, and
+HG-0001:58 already says "AI reviewing AI is not four-eyes". Human merge is untouched.
+
+**The first live run found a real defect — in the reporting, not the design.**
+`claude-code-action` withholds its GitHub App token from any run whose own workflow file
+differs from the default branch (anti-exfiltration: a PR must not be able to rewrite the
+workflow *and* get the token). On the PR that introduces this workflow that condition always
+holds, so the action skipped. The design behaved correctly under it — no review file, so the
+three-way parse refused green and reported DID NOT COMPLETE, which is the intended failure
+mode observed live rather than argued for. But the message named the *symptom* ("produced no
+review file") rather than the cause, leaving a future control-plane PR to debug it blind.
+Preflight now detects the condition by diffing this workflow against the default branch and
+says so, including that it self-resolves on merge. Verified: the guard fires on this branch
+and stays silent for an unrelated workflow file (negative control). The same pass also closed
+a second gap — structural non-runs previously left no PR comment at all, so a fork PR would
+have shown a bare green check with nothing to explain it.
+
+Consequence worth knowing: **a PR that edits `ai-review.yml` cannot exercise the reviewers on
+itself.** The first real review will be on the PR after this one merges.
+
+Evidence: workflow YAML parses and its structure verified (2 matrix legs, `fail-fast: false`,
+7 steps, guarded permissions); verdict parse 12/12 against the edge cases above;
+workflow-validation guard verified with a negative control. ADR 0029 was filed as **Proposed**
+— a control-plane change needs `control-plane-owners`, not the agent's own say-so — and was
+**Accepted by the user on 2026-08-16**. Still owed and recorded in ADR 0029: the
+injected-violation self-test proving the check goes red against a real finding, which cannot
+run until the workflow is on the default branch.
+
+Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the environment is
+synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or
+`ANTHROPIC_BASE_URL` — but the OAuth token pins the job to the first-party API, so that swap
+is two changes, not one. ADR 0029 records both.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): the review engine becomes a swappable port
+
+Follow-up to the entry above, on request: make the reviewing model swappable rather than
+hardcoded — Claude now, other engines later.
+
+PRD §3 already says institution-specific systems are ports — code against the interface, keep
+the mapping in configuration, never hardcode a vendor. That rule applies to the model
+reviewing the bank's code at least as much as to the bank's ITSM, so the engine is now a port
+rather than a vendor baked into a workflow step.
+
+The contract is fixed and engine-agnostic: read a CODEOWNERS-protected reviewer definition,
+diff the PR against its base, write a review to `$REVIEW_FILE` whose last line is the
+`VERDICT:` line. **The verdict parse is the port's contract test** — the same acceptance rule
+ADR 0024 sets for the enterprise adapters (an adapter must pass exactly the tests the
+simulator passes). Which engines run is `.github/ai-review.config.json`; one enabled engine is
+a swap, two is a cross-check at twice the cost.
+
+The failure mode worth engineering against is a HALF-ADDED engine: a registry entry with no
+adapter step would produce a matrix leg that runs, executes nothing, writes no review, and
+surfaces as the generic DID NOT COMPLETE — a real non-review wearing the costume of a
+transient failure. `scripts/ai-review-matrix.mjs` refuses to build such a matrix, so the new
+`config` job fails loudly and specifically before a single token is spent.
+
+Two engine-specific facts were moved OUT of the core into the registry, because leaving them
+in would have made "swap the engine" untrue: the comment attribution (attributing a Codex
+review to Claude Code would misstate which model produced the verdict) and
+`requires_workflow_parity` (the anti-exfiltration rule from the entry above belongs to one
+engine's tooling, not to the port — the Codex CLI adapter uses a plain secret and has no such
+constraint, so it could review workflow-editing PRs that the Claude engine cannot).
+
+No repository-variable override, deliberately: HG-0006 makes the reviewer prompts and the
+model serving them model configuration, and HG-0002 puts that under control-plane-owners. An
+admin-settable override would move part of that decision outside CODEOWNERS. Changing which
+model reviews the agent's work is a control-plane PR.
+
+Evidence: 10 new guard tests (30/30 total in `scripts/test`), covering enabled-without-adapter
+rejected, disabled-without-adapter allowed, no-enabled-engine rejected, missing agent
+definition rejected, duplicate keys, all problems reported at once, and an assertion that the
+engine-agnostic core names no provider. Proved the CLI FAILS CLOSED end to end on a scratch
+tree: enabled-with-adapter exit 0, enabled-without-adapter exit 1 with an `::error`, two
+enabled engines produce the cross product. Workflow YAML re-parsed (2 jobs, dynamic matrix,
+`fail-fast: false`, 8 steps). Claude-only output is unchanged at 2 check runs.
+
+NOT PROVEN: the Codex adapter has never executed. It is real rather than a stub — written
+against the `@openai/codex` CLI surface verified against v0.147.0 (`codex exec` with
+`--model`/`--sandbox`/`-o`) rather than an action reference that could not be confirmed to
+exist — but it ships `enabled: false` with no `CODEX_API_KEY`, and its first run must be
+treated as unproven. It fails loudly if wrong: no review file written, so the core reports
+DID NOT COMPLETE.
+
+---
+
+## 2026-08-16 — ADR 0029 accepted (control-plane approval)
+
+The user approved ADR 0029 (AI review as an advisory CI check, incl. the swappable engine
+port). Status flipped **Proposed → Accepted**.
+
+Recording the authority rather than just the outcome: this is a control-plane change under
+HG-0002, which requires approval from a human control-plane owner who is not the build agent.
+`@michartmann` is the resolvable CODEOWNER on `/docs/adrs/` and `/.github/` under the interim
+arrangement documented in `.github/CODEOWNERS`, so the approval came from the right authority.
+
+**This is not a merge.** HG-0001 keeps merge as a separate human act and the agent never
+self-merges; PR #314 stays open for the user. Accepting the ADR settles the decision record,
+not the code review of the change that implements it.
+
+Still owed, unchanged by the acceptance: the injected-violation self-test proving the check
+goes red against a real finding, which cannot run until the workflow is on the default branch;
+and the Codex adapter's first real execution, which has never happened.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): one active engine, three registered, swap by one string
+
+Requirement clarified by the user: one model reviews (cost minimum), and it must be swappable
+among several as better review models appear. That is a different shape from what shipped in
+the previous entry, which allowed N enabled engines crossed with reviewers.
+
+Replaced the per-engine `enabled` booleans with a single `active` key. **Exactly one engine
+reviews, by construction rather than by convention** — `active` is one string, so no
+combination of registry entries can produce a second review leg and double the recurring
+bill. A test asserts the invariant holds with four engines registered. Swapping the reviewing
+model is now that one string, and a test drives claude→codex end to end asserting the secret
+and model swap with it.
+
+Cross-checking two engines was dropped deliberately, not lost: it doubles cost for a check
+that is advisory anyway. Re-adding it is a change to the matrix builder, not a config flag —
+the right friction for a decision that doubles a recurring bill.
+
+THREE ENGINES REGISTERED, EVERY SURFACE PROBED RATHER THAN ASSUMED. A fabricated action
+reference or wrong auth variable produces a silently broken CI job, so none of this came from
+documentation or a research summary alone:
+- claude — anthropics/claude-code-action@v1; CLAUDE_CODE_OAUTH_TOKEN. Proven in CI.
+- codex — @openai/codex v0.147.0, `codex exec --model --sandbox --color`; CODEX_API_KEY
+  confirmed read (a dummy key reached the API rather than a "not logged in" error); exits 1 on
+  failure. An `openai/codex-action` was reported by a research pass but could NOT be verified
+  from this environment, so the adapter uses the npm CLI — which also means a `run:` step that
+  cannot break job setup the way an unresolvable `uses:` would.
+- gemini — @google/gemini-cli v0.55.1, `gemini -p --model --approval-mode yolo --skip-trust`;
+  GEMINI_API_KEY confirmed read.
+
+THE GEMINI PROBE RETIRED AN ASSUMPTION. Without `--skip-trust` the CLI reports it is "not
+running in a trusted directory", silently downgrades `--approval-mode yolo` back to `default`,
+does nothing — AND EXITS 0. It also exits 0 on a critical API error. A `set -e` adapter step
+sails past both. Only the missing review file catches it. The rule that an adapter is never
+trusted to set the job's status started as a principle in the previous entry and is now an
+observed necessity, with a named CLI behind it.
+
+Evidence: registry tests 13 (33/33 in scripts/test); eslint clean; workflow parses with 9
+steps and three adapters; CLI swap probe run against all three engines — each yields exactly 2
+check runs, never 4 — and the config restored to `active: claude` afterwards.
+
+UNCHANGED AND STILL OWED: neither CLI adapter has produced a real review. Swapping to codex or
+gemini needs its secret added first; without it preflight reports NOT RUN — explicitly not a
+pass — rather than silently reviewing nothing. And the injected-violation self-test still
+cannot run until the workflow is on the default branch.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): first real review — active flipped to codex
+
+Discovered while inspecting job logs: the Claude review legs on PR #314 have NEVER produced
+a review. Every push reports NOT RUN, with the reason
+
+    this PR modifies .github/workflows/ai-review.yml, which differs from origin/main —
+    this engine withholds its token from a run that changes its own workflow
+    (anti-exfiltration). This resolves once the PR merges
+
+That is the workflow-parity rule working exactly as designed, and it is a chicken-and-egg:
+the PR that introduces the review workflow can never be reviewed by an engine that demands
+parity with the default branch. The 7-second green check runs were preflight short-circuits,
+not reviews — which is precisely why NOT RUN is reported loudly on the check and the PR
+rather than being allowed to read as a pass.
+
+Codex and Gemini carry `requires_workflow_parity: false` — they authenticate with a plain
+repository secret rather than a GitHub App token, so the anti-exfiltration rule is not theirs
+to apply. Flipping `active` to codex therefore produces the FIRST real review this harness has
+ever emitted, on this PR, and simultaneously exercises the codex adapter end to end for the
+first time. Both keys were added by the maintainer this session.
+
+Whatever `active` holds at merge time becomes the steady state — that is a maintainer decision,
+not this session's, and it is called out on the PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): codex adapter fixed — the runner is the sandbox
+
+The first real codex run FAILED, and the harness caught it exactly as designed: two
+DID NOT COMPLETE checks, red, with "This is not a pass." on the PR. No silent green.
+
+Root cause, from the job log rather than a guess:
+
+    warning: Codex could not find bubblewrap on PATH ... using the bundled bubblewrap
+    The execution sandbox is failing before process startup
+    (`bwrap: loopback: Failed RTM_NEWADDR`), including for a plain `pwd`
+    Failed to write file .../hard-stop-codex-review.md
+
+Auth was never the problem — codex authenticated, selected gpt-5.6-sol and spent 14,443
+tokens. Its OWN sandbox is bubblewrap, which cannot create a network namespace inside the
+Actions runner. The failure is at sandbox SETUP, so it takes out every mode equally,
+read-only included: reads, writes and a plain `pwd` all failed.
+
+Candidate fix IDENTIFIED BUT DELIBERATELY NOT APPLIED: selecting the CLI's no-OS-sandbox
+mode. It is the only mode that runs, since bubblewrap cannot initialise at all — so the
+real choice is "codex runs" vs "codex does not run", not "sandboxed" vs "unsandboxed".
+
+It was not committed, because it is a security decision belonging to a human rather than to
+this session. Two things weigh against it, and the second is the larger:
+
+1. The containment layer is real. The reviewer's job is reading a PR diff — semi-untrusted
+   input — so prompt injection is the live threat. With the sandbox, an injected command is
+   confined to a workspace with no network. Without it, CODEX_API_KEY and the job's
+   GITHUB_TOKEN are reachable. Blast radius is still bounded (contents: read,
+   pull-requests: write — it can comment, it cannot push), but it is not nil.
+2. CODEX LACKS THE WORKFLOW-PARITY PROTECTION, AND THAT IS THE BIGGER HOLE. `on:
+   pull_request` hands secrets to same-repo PRs while running the workflow file FROM THE PR
+   HEAD. Claude's parity rule refuses exactly that. Codex carries
+   requires_workflow_parity: false, so a PR that edits ai-review.yml still runs it with the
+   key — sandbox or no sandbox. In a repo where autonomous agents push branches, "requires
+   write access" is a low bar.
+
+CORRECTION TO THE PREVIOUS ENTRY. It framed codex's ability to review this PR — the one
+that modifies ai-review.yml — as the reason to flip `active` to it. That was backwards:
+that ability IS the hole described above, not a feature. Parity ought to be enforced by
+this harness for EVERY engine rather than left to whichever vendor happens to implement it,
+and the correct consequence of doing so is that no engine can review the PR that changes
+its own workflow.
+
+`active` is therefore restored to claude — the last known-good state, not a verdict on the
+open question. Flipping it back is one string whenever the maintainer decides.
+
+TWO DESIGN RULES EARNED THEIR KEEP THIS RUN:
+- `Parse verdict` runs on `!cancelled()`, so the adapter's exit code was never load-bearing.
+  Whether codex exited 0 or 1 is still unknown and did not matter — the missing review file
+  is what produced the red.
+- Reporting DID NOT COMPLETE distinctly from PASS is the only reason this was visible at
+  all. A harness that treated "no findings file" as "no findings" would have shown two
+  green checks over a reviewer that read nothing.
+
+Also corrected: the Claude legs on this PR have never reviewed either. They report NOT RUN
+(workflow-parity anti-exfiltration) because the PR modifies ai-review.yml. The 7-second
+green checks earlier in this branch's history were preflight short-circuits, not reviews.
+That resolves only on merge, and is why codex — which carries requires_workflow_parity:
+false — is the only engine that can review this particular PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): parity enforced by the harness, for every engine
+
+Maintainer decision: stay on claude, and make workflow parity universal rather than
+per-engine. Both done.
+
+THE DEFECT. Parity was a per-engine flag, true only for claude because claude-code-action
+enforces an equivalent rule itself. `on: pull_request` hands repository secrets to SAME-REPO
+PRs while running the workflow file FROM THE PR HEAD. claude-code-action refuses that; the
+CLI adapters authenticate with a plain repository secret and have no such rule. So pointing
+`active` at a CLI engine removed a security control silently — a PR could have rewritten the
+reviewer and collected its credential in the same run. Swapping a model is meant to be a
+one-string change; it must not also swap a guard in or out.
+
+Not spotted by reasoning. Spotted because the previous entry justified flipping `active` to
+codex on the grounds that codex COULD review the workflow-modifying PR when claude could not.
+That ability was the hole, written up as a feature.
+
+THE FIX. Preflight gates on the diff alone, for every engine, over the whole review control
+plane — each of these can decide what the reviewer executes or which secret it is handed:
+  .github/workflows/ai-review.yml   arbitrary `run:` steps with the secret in scope
+  .github/ai-review.config.json     names the secret; secrets[matrix.engine.secret] indexes
+                                    by it, so editing it redirects which secret is exposed
+  scripts/ai-review-matrix.mjs      produces that registry value, so it can do the same
+`requires_workflow_parity` is deleted from the registry, the validator, the matrix output and
+the workflow. Two tests hold the line: no per-engine flag survives anywhere in the workflow
+and all three paths are guarded; neither the registry nor the built matrix reintroduces one.
+
+VERIFIED BEFORE COMMITTING, not after. The preflight decision block was simulated across all
+seven paths with a stubbed git — fork, missing credential, each control-plane file alone, two
+files together, and the clean case that must RUN. All correct, no `set -u` unbound failures.
+That simulation also caught a cosmetic bug: `paste -sd', '` treats a multi-char delimiter as a
+CYCLING list, so three changed files rendered as "a,b c". Now `paste -sd',' | sed 's/,/, /g'`.
+
+A second latent bug surfaced writing the test: `indexOf('# ADAPTERS START')` matches the
+header prose "ADAPTERS START/END markers" at offset 2196, not the real marker at 13972,
+yielding an empty slice and a test that asserts nothing. Anchored to the newline. The existing
+ADAPTERS END test was checked and is unambiguous either way.
+
+DELIBERATE CONSEQUENCE, stated plainly: no engine reviews the PR that changes how reviews run,
+this harness included. It cannot review its own control-plane changes. That is correct and
+self-resolves on merge, but it means THIS PR gets NOT RUN on both reviewers — as will any
+future PR touching those three paths, which are then reviewed by humans only.
+
+Evidence: 15 registry tests, 35/35 across scripts/test; eslint clean; preflight simulation
+7/7. Still owed, unchanged: claude has never produced a review — it cannot until this merges.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): a missing credential now fails the job
+
+Maintainer decision, implemented: missing credential goes RED, structural non-runs stay GREEN.
+
+The distinction is about which failures are worth a colour. A fork PR cannot have secrets and
+a control-plane PR must not be reviewed by the reviewer it edits — neither is the author's
+fault, neither is fixable in the PR, and a check that is permanently red on them is a check
+people learn to scroll past. That is the failure mode where a real finding gets missed because
+the reviewer cried wolf. A missing credential is not that: it is a repository misconfiguration
+that silently disables review on EVERY PR, and green is exactly how nobody notices reviews
+stopped happening.
+
+Implementation: preflight emits a `fatal` output, set only in the credential branch, and a new
+`Enforce preflight` step is gated on it. It sits AFTER the comment step so the PR gets the
+full explanation before the job dies, and the step summary tells the reader how to fix it
+(set the secret, or point `active` at an engine whose credential exists).
+
+ORDERING IS LOAD-BEARING, and the simulation is what made that concrete. The case worth
+naming: a fork PR that also has no credential. Because the fork test runs FIRST, it reports as
+a fork and stays green — correct, since a fork legitimately has no secret and calling that a
+misconfiguration would be wrong. Reverse the two branches and every fork PR turns red with a
+misleading reason. A test now pins the ordering rather than trusting it.
+
+Evidence: preflight simulation extended to assert the `fatal` output, 8/8 including the
+fork-without-credential case; 16 registry tests, 36/36 across scripts/test; eslint clean;
+workflow parses with 10 steps in the intended order (comment before enforcement).
+
+---
+
 ## 2026-08-17 — BILL-11: TPP Cost Management decisions ratified (ADR 0006 + 0007 accepted)
 
 Docs-only decision story landing the pre-execution review of the TPP Cost Management plan
