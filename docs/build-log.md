@@ -2510,3 +2510,33 @@ exit 0. Q1b test-integrity checked post-commit. Existing-test edits were additiv
 new fields on fixtures plus one `toEqual` totals literal gaining `lfiCostMilliFils: 0`; BILL-09's
 own scenario keeps `lfiCosts: []` so every figure it asserts is unchanged, and the new dimension is
 covered by its own tests rather than by renumbering BILL-09's.
+
+### BILL-12 addendum — advisory AI review (ADR 0029) outcome
+
+`hard-stop` reviewer: **PASS**, no violations. It raised one item worth recording: binding
+`METERING_PROJECTION_VERSION` into the run identity means a re-ingested period stores a second copy
+of the same metering evidence blob — which carries `psuId` on inbound free-tier rows (pre-existing,
+`metering.ts`) — in a store with no deletion path. This diff neither adds nor touches that emission,
+but it does multiply an existing PII footprint, so whether the evidence blob should redact `psuId`
+is a human call to take before BILL-13 persists more.
+
+`contract-conformance` reviewer: **DRIFT (6)**. Four were in-scope and fixed here, all on types this
+story introduces: the statement and the directory snapshot now carry an explicit `currency: 'AED'`
+(the snapshot refuses to assume it, exactly as it already refuses to assume `unit`); the statement
+validates `period` against the contract's `^\d{4}-(0[1-9]|1[0-2])$` — the one field the OpenAPI
+contract constrains and the one the builder had not checked; and its date validation now
+calendar-checks rather than shape-checks, matching what the sibling module already did.
+
+Two findings were deliberately NOT patched, agreeing with the reviewer's own reasoning. The new
+`lfi_cost_milli_fils` wire field is sub-minor-unit and currency-less — but so are the five
+pre-existing amounts beside it, and making one field inconsistent with its neighbours would be worse
+than the deviation. That, plus the absent response schemas for the billing read surfaces, is
+spec-level (the reviewer's SPEC DEFECT 1 and 2): the profitability and rate-card payloads ride
+`AnalyticsView`'s `additionalProperties: true`, so money and enum conventions are unenforceable
+there by construction. Both predate BILL-12 and belong in a spec-change story, not a serialiser
+patch. The same gap is why the widened `free_tier.per` enum has no schema to widen; the default is
+unchanged, so no client sees a new value today.
+
+Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm the OverLimitFees unit
+from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
+statements — so it blocks where it is actionable instead of lapsing with a `done` status.

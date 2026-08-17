@@ -35,6 +35,12 @@ export interface DirectoryOverageSnapshot {
   snapshotId: string
   retrievedAt: string
   sourceUrl: string
+  /**
+   * REQUIRED for the same reason `unit` is: these rates come from an external directory this
+   * codebase has never observed, and an assumed denomination would be summed straight into the
+   * payable total. Integer minor units + ISO 4217 is the binding money convention (CLAUDE.md).
+   */
+  currency: 'AED'
   /** Canonical digest of the raw directory payload this snapshot was derived from. */
   digest: string
   /** REQUIRED: the unit the source publishes rates in. Never defaulted — see the module note. */
@@ -44,6 +50,7 @@ export interface DirectoryOverageSnapshot {
 
 export interface ResolvedLfiOverageRate {
   lfiId: string
+  currency: 'AED'
   /** false when this LFI publishes no applicable rate: the scheme reading is "charges nothing". */
   charges: boolean
   rateMilliFils: number
@@ -73,6 +80,9 @@ function assertSnapshot(snapshot: DirectoryOverageSnapshot): void {
   }
   if (!snapshot.snapshotId?.trim()) throw new RangeError('directory overage snapshot requires a snapshotId')
   if (!snapshot.digest?.trim()) throw new RangeError('directory overage snapshot requires a digest')
+  if (snapshot.currency !== 'AED') {
+    throw new RangeError('directory overage snapshot must declare currency AED; it is never assumed')
+  }
   if (!Array.isArray(snapshot.rates)) throw new TypeError('directory overage snapshot requires a rates array')
 
   for (const [index, rate] of snapshot.rates.entries()) {
@@ -108,6 +118,7 @@ export function resolveLfiOverageRate(
 
   const provenance = {
     lfiId,
+    currency: snapshot.currency,
     unit: snapshot.unit,
     snapshotId: snapshot.snapshotId,
     snapshotDigest: snapshot.digest

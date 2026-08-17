@@ -77,6 +77,8 @@ export interface ExpectedTppCostTotals {
 export interface ExpectedTppCostStatement {
   period: string
   tenantId: string
+  /** Every amount below is integer milli-fils in this currency (CLAUDE.md money convention). */
+  currency: 'AED'
   rateCardVersion: string
   evidence: {
     meterRunId: string
@@ -90,8 +92,11 @@ export interface ExpectedTppCostStatement {
   totals: ExpectedTppCostTotals
 }
 
+/** Canonical UTC form only — the statement must reproduce byte-identically. */
 const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
-const DATE = /^\d{4}-\d{2}-\d{2}$/
+const DATE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
+/** The shape the OpenAPI console and export contracts constrain `period` to. */
+const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/
 const VAT_PERCENT = 5
 
 /** Local grouping for cost attribution — not the directory's ApiFamilyType taxonomy. */
@@ -167,6 +172,16 @@ function requireText(value: string | undefined, label: string): string {
   return value
 }
 
+/** Calendar-checked, not merely shape-checked: 2026-02-31 is not a date. */
+function requireCalendarDate(value: string, label: string): string {
+  if (typeof value !== 'string' || !DATE.test(value)) throw new RangeError(`${label} must be YYYY-MM-DD`)
+  const parsed = new Date(`${value}T00:00:00.000Z`)
+  if (Number.isNaN(parsed.valueOf()) || parsed.toISOString().slice(0, 10) !== value) {
+    throw new RangeError(`${label} is not a valid calendar date`)
+  }
+  return value
+}
+
 function requireTimestamp(value: string, label: string): string {
   if (typeof value !== 'string' || !ISO_DATETIME.test(value) || Number.isNaN(Date.parse(value))) {
     throw new RangeError(`${label} must be an ISO-8601 UTC timestamp`)
@@ -197,8 +212,13 @@ export function buildExpectedTppCostStatement(
   const rateSnapshotHash = requireText(evidence.rateSnapshotHash, 'rateSnapshotHash')
   const generatedAt = requireTimestamp(evidence.generatedAt, 'generatedAt')
   const ratingRunAt = requireTimestamp(evidence.ratingRunAt, 'ratingRunAt')
-  const pricingEffectiveFrom = requireText(evidence.pricingEffectiveFrom, 'pricingEffectiveFrom')
-  if (!DATE.test(pricingEffectiveFrom)) throw new RangeError('pricingEffectiveFrom must be YYYY-MM-DD')
+  const pricingEffectiveFrom = requireCalendarDate(
+    requireText(evidence.pricingEffectiveFrom, 'pricingEffectiveFrom'),
+    'pricingEffectiveFrom'
+  )
+  // `period` is the one field the OpenAPI contract constrains and the one this builder did not
+  // check. BILL-13 calls it directly, at which point that pattern becomes its contract.
+  if (!PERIOD.test(rating.period)) throw new RangeError('period must be YYYY-MM with a real month')
 
   const buckets = new Map<string, Bucket>()
 
@@ -281,6 +301,7 @@ export function buildExpectedTppCostStatement(
   return {
     period: rating.period,
     tenantId,
+    currency: 'AED',
     rateCardVersion: rating.rateCardVersion,
     evidence: {
       meterRunId,

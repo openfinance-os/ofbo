@@ -27,6 +27,7 @@ const SNAPSHOT: DirectoryOverageSnapshot = {
   retrievedAt: '2026-06-01T00:00:00.000Z',
   sourceUrl: 'https://data.directory.openfinance.ae/participants',
   digest: 'sha256:directory-snapshot-fixture',
+  currency: 'AED',
   unit: 'per_page',
   rates: [{ lfiId: 'lfi-alpha', rateMilliFils: fils(800), effectiveFrom: '2026-01-01' }]
 }
@@ -192,6 +193,23 @@ describe('expected TPP cost statement', () => {
       customerSegment: 'retail'
     })
     expect(result.lines.filter((line) => line.feeStream === 'hub')).toHaveLength(2)
+  })
+
+  it('denominates the statement, so no amount is a bare number', () => {
+    const result = statement()
+
+    expect(result.currency).toBe('AED')
+  })
+
+  it('rejects a period or date the contract would not accept', () => {
+    const rating = rateUsage(meteredLines(), SCHEME_RATE_CARD_2026_06_02, '2026-06', [], { overageSnapshot: SNAPSHOT })
+
+    // The OpenAPI contract constrains period to a real month; the builder must not be looser.
+    expect(() => buildExpectedTppCostStatement({ ...rating, period: '2026-13' }, EVIDENCE)).toThrow(/period/)
+    expect(() => buildExpectedTppCostStatement({ ...rating, period: '2026-00' }, EVIDENCE)).toThrow(/period/)
+    // A shape-valid but non-existent calendar date must not pass either.
+    expect(() => buildExpectedTppCostStatement(rating, { ...EVIDENCE, pricingEffectiveFrom: '2026-02-31' }))
+      .toThrow(/calendar date/)
   })
 
   it('rejects evidence that would leave an amount unreproducible', () => {

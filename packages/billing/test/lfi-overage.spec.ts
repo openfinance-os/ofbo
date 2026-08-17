@@ -27,6 +27,7 @@ const SNAPSHOT: DirectoryOverageSnapshot = {
   retrievedAt: '2026-06-01T00:00:00.000Z',
   sourceUrl: 'https://data.directory.openfinance.ae/participants',
   digest: 'sha256:directory-snapshot-fixture',
+  currency: 'AED',
   unit: 'per_page',
   rates: [
     { lfiId: 'lfi-alpha', rateMilliFils: fils(500), effectiveFrom: '2026-01-01' },
@@ -71,6 +72,7 @@ describe('per-LFI directory overage resolution', () => {
     expect(resolveLfiOverageRate(SNAPSHOT, 'lfi-alpha', '2026-06-15')).toMatchObject({
       snapshotId: 'dir-2026-06-01',
       snapshotDigest: 'sha256:directory-snapshot-fixture',
+      currency: 'AED',
       unit: 'per_page'
     })
   })
@@ -88,9 +90,12 @@ describe('per-LFI directory overage resolution', () => {
     expect(resolveLfiOverageRate(SNAPSHOT, 'lfi-gamma', '2026-06-15')).toMatchObject({ charges: false, rateMilliFils: 0 })
   })
 
-  it('rejects a snapshot that omits the unit or carries an unusable rate', () => {
+  it('rejects a snapshot that omits the unit or currency, or carries an unusable rate', () => {
     expect(() => resolveLfiOverageRate({ ...SNAPSHOT, unit: undefined as never }, 'lfi-alpha', '2026-06-15'))
       .toThrow(/unit/i)
+    // An external rate with no stated denomination would be summed into the payable as if AED.
+    expect(() => resolveLfiOverageRate({ ...SNAPSHOT, currency: undefined as never }, 'lfi-alpha', '2026-06-15'))
+      .toThrow(/currency/i)
     expect(() => resolveLfiOverageRate(
       { ...SNAPSHOT, rates: [{ lfiId: 'lfi-alpha', rateMilliFils: -1, effectiveFrom: '2026-01-01' }] },
       'lfi-alpha',
