@@ -852,6 +852,18 @@ milestones:
             final-response/escalation clocks are visible on each open query; window
             length is config, not a constant.
           - A generated billing-query bundle contains every IG 10.11.3 required field.
+          - BLOCKING, inherited from BILL-13's migration 0039 - billing_tpp_cost_diff_line
+            carries a ten-value break_type CHECK and a reconciliation_break_id that has NO
+            foreign key. This story owns both. It MUST (a) decide how payable break_type maps
+            onto the contract's LineType, because GET /back-office/reconciliation/breaks
+            classifies by line_type (six values) and declares no break_type, so an unmapped
+            payable break is not representable on the endpoint that is supposed to show it;
+            (b) constrain reconciliation_break_id before writing it - a tenant-composite FK
+            needs a new UNIQUE (bank_id, id) on reconciliation_break plus an ON DELETE decision
+            for a regulated record, which is why BILL-13 deferred rather than added it; and
+            (c) reconcile variance shape - ReconciliationBreak.variance_amount is a Money
+            object while billing_tpp_cost_diff_line stores variance_milli_fils bare, so this
+            depends on the milli-fils decision recorded on BILL-17.
       - id: BILL-16
         title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
         status: pending

@@ -3146,3 +3146,44 @@ changed and why, carries the current evidence (unit 1423/1423, integration 170/1
 the two decisions that need a human rather than implying they are settled.
 
 No code changed in this addendum.
+
+### BILL-13 addendum 12 — one reviewer claim corrected, one gap the reviewer missed
+
+Contract review on the docs-only head: **DRIFT (12)**. Ten are dispositioned in addenda 4–11. Two were
+new, and checking them produced a correction in each direction.
+
+**DRIFT 10, partly wrong, and the code says so.** It reported `fee_class`, `product_family` and
+`api_family` as unconstrained `text` "while the domain types are closed unions". True for one of the
+three. `TppCostProductFamily` is a closed six-value union — but `apiFamily` is typed plain `string`
+(`apiFamilyForEndpoint` derives it from endpoint shape, not a fixed set), and `fee_class` is an open
+vocabulary the contract itself declares as an unconstrained string. CHECK-constraining either would refuse
+legitimate values the first time the scheme adds an endpoint family. So only `product_family` got a CHECK —
+and it earns one, being part of line identity under a UNIQUE key in a ledger with no UPDATE path, where a
+projection bug inventing a family would corrupt identity irrecoverably. The migration now states which of
+the three are constrained and why the other two are not, so the asymmetry reads as a decision.
+
+**DRIFT 7, right, and it led to something the reviewer did not see.** The payable diff line carries a
+ten-value `break_type` and a `reconciliation_break_id`, with the migration claiming "the payable side
+reuses that workflow" — while `GET /back-office/reconciliation/breaks` classifies by `LineType` (six
+values) and declares no `break_type`. Nothing maps one onto the other. Following that up surfaced a gap the
+review did not report: **`reconciliation_break_id` carries no foreign key at all**, so a payable diff line
+could cite a break that does not exist.
+
+I did not add the FK, and the reasoning matters because it differs from the `approval_request` case in
+addendum 4 where I did. There, the FK already existed and the fix was to widen it to a tenant-composite key
+against an existing global UNIQUE — a one-line tightening. Here there is no FK and no
+`UNIQUE (bank_id, id)` on `reconciliation_break` to reference, so adding one means altering an E1 table and
+deciding `ON DELETE` semantics for a regulated record, on a column BILL-15 writes and whose break-mapping
+question BILL-15 must settle first. Doing that as a drive-by in a payable story would be inventing E1
+design. So it is a BLOCKING criterion on BILL-15 — mapping, FK, and the `variance_amount` `Money`-vs-bare
+`milli_fils` shape — and the migration says the column is unconstrained pending that and must not be
+written. Explicit deferral, not an oversight.
+
+Infrastructure note, since it affected this round's verification: PostgreSQL died mid-session for the second
+time and the restarted cluster came up on a different data directory with password auth, so the scratch
+databases were gone. Rebuilt on `postgres:postgres@localhost` — which matches CI's own connection string —
+rather than editing `pg_hba.conf`, an action the harness correctly refused.
+
+Verified after the change, on a database built from scratch: the CHECK is present in the applied schema;
+unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.

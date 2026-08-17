@@ -119,7 +119,15 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_statement_line (
   cost_recipient_id         text NOT NULL,
   fee_stream                text NOT NULL CHECK (fee_stream IN ('hub','lfi_payment','lfi_data')),
   fee_class                 text NOT NULL,
-  product_family            text NOT NULL,
+  -- CHECKed because TppCostProductFamily is a CLOSED union and this column is part of the line's
+  -- identity (see tppCostLineRef) under a UNIQUE key — so a projection bug that invented a family
+  -- would corrupt line identity in a ledger with no UPDATE path. fee_class and api_family below are
+  -- deliberately NOT checked: `fee_class` is an open vocabulary the contract itself declares as an
+  -- unconstrained string, and `apiFamily` is typed `string` in the domain (apiFamilyForEndpoint),
+  -- derived from endpoint shape rather than from a fixed set. Constraining either would refuse
+  -- legitimate values the moment the scheme adds an endpoint family.
+  product_family            text NOT NULL CHECK (product_family IN (
+                              'payments','data','confirmation_of_payee','insurance','quotes','other')),
   api_family                text NOT NULL,
   customer_segment          text NOT NULL CHECK (customer_segment IN ('retail','corporate','unclassified')),
   internal_product          text,
@@ -270,6 +278,14 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_diff_line (
   presence                 text NOT NULL CHECK (presence IN ('both','expected_only','document_only')),
   reason_code              text,
   -- The E1 break this difference was raised as; the payable side reuses that workflow.
+  --
+  -- Deliberately carries NO foreign key, and that is a deferral rather than an oversight. A
+  -- tenant-composite FK would need a new UNIQUE (bank_id, id) on reconciliation_break — an E1 table —
+  -- plus a decision on ON DELETE semantics for a regulated record, and BILL-15 (which writes this
+  -- column) must first settle how the payable `break_type` above maps onto the contract's LineType,
+  -- since GET /back-office/reconciliation/breaks classifies by line_type and declares no break_type.
+  -- Both are BLOCKING criteria on BILL-15. Until then the column is an unconstrained reference and
+  -- must not be written.
   reconciliation_break_id  uuid,
   created_at               timestamptz NOT NULL DEFAULT now(),
   classification           ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
