@@ -2451,3 +2451,58 @@ corrected — all folded into ADR 0007 / PRD / backlog in this same PR before me
 Evidence: docs gates re-run green (docs:check, discovery waist gate, adr-number-check);
 backlog YAML parses. Still docs-only.
 
+
+---
+
+## 2026-08-17 — HARNESS-16 VERIFIED: both reviewers ran end to end (PR #318)
+
+The thing every prior entry listed as owed. HARNESS-16 merged (PR #314, d37c791), and PR #318
+was opened for the single purpose of exercising the reviewing path — which had never once
+executed, because every run on #314 reported NOT RUN under the control-plane parity guard.
+
+The test change had to satisfy two constraints or it would have proven nothing: touch NONE of
+the three parity paths (or NOT RUN again), and not be markdown or under docs/ (or paths-ignore
+skips the workflow entirely). A comment fix in scripts/test/ai-review-matrix.test.mjs
+satisfied both while being a real correction — the header cited "an enabled engine ..." for a
+test since renamed to "the ACTIVE engine ...", against a field that no longer exists.
+
+RESULT — both legs ran, with verdicts:
+  AI review — contract conformance · Claude   VERDICT: CONFORMANT
+  AI review — hard-stop · Claude              VERDICT: PASS
+
+The verdicts matter less than the substance, and the substance was real:
+- Each reviewer walked its full checklist recording WHY each item was unreachable by a
+  comment-only diff, rather than asserting a pass.
+- contract-conformance ran its own `git diff` against specs/ services/ apps/ packages/ to
+  verify emptiness, and distinguished the PORT contract from the OpenAPI contract it owns.
+- hard-stop independently observed that a comment-only change to a TEST file is the shape a
+  Q1b test-integrity evasion would take, verified no assertion or matcher was weakened, and
+  checked the comment's factual claims against source instead of trusting the prose.
+- contract-conformance found a genuine flaw in the diff — "a registry entry here" pointing at
+  the test file rather than .github/ai-review.config.json — declined to file it as a finding
+  (style is out of its scope) but recorded the omission so the judgement was stated, not
+  silent. Fixed in e47e7f9, which the reviewer then confirmed on re-run.
+
+INFRASTRUCTURE, NOT THE DIFF. Midway through, GitHub stopped assigning runners: jobs failed in
+~2s with runner_id 0, no steps recorded, logs 404, and 0ms billable — including jobs unrelated
+to the change (Q2c, Q2b, Q4, Discovery). Diagnosed as runner starvation rather than a workflow
+defect and recorded on the PR rather than thrashed at with commits; a rerun once capacity
+returned dispatched all ten jobs. Billing could not be checked from this session — the GitHub
+MCP surface exposes no billing tools and those endpoints need org-admin scope — so whether it
+was a minutes quota or an Actions incident remains for a human to confirm.
+
+That accident tested the design's central claim harder than any deliberate test: undispatched
+jobs went RED, never green. Four distinct failure modes now — workflow-validation skip, codex's
+broken sandbox, parity non-runs, runner starvation — and a review that never ran has not once
+been mistaken for a review that found nothing.
+
+ADR 0029 updated: engine table corrected (claude proven end to end; codex ran and does NOT work
+as written), the codex bubblewrap finding recorded in the decision record for the first time,
+and a verification-record section added.
+
+STILL OWED, unchanged: the injected-violation self-test. A comment-only diff cannot show a
+reviewer CATCHES a violation, only that the path runs and the reviewers reason about scope. The
+green verdicts here are weak evidence by construction, and now that the workflow is on main
+that test is finally possible.
+
+Evidence: all 13 checks green on e47e7f9; 36/36 scripts/test; eslint clean.
