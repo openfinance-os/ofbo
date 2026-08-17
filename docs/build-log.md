@@ -2486,7 +2486,10 @@ INFRASTRUCTURE, NOT THE DIFF. Midway through, GitHub stopped assigning runners: 
 ~2s with runner_id 0, no steps recorded, logs 404, and 0ms billable — including jobs unrelated
 to the change (Q2c, Q2b, Q4, Discovery). Diagnosed as runner starvation rather than a workflow
 defect and recorded on the PR rather than thrashed at with commits; a rerun once capacity
-returned dispatched all ten jobs. Billing could not be checked from this session — the GitHub
+returned dispatched all ten jobs of the `ci` workflow run. (Units differ deliberately through
+this entry: the PR carries 13 CHECK RUNS across two workflows — `ci` and `ai-review` — while the
+`ci` run itself contains 10 JOBS. A check run is not one-to-one with a job.) Billing could not be
+checked from this session — the GitHub
 MCP surface exposes no billing tools and those endpoints need org-admin scope — so whether it
 was a minutes quota or an Actions incident remains for a human to confirm.
 
