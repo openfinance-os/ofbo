@@ -1,0 +1,324 @@
+import { randomUUID } from 'node:crypto'
+import pg from 'pg'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import {
+  SCHEME_RATE_CARD_2026_06_02,
+  buildExpectedTppCostStatement,
+  canonicalBillingCloudEvent,
+  fils,
+  meterBillableEvents,
+  parseBillingCloudEvent,
+  rateUsage,
+  type DirectoryOverageSnapshot,
+  type ExpectedTppCostEvidence,
+  type ExpectedTppCostStatement
+} from '../../billing/src/index.js'
+import {
+  applyMigrations,
+  PgBillingMeteringStore,
+  PgBillingTppCostStore,
+  PgLineageEmitter
+} from '../src/index.js'
+
+/**
+ * BILL-13 — the durable payable ledger.
+ *
+ * Proves the properties that make it a regulated ledger rather than a table: tenant isolation,
+ * INSERT-only immutability, zero PSU data, and closed-period correction by delta rather than
+ * mutation. These cannot be established by unit tests — they are database controls.
+ */
+
+const DATABASE_URL = process.env.DATABASE_URL
+if (!DATABASE_URL) throw new Error('integration tests require DATABASE_URL')
+
+const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+const OTHER_TENANT = { bankId: '22222222-2222-4222-8222-222222222222', channel: 'internal_retail' }
+
+const COST_TABLES = [
+  'billing_tpp_cost_statement',
+  'billing_tpp_cost_statement_line',
+  'billing_tpp_cost_document',
+  'billing_tpp_cost_document_line',
+  'billing_tpp_cost_reconciliation',
+  'billing_tpp_cost_diff_line',
+  'billing_tpp_cost_ap_dispatch',
+  'billing_tpp_cost_rerating'
+]
+
+function snapshot(rateMilliFils: number, id: string): DirectoryOverageSnapshot {
+  return {
+    snapshotId: id,
+    retrievedAt: '2026-06-01T00:00:00.000Z',
+    sourceUrl: 'https://data.directory.openfinance.ae/participants',
+    digest: `sha256:${id}`,
+    currency: 'AED',
+    unit: 'per_page',
+    rates: [{ lfiId: 'lfi-alpha', rateMilliFils, effectiveFrom: '2026-01-01' }]
+  }
+}
+
+/** One outbound payment and one overage-bearing data call: a Hub cost and two LFI costs. */
+function outboundEvents(suffix: string) {
+  const base = {
+    outcome: 200,
+    direction: 'outbound' as const,
+    tppId: `bank-as-tpp-${suffix}`,
+    clientId: 'client-a',
+    counterpartyLfiId: 'lfi-alpha',
+    psuId: `psu-${suffix}`
+  }
+  const event = (id: string, extra: Record<string, unknown>) => parseBillingCloudEvent({
+    specversion: '1.0',
+    id: `${id}-${suffix}`,
+    source: 'urn:ofbo:gateway',
+    type: 'com.ofbo.billing.gateway-call.v1',
+    subject: `${id}-${suffix}`,
+    time: '2026-06-15T10:00:00Z',
+    datacontenttype: 'application/json',
+    fapiinteractionid: `fapi-${id}-${suffix}`,
+    data: { ...base, ...extra }
+  })
+  return [
+    event('pay', { endpoint: 'POST /payments', payment: { type: 'p2p_sme', amountMilliFils: fils(10_000) } }),
+    event('data', { endpoint: 'GET /accounts/{id}/transactions', data: { segment: 'retail', attended: true, lines: 1_800 } })
+  ]
+}
+
+describe('PgBillingTppCostStore', () => {
+  const lineage = new PgLineageEmitter(DATABASE_URL!, TENANCY)
+  const metering = new PgBillingMeteringStore(DATABASE_URL!, TENANCY, lineage)
+  const store = new PgBillingTppCostStore(DATABASE_URL!, TENANCY, lineage)
+  const otherStore = new PgBillingTppCostStore(DATABASE_URL!, OTHER_TENANT, lineage)
+  const admin = new pg.Pool({ connectionString: DATABASE_URL })
+
+  beforeAll(async () => {
+    await applyMigrations(DATABASE_URL!)
+  }, 60_000)
+
+  afterAll(async () => {
+    await store.close()
+    await otherStore.close()
+    await metering.close()
+    await lineage.close()
+    await admin.end()
+  })
+
+  /** Meter and rate a fresh period, then project it into a statement. */
+  async function persistStatement(overageMilliFils: number, snapshotId: string): Promise<{
+    statementId: string
+    meterRunId: string
+    statement: ExpectedTppCostStatement
+    created: boolean
+  }> {
+    const suffix = randomUUID()
+    const events = outboundEvents(suffix)
+    const trace = `trace-${suffix}`
+    await metering.ingestEvents(events.map((event) => ({
+      eventId: event.id,
+      source: event.source,
+      type: event.type,
+      occurredAt: event.time,
+      eventHash: `sha256:${canonicalBillingCloudEvent(event)}`,
+      eventPayload: event,
+      fapiInteractionId: event.fapiinteractionid,
+      endpoint: event.data.endpoint,
+      outcome: event.data.outcome,
+      direction: event.data.direction,
+      tppId: event.data.tppId,
+      psuId: event.data.psuId
+    })), trace)
+
+    const metered = meterBillableEvents(events, SCHEME_RATE_CARD_2026_06_02)
+    const run = await metering.saveMeterRun({
+      period: '2026-06',
+      rateCardVersion: SCHEME_RATE_CARD_2026_06_02.version,
+      inputHash: `sha256:${suffix}`,
+      eventCount: metered.stats.eventsTotal,
+      stats: metered.stats,
+      evidence: metered.evidence,
+      lines: metered.lines
+    }, trace)
+
+    const rating = rateUsage(metered.lines, SCHEME_RATE_CARD_2026_06_02, '2026-06', [], {
+      overageSnapshot: snapshot(overageMilliFils, snapshotId)
+    })
+    const evidence: ExpectedTppCostEvidence = {
+      tenantId: TENANCY.bankId,
+      meterRunId: run.run.id,
+      generatedAt: '2026-07-03T02:00:00.000Z',
+      ratingRunAt: '2026-07-03T01:59:00.000Z',
+      pricingEffectiveFrom: SCHEME_RATE_CARD_2026_06_02.effectiveFrom,
+      rateSnapshotHash: `sha256:pricing+${snapshotId}`,
+      directorySnapshotId: snapshotId
+    }
+    const statement = buildExpectedTppCostStatement(rating, evidence)
+    const saved = await store.saveStatement({ meterRunId: run.run.id, statement }, trace)
+    return { statementId: saved.record.id, meterRunId: run.run.id, statement, created: saved.created }
+  }
+
+  it('persists an expected cost statement with its lines and reads it back intact', async () => {
+    const { statementId, statement } = await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    const stored = await store.statementById(statementId)
+    expect(stored?.statement.totals).toEqual(statement.totals)
+    expect(stored?.statement.currency).toBe('AED')
+
+    const lines = await store.statementLines(statementId)
+    expect(lines.length).toBe(statement.lines.length)
+    expect(lines.length).toBeGreaterThan(0)
+    // The three streams must still add up once round-tripped through the ledger.
+    const net = lines.reduce((sum, line) => sum + line.expectedNetMilliFils, 0)
+    expect(net).toBe(statement.totals.totalNetMilliFils)
+    expect(lines.every((line) => line.eventIds.length > 0)).toBe(true)
+  })
+
+  it('is idempotent: the same run and rate snapshot yields one statement, not a second', async () => {
+    const snapshotId = `dir-${randomUUID()}`
+    const first = await persistStatement(fils(800), snapshotId)
+    expect(first.created).toBe(true)
+
+    const again = await store.saveStatement(
+      { meterRunId: first.meterRunId, statement: first.statement },
+      'trace-replay'
+    )
+    expect(again.created).toBe(false)
+    expect(again.record.id).toBe(first.statementId)
+
+    const count = await admin.query(
+      `SELECT count(*)::int AS n FROM billing_tpp_cost_statement WHERE meter_run_id = $1`,
+      [first.meterRunId]
+    )
+    expect(count.rows[0].n).toBe(1)
+  })
+
+  it('never persists a PSU identifier anywhere in the cost ledger', async () => {
+    const { statementId, statement } = await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    // The metered events carried a psuId; the statement and its lines must not.
+    const dump = await admin.query(
+      `SELECT to_jsonb(s) AS s FROM billing_tpp_cost_statement s WHERE id = $1`,
+      [statementId]
+    )
+    const lineDump = await admin.query(
+      `SELECT to_jsonb(l) AS l FROM billing_tpp_cost_statement_line l WHERE statement_id = $1`,
+      [statementId]
+    )
+    const serialised = JSON.stringify(dump.rows[0].s) + JSON.stringify(lineDump.rows.map((r) => r.l))
+    expect(serialised).not.toMatch(/psu/i)
+    expect(statement.lines.length).toBeGreaterThan(0)
+  })
+
+  it('isolates tenants: another bank cannot see or read this statement', async () => {
+    const { statementId } = await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    expect(await otherStore.statementById(statementId)).toBeNull()
+    expect(await otherStore.statementLines(statementId)).toEqual([])
+  })
+
+  it('refuses UPDATE and DELETE on every cost table for the application role', async () => {
+    const client = await admin.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query('SET LOCAL ROLE ofbo_app')
+      for (const table of COST_TABLES) {
+        await expect(
+          client.query(`UPDATE ${table} SET classification = classification`),
+          `${table} must not be updatable`
+        ).rejects.toThrow(/permission denied/i)
+        await client.query('ROLLBACK')
+        await client.query('BEGIN')
+        await client.query('SET LOCAL ROLE ofbo_app')
+        await expect(
+          client.query(`DELETE FROM ${table}`),
+          `${table} must not be deletable`
+        ).rejects.toThrow(/permission denied/i)
+        await client.query('ROLLBACK')
+        await client.query('BEGIN')
+        await client.query('SET LOCAL ROLE ofbo_app')
+      }
+      await client.query('ROLLBACK')
+    } finally {
+      client.release()
+    }
+  })
+
+  it('corrects a closed period by delta, leaving the original statement untouched', async () => {
+    const previous = await persistStatement(fils(800), `dir-prev-${randomUUID()}`)
+
+    // Same immutable facts, a corrected directory rate: the payable moves, the metering does not.
+    const correctedSnapshotId = `dir-corr-${randomUUID()}`
+    const meteredLines = await store.meteredLinesForRun(previous.meterRunId)
+    const rating = rateUsage(meteredLines, SCHEME_RATE_CARD_2026_06_02, '2026-06', [], {
+      overageSnapshot: snapshot(fils(400), correctedSnapshotId)
+    })
+    const corrected = buildExpectedTppCostStatement(rating, {
+      tenantId: TENANCY.bankId,
+      meterRunId: previous.meterRunId,
+      generatedAt: '2026-08-01T02:00:00.000Z',
+      ratingRunAt: '2026-08-01T01:59:00.000Z',
+      pricingEffectiveFrom: SCHEME_RATE_CARD_2026_06_02.effectiveFrom,
+      rateSnapshotHash: `sha256:pricing+${correctedSnapshotId}`,
+      directorySnapshotId: correctedSnapshotId
+    })
+    const correctedSaved = await store.saveStatement(
+      { meterRunId: previous.meterRunId, statement: corrected },
+      'trace-correction'
+    )
+    expect(correctedSaved.created).toBe(true)
+
+    const rerating = await store.saveRerating({
+      meterRunId: previous.meterRunId,
+      previousStatementId: previous.statementId,
+      correctedStatementId: correctedSaved.record.id,
+      correctionReference: `CORR-${randomUUID()}`,
+      meteredFactsFingerprint: `sha256:facts-${previous.meterRunId}`,
+      reratedAt: '2026-08-01T02:00:00.000Z',
+      previous: previous.statement,
+      corrected
+    }, 'trace-correction')
+    expect(rerating.created).toBe(true)
+
+    const row = await admin.query(
+      `SELECT previous_total_net_milli_fils AS prev, corrected_total_net_milli_fils AS corr,
+              total_delta_net_milli_fils AS delta, facts_unchanged
+         FROM billing_tpp_cost_rerating WHERE id = $1`,
+      [rerating.id]
+    )
+    const record = row.rows[0]
+    expect(Number(record.delta)).toBe(Number(record.corr) - Number(record.prev))
+    // The corrected rate is lower, so the payable falls.
+    expect(Number(record.corr)).toBeLessThan(Number(record.prev))
+    expect(record.facts_unchanged).toBe(true)
+
+    // The original statement is still exactly as written.
+    const untouched = await store.statementById(previous.statementId)
+    expect(untouched?.statement.totals).toEqual(previous.statement.totals)
+  })
+
+  it('refuses a correction that re-prices a different meter run — that is a re-meter, not a re-rate', async () => {
+    const previous = await persistStatement(fils(800), `dir-a-${randomUUID()}`)
+    const unrelated = await persistStatement(fils(800), `dir-b-${randomUUID()}`)
+
+    await expect(store.saveRerating({
+      meterRunId: previous.meterRunId,
+      previousStatementId: previous.statementId,
+      correctedStatementId: unrelated.statementId,
+      correctionReference: `CORR-${randomUUID()}`,
+      meteredFactsFingerprint: 'sha256:mismatched',
+      reratedAt: '2026-08-01T02:00:00.000Z',
+      previous: previous.statement,
+      corrected: unrelated.statement
+    }, 'trace-bad')).rejects.toThrow(/same meter run/i)
+  })
+
+  it('emits BCBS 239 lineage for every cost table it writes', async () => {
+    await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    const rows = await admin.query(
+      `SELECT DISTINCT table_name FROM lineage_events WHERE table_name LIKE 'billing_tpp_cost%'`
+    )
+    const covered = rows.rows.map((row) => row.table_name as string)
+    expect(covered).toContain('billing_tpp_cost_statement')
+    expect(covered).toContain('billing_tpp_cost_statement_line')
+  })
+})
