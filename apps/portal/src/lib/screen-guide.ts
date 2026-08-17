@@ -173,6 +173,17 @@ export const SCREEN_GUIDE: ScreenGuide[] = [
       'Open Finance is a regulated business line, not a compliance checkbox. The bank needs trustworthy, lineage-backed numbers to run it commercially and to demonstrate to the regulator that service levels are being met.'
   },
   {
+    key: 'billing-console',
+    title: 'Billing Control Plane',
+    icon: 'payments',
+    whatItIs:
+      'The institution-owned billing evidence chain: resolved rate card, independent metering outcomes, collections, accounting close, revenue assurance and profitability for one tenant and period.',
+    helpsYou:
+      'Know what the institution should earn and pay, find leakage before the query window closes, test pricing decisions, and produce evidenced regulator and exit exports.',
+    whyOpenFinance:
+      'Nebras provides aggregated billing support rather than a line-level billing API. The LFI therefore needs its own tenant-isolated evidence, rating and reconciliation trail to challenge charges and operate Open Finance as a controlled business line.'
+  },
+  {
     key: 'billing',
     title: 'TPP Billing & Registry',
     icon: 'receipt_long',

@@ -107,6 +107,12 @@ import {
   type BillingCollectionsStore
 } from './billing/collections.js'
 import {
+  BillingConsoleService,
+  billingConsoleRoutes,
+  type BillingConsoleProfitabilityPort,
+  type BillingConsoleTenantPort
+} from './billing/console.js'
+import {
   OperationsConsoleService,
   operationsConsoleRoutes,
   type OpsCertificationReader,
@@ -223,6 +229,10 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/invoice-runs',
   'post /back-office/invoice-runs',
   'get /back-office/invoice-runs/{invoice_run_id}',
+  'get /back-office/billing/console',
+  'post /back-office/billing/profitability:simulate',
+  'post /back-office/billing/exports:cbuae-fee-review',
+  'get /back-office/billing/export',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
@@ -307,6 +317,10 @@ export interface AppDeps {
   revenueAssuranceReader?: FinanceRevenueAssuranceReader
   /** BILL-09 — deterministic P&L by TPP/product family for the Finance View. */
   profitabilityReader?: FinanceProfitabilityReader
+  /** BILL-09 — pure scenario + audited CBUAE export operations for the billing console. */
+  billingProfitability?: BillingConsoleProfitabilityPort
+  /** BILL-10 — verified-tenant profile and outsourcing portability surface. */
+  billingTenant?: BillingConsoleTenantPort
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
   /** BACKOFFICE-75 — respondent-side Nebras dispute store (defaults in-memory; the
@@ -549,6 +563,17 @@ export function createApp(deps: AppDeps = {}) {
     store: deps.billingCollectionsStore ?? new InMemoryBillingCollectionsStore(),
     audit: highClassAudit
   })
+  const billingConsoleService = new BillingConsoleService({
+    tenant: deps.billingTenant ?? {
+      profile: async () => { throw new Error('billing tenant store is not configured') },
+      portableExport: async () => { throw new Error('billing tenant store is not configured') }
+    },
+    collections: billingCollectionsService,
+    accounting: deps.accountingClosePackReader,
+    assurance: deps.revenueAssuranceReader,
+    profitability: deps.billingProfitability,
+    audit: highClassAudit
+  })
   // BACKOFFICE-31 — Finance View composes persisted data under one read scope:
   // fee accrual (BACKOFFICE-32 aggregates), margin (BACKOFFICE-07), the open Nebras
   // dispute queue, and the unbilled-traffic signal (BACKOFFICE-72, aggregate count).
@@ -698,6 +723,7 @@ export function createApp(deps: AppDeps = {}) {
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
+    ...billingConsoleRoutes(billingConsoleService, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),

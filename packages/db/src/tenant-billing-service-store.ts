@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import pg from 'pg'
-import type { ProfitabilityReport, RevenueAssuranceReport } from '@ofbo/billing'
+import { canonicalJson, type ProfitabilityReport, type RevenueAssuranceReport } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
 import { isPurposeApproved, type GovernedAuditSink } from './governed-aggregate.js'
 import type { LineageSink } from './lineage.js'
@@ -62,17 +62,8 @@ const EXPORT_TABLES = [
   'billing_benchmark_snapshot'
 ] as const
 
-function canonical(value: unknown): string {
-  const norm = (item: unknown): unknown => item === null || typeof item !== 'object'
-    ? item
-    : Array.isArray(item)
-      ? item.map(norm)
-      : Object.fromEntries(Object.keys(item as Record<string, unknown>).sort().map((key) => [key, norm((item as Record<string, unknown>)[key])]))
-  return JSON.stringify(norm(value))
-}
-
 function hash(value: unknown): string {
-  return `sha256:${createHash('sha256').update(canonical(value)).digest('hex')}`
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`
 }
 
 function mapConfiguration(row: Record<string, unknown>): TenantConfiguration {
@@ -155,7 +146,7 @@ export class PgTenantBillingServiceStore {
       created = Boolean(inserted.rows[0])
       const saved = await client.query(`SELECT * FROM tenant_configuration WHERE bank_id=$1`, [input.bankId])
       const savedConfig = mapConfiguration(saved.rows[0] as Record<string, unknown>)
-      if (canonical(savedConfig) !== canonical(config)) throw new Error(`conflicting tenant configuration for ${input.bankId}`)
+      if (canonicalJson(savedConfig) !== canonicalJson(config)) throw new Error(`conflicting tenant configuration for ${input.bankId}`)
       await client.query('COMMIT')
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined)
@@ -192,7 +183,16 @@ export class PgTenantBillingServiceStore {
     })
     const recordCounts = Object.fromEntries(Object.entries(tables).map(([table, rows]) => [table, rows.length]))
     const body = { schemaVersion: 'ofbo.billing-export.v1' as const, bankId, generatedAt, recordCounts, tables }
-    return { ...body, sha256: hash(body) }
+    const wireBody = {
+      schema_version: body.schemaVersion,
+      bank_id: body.bankId,
+      generated_at: body.generatedAt,
+      record_counts: body.recordCounts,
+      // Database rows, including nested jsonb payloads, are opaque export data.
+      // Their keys must remain byte-stable for a portability round trip.
+      tables: body.tables
+    }
+    return { ...body, sha256: hash(wireBody) }
   }
 
   async publishBenchmark(bankId: string, input: BillingBenchmarkSnapshotInput, traceId: string): Promise<{ created: boolean }> {

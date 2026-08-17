@@ -1,8 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { DEMO_BANK_ID, DEMO_TENANTS } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
+import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 
 /**
  * Rich DEMO scenario layered ON TOP of the base seedDemoDataset — a believable
@@ -18,10 +19,93 @@ import { seedDemoDataset } from './seed.js'
  * table it touches (Q4.5 stays green). No PSU PII — class/party/ref data only.
  */
 const CH = 'internal_retail'
+const DEFAULT_DEMO_TENANT = DEMO_TENANTS.find((tenant) => tenant.bank_id === DEMO_BANK_ID)!
+
+/**
+ * BILL-09/BILL-10 demo acceptance evidence. The hosted demo is single-tenant by default, so it
+ * must provision Alpha even when the opt-in three-tenant seed is not run. A compact current-month
+ * expected memo gives the profitability console and pure scenario/export actions persisted,
+ * tenant-scoped evidence without inventing an insurance model or mutating production facts.
+ */
+async function seedBillingConsoleEvidence(pool: pg.Pool): Promise<void> {
+  await seedTenantGroup(pool, DEFAULT_DEMO_TENANT)
+  await seedTenantConfiguration(pool, DEFAULT_DEMO_TENANT)
+
+  const period = new Date().toISOString().slice(0, 7)
+  const inputHash = `sha256:demo-billing-console:${period}`
+  const meter = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO billing_meter_run
+         (bank_id,channel,period,rate_card_version,input_hash,event_count,stats,evidence)
+       VALUES ($1,$2,$3,'2026.06.02',$4,2,$5::jsonb,$6::jsonb)
+       ON CONFLICT (bank_id,period,rate_card_version,input_hash) DO NOTHING
+       RETURNING id
+     )
+     SELECT id FROM inserted
+     UNION ALL
+     SELECT id FROM billing_meter_run
+      WHERE bank_id=$1 AND period=$3 AND rate_card_version='2026.06.02' AND input_hash=$4
+     LIMIT 1`,
+    [DEMO_BANK_ID, CH, period, inputHash,
+      JSON.stringify({ demo: true, receivable_lines: 2 }),
+      JSON.stringify({ source: 'seed-demo-scenario', period })]
+  )
+  const meterRunId = meter.rows[0].id as string
+  const generatedAt = `${period}-01T00:00:00.000Z`
+  const dueAt = `${period}-03T23:59:59.999Z`
+  const lines = [
+    {
+      lineRef: `${period}|org-fictional-fintech-01|data.retail_page`,
+      tppId: 'org-fictional-fintech-01', feeClass: 'data.retail_page', units: 12500,
+      events: 1, amountMilliFils: 12500000, valueMilliFils: 12500000,
+      eventIds: ['demo-billing-data-01'], traceIds: ['demo-billing-trace-01']
+    },
+    {
+      lineRef: `${period}|org-yap|payment.initiation`,
+      tppId: 'org-yap', feeClass: 'payment.initiation', units: 7500,
+      events: 1, amountMilliFils: 7500000, valueMilliFils: 7500000,
+      eventIds: ['demo-billing-payment-01'], traceIds: ['demo-billing-trace-02']
+    }
+  ]
+  const statement = {
+    period, rateCardVersion: '2026.06.02', generatedAt, dueAt, generatedOnTime: true,
+    lines, totalMilliFils: 20000000
+  }
+  const memo = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO billing_expected_memo
+         (bank_id,channel,meter_run_id,meter_input_hash,period,rate_card_version,
+          generated_at,due_at,generated_on_time,total_milli_fils,statement_payload)
+       VALUES ($1,$2,$3,$4,$5,'2026.06.02',$6,$7,true,20000000,$8::jsonb)
+       ON CONFLICT (bank_id,meter_run_id,rate_card_version) DO NOTHING
+       RETURNING id
+     )
+     SELECT id FROM inserted
+     UNION ALL
+     SELECT id FROM billing_expected_memo
+      WHERE bank_id=$1 AND meter_run_id=$3 AND rate_card_version='2026.06.02'
+     LIMIT 1`,
+    [DEMO_BANK_ID, CH, meterRunId, inputHash, period, generatedAt, dueAt, JSON.stringify(statement)]
+  )
+  const memoId = memo.rows[0].id as string
+  for (const line of lines) {
+    await pool.query(
+      `INSERT INTO billing_expected_memo_line
+         (bank_id,channel,expected_memo_id,line_ref,tpp_id,fee_class,units,event_count,
+          amount_milli_fils,value_milli_fils,event_ids,fapi_interaction_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (bank_id,expected_memo_id,line_ref) DO NOTHING`,
+      [DEMO_BANK_ID, CH, memoId, line.lineRef, line.tppId, line.feeClass, line.units,
+        line.events, line.amountMilliFils, line.valueMilliFils, line.eventIds, line.traceIds]
+    )
+  }
+}
 
 export async function seedDemoScenario(databaseUrl: string): Promise<void> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
+    await seedBillingConsoleEvidence(pool)
+
     // ── 1. 30-day reconciliation history → the SLO dashboard shows a trend, not one row.
     await pool.query(
       `INSERT INTO reconciliation_log
@@ -523,7 +607,12 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       ['compliance_report', ['bank_id', 'channel', 'report_type', 'status', 'classification']],
       ['trust_framework_participant', ['bank_id', 'channel', 'role', 'organisation_id', 'status']],
       ['respondent_dispute', ['bank_id', 'channel', 'nebras_dispute_ref', 'category', 'state']],
-      ['agent_registry', ['bank_id', 'channel', 'client_id', 'persona', 'status']]
+      ['agent_registry', ['bank_id', 'channel', 'client_id', 'persona', 'status']],
+      ['tenant_group_member', ['bank_id', 'tenant_group_id', 'group_slug', 'display_name', 'tier']],
+      ['tenant_configuration', ['bank_id', 'year_anchor_date', 'retail_overage_milli_fils', 'invoice_template_ref', 'invoice_brand_key', 'asp_route_profile', 'collection_rail_policy']],
+      ['billing_meter_run', ['bank_id', 'channel', 'period', 'rate_card_version', 'input_hash']],
+      ['billing_expected_memo', ['bank_id', 'channel', 'meter_run_id', 'period', 'rate_card_version', 'total_milli_fils']],
+      ['billing_expected_memo_line', ['bank_id', 'channel', 'expected_memo_id', 'line_ref', 'tpp_id', 'fee_class', 'amount_milli_fils']]
     ]
     for (const [table, columns] of lineage) {
       await pool.query(

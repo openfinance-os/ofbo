@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   buildProfitabilityReport,
+  canonicalJson,
   simulateFeeScenario,
   type FeeScenario,
   type FeeScenarioResult,
@@ -8,6 +9,7 @@ import {
   type ProfitabilityReport
 } from '@ofbo/billing'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { cbuaeFeeReviewWireBody } from './wire.js'
 
 export interface BillingProfitabilitySource {
   inputForPeriod(period: string): Promise<ProfitabilityInput | null>
@@ -36,15 +38,6 @@ export interface CbuaeFeeReviewExport {
   profitability: ProfitabilityReport
   scenarios: FeeScenarioResult[]
   sha256: string
-}
-
-function canonical(value: unknown): string {
-  const norm = (item: unknown): unknown => item === null || typeof item !== 'object'
-    ? item
-    : Array.isArray(item)
-      ? item.map(norm)
-      : Object.fromEntries(Object.keys(item as Record<string, unknown>).sort().map((key) => [key, norm((item as Record<string, unknown>)[key])]))
-  return JSON.stringify(norm(value))
 }
 
 export class BillingProfitabilityService {
@@ -84,7 +77,8 @@ export class BillingProfitabilityService {
       profitability,
       scenarios: scenarios.map((scenario) => simulateFeeScenario(input, scenario))
     }
-    const result = { ...body, sha256: `sha256:${createHash('sha256').update(canonical(body)).digest('hex')}` }
+    const wireBody = cbuaeFeeReviewWireBody(body)
+    const result = { ...body, sha256: `sha256:${createHash('sha256').update(canonicalJson(wireBody)).digest('hex')}` }
     await this.deps.audit.emit({
       event_type: 'billing_cbuae_fee_review_exported',
       acting_principal: 'system:billing-profitability',

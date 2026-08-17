@@ -2371,3 +2371,83 @@ misleading reason. A test now pins the ordering rather than trusting it.
 Evidence: preflight simulation extended to assert the `fatal` output, 8/8 including the
 fork-without-credential case; 16 registry tests, 36/36 across scripts/test; eslint clean;
 workflow parses with 10 steps in the intended order (comment before enforcement).
+
+---
+
+## 2026-08-17 — BILL-11: TPP Cost Management decisions ratified (ADR 0006 + 0007 accepted)
+
+Docs-only decision story landing the pre-execution review of the TPP Cost Management plan
+(payable side of the billing control plane). The plan was verified two ways before acceptance:
+every reuse claim checked against main (both alleged rating defects confirmed real — outbound
+corporate data rated as retail overage in `metering.ts:316-325`; profitability counting only Hub
+cost in `profitability.ts:88`), and the scheme-facing assumptions checked against UAE OF sources
+(C&P Pricing Model v1.0, per-endpoint chargeability, per-LFI directory rates), which corrected
+three of them: per-LFI `OverLimitFees` overage rates are directory-published required work (with
+a per-call vs per-page unit check), Nebras centrally collects BOTH fee streams (so the Nebras
+settlement statement is the primary actuals document), and the 30-day query window is a house
+convention, not a published scheme rule.
+
+- **ADR 0007 → Accepted** under the product name **TPP Cost Management**, recording the full
+  decision set: OFBO/P9 boundary with an explicit P9 port extension (AP dispatch + status, both
+  adapters, port contract tests); gross ledgers with netting only at settlement; fee-schedule
+  source = versioned C&P model + per-LFI directory snapshots; VAT accrued net with an input-VAT
+  leg on acceptance (Hub posture → BD-20); Nebras-primary document taxonomy; configurable query
+  window (BD-21); cost-period close composing the BACKOFFICE-06 monthly sign-off; closed-period
+  re-rating; insurance consumption in scope / commissions deferred; PostgreSQL; CAAP reserved as
+  a future stream; no PSU identifiers in cost tables.
+- **ADR 0006 → Accepted** (Option 1, role_domain LFI|TPP|shared) with the billing-family
+  taxonomy decided now (payable family TPP-domain from day one); platform-wide taxonomy is
+  BD-22, enforcement build is SEG-01 (blocked on BD-22).
+- **PRD:** §2 Finance Analyst scopes aligned to the spec's `x-required-scope` ground truth —
+  resolves the 2026-06-11 BACKOFFICE-47 advisory (`finance:reconciliation:*`/`billing:read`
+  drift); role-domain note added; §6 reconciliation module row corrected the same way; §7.6
+  gains the payable-side product definition; BD-20..BD-22 added to §10.
+- **Backlog:** BILL-12..BILL-17 seeded pending with acceptance criteria (statement domain +
+  rate corrections → ledger + re-rating → document ingest → three-way recon → accounting/AP/
+  settlement → console/demo/smoke), plus SEG-01 blocked on BD-22.
+- **OpenAPI intentionally untouched** — the contract lands spec-first per story with failing
+  contract tests, per the workflow; PR 1 is the decision record only.
+
+Evidence: docs gates green (docs:check link check, ADR number check, discovery waist gate —
+BILL/SEG ids are not waist-gated feature items); backlog YAML parses; no source, spec, or test
+files changed.
+
+## 2026-08-17 — BILL-11 addendum: verified against Nebras Interaction Guide v5.0 (same PR)
+
+The user supplied IG v5.0 (§10 Billing and Invoicing, 74 pp) after the decision commit; the
+plan and the just-landed ADR text were re-verified against it. Two decisions confirmed, three
+corrected — all folded into ADR 0007 / PRD / backlog in this same PR before merge:
+
+- **Confirmed — Nebras-primary documents (D9/D5):** §10.2 has the TPP tax invoice carrying
+  API Hub fees AND LFI charges; §10.3.4/10.18 add summarized supporting data (more on
+  request). The §10.9 sample shows Hub sections only, so BILL-14 ingests both layouts, and
+  the invoice's own line-category taxonomy (Service Initiation / Data Sharing categories)
+  becomes the reconciliation grain via a category→fee-class mapping.
+- **Confirmed — dual-role netting (D2):** §10.16 verbatim: amounts payable to LFIs are netted
+  against fees owed to Nebras where the LFI also operates as a TPP. Settlement calendar
+  30th–5th.
+- **Corrected — query window (was "house convention"):** §10.13 publishes it — submit within
+  30 CALENDAR days of occurrence, first response 10 min, final response 10 days, respondent
+  review & escalation 15 days. BD-21 narrowed to anchor semantics; BILL-15 now also tracks
+  the Nebras response clocks and mirrors the §10.11.3 billing-query field list.
+- **Corrected — Hub-fee VAT (BD-20 default flipped):** the §10.9 sample tax invoice prices
+  lines at net scheme rates with Taxable / VAT 5% / VAT Amount / Gross columns — Hub fees are
+  VAT-EXCLUSIVE +5%, not inclusive. LFI-side amounts stay inclusive (the §10.10 collection
+  memo shows no VAT columns). BD-20 now only confirms on the first real invoice (the sample
+  carries a CoP-discounted unit anomaly, 0.25 vs 0.005, noted in the ADR).
+- **Corrected — payment mechanics (D1/D5):** §10.14 requires TPPs to pay by DIRECT DEBIT —
+  DDA presented on the 10th, collection to the 30th, §10.17 late-payment penalty fees. P9's
+  execution role is DD mandate management + debit matching, not push payment; penalties are a
+  distinct recon charge class (BILL-15/16 notes updated).
+- Also absorbed: billing calendar §10.12.3 (3rd/5th/10th/30th/30th–5th) anchors the BILL-14
+  absence alarm, which §10.12.2 makes a participant OBLIGATION; the §10.10 collection memo
+  confirms per-LFI-set retail overage ("Customer Data" at the issuing LFI's own rate) and
+  corporate data at 0.4 AED/page.
+- **Out-of-scope observation for BD-16 (noted in its row, no change here):** IG v5.0 §8
+  publishes 30/5/10/15 calendar-day dispute-stage clocks and §11 gives 15-day maintenance /
+  30-day version-release notices — to be reconciled with the BACKOFFICE-75/-78 configured
+  clocks in a follow-up story.
+
+Evidence: docs gates re-run green (docs:check, discovery waist gate, adr-number-check);
+backlog YAML parses. Still docs-only.
+

@@ -24,7 +24,7 @@ import { normalizeTenantConfiguration } from './tenant-configuration.js'
 const CH = 'internal_retail'
 
 /** Insert the tenant→group mapping (control-plane; owner/superuser write, RLS is ENABLE-not-FORCE). */
-async function seedTenantGroup(pool: pg.Pool, t: DemoTenant): Promise<void> {
+export async function seedTenantGroup(pool: pg.Pool, t: DemoTenant): Promise<void> {
   await pool.query(
     `INSERT INTO tenant_group_member (bank_id, tenant_group_id, group_slug, display_name, tier)
      VALUES ($1, $2, $3, $4, $5)
@@ -35,7 +35,7 @@ async function seedTenantGroup(pool: pg.Pool, t: DemoTenant): Promise<void> {
   )
 }
 
-async function seedTenantConfiguration(pool: pg.Pool, t: DemoTenant): Promise<void> {
+export async function seedTenantConfiguration(pool: pg.Pool, t: DemoTenant): Promise<void> {
   const config = normalizeTenantConfiguration({
     bankId: t.bank_id,
     yearAnchorDate: t.slug === 'beta-bank' ? '2026-01-01' : '2025-10-01',

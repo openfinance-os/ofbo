@@ -17,6 +17,8 @@ describe('visibleModules (scope-gated nav)', () => {
     const keys = visibleModules(['reconciliation:read', 'billing:read'], false).map((m) => m.key)
     expect(keys).toContain('dashboard')
     expect(keys).toContain('finance')
+    expect(keys).toContain('billing-console')
+    expect(keys).toContain('billing')
     expect(keys).not.toContain('risk')
     expect(keys).not.toContain('customer-care')
     expect(keys).not.toContain('operations')
