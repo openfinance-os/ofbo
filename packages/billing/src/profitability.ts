@@ -12,7 +12,14 @@ export interface ProfitabilityLine {
 export interface ProfitabilityInput {
   period: string
   receivables: ProfitabilityLine[]
+  /** Nebras API Hub fees the institution owes as TPP-of-record. */
   hubCosts: ProfitabilityLine[]
+  /**
+   * Fees owed to the underlying LFIs that executed payments or served data (ADR 0007).
+   * A distinct external cost from the Hub fee: a single successful request can incur both, and
+   * folding them together hid the larger of the two — the defect BILL-12 closes.
+   */
+  lfiCosts: ProfitabilityLine[]
   liabilityProvisions: ProfitabilityLine[]
   tppAasMargins: ProfitabilityLine[]
 }
@@ -20,6 +27,7 @@ export interface ProfitabilityInput {
 export interface ProfitabilityAmounts {
   receivableMilliFils: number
   hubCostMilliFils: number
+  lfiCostMilliFils: number
   liabilityProvisionMilliFils: number
   tppAasMarginMilliFils: number
   profitMilliFils: number
@@ -81,11 +89,15 @@ function safeAdd(left: number, right: number, label: string): number {
 }
 
 function empty(): ProfitabilityAmounts {
-  return { receivableMilliFils: 0, hubCostMilliFils: 0, liabilityProvisionMilliFils: 0, tppAasMarginMilliFils: 0, profitMilliFils: 0 }
+  return { receivableMilliFils: 0, hubCostMilliFils: 0, lfiCostMilliFils: 0, liabilityProvisionMilliFils: 0, tppAasMarginMilliFils: 0, profitMilliFils: 0 }
 }
 
 function withProfit(value: Omit<ProfitabilityAmounts, 'profitMilliFils'>): ProfitabilityAmounts {
-  const profitMilliFils = value.receivableMilliFils - value.hubCostMilliFils - value.liabilityProvisionMilliFils + value.tppAasMarginMilliFils
+  const profitMilliFils = value.receivableMilliFils
+    - value.hubCostMilliFils
+    - value.lfiCostMilliFils
+    - value.liabilityProvisionMilliFils
+    + value.tppAasMarginMilliFils
   if (!Number.isSafeInteger(profitMilliFils)) throw new RangeError('profit exceeds the safe integer range')
   return { ...value, profitMilliFils }
 }
@@ -120,6 +132,7 @@ function aggregate(
   }
   apply(input.receivables, 'receivableMilliFils')
   apply(input.hubCosts, 'hubCostMilliFils')
+  apply(input.lfiCosts, 'lfiCostMilliFils')
   apply(input.liabilityProvisions, 'liabilityProvisionMilliFils')
   apply(input.tppAasMargins, 'tppAasMarginMilliFils')
   return groups
@@ -130,12 +143,14 @@ export function buildProfitabilityReport(input: ProfitabilityInput): Profitabili
   if (!PERIOD.test(input.period)) throw new RangeError('period must be YYYY-MM')
   validateLines(input.receivables, 'receivables')
   validateLines(input.hubCosts, 'hubCosts')
+  validateLines(input.lfiCosts, 'lfiCosts')
   validateLines(input.liabilityProvisions, 'liabilityProvisions')
   validateLines(input.tppAasMargins, 'tppAasMargins')
 
   const totals = empty()
   for (const line of input.receivables) addLine(totals, 'receivableMilliFils', line)
   for (const line of input.hubCosts) addLine(totals, 'hubCostMilliFils', line)
+  for (const line of input.lfiCosts) addLine(totals, 'lfiCostMilliFils', line)
   for (const line of input.liabilityProvisions) addLine(totals, 'liabilityProvisionMilliFils', line)
   for (const line of input.tppAasMargins) addLine(totals, 'tppAasMarginMilliFils', line)
   const finalTotals = withProfit(totals)
@@ -197,6 +212,7 @@ export function simulateFeeScenario(input: ProfitabilityInput, scenario: FeeScen
   const projected = withProfit({
     receivableMilliFils: projectedRevenue,
     hubCostMilliFils: report.totals.hubCostMilliFils,
+    lfiCostMilliFils: report.totals.lfiCostMilliFils,
     liabilityProvisionMilliFils: report.totals.liabilityProvisionMilliFils,
     tppAasMarginMilliFils: report.totals.tppAasMarginMilliFils
   })

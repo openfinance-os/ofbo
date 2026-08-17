@@ -171,6 +171,8 @@ export class FinanceViewService {
       stats: [
         { label: 'Receivables', value: fmtMilliFils(profitability.totals.receivableMilliFils) },
         { label: 'Hub costs', value: fmtMilliFils(profitability.totals.hubCostMilliFils) },
+        // BILL-12: the underlying-LFI cost stands beside the Hub cost rather than being folded into it.
+        { label: 'Underlying-LFI costs', value: fmtMilliFils(profitability.totals.lfiCostMilliFils) },
         { label: 'Liability provisions', value: fmtMilliFils(profitability.totals.liabilityProvisionMilliFils) },
         { label: 'Net contribution', value: fmtMilliFils(profitability.totals.profitMilliFils) }
       ]

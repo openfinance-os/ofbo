@@ -637,7 +637,7 @@ milestones:
             (docs:check, adr-number-check, discovery gate) pass.
       - id: BILL-12
         title: Expected TPP cost statement + payable rate-model corrections
-        status: pending
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-11]
@@ -657,6 +657,30 @@ milestones:
           corporate data must rate as data.corporate_page (40 fils/page, no free tier;
           metering.ts:316-325) and profitability must expose underlying-LFI cost as its own
           external-cost line (profitability.ts:88).
+        outcome: >-
+          Landed 2026-08-17. buildExpectedTppCostStatement + resolveLfiOverageRate (snapshot-level
+          REQUIRED unit, effective-dated, absent/expired/zero = charges nothing, provenance on every
+          resolution); rating prices payable retail overage from the snapshot and FAILS CLOSED
+          without one; both defects fixed (outbound corporate -> data.corporate_page with no free
+          tier; profitability lfiCostMilliFils as its own external cost, subtracted from profit,
+          surfaced on the wire as lfi_cost_milli_fils and as a Finance View stat).
+          Two hazards found by adversarial review and fixed in-branch: (1) meter runs dedupe on
+          (bank_id, period, rate_card_version, input_hash) which cannot see a projection change, so
+          METERING_PROJECTION_VERSION is now bound into the hash - otherwise the corporate fix would
+          have been a silent no-op on every already-metered period; (2) the new fail-closed throw
+          would have bricked three receivable-only projections (revenue assurance, expected memo,
+          closed-period re-rating) that never read payable lines - they now rate via
+          receivableMeteredLines, with a regression test.
+          The free-tier granularity question surfaced during review is now explicit rate-card data
+          (RetailFreeTierGranularity) defaulting to the conservative psu_per_day rather than a silent
+          per-LFI reinterpretation that would have understated the payable.
+          NOT closed: the OverLimitFees unit pre-task - the egress policy denies
+          data.directory.openfinance.ae so no live snapshot could be observed; recorded on ADR 0007.
+          DEFERRED with reasons: no P6 directory producer or demo snapshot (would encode the
+          unconfirmed unit) and no synthetic outbound data events, so the statement is domain-tested
+          but not yet demonstrable end-to-end - BILL-13 persists statements and seeds them once the
+          unit is known. Evidence: 34 new tests; unit suite 1413/1413; monorepo typecheck + ESLint
+          clean; coverage gate exit 0.
         acceptance:
           - The OverLimitFees unit decision is recorded in ADR 0007 from a live snapshot
             before the statement model merges.
@@ -686,6 +710,10 @@ milestones:
           billing_tpp_cost_rerating mirrors billing_period_rerating: closed-period
           corrections replay into immutable delta statements, never mutation.
         acceptance:
+          - The OverLimitFees unit is confirmed from a live directory snapshot and recorded in
+            ADR 0007 BEFORE statements are persisted. Carried forward from BILL-12, whose egress
+            policy denied the directory host; persisting a statement priced on an unconfirmed unit
+            is what this criterion exists to prevent.
           - RLS isolation and INSERT-only proven by denial tests across all eight tables;
             the derived Q4.5 lineage gate covers them with no KNOWN_LINEAGE_GAPS additions.
           - Re-rating a closed period yields previous/corrected/delta statements with

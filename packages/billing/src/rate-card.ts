@@ -37,9 +37,20 @@ export interface PageRate extends RateBase {
   flatMilliFils: number
 }
 
+/**
+ * Granularity of the retail free threshold. The C&P model states "FREE up to 15 pages/customer/day"
+ * without saying whether a customer gets one allowance in total or one per serving LFI. Since each
+ * LFI publishes its own overage rate above its own threshold, per-serving-LFI is the likelier
+ * reading — but it is UNCONFIRMED, and it grants more free pages, i.e. it UNDERSTATES what the bank
+ * owes as a TPP. So the conservative `psu_per_day` stays the default and the alternative is an
+ * explicit, tenant-selectable value rather than something metering decides on its own.
+ * Open verification item on ADR 0007.
+ */
+export type RetailFreeTierGranularity = 'psu_per_day' | 'psu_per_serving_lfi_per_day'
+
 export interface RetailPageRate extends RateBase {
   basis: 'per_page_over_free_tier'
-  freeTier: { attended: number; unattended: number; per: 'psu_per_day' }
+  freeTier: { attended: number; unattended: number; per: RetailFreeTierGranularity }
   overageMilliFils: number
   overageSource: string
 }

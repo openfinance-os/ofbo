@@ -42,6 +42,7 @@ const scenarioWire = {
 const zeroAmounts: ProfitabilityAmounts = {
   receivableMilliFils: 0,
   hubCostMilliFils: 0,
+  lfiCostMilliFils: 0,
   liabilityProvisionMilliFils: 0,
   tppAasMarginMilliFils: 0,
   profitMilliFils: 0

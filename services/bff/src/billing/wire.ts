@@ -88,6 +88,8 @@ export function profitabilityAmountsWire(amounts: ProfitabilityAmounts): Record<
   return {
     receivable_milli_fils: amounts.receivableMilliFils,
     hub_cost_milli_fils: amounts.hubCostMilliFils,
+    // BILL-12: the underlying-LFI cost is a separate external cost from the Hub fee, not folded in.
+    lfi_cost_milli_fils: amounts.lfiCostMilliFils,
     liability_provision_milli_fils: amounts.liabilityProvisionMilliFils,
     tpp_aas_margin_milli_fils: amounts.tppAasMarginMilliFils,
     profit_milli_fils: amounts.profitMilliFils

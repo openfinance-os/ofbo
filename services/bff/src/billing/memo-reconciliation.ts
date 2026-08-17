@@ -2,6 +2,7 @@ import {
   buildExpectedCollectionMemo,
   diffCollectionMemo,
   rateUsage,
+  receivableMeteredLines,
   rerateClosedPeriod as replayClosedPeriod,
   toMinorUnitMoney,
   type ClosedPeriodRerating,
@@ -135,7 +136,8 @@ export class BillingMemoReconciliationService {
     if (!meterRun) throw new Error(`no metering run exists for ${period}`)
     assertRateCard(meterRun, card)
     const facts = await this.store.meteredLinesForRun(meterRun.id)
-    const statement = buildExpectedCollectionMemo(rateUsage(facts, card, period), generatedAt)
+    // The expected memo is a receivable projection; see receivableMeteredLines.
+    const statement = buildExpectedCollectionMemo(rateUsage(receivableMeteredLines(facts), card, period), generatedAt)
     const saved = await this.store.saveExpectedMemo({
       meterRunId: meterRun.id,
       meterInputHash: meterRun.inputHash,
