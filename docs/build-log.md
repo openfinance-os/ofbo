@@ -2026,3 +2026,41 @@ Evidence: monorepo typecheck and ESLint clean; full unit suite 1,305/1,305 green
 Postgres integration test added for migrations, billing-table RLS, tenant-only export, and governed
 three-tenant benchmark. The local environment did not expose a database connection, so the real-
 Postgres suite remains a CI gate.
+
+## 2026-08-17 — BILL-11: TPP Cost Management decisions ratified (ADR 0006 + 0007 accepted)
+
+Docs-only decision story landing the pre-execution review of the TPP Cost Management plan
+(payable side of the billing control plane). The plan was verified two ways before acceptance:
+every reuse claim checked against main (both alleged rating defects confirmed real — outbound
+corporate data rated as retail overage in `metering.ts:316-325`; profitability counting only Hub
+cost in `profitability.ts:88`), and the scheme-facing assumptions checked against UAE OF sources
+(C&P Pricing Model v1.0, per-endpoint chargeability, per-LFI directory rates), which corrected
+three of them: per-LFI `OverLimitFees` overage rates are directory-published required work (with
+a per-call vs per-page unit check), Nebras centrally collects BOTH fee streams (so the Nebras
+settlement statement is the primary actuals document), and the 30-day query window is a house
+convention, not a published scheme rule.
+
+- **ADR 0007 → Accepted** under the product name **TPP Cost Management**, recording the full
+  decision set: OFBO/P9 boundary with an explicit P9 port extension (AP dispatch + status, both
+  adapters, port contract tests); gross ledgers with netting only at settlement; fee-schedule
+  source = versioned C&P model + per-LFI directory snapshots; VAT accrued net with an input-VAT
+  leg on acceptance (Hub posture → BD-20); Nebras-primary document taxonomy; configurable query
+  window (BD-21); cost-period close composing the BACKOFFICE-06 monthly sign-off; closed-period
+  re-rating; insurance consumption in scope / commissions deferred; PostgreSQL; CAAP reserved as
+  a future stream; no PSU identifiers in cost tables.
+- **ADR 0006 → Accepted** (Option 1, role_domain LFI|TPP|shared) with the billing-family
+  taxonomy decided now (payable family TPP-domain from day one); platform-wide taxonomy is
+  BD-22, enforcement build is SEG-01 (blocked on BD-22).
+- **PRD:** §2 Finance Analyst scopes aligned to the spec's `x-required-scope` ground truth —
+  resolves the 2026-06-11 BACKOFFICE-47 advisory (`finance:reconciliation:*`/`billing:read`
+  drift); role-domain note added; §6 reconciliation module row corrected the same way; §7.6
+  gains the payable-side product definition; BD-20..BD-22 added to §10.
+- **Backlog:** BILL-12..BILL-17 seeded pending with acceptance criteria (statement domain +
+  rate corrections → ledger + re-rating → document ingest → three-way recon → accounting/AP/
+  settlement → console/demo/smoke), plus SEG-01 blocked on BD-22.
+- **OpenAPI intentionally untouched** — the contract lands spec-first per story with failing
+  contract tests, per the workflow; PR 1 is the decision record only.
+
+Evidence: docs gates green (docs:check link check, ADR number check, discovery waist gate —
+BILL/SEG ids are not waist-gated feature items); backlog YAML parses; no source, spec, or test
+files changed.

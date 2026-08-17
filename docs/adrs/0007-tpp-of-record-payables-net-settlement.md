@@ -1,8 +1,8 @@
 # ADR 0007 — TPP-of-record fee payables + net settlement
 
-- Status: **Proposed** — awaiting human decision (new commercial surface; fee-schedule + settlement-ownership decisions)
-- Date: 2026-06-20
-- Related: ADR 0006 (LFI↔TPP data segregation — payables are TPP-domain); BACKOFFICE-71/-72/-73 (consuming-TPP registry + invoicing, receivables); E1 reconciliation (-01/-02/-12 break detection + thresholds, -06 monthly sign-off); BACKOFFICE-76 (`net_settlement_offset`, cross-scheme guard); P9 financial-management port; the OF-UAE dual-role gap analysis (2026-06-20)
+- Status: **Accepted — Option 1** (user decision, 2026-08-17, recorded via BILL-11; product name **TPP Cost Management**)
+- Date: 2026-06-20 (proposed) · 2026-08-17 (accepted)
+- Related: ADR 0006 (LFI↔TPP data segregation — payables are TPP-domain; accepted the same day); BACKOFFICE-71/-72/-73 (consuming-TPP registry + invoicing, receivables); E1 reconciliation (-01/-02/-12 break detection + thresholds, -06 monthly sign-off); BACKOFFICE-76 (`net_settlement_offset`, cross-scheme guard); P9 financial-management port; the OF-UAE dual-role gap analysis (2026-06-20); delivery backlog BILL-11..BILL-17; BD-15, BD-20..BD-22 (PRD §10)
 
 ## Context
 
@@ -83,19 +83,85 @@ commercial blind spot.
 
 ## Decision
 
-_Pending._ Once chosen: (a) capture the counterparty/API-Hub **fee schedules** as a
-BD-style decision; (b) decide **settlement ownership** (OFBO instruction → P9 execution);
-(c) raise a BACKOFFICE requirement + PRD addition; (d) implement payables ingest +
-three-way recon + net-settlement view + Finance sign-off + lineage, tests-first.
+**Accepted — Option 1** (user decision, 2026-08-17). Product name: **TPP Cost Management** —
+the payable side of the existing billing control plane, delivered as backlog items
+BILL-11..BILL-17 (spec-first per story). The ratified decisions:
+
+1. **Boundary.** OFBO owns metering, rate application, expected-cost statements,
+   provider-document ingestion, three-way reconciliation, dispute evidence + query-window
+   tracking, approval workflow, settlement decomposition, closed-period corrections, and
+   audit/regulatory evidence. **P9 owns** final AP posting, supplier master, payment
+   execution, and cash disbursement. Settlement execution rides the existing P9 port,
+   **extended** with an AP-dispatch method + status surface — interface + sim adapter +
+   fail-closed enterprise adapter + port contract tests binding both (the M6 gate).
+2. **Gross ledgers; netting only at settlement.** TPP payables remain distinct from LFI
+   receivables end-to-end; settlement decomposition preserves both gross views, and any
+   unexplained residue posts to suspense **and** raises an E1 break.
+3. **Fee-schedule source of truth.** The scheme **Commercial & Pricing Model** (versioned
+   document — currently v1.0, 4 Oct 2024, reviewed annually by CBUAE/Nebras board) for
+   scheme-uniform fees, **plus per-LFI directory-published data-overage rates**
+   (`GET /participants` → `ApiResources[].ApiMetadata.OverLimitFees`; absent/empty = that
+   LFI charges nothing above the free thresholds). Rate cards are effective-dated; each
+   statement's rate-snapshot hash chains to the pricing-doc version and the directory
+   snapshot; the BILL-01 watcher covers both sources. Mirror-pricing off the bank's own
+   receivable card is retained **only** for scheme-uniform fees — never data overage.
+   **Unit check (BILL-12 pre-task, blocking):** the directory publishes overage per *call*;
+   the house model prices per *page* (100 lines) — confirm against a live snapshot before
+   the statement model lands.
+4. **VAT posture (payable side).** TPP↔LFI fees are scheme-defined **VAT-inclusive** →
+   5/105 extraction, mirroring the receivable posture. The Nebras **Hub-fee** posture is
+   *not* covered by that rule — verified from the first real Nebras TPP tax invoice
+   (**BD-20**). Accrue **net of VAT**; recognise input VAT only on a valid tax invoice
+   (the acceptance journal gains a `Dr Input VAT receivable` leg).
+5. **Primary actuals document.** Nebras calculates and collects *both* TPP→LFI and LFI→TPP
+   fees (Pricing Model, Billing & Settlement; DD/VOD collection consents) — so the **Nebras
+   invoice / settlement statement is the primary actuals source for both cost components**;
+   direct underlying-LFI invoices exist only under bilateral self-invoicing and reconcile
+   as the secondary path. BD-15 remains the bank-confirmation hook.
+6. **Query window.** The 30-day billing-query window is a **configurable default** — a house
+   convention, not a published scheme rule (**BD-21** verifies it against Nebras collection
+   requirements / the LFI–TPP agreement).
+7. **Close composes -06.** Cost-period close is a gated precondition feeding the *existing*
+   monthly Finance four-eyes sign-off (BACKOFFICE-06) — no parallel close mechanism. The
+   2-business-hour approval-expiry default applies to all new four-eyes actions.
+8. **Corrections.** Closed cost periods are corrected by re-rating replay producing immutable
+   delta statements (mirror of `billing_period_rerating`) — never mutation.
+9. **Insurance.** API-consumption costs are **in scope** (metered external cost; insurance
+   data sharing is LFI-side free, so it produces Nebras cost only — no `payable_lfi`).
+   Insurance commissions/clawbacks stay **deferred** until an approved commercial model
+   exists (scheme defaults: 30-day cool-off before commission, 2-year life clawback).
+10. **Storage.** PostgreSQL remains the governed operational ledger (Parquet archive tier
+    unchanged); no ClickHouse.
+11. **Sequencing with ADR 0006.** Accepted alongside: the new payable tables
+    (`billing_tpp_cost_*`) are tagged **TPP-domain** from day one; the platform-wide
+    role-domain taxonomy is BD-22 / SEG-01.
+12. **Future stream.** CAAP pricing is a commercial placeholder at Nebras — reserved here as
+    a named future cost stream so the model has a place for it; no build now.
+13. **No PSU identifiers** in any cost table: statement lines reference `event_ids` for
+    drill-down (`psu_id` stays confined to `billing_event`); no per-customer buckets are
+    persisted, so no derived customer key exists.
+
+Scheme evidence backing these decisions (verified Jun–Jul 2026; re-verify before BILL-12):
+fees accrue only on **technically successful** calls; the paired discount is exactly **one
+Balance + one CoP per payment within 2 hours**; insurance policy reads are Hub-chargeable
+but LFI-free; quote fees tier 5–12.5 fils by provider count; corporate data is 40 fils/page
+with **no** free tier; the refund-account `GET` is chargeable.
 
 ## Consequences
 
 - New **payables data class** + Nebras TPP-invoice ingest (P6/P9) + counterparty fee
   schedules; reuses break detection (-02/-12), monthly sign-off (-06), and lineage.
-- **Soft-depends on ADR 0006** — payables are TPP-role-domain data, so the role-domain
-  taxonomy should tag them; sequence 0006's classification first for a clean wall.
-- **Bank decisions required:** fee schedules and settlement ownership.
+- **Soft-depends on ADR 0006** — resolved: 0006 accepted the same day; payable tables are
+  TPP-domain-tagged from day one (0006 Decision).
+- **Bank decisions:** settlement ownership and fee-schedule source decided above; still
+  open as PRD §10 checklist items — BD-20 (Hub-fee VAT posture), BD-21 (query window),
+  BD-22 (platform-wide role-domain taxonomy), BD-15 (collection-model confirmation).
 - **Until built, the bank's dual-role commercial position is half-visible** (receivables
-  only) and payables carry no over-billing control — a known gap.
+  only) and payables carry no over-billing control — the gap BILL-12..17 closes.
 - Composes existing primitives only — **no new approval mechanism, gateway, or auth path**
-  (settlement execution rides the existing P9 port).
+  (the P9 port is extended, not bypassed; close feeds the existing -06 sign-off).
+- **Open verification items tracked here until closed:** directory `OverLimitFees` unit
+  (per call vs per page — BILL-12 pre-task) · Nebras Hub-fee VAT posture (BD-20, first
+  real invoice at BILL-14) · query-window provenance (BD-21) · Pricing Model version watch
+  (a v2.0 invalidates every figure — BILL-01 watcher) · CAAP pricing (future ADR when
+  Nebras publishes terms).

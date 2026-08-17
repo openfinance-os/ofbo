@@ -42,7 +42,7 @@ Eight internal personas, written in role terms only. Scope hygiene is load-beari
 | **OF Operations Analyst** | Internal Portal — Operations Console | Platform/Nebras health, SLA tracking, certification pipeline, onboarding-handover health, outage coordination | `platform:operations:read/write`, `certification:read` |
 | **Customer Care Agent (OF)** | Customer-Care Console (port P1) | PSU consent search (bank customer ID / IBAN / Emirates ID), revoke (<5s to Nebras), unauthorized-payment investigation + next-business-day refund, complaint cases | `consents:admin`, `disputes:admin`, `audit:read` |
 | **OF Compliance Officer** | Internal Portal — Compliance View | CBUAE periodic reports <10 min, inquiry bundles, 5-year retention and residency verification, regulatory release-gap tracking | `audit:read`, `compliance:reports:*` |
-| **OF Finance Analyst** | Internal Portal — Reconciliation Console + Finance View | Daily three-way reconciliation, break workflow (p50 ≤2 / p90 ≤5 business days), Nebras disputes, monthly sign-off, TPP-aaS margin | `finance:reconciliation:*`, `finance:disputes:write`, `billing:read` |
+| **OF Finance Analyst** | Internal Portal — Reconciliation Console + Finance View + Billing Console | Daily three-way reconciliation, break workflow (p50 ≤2 / p90 ≤5 business days), Nebras disputes, monthly sign-off, TPP-aaS margin, TPP-of-record cost management (expected cost vs provider documents, payable disputes, AP approval — ADR 0007) | `reconciliation:read`, `finance:reconciliation:write`, `finance:disputes:write`, `billing:read`, `billing:write` |
 | **OF Risk Analyst** | Internal Portal — Risk View | Consent/TPP anomalies, CoP mismatch trends, proactive Nebras-liability monitoring (500ms end-to-end API response SLA; the LFI's internal share is bank-configurable, default 250ms), fraud-flagged revocations, STR triggers | `risk:read`, `risk:investigations:write`, `consents:admin:fraud-revoke` |
 | **Commercial Desk Head** | Internal Portal — Executive Dashboard (Commercial angle) | Cross-fintech revenue/margin by product family, pipeline, onboarding funnel | `platform:analytics:read`, `commercial:read`, `pipeline:read` |
 | **OF Programme Manager** | Internal Portal — Executive Dashboard (Programme angle) + Ops Console | Adoption, LFI/TPP certification status, CBUAE mandatory-release calendar alignment, multi-entity group visibility | `platform:analytics:read`, `programme:read`, `certification:read` |
@@ -51,6 +51,8 @@ Eight internal personas, written in role terms only. Scope hygiene is load-beari
 **Super Administrator guardrails (non-negotiable).** The role exists for platform administration, incident recovery, and demonstrations — not daily operations. (a) Assigned to at most two named individuals per environment, never to service accounts or automations. (b) `platform:superadmin` is a *marker* scope: every action it performs is High-class audited with the marker recorded, and any session under it auto-raises an informational ITSM ticket and a Risk View signal — super-admin activity is anomalous by definition. (c) **Four-eyes is never bypassed**: a super admin initiating a gated operation still requires a *different* principal to approve; self-approval is rejected at the approvals service regardless of scope. (d) Mutating actions require a recorded justification (≥20 chars). (e) Compliance reviews super-admin session logs monthly. (f) **Demo profile exception:** the super admin is the default pre-provisioned walkthrough login so every feature is showcasable from one account; guardrails (b)–(d) still run, which itself demonstrates the control story.
 
 Existing platform personas (fintech operators, relationship managers, AI agents, PSUs) are unchanged; RM surfaces may consume read-only back-office signals.
+
+**Role-domain dimension (ADR 0006, accepted).** In addition to the functional scope split above, personas, scopes, and data classes carry a `role_domain` tag — **LFI | TPP | shared** — enforcing the dual-role Chinese wall. Initial taxonomy: the receivable billing family is LFI-domain; the payable family (`billing_tpp_cost_*`, ADR 0007) is TPP-domain; scheme reference data, rate cards, and settlement/sign-off aggregates are shared. The platform-wide taxonomy is BD-22; enforcement is SEG-01 (blocked on BD-22).
 
 ---
 
@@ -183,7 +185,7 @@ Canonical contract: `specs/backoffice-openapi.yaml` — 57 paths, 9 tags, all on
 
 | Tag | Paths | Scope | Notes |
 |---|---|---|---|
-| reconciliation | 13 | `finance:reconciliation:*` | Runs, replay, break lifecycle, monthly sign-off, thresholds, CBUAE export |
+| reconciliation | 13 | `reconciliation:read`, `finance:reconciliation:write` | Runs, replay, break lifecycle, monthly sign-off, thresholds, CBUAE export |
 | analytics | 9 | `platform:analytics:read` | Five persona views, onboarding funnel, handover health, liability monitor |
 | reports | 7 | `compliance:reports:generate` | Generate/approve/submit; PSU inquiry bundles (PDF+XLSX) |
 | approvals | 5 | `approvals:*` | Shared four-eyes primitive; gated operations return `202` + approval_request |
@@ -312,6 +314,10 @@ Derived from the Nebras Interaction Guide for LFIs/TPPs (v4, Mar 2025) and the T
 | BACKOFFICE-79 | Nebras service-desk case tracking | Should | Any case raised with the Nebras service desk (incident, billing query, onboarding, general) is trackable in the Ops Console by Nebras case reference with type, priority, and the Interaction Guide SLA table applied; linked to the originating break, dispute, or signal where one exists |
 | BACKOFFICE-80 | Platform Super Administrator role with mandatory guardrails | Must | `platform:superadmin` grants the union of all scopes across all surfaces. Guardrails enforced in code, not policy: marker scope recorded on every High-class audit record; active super-admin session auto-raises an informational ITSM ticket + Risk View signal; four-eyes self-approval rejected at the approvals service regardless of scope; mutating actions require ≥20-char justification; role assignable only to named human principals (registration of a service account with this scope is rejected); monthly Compliance review query pre-built in the Compliance View. Demo profile: super admin is the default pre-provisioned walkthrough login with guardrails live |
 
+#### TPP Cost Management — the payable side (ADR 0007, BILL-11..17)
+
+BACKOFFICE-73's pipeline governs what the bank is *owed* as an LFI. **TPP Cost Management** is the symmetric payable-side control for what the bank *owes* as TPP-of-record: expected Nebras API Hub and underlying-LFI costs projected from the bank's own outbound metering (BILL-02) under effective-dated scheme rates **plus per-LFI directory-published overage rates**; verified ingestion of the Nebras TPP invoice / settlement statement (**primary** — Nebras calculates and collects both fee streams) and bilateral self-invoicing documents (secondary); three-way reconciliation with an explicit rounding tolerance, variances flowing into the standard E1 break workflow inside the configurable billing-query window (BD-21); four-eyes AP approval dispatched through the **extended P9 port** (AP-dispatch + status, both adapters, port contract tests); net-settlement decomposition preserving gross receivable and gross payable ledgers, with unexplained residue raising a break; closed-period corrections by re-rating replay (immutable delta statements). Cost-period close is a gated precondition feeding the existing monthly sign-off (BACKOFFICE-06) — no parallel close mechanism. VAT: TPP↔LFI fees are scheme-defined VAT-inclusive (5/105); accruals are net of VAT; input VAT recognised on tax-invoice acceptance (Hub-fee posture: BD-20). Payable tables are TPP-domain under ADR 0006; no PSU identifiers in any cost table. Insurance API-consumption costs are in scope; insurance commissions are not (deferred). Delivery: backlog **BILL-11..BILL-17**; the `tpp-cost` module registers in §6 as its endpoints land (OpenAPI-first per story).
+
 ---
 
 ## 8. Non-Functional Requirements (highlights of 40)
@@ -365,6 +371,11 @@ Each milestone gates the next; one feature at a time within a milestone. This is
 | BD-14 | Demo hosting stack (demo profile only — not a bank decision) | Three-service default: Cloudflare (portal/BFF + cron) + Supabase (Postgres/RLS + Auth + storage) + Railway (simulator + jobs); see README |
 | BD-15 | LFI-to-TPP fee collection model confirmation: LFI-issued invoices from emailed Nebras billing records (current operational reality, BACKOFFICE-73) vs Nebras-collected pass-through with net settlement (Interaction Guide v4 §5.11/5.13) — confirm the current scheme arrangement and whether both flows co-exist | Build BACKOFFICE-73 on the LFI-issued-invoice model; keep net-settlement reconciliation in scope |
 | BD-16 | Re-verify Interaction Guide v4 figures against current scheme docs: dispute/respondent clocks, incident P1–P4 SLAs, notification notice periods, service-desk channels | Build on v4 figures as defaults; clocks configurable per class |
+| BD-20 | Nebras API Hub fee VAT posture — TPP↔LFI fees are scheme-defined VAT-inclusive, but the Hub fee is not covered by that rule; verify from the first real Nebras TPP tax invoice (ADR 0007) | Treat as VAT-inclusive (5/105) pending the first invoice; accrue net of VAT |
+| BD-21 | Billing-query window — confirm the 30-day window against Nebras collection requirements / the LFI–TPP agreement (house convention, not a published scheme rule; ADR 0007) | 30 days, configurable |
+| BD-22 | Role-domain taxonomy (LFI / TPP / shared) for personas and non-billing data classes (ADR 0006; the billing-family classification is already decided there) | Billing family per ADR 0006; SEG-01 stays blocked until decided |
+
+*BD-17–BD-19 (ASP selection, collection rails, receivable VAT posture) are defined in `docs/research/lfi-billing-system-tier2.md` §10.*
 
 ---
 
