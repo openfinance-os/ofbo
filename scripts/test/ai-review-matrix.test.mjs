@@ -1,10 +1,11 @@
 // HARNESS-16 — guard tests for the AI-review engine registry (scripts/ai-review-matrix.mjs).
 //
 // These are the port's contract tests. The one that earns its place is "the ACTIVE engine
-// having no adapter step is rejected": adding an engine takes two edits — a registry entry
-// here and a guarded adapter step in the workflow — and doing only the first would otherwise
-// produce a matrix leg that runs, executes no adapter, writes no review, and reports the
-// generic "DID NOT COMPLETE" — a real non-review wearing the costume of a transient failure.
+// having no adapter step is rejected". Adding an engine takes two edits: an entry in
+// .github/ai-review.config.json, and a guarded adapter step in
+// .github/workflows/ai-review.yml. Doing only the first would otherwise produce a matrix leg
+// that runs, executes no adapter, writes no review, and reports the generic
+// "DID NOT COMPLETE" — a real non-review wearing the costume of a transient failure.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
