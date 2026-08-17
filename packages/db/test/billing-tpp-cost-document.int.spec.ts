@@ -122,6 +122,29 @@ describe('PgBillingTppCostStore — provider documents', () => {
     expect(count.rows[0].n).toBe(1)
   })
 
+  it('honours BOTH unique keys: a reused idempotency key conflicts instead of raising a raw 23505', async () => {
+    // The table carries UNIQUE (bank_id, idempotency_key) as well as UNIQUE (bank_id, issuer_id,
+    // document_reference). An earlier version handled only the second, so reusing a key raised a bare
+    // unique violation the route could not classify — a 500 where the contract promises 409.
+    const key = randomUUID()
+    const first = parseNebrasTaxInvoice(invoice(`NEB-${randomUUID()}`))
+    const saved = await store.saveDocument(ingestInput(first, key), 'trace-key-1')
+    expect(saved.created).toBe(true)
+
+    // Same key, SAME document: a genuine replay returns the stored row.
+    const replay = await store.saveDocument(ingestInput(first, key), 'trace-key-2')
+    expect(replay).toMatchObject({ created: false })
+    expect(replay.record.id).toBe(saved.record.id)
+
+    // Same key, DIFFERENT document: the caller reused a key, which is a conflict — answering with
+    // either document would be wrong.
+    const other = parseNebrasTaxInvoice(invoice(`NEB-${randomUUID()}`))
+    await expect(store.saveDocument(ingestInput(other, key), 'trace-key-3'))
+      .rejects.toThrow(BillingTppCostDocumentConflictError)
+    await expect(store.saveDocument(ingestInput(other, key), 'trace-key-4'))
+      .rejects.toThrow(/already used for a different document/i)
+  })
+
   it('stores an unmapped provider category as a flagged line rather than dropping it', async () => {
     const parsed = parseNebrasTaxInvoice(invoice(`NEB-${randomUUID()}`, {
       line_ref: 'SI-9', category: 'CoP (Discounted)', units: 20, unit_price_fils: 0.005

@@ -85,6 +85,18 @@ export interface TppCostDocumentIngestInput {
   fileBytes?: Uint8Array
 }
 
+export interface TppCostDocumentIngestResult {
+  document: ParsedTppCostDocument
+  id: string
+  created: boolean
+  unmappedLineCount: number
+  redactedFieldCount: number
+  documentSha256: string
+  receivedAt: string
+  verifiedBy: string
+  verifiedAt: string
+}
+
 const DOCUMENT_TYPES: readonly TppCostDocumentType[] = [
   'nebras_tax_invoice', 'nebras_settlement_statement', 'lfi_self_invoice',
   'credit_note', 'debit_note', 'manual_adjustment'
@@ -109,7 +121,7 @@ export class TppCostDocumentIngestService {
     input: TppCostDocumentIngestInput,
     idempotencyKey: string,
     traceId: string
-  ): Promise<{ document: ParsedTppCostDocument; id: string; created: boolean; unmappedLineCount: number; redactedFieldCount: number }> {
+  ): Promise<TppCostDocumentIngestResult> {
     assertScope(principal, BILLING_WRITE_SCOPE)
 
     const documentType = input.documentType as TppCostDocumentType | undefined
@@ -180,14 +192,23 @@ export class TppCostDocumentIngestService {
       )
     }
 
-    // Retain the original outside the ledger, then store only a pointer plus the integrity hash.
-    const archived = await this.deps.archive.put({
-      reference: document.documentReference, sha256: documentSha256, bytes: input.fileBytes
-    })
-
     const nowIso = this.now().toISOString()
     let saved: Awaited<ReturnType<TppCostDocumentStore['saveDocument']>>
     try {
+      // Retain the original outside the ledger FIRST, so the ledger row can point at it — but only
+      // after every refusal above has passed. An earlier version archived before validating, so a
+      // document rejected as a conflict had already had its raw bytes retained. The archive holds
+      // UNREDACTED provider content, which is the point (the original must stay auditable) and also
+      // why it must not accumulate copies of documents we refused.
+      //
+      // Obligations on whoever implements RawDocumentArchive, since the interface cannot enforce them:
+      // tenant-scoped access, the same 24-month/5-year retention as the ledger, a classification no
+      // weaker than confidential-restricted, and no cross-tenant read. It is deliberately NOT one of
+      // the cost tables for that reason — an unredacted artifact does not belong behind the
+      // governed-aggregate seam.
+      const archived = await this.deps.archive.put({
+        reference: document.documentReference, sha256: documentSha256, bytes: input.fileBytes
+      })
       saved = await this.deps.store.saveDocument({
         document,
         documentSha256,
@@ -225,6 +246,10 @@ export class TppCostDocumentIngestService {
           gross_milli_fils: document.grossMilliFils,
           document_sha256: documentSha256,
           verified_by: input.verifiedBy,
+          // Provenance the operator typed (e.g. "email received 3 Jul, from billing@…"). There is no
+          // column for it on billing_tpp_cost_document, and the contract accepts the field — so it is
+          // recorded here, in the INSERT-only audit trail, rather than accepted and silently dropped.
+          ...(input.sourceNote ? { source_note: input.sourceNote } : {}),
           unmapped_line_count: document.unmappedLineCount,
           // Counts and key PATHS only — never the redacted values.
           redacted_field_count: document.redactedFieldCount,
@@ -238,7 +263,14 @@ export class TppCostDocumentIngestService {
       id: saved.record.id,
       created: saved.created,
       unmappedLineCount: document.unmappedLineCount,
-      redactedFieldCount: document.redactedFieldCount
+      redactedFieldCount: document.redactedFieldCount,
+      // The verified-manual-upload evidence the endpoint description leans on. An earlier version
+      // computed all four and then omitted them from the response, which made the integrity hash and
+      // the second-person record unverifiable by the caller that just supplied them.
+      documentSha256,
+      receivedAt: nowIso,
+      verifiedBy: input.verifiedBy,
+      verifiedAt: nowIso
     }
   }
 }
@@ -248,12 +280,14 @@ export class TppCostDocumentIngestService {
 // ---------------------------------------------------------------------------------------------
 
 /** Wire shape for the ingested document — snake_case, per the API conventions. */
-export function tppCostDocumentWire(
-  result: { id: string; document: ParsedTppCostDocument }
-): Record<string, unknown> {
+export function tppCostDocumentWire(result: TppCostDocumentIngestResult): Record<string, unknown> {
   const { id, document } = result
   return {
     document_id: id,
+    document_sha256: result.documentSha256,
+    received_at: result.receivedAt,
+    verified_by: result.verifiedBy,
+    verified_at: result.verifiedAt,
     document_type: document.documentType,
     issuer_id: document.issuerId,
     recipient_id: document.recipientId,

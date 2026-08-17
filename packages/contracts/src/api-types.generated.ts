@@ -3264,6 +3264,7 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         file: string;
+                        /** @description The taxonomy is declared in full, but a type is only ingestible once a transport is wired behind the parser adapter. Today that is `nebras_tax_invoice` only — the Nebras invoice is primary (IG §10.2). The other five are accepted vocabulary for the ledger and are refused at ingest with `BACKOFFICE.UNSUPPORTED_DOCUMENT_TYPE` until their transport lands. */
                         document_type: components["schemas"]["TppCostDocumentType"];
                         billing_period: string;
                         /** @description The second person who verified this upload. Checked against the caller's own verified subject claim and refused when equal — it selects the verifier, it does not assert one. */
@@ -3274,7 +3275,7 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Idempotent replay of a previously ingested document */
+                /** @description The document was already ingested, so nothing new was written. Reached when the same issuer and document reference arrive again with identical content — including under a new `Idempotency-Key`. A replay of the SAME key returns the original cached response, status included, so a repeated first-ingest replays its `201`. */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5363,48 +5364,48 @@ export interface components {
         TppCostDocumentType: "nebras_tax_invoice" | "nebras_settlement_statement" | "lfi_self_invoice" | "credit_note" | "debit_note" | "manual_adjustment";
         /** @description One provider line. `source_category` is the provider's own category, kept verbatim as evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false. */
         TppCostDocumentLine: {
-            line_ref?: string;
-            source_category?: string;
+            line_ref: string;
+            source_category: string;
             fee_class?: string | null;
             /** @description False when the provider category resolves to no known fee class. Such a line is flagged, never dropped. */
-            mapped?: boolean;
+            mapped: boolean;
             /** @enum {string} */
-            cost_recipient_type?: "nebras" | "underlying_lfi";
-            cost_recipient_id?: string;
-            units?: number;
+            cost_recipient_type: "nebras" | "underlying_lfi";
+            cost_recipient_id: string;
+            units: number;
             /** @description Integer milli-fils (see BILL-17 — the unit is unratified) */
-            unit_price_milli_fils?: number;
-            actual_net_milli_fils?: number;
-            vat_milli_fils?: number;
-            actual_gross_milli_fils?: number;
+            unit_price_milli_fils: number;
+            actual_net_milli_fils: number;
+            vat_milli_fils: number;
+            actual_gross_milli_fils: number;
         };
         TppCostDocument: {
             /** Format: uuid */
-            document_id?: string;
-            document_type?: components["schemas"]["TppCostDocumentType"];
-            issuer_id?: string;
-            recipient_id?: string;
-            document_reference?: string;
+            document_id: string;
+            document_type: components["schemas"]["TppCostDocumentType"];
+            issuer_id: string;
+            recipient_id: string;
+            document_reference: string;
             /** @description YYYY-MM */
-            billing_period?: string;
-            currency?: string;
-            net_milli_fils?: number;
-            vat_milli_fils?: number;
-            gross_milli_fils?: number;
-            document_sha256?: string;
+            billing_period: string;
+            currency: string;
+            net_milli_fils: number;
+            vat_milli_fils: number;
+            gross_milli_fils: number;
+            document_sha256: string;
             /** Format: date-time */
-            issued_at?: string;
+            issued_at: string;
             /** Format: date-time */
-            received_at?: string;
+            received_at: string;
             /** @description The second person who verified the upload; never equal to the uploader */
-            verified_by?: string;
+            verified_by: string;
             /** Format: date-time */
-            verified_at?: string;
+            verified_at: string;
             /** @description Lines stored with mapped=false, awaiting a category mapping. Non-zero is a signal, not a failure. */
-            unmapped_line_count?: number;
+            unmapped_line_count: number;
             /** @description How many provider fields were redacted at parse time. Key paths are audited; the removed values are never stored or logged. */
-            redacted_field_count?: number;
-            lines?: components["schemas"]["TppCostDocumentLine"][];
+            redacted_field_count: number;
+            lines: components["schemas"]["TppCostDocumentLine"][];
         };
         InvoiceRun: {
             /** Format: uuid */

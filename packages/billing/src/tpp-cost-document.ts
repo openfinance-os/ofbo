@@ -30,10 +30,19 @@ export type TppCostDocumentType =
  * 2. **Totals are derived, then checked against the provider's own.** We sum the lines and compare;
  *    a disagreement is refused rather than silently resolved in either party's favour, because
  *    "trust the header" and "trust the lines" are both wrong when they conflict.
- * 3. **Redaction happens HERE, before any caller can persist.** The cost tables are INSERT-only with
- *    no deletion path (migration 0039), so a provider line carrying customer detail would be
- *    unremovable. The parser therefore returns an already-redacted payload; there is no code path
- *    that yields the raw one.
+ * 3. **Customer detail is removed HERE, before any caller can persist** — the cost tables are
+ *    INSERT-only with no deletion path (migration 0039), so anything that lands is unremovable. Two
+ *    different mechanisms, because two different kinds of field:
+ *
+ *    - The free-form provider payload is REDACTED (`redactProviderPayload`) and the parser returns
+ *      only the redacted copy; there is no accessor for the raw one.
+ *    - The STRUCTURED identifier fields the parser lifts into their own columns — `line_ref`,
+ *      `category`, `cost_recipient_id`, the document reference, issuer/recipient ids and TRNs —
+ *      cannot be redacted, because `line_ref` is part of a UNIQUE key and `category` is the evidence
+ *      a fee-class mapping derives from. A marker there would destroy identity, so a document
+ *      carrying a customer-detail shape in any of them is REFUSED instead
+ *      (`assertIdentifierFieldsClean`). An earlier version of this module redacted the payload only
+ *      and let those columns through unchecked, which was the more dangerous half.
  *
  * Parsing sits behind {@link TppCostDocumentParser} so a scheme or enterprise transport (PDF, EDI,
  * an API pull) can be added without touching the ingest service.
@@ -184,6 +193,38 @@ const PSU_VALUE_SHAPES: ReadonlyArray<{ label: string; pattern: RegExp }> = [
 
 export const REDACTED = '[redacted]'
 
+/**
+ * Refuse a document whose STRUCTURED identifier fields carry a customer-detail shape.
+ *
+ * Redaction cannot help here, and that distinction matters. `line_ref`, `source_category`,
+ * `cost_recipient_id`, `document_reference`, the issuer/recipient ids and the TRNs are lifted out of
+ * the provider document into their own columns — `line_ref` is part of a UNIQUE key, and
+ * `source_category` is the evidence a fee-class mapping is derived from. Replacing any of them with a
+ * marker would destroy identity rather than protect a customer.
+ *
+ * So the document is REFUSED instead. A provider putting an IBAN or a national identifier in a line
+ * reference is malformed, and in a family with no deletion path, rejecting the upload is strictly
+ * better than storing it and discovering later that it cannot be removed. Shape-keyed for the same
+ * reason as the payload redactor: it has to catch a real value it has never been shown.
+ *
+ * This closes a gap the payload redactor left wide open — these columns never passed through it, and
+ * `billing_tpp_cost_document_line` is cross-tenant readable under the ratified governed-aggregate seam.
+ */
+export function assertIdentifierFieldsClean(fields: Record<string, string | undefined>): void {
+  for (const [name, value] of Object.entries(fields)) {
+    if (typeof value !== 'string' || value === '') continue
+    const shape = redactedValueShape(value)
+    if (shape) {
+      throw new UnparseableDocumentError(
+        `refusing the document: its ${name} carries a ${shape} shape, and that field is stored as a `
+        + 'structured column in a ledger with no deletion path. Redaction cannot apply — the field is '
+        + 'part of the record identity — so a document carrying customer detail there is rejected. '
+        + '(The offending value is deliberately not echoed.)'
+      )
+    }
+  }
+}
+
 export interface RedactionResult {
   redacted: unknown
   /** Key paths that were removed. Never the values — reporting those would defeat the redaction. */
@@ -298,6 +339,28 @@ function requireString(source: Record<string, unknown>, key: string, label = key
   return value
 }
 
+/**
+ * A real RFC 3339 instant, normalised to ISO.
+ *
+ * The contract declares `issued_at` as `format: date-time` and the value is echoed straight onto the
+ * wire, so accepting any non-empty string was a latent contract violation: Postgres happily parses
+ * "3 July 2026" into the timestamptz column, and the response would then carry it verbatim.
+ */
+function requireIsoDateTime(source: Record<string, unknown>, key: string): string {
+  const raw = requireString(source, key, key)
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new UnparseableDocumentError(`${key} must be an RFC 3339 date-time.`)
+  }
+  // Reject forms that parse but are not RFC 3339 — the contract promises a date-time, not "parseable".
+  if (!/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(raw.trim())) {
+    throw new UnparseableDocumentError(
+      `${key} must be an RFC 3339 date-time (the provider form is deliberately not echoed).`
+    )
+  }
+  return parsed.toISOString()
+}
+
 function requireObject(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new UnparseableDocumentError(`${label} is required`)
@@ -334,10 +397,10 @@ export function parseNebrasTaxInvoice(
   const currency = requireString(doc, 'currency', 'currency')
   if (currency !== 'AED') {
     throw new UnparseableDocumentError(
-      `currency must be AED — a non-AED payable cannot be stored in a ledger with no deletion path, received ${currency}`
+      'currency must be AED: a non-AED payable cannot be stored in a ledger with no deletion path. (The provider value is deliberately not echoed.)'
     )
   }
-  const issuedAt = requireString(doc, 'issued_at', 'issued_at')
+  const issuedAt = requireIsoDateTime(doc, 'issued_at')
 
   const issuer = requireObject(doc.issuer, 'issuer')
   const recipient = requireObject(doc.recipient, 'recipient')
@@ -345,6 +408,14 @@ export function parseNebrasTaxInvoice(
   const issuerTrn = requireString(issuer, 'trn', 'issuer.trn (TRN)')
   const recipientId = requireString(recipient, 'id', 'recipient.id')
   const recipientTrn = requireString(recipient, 'trn', 'recipient.trn (TRN)')
+
+  assertIdentifierFieldsClean({
+    invoice_number: documentReference,
+    'issuer.id': issuerId,
+    'issuer.trn': issuerTrn,
+    'recipient.id': recipientId,
+    'recipient.trn': recipientTrn
+  })
 
   const sections = doc.sections
   if (!Array.isArray(sections) || sections.length === 0) {
@@ -357,7 +428,7 @@ export function parseNebrasTaxInvoice(
     const treatment = section.vat_treatment
     if (treatment !== 'exclusive' && treatment !== 'inclusive') {
       throw new UnparseableDocumentError(
-        `section vat_treatment must be exclusive or inclusive (ADR 0007 D4), received ${String(treatment)}`
+        'section vat_treatment must be exclusive or inclusive (ADR 0007 D4).'
       )
     }
     const sectionRecipientType = section.cost_recipient_type as CostRecipientType | undefined
@@ -371,6 +442,12 @@ export function parseNebrasTaxInvoice(
       const lineRef = requireString(line, 'line_ref', 'line.line_ref')
       const sourceCategory = requireString(line, 'category', 'line.category')
       const units = requireCount(line.units, 'line.units')
+      // These three become structured columns, so they cannot be redacted — only refused.
+      assertIdentifierFieldsClean({
+        'line.line_ref': lineRef,
+        'line.category': sourceCategory,
+        'line.cost_recipient_id': typeof line.cost_recipient_id === 'string' ? line.cost_recipient_id : undefined
+      })
       const mapped = mapSourceCategory(map, sourceCategory)
 
       let split: VatSplit

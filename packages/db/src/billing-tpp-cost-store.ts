@@ -483,15 +483,20 @@ export class PgBillingTppCostStore {
   /**
    * BILL-14 — persist a parsed provider document and its lines.
    *
-   * Idempotent on (bank_id, idempotency_key), and a CONFLICT rather than a second row when the same
-   * issuer and document reference arrives carrying different content: `UNIQUE (bank_id, issuer_id,
-   * document_reference)` makes "same document, different body" unstorable, and swallowing it would
-   * hide a provider restatement on an immutable record.
+   * The table carries TWO unique keys and both must be honoured, which an earlier version of this
+   * method got wrong: it declared itself "idempotent on (bank_id, idempotency_key)" while handling
+   * conflicts only on (issuer_id, document_reference), so a reused key raised a bare 23505 and
+   * surfaced as a 500.
+   *
+   * - `(bank_id, idempotency_key)` — a replayed key carrying the SAME document returns the stored row.
+   *   A replayed key carrying a DIFFERENT document is a conflict: the caller reused a key, and
+   *   answering with either document would be wrong.
+   * - `(bank_id, issuer_id, document_reference)` — the same document under a new key is a no-op
+   *   replay; the same reference with a different body is a provider restatement and conflicts.
    *
    * The payload written here is already redacted — the parser has no accessor for the raw one — so
-   * this method cannot be the place customer detail leaks in. It re-checks anyway, because that
-   * invariant is worth enforcing at the boundary that makes it permanent rather than trusting a
-   * caller to have used the parser.
+   * this method cannot be the place customer detail leaks in. It re-checks anyway, because this is the
+   * boundary that makes a payload permanent.
    */
   async saveDocument(
     input: BillingTppCostDocumentInput,
@@ -508,6 +513,23 @@ export class PgBillingTppCostStore {
     })
 
     const result = await this.asApp(async (client) => {
+      // Idempotency key first: it is the caller's own replay token, so a mismatch under it is a
+      // client error rather than a provider restatement, and the two deserve different answers.
+      const byKey = (await client.query(
+        `SELECT id, document_reference, evidence_hash, parsed_payload
+           FROM billing_tpp_cost_document WHERE idempotency_key = $1`,
+        [input.idempotencyKey]
+      )).rows[0] as Record<string, unknown> | undefined
+      if (byKey) {
+        if (byKey.evidence_hash !== evidenceHash) {
+          throw new BillingTppCostDocumentConflictError(
+            `idempotency key ${input.idempotencyKey} was already used for a different document `
+            + `(stored evidence ${String(byKey.evidence_hash)}, supplied ${evidenceHash})`
+          )
+        }
+        return { row: byKey, created: false }
+      }
+
       const inserted = await client.query(
         `INSERT INTO billing_tpp_cost_document
            (bank_id, channel, document_type, issuer_id, recipient_id, document_reference,

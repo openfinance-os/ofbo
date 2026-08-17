@@ -3330,3 +3330,68 @@ stale "93 paths" the moment the spec grew.
 unconfirmed because the egress policy continues to deny `data.directory.openfinance.ae` (rating stays
 fail-closed), and BD-20 still needs the first real Nebras invoice — which is also what resolves the four
 unmapped categories. Both now carry to BILL-15.
+
+### BILL-14 addendum — the redactor covered the payload and not the columns beside it
+
+Both advisory reviews ran on the first push. The hard-stop reviewer found the one that mattered, and it
+is the **fourth** instance of this track's recurring pattern — a control claimed more broadly than it was
+built:
+
+> `redactProviderPayload` is applied to exactly one thing: the JSON blob. The per-line fields are read
+> straight off the provider document and copied verbatim … The module header says "there is no code path
+> that yields the raw one" — true of `payload`, not true of the columns beside it.
+
+Exactly right, and worse than it first looks: `line_ref`, `source_category`, `cost_recipient_id`, the
+document reference, the issuer/recipient ids and the TRNs all bypassed the redactor into structured
+columns — and `billing_tpp_cost_document_line` was *already* cross-tenant readable from 0039's loop.
+
+**Refused rather than redacted, and the distinction is the fix.** Redaction cannot apply to these fields:
+`line_ref` is part of a UNIQUE key and `source_category` is the evidence a fee-class mapping derives
+from, so a marker would destroy identity rather than protect anyone. `assertIdentifierFieldsClean` now
+refuses the whole document when any of them carries a customer-detail shape — in a family with no
+deletion path, rejecting an upload beats storing something unremovable. Tested per field, header and
+line, plus a test that the refusal message does not itself echo the offending value (it crosses the API
+boundary as a 422).
+
+Also from the hard-stop review: **the archive ran before validation**, so a document later refused as a
+conflict had already had its raw bytes retained. Archiving now happens only after every refusal has
+passed, and the obligations the interface cannot enforce — tenant scoping, matching retention,
+classification floor, no cross-tenant read — are written at the call site. Provider values were also
+being interpolated into parse-error messages that cross the API boundary; those now name the field and
+say the value is deliberately not echoed.
+
+The contract review found six more real ones, three of them defects rather than drift:
+
+1. **A reused `Idempotency-Key` raised a bare 23505 → 500.** The table carries `UNIQUE (bank_id,
+   idempotency_key)` as well as the issuer/reference key, and `saveDocument` handled only the second —
+   while its own doc comment claimed idempotency on the first. Same claim-without-evidence shape. Both
+   keys are now honoured: same key + same document replays, same key + different document conflicts.
+2. **The response omitted the four fields that ARE the verified-upload evidence** — `document_sha256`,
+   `received_at`, `verified_by`, `verified_at`. All four were computed and then dropped, so the caller
+   could not verify the integrity hash or the second-person record it had just supplied.
+3. **`source_note` was accepted and silently discarded.** There is no column for it, so it is now
+   recorded in the INSERT-only audit trail, which is where "email received 3 Jul, from …" provenance
+   belongs anyway.
+4. **`issued_at` was any non-empty string** while the contract declares `format: date-time`; Postgres
+   would accept "3 July 2026" and the response would echo it. Now RFC 3339 or refused.
+5. **Neither response schema declared `required`**, which is precisely why (2) was invisible to
+   validation. Both now do — 18 fields on `TppCostDocument` — so that class of omission fails a
+   validator instead of shipping.
+6. **Five of six `document_type` values always 400** because only the Nebras invoice has a transport
+   wired. The spec now says so on the field rather than advertising a taxonomy that half-rejects.
+
+And the gap behind all of it: **no test exercised the HTTP route.** The service was tested directly, so
+the envelope, the 201/200 selection, the error mapping and the wire shape were unasserted —
+`verify:contract` cannot help, it probes only parameter-less GETs. Six route-level tests through
+`createApp` now bind them, including that a same-document re-upload under a new key returns 200 rather
+than 201, and that every response key is snake_case.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180** across 78 files; Q4.5
+PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; Q1b **5 changed test files, no
+weakening detected**.
+
+Left as recorded rather than fixed: `x-rate-limit-per-min` is unenforced repo-wide (inherited, not this
+story's), the 409 response declares no `content` (precedent runs both ways in the same file), and the
+milli-fils unit question — now seven more fields deep — which is still the human decision BILL-17 blocks
+on. PostgreSQL also died four times during this story; each time it was restarted and the run repeated
+from a pristine database rather than reported around.

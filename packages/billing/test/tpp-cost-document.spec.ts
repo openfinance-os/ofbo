@@ -248,6 +248,41 @@ describe('BILL-14 redaction at parse time', () => {
     expect(parsed.redactedFieldCount).toBe(0)
   })
 
+  it('REFUSES a document carrying customer detail in a structured identifier column', () => {
+    // Redaction cannot help these fields: line_ref is part of a UNIQUE key and category is the
+    // evidence a fee-class mapping derives from, so a marker would destroy identity rather than
+    // protect anyone. In a ledger with no deletion path, refusing the upload is the safer answer.
+    // An earlier version of this parser redacted the payload only and let these columns through.
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['line_ref', { line_ref: SYNTHETIC_IBAN, category: 'Payment Initiation', units: 1, unit_price_fils: 2.5 }],
+      ['category', { line_ref: 'SI-2', category: SYNTHETIC_NATIONAL_ID, units: 1, unit_price_fils: 2.5 }],
+      ['cost_recipient_id', { line_ref: 'SI-3', category: 'Payment Initiation', units: 1, unit_price_fils: 2.5, cost_recipient_id: SYNTHETIC_IBAN }]
+    ]
+    for (const [field, line] of cases) {
+      expect(() => parseNebrasTaxInvoice(hubInvoice({
+        sections: [{ name: 'Service Initiation', vat_treatment: 'exclusive', lines: [line] }]
+      })), field).toThrow(UnparseableDocumentError)
+    }
+  })
+
+  it('refuses customer detail in the document header identifiers too', () => {
+    expect(() => parseNebrasTaxInvoice(hubInvoice({ invoice_number: SYNTHETIC_IBAN })))
+      .toThrow(/structured column/i)
+    expect(() => parseNebrasTaxInvoice(hubInvoice({ issuer: { id: SYNTHETIC_NATIONAL_ID, trn: '100123456700003' } })))
+      .toThrow(/structured column/i)
+  })
+
+  it('never echoes the offending provider value in the refusal message', () => {
+    // The refusal must not itself become the leak — the message crosses the API boundary as a 422.
+    try {
+      parseNebrasTaxInvoice(hubInvoice({ invoice_number: SYNTHETIC_IBAN }))
+      throw new Error('expected a refusal')
+    } catch (error) {
+      expect((error as Error).message).not.toContain(SYNTHETIC_IBAN)
+      expect((error as Error).message).toMatch(/deliberately not echoed/i)
+    }
+  })
+
   it('is IDEMPOTENT: re-redacting an already-redacted payload reports nothing new', () => {
     // Load-bearing, not cosmetic. The store re-runs the redactor as a boundary check before an
     // unremovable INSERT and treats "reported something" as "this was never redacted". Replacing a
