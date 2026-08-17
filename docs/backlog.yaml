@@ -702,24 +702,38 @@ milestones:
           POST /back-office/billing/tpp-cost-documents mirrors the billing-records
           verified-manual-upload pattern (BACKOFFICE-67/-73): multipart, integrity SHA-256,
           second-person verification, lineage, Idempotency-Key, super-admin justification.
-          Document taxonomy per ADR 0007 D9: Nebras TPP tax invoice + Nebras settlement
-          statement PRIMARY (they carry both cost components - Nebras collects both fee
-          streams); underlying-LFI self-invoicing documents secondary; credit/debit notes;
-          Finance-approved manual adjustments. Identical duplicate returns the prior
-          result; same reference with different content conflicts (409). Issuer, recipient,
-          period, currency (AED) validation; VAT-inclusive totals parse (5/105); raw
-          document retained with parsed-vs-raw linkage. Missing-document alarm from a
-          scheme billing-calendar config raised via P3 ITSM + ops signal (existing alert
-          path). Parsing sits behind an adapter so a scheme/enterprise transport can be
-          added later. The first real Nebras tax invoice closes BD-20 (Hub-fee VAT
-          posture).
+          Document taxonomy per ADR 0007 D9 (IG v5.0 section 10): monthly Nebras Tax
+          Invoice PRIMARY - it may carry BOTH cost components (Hub fees + LFI charges,
+          IG 10.2), though the 10.9 sample shows Hub sections only, so ingestion accepts
+          both layouts; the summarized supporting data (IG 10.3.4/10.18) is stored as an
+          evidence artifact; underlying-LFI self-invoicing documents secondary;
+          credit/debit notes; Finance-approved manual adjustments. Header validation:
+          invoice number, billing period, TPP+Nebras TRNs, currency (AED), due date.
+          VAT parse is split per ADR 0007 D4: Hub-fee sections are VAT-EXCLUSIVE with
+          Taxable/VAT 5%/Gross columns (IG 10.9 sample); LFI-charge amounts are
+          VAT-inclusive (5/105). Line categories parse against a maintained Nebras
+          category -> fee-class mapping (Service Initiation: Corporate Payment / Payment
+          Initiation / Payment Data; Data Sharing: Bank Data Sharing / Corporate Data /
+          Balance (Discounted) / CoP (Discounted) / Setup and Consent / Insurance Data
+          Sharing / Insurance Quote Sharing). Identical duplicate returns the prior
+          result; same reference with different content conflicts (409). Raw document
+          retained with parsed-vs-raw linkage. Missing-document alarm anchored to the
+          scheme billing calendar (IG 10.12.3: invoice/memo due on/before the 5th, next
+          business day if weekend/holiday) raised via P3 ITSM + ops signal - IG 10.12.2
+          makes reporting non-receipt the participant's OBLIGATION, so the alarm is a
+          compliance control. Parsing sits behind an adapter so a scheme/enterprise
+          transport can be added later. The first real Nebras tax invoice closes BD-20.
         acceptance:
           - Idempotent replay and same-ref-different-content conflict both proven; raw
             document is immutable and hash-linked to parsed lines.
-          - A Nebras settlement statement carrying Hub AND LFI-collected components parses
-            into document lines with gross/VAT/net per line.
-          - The absence alarm fires through P3 at the configured calendar date and not
-            before.
+          - An IG-10.9-shaped tax invoice (Service Initiation + Data Sharing sections,
+            Taxable/VAT/Gross columns) parses with per-line net/VAT/gross reconstructing
+            the section subtotals and invoice total; a document carrying an LFI-charges
+            component parses its VAT-inclusive amounts via 5/105.
+          - Every parsed line resolves through the category->fee-class mapping or is
+            flagged unmapped (never silently dropped).
+          - The absence alarm fires through P3 when no invoice has arrived by the
+            configured calendar anchor (the 5th by default) and not before.
       - id: BILL-15
         title: Three-way payable reconciliation + dispute-window management
         status: pending
@@ -728,16 +742,25 @@ milestones:
         depends_on: [BILL-14]
         note: >-
           Own outbound metering <-> expected statement <-> provider document, matched at
-          line level (period, recipient, fee class, units, applied rate, amount, VAT,
-          evidence, rate effective date) under an explicit configurable tolerance
-          defaulting to the fils(1) pattern (expected values are milli-fils, documents
-          arrive in fils/AED - never exact equality). The Nebras settlement statement
-          reconciles both cost components first; LFI self-invoices reconcile as the
-          secondary path; a charge on both sources is itself a duplicate_charge break.
-          Variances become standard E1 reconciliation_break records (quantity, rate,
-          unexpected, missing, wrong recipient, duplicate, VAT, period, unmatched either
-          side) carrying expected/actual, absolute+percent variance, owner, reason code,
-          dispute deadline (BD-21 config), resolution evidence, approval history.
+          the INVOICE CATEGORY grain (Nebras line categories -> fee classes via the
+          BILL-14 mapping, our line-level evidence beneath) under an explicit configurable
+          tolerance defaulting to the fils(1) pattern (expected values are milli-fils,
+          documents arrive in fils/AED - never exact equality). Match keys per category:
+          period, recipient, units, applied rate, amount, VAT, rate effective date. The
+          Nebras invoice reconciles both cost components first; LFI self-invoices
+          reconcile as the secondary path; a charge on both sources is itself a
+          duplicate_charge break. IG 10.17 late-payment penalty fees are a distinct
+          charge class - expected only when a late payment actually occurred, otherwise
+          an unexpected-charge break. Variances become standard E1 reconciliation_break
+          records (quantity, rate, unexpected, missing, wrong recipient, duplicate, VAT,
+          period, unmatched either side) carrying expected/actual, absolute+percent
+          variance, owner, reason code, dispute deadline, resolution evidence, approval
+          history. The dispute window is scheme-published (IG v5.0 10.13): submit within
+          30 CALENDAR days of occurrence (config; BD-21 confirms the anchor), and the
+          workflow also tracks Nebras response clocks - first response 10 min, final
+          response 10 days, respondent review & escalation 15 days. Billing-query
+          evidence bundles carry the IG 10.11.3 required fields (invoice number,
+          interaction ID, timestamp, LFI/TPP names, payment/transaction detail).
           POST .../tpp-cost-documents/{id}:reconcile requires finance:reconciliation:write,
           mirroring billing-records:reconcile. Disputed lines are withheld from payable
           approval (mirror of reconcile-before-invoice); Finance+Ops alerted as unresolved
@@ -746,10 +769,14 @@ milestones:
           - Overcharge, missing charge, and VAT mismatch each produce the correct break
             class with line-level evidence; a difference inside the tolerance produces
             none.
+          - A penalty line without a matching late payment raises an unexpected-charge
+            break; with one, it matches clean.
           - A disputed line cannot reach an approved payable (blocked path tested end to
             end).
-          - The expiry alert fires as the configured window closes; window length is
-            config, not a constant.
+          - The expiry alert fires as the configured window closes and the Nebras
+            final-response/escalation clocks are visible on each open query; window
+            length is config, not a constant.
+          - A generated billing-query bundle contains every IG 10.11.3 required field.
       - id: BILL-16
         title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
         status: pending
@@ -766,8 +793,15 @@ milestones:
           expiry) before close, material-variance acceptance (existing configurable
           threshold mechanism - no new materiality config), P9 dispatch, manual adjustment,
           net-settlement authorisation. Cost-period close is a gated precondition feeding
-          the existing BACKOFFICE-06 monthly sign-off - no parallel close mechanism. P9
-          port extension: dispatchPayableInstruction + a payable-status method on
+          the existing BACKOFFICE-06 monthly sign-off - no parallel close mechanism.
+          Collection is the scheme's DIRECT-DEBIT PULL (IG v5.0 10.14-10.15: TPPs must pay
+          by direct debit; DDA presented to the Nebras sponsoring bank on the 10th,
+          collection window to the 30th, LFI transfers 30th-5th) - the four-eyes AP
+          approval authorises honouring the debit, and P9's execution role is DD mandate
+          management plus matching the pulled debit to the approved payable, not push
+          payment. Dual-role netting is scheme-confirmed (IG 10.16: amounts payable to
+          LFIs are netted against fees owed to Nebras where the LFI also operates as a
+          TPP). P9 port extension: dispatchPayableInstruction + a payable-status method on
           FinancialSystemPort, sim adapter + fail-closed enterprise financial-system
           adapter, port contract tests binding BOTH through the HARNESS-10 bench (a new
           port method cannot skip the gate). Net settlement decomposes gross receivables

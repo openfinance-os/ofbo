@@ -2,7 +2,7 @@
 
 - Status: **Accepted — Option 1** (user decision, 2026-08-17, recorded via BILL-11; product name **TPP Cost Management**)
 - Date: 2026-06-20 (proposed) · 2026-08-17 (accepted)
-- Related: ADR 0006 (LFI↔TPP data segregation — payables are TPP-domain; accepted the same day); BACKOFFICE-71/-72/-73 (consuming-TPP registry + invoicing, receivables); E1 reconciliation (-01/-02/-12 break detection + thresholds, -06 monthly sign-off); BACKOFFICE-76 (`net_settlement_offset`, cross-scheme guard); P9 financial-management port; the OF-UAE dual-role gap analysis (2026-06-20); delivery backlog BILL-11..BILL-17; BD-15, BD-20..BD-22 (PRD §10)
+- Related: ADR 0006 (LFI↔TPP data segregation — payables are TPP-domain; accepted the same day); BACKOFFICE-71/-72/-73 (consuming-TPP registry + invoicing, receivables); E1 reconciliation (-01/-02/-12 break detection + thresholds, -06 monthly sign-off); BACKOFFICE-76 (`net_settlement_offset`, cross-scheme guard); P9 financial-management port; the OF-UAE dual-role gap analysis (2026-06-20); delivery backlog BILL-11..BILL-17; BD-15, BD-20..BD-22 (PRD §10); Nebras Interaction Guide for LFIs & TPPs **v5.0** §10 (billing, collection, settlement — verified 2026-08-17)
 
 ## Context
 
@@ -91,12 +91,24 @@ BILL-11..BILL-17 (spec-first per story). The ratified decisions:
    provider-document ingestion, three-way reconciliation, dispute evidence + query-window
    tracking, approval workflow, settlement decomposition, closed-period corrections, and
    audit/regulatory evidence. **P9 owns** final AP posting, supplier master, payment
-   execution, and cash disbursement. Settlement execution rides the existing P9 port,
+   settlement, and cash accounting. Settlement execution rides the existing P9 port,
    **extended** with an AP-dispatch method + status surface — interface + sim adapter +
    fail-closed enterprise adapter + port contract tests binding both (the M6 gate).
+   **Collection is a direct-debit pull, not a push payment** (IG v5.0 §10.14.1: TPPs are
+   required to pay by direct debit; the DDA is presented to the Nebras sponsoring bank on
+   the 10th, the collection window runs to the 30th) — so P9's "payment execution" means
+   DD mandate management plus matching the pulled debit to the approved payable, and the
+   four-eyes AP approval is what authorises honouring the debit. Late payments accrue
+   penalty fees on a subsequent invoice after reminders (§10.17) — reconciliation treats
+   a penalty line as a distinct charge class, expected only when a late payment actually
+   occurred (otherwise it is an unexpected-charge break).
 2. **Gross ledgers; netting only at settlement.** TPP payables remain distinct from LFI
    receivables end-to-end; settlement decomposition preserves both gross views, and any
-   unexplained residue posts to suspense **and** raises an E1 break.
+   unexplained residue posts to suspense **and** raises an E1 break. Scheme-confirmed for
+   the dual-role case verbatim — IG v5.0 §10.16: *"amounts payable to LFIs are netted
+   against any fees owed to Nebras where the LFI also operates as a TPP"* (net settlement
+   via the Nebras sponsoring bank; detail in the LFI–TPP Agreement). The settlement
+   calendar is §10.12.3: LFI-side fund transfers run the 30th to the 5th of the next month.
 3. **Fee-schedule source of truth.** The scheme **Commercial & Pricing Model** (versioned
    document — currently v1.0, 4 Oct 2024, reviewed annually by CBUAE/Nebras board) for
    scheme-uniform fees, **plus per-LFI directory-published data-overage rates**
@@ -108,19 +120,37 @@ BILL-11..BILL-17 (spec-first per story). The ratified decisions:
    **Unit check (BILL-12 pre-task, blocking):** the directory publishes overage per *call*;
    the house model prices per *page* (100 lines) — confirm against a live snapshot before
    the statement model lands.
-4. **VAT posture (payable side).** TPP↔LFI fees are scheme-defined **VAT-inclusive** →
-   5/105 extraction, mirroring the receivable posture. The Nebras **Hub-fee** posture is
-   *not* covered by that rule — verified from the first real Nebras TPP tax invoice
-   (**BD-20**). Accrue **net of VAT**; recognise input VAT only on a valid tax invoice
-   (the acceptance journal gains a `Dr Input VAT receivable` leg).
-5. **Primary actuals document.** Nebras calculates and collects *both* TPP→LFI and LFI→TPP
-   fees (Pricing Model, Billing & Settlement; DD/VOD collection consents) — so the **Nebras
-   invoice / settlement statement is the primary actuals source for both cost components**;
-   direct underlying-LFI invoices exist only under bilateral self-invoicing and reconcile
-   as the secondary path. BD-15 remains the bank-confirmation hook.
-6. **Query window.** The 30-day billing-query window is a **configurable default** — a house
-   convention, not a published scheme rule (**BD-21** verifies it against Nebras collection
-   requirements / the LFI–TPP agreement).
+4. **VAT posture (payable side), split by stream** (verified against IG v5.0 §10.9/§10.10):
+   TPP↔LFI fees are scheme-defined **VAT-inclusive** → 5/105 extraction, mirroring the
+   receivable posture (the sample Collection Memo shows amounts with no VAT columns).
+   Nebras **Hub fees are VAT-exclusive**: the sample Nebras Tax Invoice prices lines at the
+   net scheme rate (e.g. 0.025 AED) with Taxable Amount / VAT 5% / VAT Amount / Gross
+   columns — VAT is **added on top**, not extracted. **BD-20** narrows to confirming this on
+   the first *real* invoice (the sample carries one internal inconsistency — a
+   CoP-discounted unit of 0.25 vs the scheme's 0.005 — so it is strong evidence, not final).
+   Accrue **net of VAT**; recognise input VAT only on a valid tax invoice (the acceptance
+   journal gains a `Dr Input VAT receivable` leg).
+5. **Primary actuals document.** Per IG v5.0 §10.2–10.3, the monthly **Nebras Tax Invoice
+   to the TPP may carry both cost components** — API Hub fees *and* LFI charges (fees
+   payable by TPPs to LFIs) — with summarized supporting data alongside (§10.3.4; more
+   available on request, §10.18). The sample invoice (§10.9) demonstrates only the Hub-fee
+   sections, so ingestion must accept **both layouts** (Hub-only invoice + LFI-charges
+   component wherever it arrives). Direct underlying-LFI invoices exist only under
+   bilateral self-invoicing and reconcile as the secondary path. BD-15 remains the
+   bank-confirmation hook. **Reconciliation grain:** the invoice aggregates by its own
+   line categories (Service Initiation: Corporate Payment / Payment Initiation / Payment
+   Data; Data Sharing: Bank Data Sharing / Corporate Data / Balance (Discounted) / CoP
+   (Discounted) / Setup and Consent / Insurance Data Sharing / Insurance Quote Sharing) —
+   matching runs at that category grain via a maintained **category → fee-class mapping**,
+   with our line-level evidence beneath it.
+6. **Query window — scheme-published** (corrects the earlier "house convention" reading,
+   which pre-dated IG v5.0): §10.13 sets billing-query timeframes — submit **within 30
+   calendar days of occurrence**, first response 10 minutes, final response 10 days,
+   respondent review & escalation 15 days; §10.12.2 obliges prompt reporting. The window
+   stays configuration (default 30 calendar days), and **BD-21** narrows to confirming the
+   anchor semantics ("occurrence" — charge date vs invoice receipt) in the LFI–TPP
+   Agreement. The payable dispute workflow also tracks **Nebras's response clocks**
+   (10-day final response, 15-day escalation).
 7. **Close composes -06.** Cost-period close is a gated precondition feeding the *existing*
    monthly Finance four-eyes sign-off (BACKOFFICE-06) — no parallel close mechanism. The
    2-business-hour approval-expiry default applies to all new four-eyes actions.
@@ -141,11 +171,20 @@ BILL-11..BILL-17 (spec-first per story). The ratified decisions:
     drill-down (`psu_id` stays confined to `billing_event`); no per-customer buckets are
     persisted, so no derived customer key exists.
 
-Scheme evidence backing these decisions (verified Jun–Jul 2026; re-verify before BILL-12):
+Scheme evidence backing these decisions (pricing verified Jun–Jul 2026; billing mechanics
+verified against **IG v5.0**, uploaded 2026-08-17; re-verify pricing before BILL-12):
 fees accrue only on **technically successful** calls; the paired discount is exactly **one
 Balance + one CoP per payment within 2 hours**; insurance policy reads are Hub-chargeable
 but LFI-free; quote fees tier 5–12.5 fils by provider count; corporate data is 40 fils/page
-with **no** free tier; the refund-account `GET` is chargeable.
+with **no** free tier (confirmed on the sample Collection Memo at 0.4 AED/page); the
+refund-account `GET` is chargeable. **Billing calendar (IG v5.0 §10.12.3):** usage
+extracted the 3rd → invoice + collection memo to the designated PBCs on/before the **5th**
+(next business day if weekend/holiday) → DDA presented the **10th** → collection window to
+the **30th** → LFI settlements 30th–5th. §10.12.2 makes it the *participant's obligation*
+to raise non-receipt of the invoice/memo by the 5th — the missing-document alarm is a
+compliance control, not just hygiene. The sample Collection Memo also shows per-LFI
+retail-overage pricing as an LFI-set rate ("Customer Data" at the issuing LFI's own
+price), reinforcing the per-LFI overage decision and the BILL-12 unit check.
 
 ## Consequences
 
@@ -161,7 +200,11 @@ with **no** free tier; the refund-account `GET` is chargeable.
 - Composes existing primitives only — **no new approval mechanism, gateway, or auth path**
   (the P9 port is extended, not bypassed; close feeds the existing -06 sign-off).
 - **Open verification items tracked here until closed:** directory `OverLimitFees` unit
-  (per call vs per page — BILL-12 pre-task) · Nebras Hub-fee VAT posture (BD-20, first
-  real invoice at BILL-14) · query-window provenance (BD-21) · Pricing Model version watch
-  (a v2.0 invalidates every figure — BILL-01 watcher) · CAAP pricing (future ADR when
-  Nebras publishes terms).
+  (per call vs per page — BILL-12 pre-task; the sample Collection Memo's LFI-set
+  "Customer Data" rate confirms per-LFI pricing but not the unit) · Nebras Hub-fee VAT
+  posture (**narrowed by IG v5.0 §10.9**: the sample invoice shows VAT-exclusive + 5% —
+  BD-20 now only confirms this on the first *real* invoice, which also resolves the
+  sample's CoP-discounted unit anomaly, 0.25 vs 0.005) · query-window **anchor semantics**
+  (BD-21 — the window itself is published: §10.13, 30 calendar days) · Pricing Model
+  version watch (a v2.0 invalidates every figure — BILL-01 watcher) · CAAP pricing
+  (future ADR when Nebras publishes terms).
