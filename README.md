@@ -66,7 +66,7 @@ The demo profile (PRD §3.1) runs on free tiers with **synthetic data only** —
 | File | Purpose |
 |---|---|
 | `docs/PRD_Open_Finance_Back_Office.md` | Complete PRD: personas, ports model, architecture, all 80 requirements (BACKOFFICE-01..80), data model, NFRs, build sequence (M0–M6), adopting-bank decision checklist (BD-01..16) |
-| `specs/backoffice-openapi.yaml` | API contract — **93 paths, 12 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
+| `specs/backoffice-openapi.yaml` | API contract — **94 paths, 12 tags**, admin-scoped. The contract is ground truth: if the spec is wrong, change it via PR first, then tests, then code |
 | `CLAUDE.md` | Build conventions: stack defaults, ports model, API conventions, per-story workflow, regulatory hard stops |
 | `docs/architecture-overview.md` | Component architecture — system context, ports P1–P10, BFF feature modules, data layer, shared packages (+ `docs/diagrams/` SVGs) |
 | `docs/backlog.yaml` | Machine-readable work queue (drives the autonomous build loop) |

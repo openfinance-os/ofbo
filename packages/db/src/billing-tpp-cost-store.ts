@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
 import pg from 'pg'
-import type {
-  ExpectedTppCostStatement,
-  ExpectedTppCostStatementLine,
-  MeteredLine
+import {
+  redactProviderPayload,
+  type ExpectedTppCostStatement,
+  type ExpectedTppCostStatementLine,
+  type MeteredLine,
+  type ParsedTppCostDocument
 } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
@@ -44,6 +46,65 @@ export interface BillingTppCostReratingInput {
   corrected: ExpectedTppCostStatement
 }
 
+export interface BillingTppCostDocumentInput {
+  document: ParsedTppCostDocument
+  /** Integrity hash of the raw artifact, `sha256:<64 hex>`. */
+  documentSha256: string
+  /** Pointer to the retained original, which lives outside this ledger. */
+  rawDocumentRef: string
+  receivedAt: string
+  /** Second person who verified the upload. Bound to a P2 claim by the service, never to input. */
+  verifiedBy: string
+  verifiedAt: string
+  idempotencyKey: string
+}
+
+export interface StoredBillingTppCostDocument {
+  id: string
+  documentReference: string
+  evidenceHash: string
+  payload: unknown
+}
+
+/**
+ * The same issuer + reference arriving with different content. Typed, because the ingest endpoint
+ * answers it with 409 and must not classify it by matching message text.
+ */
+export class BillingTppCostDocumentConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BillingTppCostDocumentConflictError'
+  }
+}
+
+/**
+ * Last line of defence before an unremovable write: the parser redacts, but this is the boundary that
+ * makes a payload permanent, so it refuses one still carrying an identifier shape. Structural only —
+ * it re-uses the parser's own shapes rather than inventing a second, weaker notion of PII.
+ */
+function assertRedactedPayload(payload: unknown): void {
+  const { removedPaths } = redactProviderPayload(payload)
+  if (removedPaths.length > 0) {
+    throw new Error(
+      'refusing to persist an unredacted provider payload: '
+      + `${removedPaths.length} field(s) still match a customer-detail shape. Parse via the document `
+      + 'parser, which redacts before returning. Paths (names only, no values): '
+      + removedPaths.join(', ')
+    )
+  }
+}
+
+const DOCUMENT_LINEAGE = [
+  'bank_id', 'channel', 'document_type', 'issuer_id', 'recipient_id', 'document_reference',
+  'billing_period', 'currency', 'gross_milli_fils', 'vat_milli_fils', 'net_milli_fils',
+  'document_sha256', 'raw_document_ref', 'issued_at', 'received_at', 'verified_by', 'verified_at',
+  'idempotency_key', 'parsed_payload', 'evidence_hash'
+]
+const DOCUMENT_LINE_LINEAGE = [
+  'bank_id', 'channel', 'document_id', 'line_ref', 'source_category', 'fee_class', 'mapped',
+  'cost_recipient_type', 'cost_recipient_id', 'units', 'unit_price_milli_fils',
+  'actual_net_milli_fils', 'vat_milli_fils', 'actual_gross_milli_fils'
+]
 const STATEMENT_LINEAGE = [
   'bank_id', 'channel', 'meter_run_id', 'period', 'currency', 'rate_card_version',
   'rate_snapshot_hash', 'directory_snapshot_id', 'pricing_effective_from', 'generated_at',
@@ -417,6 +478,119 @@ export class PgBillingTppCostStore {
     })
     if (result.created) await this.emit('billing_tpp_cost_rerating', RERATING_LINEAGE, traceId)
     return result
+  }
+
+  /**
+   * BILL-14 — persist a parsed provider document and its lines.
+   *
+   * Idempotent on (bank_id, idempotency_key), and a CONFLICT rather than a second row when the same
+   * issuer and document reference arrives carrying different content: `UNIQUE (bank_id, issuer_id,
+   * document_reference)` makes "same document, different body" unstorable, and swallowing it would
+   * hide a provider restatement on an immutable record.
+   *
+   * The payload written here is already redacted — the parser has no accessor for the raw one — so
+   * this method cannot be the place customer detail leaks in. It re-checks anyway, because that
+   * invariant is worth enforcing at the boundary that makes it permanent rather than trusting a
+   * caller to have used the parser.
+   */
+  async saveDocument(
+    input: BillingTppCostDocumentInput,
+    traceId: string
+  ): Promise<{ record: StoredBillingTppCostDocument; created: boolean }> {
+    const { document } = input
+    assertRedactedPayload(document.payload)
+    const evidenceHash = tppCostEvidenceHash({
+      reference: document.documentReference,
+      issuer: document.issuerId,
+      period: document.billingPeriod,
+      totals: [document.netMilliFils, document.vatMilliFils, document.grossMilliFils],
+      lines: document.lines
+    })
+
+    const result = await this.asApp(async (client) => {
+      const inserted = await client.query(
+        `INSERT INTO billing_tpp_cost_document
+           (bank_id, channel, document_type, issuer_id, recipient_id, document_reference,
+            billing_period, currency, gross_milli_fils, vat_milli_fils, net_milli_fils,
+            document_sha256, raw_document_ref, issued_at, received_at, verified_by, verified_at,
+            idempotency_key, parsed_payload, evidence_hash)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20)
+         ON CONFLICT (bank_id, issuer_id, document_reference) DO NOTHING
+         RETURNING id, document_reference, evidence_hash, parsed_payload`,
+        [this.config.bankId, this.config.channel, document.documentType, document.issuerId,
+          document.recipientId, document.documentReference, document.billingPeriod, document.currency,
+          document.grossMilliFils, document.vatMilliFils, document.netMilliFils,
+          input.documentSha256, input.rawDocumentRef, document.issuedAt, input.receivedAt,
+          input.verifiedBy, input.verifiedAt, input.idempotencyKey,
+          JSON.stringify(document.payload), evidenceHash]
+      )
+      let row = inserted.rows[0] as Record<string, unknown> | undefined
+      const created = Boolean(row)
+      if (!row) {
+        row = (await client.query(
+          `SELECT id, document_reference, evidence_hash, parsed_payload
+             FROM billing_tpp_cost_document
+            WHERE issuer_id = $1 AND document_reference = $2`,
+          [document.issuerId, document.documentReference]
+        )).rows[0] as Record<string, unknown> | undefined
+      }
+      if (!row) throw new Error('provider cost document could not be read after insert')
+
+      // Same issuer + reference, different content: a restatement masquerading as a replay.
+      if (row.evidence_hash !== evidenceHash) {
+        throw new BillingTppCostDocumentConflictError(
+          `conflicting provider document ${document.issuerId}/${document.documentReference}: stored `
+          + `evidence ${String(row.evidence_hash)} does not match ${evidenceHash}`
+        )
+      }
+
+      if (created) {
+        for (const line of document.lines) {
+          await client.query(
+            `INSERT INTO billing_tpp_cost_document_line
+               (bank_id, channel, document_id, line_ref, source_category, fee_class, mapped,
+                cost_recipient_type, cost_recipient_id, units, unit_price_milli_fils,
+                actual_net_milli_fils, vat_milli_fils, actual_gross_milli_fils)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+            [this.config.bankId, this.config.channel, row.id, line.lineRef, line.sourceCategory,
+              line.feeClass, line.mapped, line.costRecipientType, line.costRecipientId, line.units,
+              line.unitPriceMilliFils, line.actualNetMilliFils, line.vatMilliFils,
+              line.actualGrossMilliFils]
+          )
+        }
+      }
+      return { row, created }
+    })
+
+    if (result.created) {
+      await this.emit('billing_tpp_cost_document', DOCUMENT_LINEAGE, traceId)
+      if (document.lines.length) {
+        await this.emit('billing_tpp_cost_document_line', DOCUMENT_LINE_LINEAGE, traceId)
+      }
+    }
+    return {
+      record: {
+        id: result.row.id as string,
+        documentReference: result.row.document_reference as string,
+        evidenceHash: result.row.evidence_hash as string,
+        payload: result.row.parsed_payload
+      },
+      created: result.created
+    }
+  }
+
+  /** Documents ingested for a period — BILL-15 reconciles against these; the alarm counts them. */
+  async documentsForPeriod(period: string): Promise<Array<{ id: string; documentType: string; documentReference: string }>> {
+    const rows = await this.asApp(async (client) => (await client.query(
+      `SELECT id, document_type, document_reference FROM billing_tpp_cost_document
+        WHERE billing_period = $1 ORDER BY created_at ASC`,
+      [period]
+    )).rows as Array<Record<string, unknown>>)
+    return rows.map((row) => ({
+      id: row.id as string,
+      documentType: row.document_type as string,
+      documentReference: row.document_reference as string
+    }))
   }
 
   async close(): Promise<void> {

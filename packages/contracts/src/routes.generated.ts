@@ -528,6 +528,13 @@ export const ROUTES: readonly Route[] = [
     "fourEyes": false
   },
   {
+    "method": "post",
+    "path": "/back-office/billing/tpp-cost-documents",
+    "tag": "tpp-billing",
+    "scope": "billing:write",
+    "fourEyes": false
+  },
+  {
     "method": "get",
     "path": "/back-office/tpp-counterparties",
     "tag": "tpp-billing",

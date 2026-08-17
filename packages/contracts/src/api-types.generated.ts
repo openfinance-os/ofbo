@@ -3228,6 +3228,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/billing/tpp-cost-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest a provider cost document — Nebras invoice primary (verified manual upload, BILL-14)
+         * @description The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted, second-person verification recorded from the verified identity-provider claim — the verifier may not be the uploader, and neither is taken from the request body.
+         *
+         *     Provider payloads are redacted at parse time, before the first INSERT: the cost tables are INSERT-only with no deletion path, so any customer detail a provider line carries would be unremovable. Lines whose provider category has no fee-class mapping are stored flagged `mapped: false` rather than dropped.
+         *
+         *     Replay of the same `Idempotency-Key` returns the stored result. The same issuer and document reference carrying different content is a conflict, not a second document.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        document_type: components["schemas"]["TppCostDocumentType"];
+                        billing_period: string;
+                        /** @description The second person who verified this upload. Checked against the caller's own verified subject claim and refused when equal — it selects the verifier, it does not assert one. */
+                        verified_by: string;
+                        /** @description e.g. email received date / sender */
+                        source_note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Idempotent replay of a previously ingested document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostDocument"];
+                        };
+                    };
+                };
+                /** @description Document ingested with its parsed lines; reconciliation NOT yet run (BILL-15) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostDocument"];
+                        };
+                    };
+                };
+                /** @description 'Rejected: the same issuer and document reference already exists with different content, or the nominated verifier is the uploader.' */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/tpp-counterparties": {
         parameters: {
             query?: never;
@@ -5271,6 +5355,56 @@ export interface components {
             open_break_count?: number;
             /** @description Nebras case references for disputed lines (30-day window) */
             nebras_billing_query_refs?: string[];
+        };
+        /**
+         * @description Provider cost-document taxonomy (ADR 0007 D9, IG v5.0 §10). Nebras tax invoice is primary.
+         * @enum {string}
+         */
+        TppCostDocumentType: "nebras_tax_invoice" | "nebras_settlement_statement" | "lfi_self_invoice" | "credit_note" | "debit_note" | "manual_adjustment";
+        /** @description One provider line. `source_category` is the provider's own category, kept verbatim as evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false. */
+        TppCostDocumentLine: {
+            line_ref?: string;
+            source_category?: string;
+            fee_class?: string | null;
+            /** @description False when the provider category resolves to no known fee class. Such a line is flagged, never dropped. */
+            mapped?: boolean;
+            /** @enum {string} */
+            cost_recipient_type?: "nebras" | "underlying_lfi";
+            cost_recipient_id?: string;
+            units?: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified) */
+            unit_price_milli_fils?: number;
+            actual_net_milli_fils?: number;
+            vat_milli_fils?: number;
+            actual_gross_milli_fils?: number;
+        };
+        TppCostDocument: {
+            /** Format: uuid */
+            document_id?: string;
+            document_type?: components["schemas"]["TppCostDocumentType"];
+            issuer_id?: string;
+            recipient_id?: string;
+            document_reference?: string;
+            /** @description YYYY-MM */
+            billing_period?: string;
+            currency?: string;
+            net_milli_fils?: number;
+            vat_milli_fils?: number;
+            gross_milli_fils?: number;
+            document_sha256?: string;
+            /** Format: date-time */
+            issued_at?: string;
+            /** Format: date-time */
+            received_at?: string;
+            /** @description The second person who verified the upload; never equal to the uploader */
+            verified_by?: string;
+            /** Format: date-time */
+            verified_at?: string;
+            /** @description Lines stored with mapped=false, awaiting a category mapping. Non-zero is a signal, not a failure. */
+            unmapped_line_count?: number;
+            /** @description How many provider fields were redacted at parse time. Key paths are audited; the removed values are never stored or logged. */
+            redacted_field_count?: number;
+            lines?: components["schemas"]["TppCostDocumentLine"][];
         };
         InvoiceRun: {
             /** Format: uuid */

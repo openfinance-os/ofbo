@@ -98,6 +98,12 @@ import {
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
+import {
+  TppCostDocumentIngestService,
+  tppCostDocumentRoutes,
+  type RawDocumentArchive,
+  type TppCostDocumentStore
+} from './billing/tpp-cost-document.js'
 import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
 import { strDraftRoutes } from './str/routes.js'
 import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceProfitabilityReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
@@ -233,6 +239,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/billing/profitability:simulate',
   'post /back-office/billing/exports:cbuae-fee-review',
   'get /back-office/billing/export',
+  'post /back-office/billing/tpp-cost-documents',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
@@ -311,6 +318,10 @@ export interface AppDeps {
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
   billingRecordStore?: BillingRecordStore
   invoiceRunStore?: InvoiceRunStore
+  /** BILL-14 — provider cost-document ledger writer. */
+  tppCostDocumentStore?: TppCostDocumentStore
+  /** BILL-14 — retention of the raw provider artifact, outside the ledger. */
+  rawDocumentArchive?: RawDocumentArchive
   /** BILL-05 — append-only settlement decomposition and direct-collection action store. */
   billingCollectionsStore?: BillingCollectionsStore
   /** BILL-08 — latest immutable revenue-assurance report for Finance View/VAL-01 composition. */
@@ -563,6 +574,18 @@ export function createApp(deps: AppDeps = {}) {
     store: deps.billingCollectionsStore ?? new InMemoryBillingCollectionsStore(),
     audit: highClassAudit
   })
+  // BILL-14 — provider cost-document ingestion. Fails closed when no store is configured: an
+  // unconfigured ingest must refuse rather than accept an upload it cannot persist.
+  const tppCostDocumentService = new TppCostDocumentIngestService({
+    store: deps.tppCostDocumentStore ?? {
+      saveDocument: async () => { throw new Error('TPP cost document store is not configured') },
+      documentsForPeriod: async () => []
+    },
+    archive: deps.rawDocumentArchive ?? {
+      put: async () => { throw new Error('raw document archive is not configured') }
+    },
+    audit: highClassAudit
+  })
   const billingConsoleService = new BillingConsoleService({
     tenant: deps.billingTenant ?? {
       profile: async () => { throw new Error('billing tenant store is not configured') },
@@ -724,6 +747,7 @@ export function createApp(deps: AppDeps = {}) {
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
     ...billingConsoleRoutes(billingConsoleService, idempotencyStore),
+    ...tppCostDocumentRoutes(tppCostDocumentService, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),

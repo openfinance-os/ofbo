@@ -1839,6 +1839,77 @@ paths:
                       data: { type: object, additionalProperties: true }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/billing/tpp-cost-documents:
+    post:
+      tags: [tpp-billing]
+      summary: Ingest a provider cost document — Nebras invoice primary (verified manual upload, BILL-14)
+      description: >
+        The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes
+        as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload
+        posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted,
+        second-person verification recorded from the verified identity-provider claim — the verifier
+        may not be the uploader, and neither is taken from the request body.
+
+
+        Provider payloads are redacted at parse time, before the first INSERT: the cost tables are
+        INSERT-only with no deletion path, so any customer detail a provider line carries would be
+        unremovable. Lines whose provider category has no fee-class mapping are stored flagged
+        `mapped: false` rather than dropped.
+
+
+        Replay of the same `Idempotency-Key` returns the stored result. The same issuer and document
+        reference carrying different content is a conflict, not a second document.
+      x-rate-limit-per-min: 20
+      x-required-scope: billing:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, document_type, billing_period, verified_by]
+              properties:
+                file: { type: string, format: binary }
+                document_type: { $ref: '#/components/schemas/TppCostDocumentType' }
+                billing_period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+                verified_by:
+                  type: string
+                  description: >
+                    The second person who verified this upload. Checked against the caller's own
+                    verified subject claim and refused when equal — it selects the verifier, it does
+                    not assert one.
+                source_note: { type: string, description: e.g. email received date / sender }
+      responses:
+        '201':
+          description: Document ingested with its parsed lines; reconciliation NOT yet run (BILL-15)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostDocument' }
+        '200':
+          description: Idempotent replay of a previously ingested document
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostDocument' }
+        '409':
+          description: >
+            'Rejected: the same issuer and document reference already exists with different content,
+            or the nominated verifier is the uploader.'
+        default: { $ref: '#/components/responses/Error' }
+
   # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------
   /back-office/tpp-counterparties:
     get:
@@ -3572,6 +3643,64 @@ components:
         status: { type: string, enum: [ingested, reconciling, reconciled_clean, reconciled_with_breaks] }
         open_break_count: { type: integer }
         nebras_billing_query_refs: { type: array, items: { type: string }, description: Nebras case references for disputed lines (30-day window) }
+    TppCostDocumentType:
+      type: string
+      description: Provider cost-document taxonomy (ADR 0007 D9, IG v5.0 §10). Nebras tax invoice is primary.
+      enum:
+        - nebras_tax_invoice
+        - nebras_settlement_statement
+        - lfi_self_invoice
+        - credit_note
+        - debit_note
+        - manual_adjustment
+    TppCostDocumentLine:
+      type: object
+      description: >
+        One provider line. `source_category` is the provider's own category, kept verbatim as
+        evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false.
+      properties:
+        line_ref: { type: string }
+        source_category: { type: string }
+        fee_class: { type: string, nullable: true }
+        mapped:
+          type: boolean
+          description: False when the provider category resolves to no known fee class. Such a line is flagged, never dropped.
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        units: { type: integer }
+        unit_price_milli_fils: { type: integer, description: Integer milli-fils (see BILL-17 — the unit is unratified) }
+        actual_net_milli_fils: { type: integer }
+        vat_milli_fils: { type: integer }
+        actual_gross_milli_fils: { type: integer }
+    TppCostDocument:
+      type: object
+      properties:
+        document_id: { type: string, format: uuid }
+        document_type: { $ref: '#/components/schemas/TppCostDocumentType' }
+        issuer_id: { type: string }
+        recipient_id: { type: string }
+        document_reference: { type: string }
+        billing_period: { type: string, description: 'YYYY-MM' }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        net_milli_fils: { type: integer }
+        vat_milli_fils: { type: integer }
+        gross_milli_fils: { type: integer }
+        document_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        issued_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        verified_by: { type: string, description: The second person who verified the upload; never equal to the uploader }
+        verified_at: { type: string, format: date-time }
+        unmapped_line_count:
+          type: integer
+          description: Lines stored with mapped=false, awaiting a category mapping. Non-zero is a signal, not a failure.
+        redacted_field_count:
+          type: integer
+          description: >
+            How many provider fields were redacted at parse time. Key paths are audited; the removed
+            values are never stored or logged.
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostDocumentLine' }
     InvoiceRun:
       type: object
       properties:

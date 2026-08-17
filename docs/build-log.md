@@ -3253,3 +3253,80 @@ Its acceptance criteria include the anti-vacuous test this story learned to insi
 fail-closed directly, and prove the test fails if the fallback clause is restored.
 
 No code changed. Backlog and build log only.
+
+## 2026-08-17 — BILL-14: provider-document ingestion (Nebras-primary taxonomy)
+
+The payable actuals. `POST /back-office/billing/tpp-cost-documents` added **spec-first** (93 → 94 paths,
+client regenerated), then failing tests, then code — the parser tests were confirmed red 14/14 before the
+module existed.
+
+**Parsing behind an adapter.** `TppCostDocumentParser` is the seam; the Nebras tax-invoice parser is the
+one implementation, so a PDF/EDI/API transport can be added without touching the ingest service. VAT is
+split by **stream**, not by document (ADR 0007 D4): Hub sections are VAT-exclusive so 5% is added to the
+stated net, underlying-LFI sections are VAT-inclusive so 5/105 is carved out of the stated gross. Gross is
+always computed as net + vat rather than net × 1.05, so the three reconcile exactly under half-up rounding
+at every amount — asserted across a range, not one example. Document totals are **derived from the lines**
+and then checked against the provider's own; a disagreement is refused, because "trust the header" and
+"trust the lines" are both wrong when they conflict.
+
+**A deliberately partial category map.** Five categories map to fee classes we already price. Four are
+knowingly unmapped: `Balance (Discounted)` and `CoP (Discounted)` because the IG §10.9 sample carries a
+unit anomaly (0.25 vs 0.005) that BD-20 must resolve on a real invoice, and `Payment Data` and
+`Setup and Consent` because no current fee class corresponds without inventing scheme semantics. Mapping
+them now would silently mis-state the payable; flagging them cannot. Unmapped lines persist with
+`mapped: false` and `fee_class NULL`, which the schema CHECK ties together. The map is versioned data with
+a cited source, so a correction is config, not a release.
+
+### The redaction control, and two bugs the double-check caught
+
+Criterion 5 was the load-bearing one: these tables are INSERT-only with no deletion path, so customer
+detail must be removed **before** the first INSERT. Redaction keys on field NAMES and on identifier
+SHAPES — and the shape choice matters more than it looks. The repo's PII guard refuses real-shaped
+fixtures, forcing synthetic forms (national-identifier prefix 999, IBAN bank code 000). That pushed the
+redactor to match `\d{3}-\d{4}-\d{7}-\d` and `AE` + 21 digits **structurally** rather than by prefix or
+bank code — which is precisely what makes it catch a real value it has never been shown. A hook that
+looked like an obstacle produced a better control.
+
+The parser redacts and has no accessor for the raw payload; the store re-checks at the boundary that makes
+a write permanent. That second check found two defects that no review had to:
+
+1. **Redaction was not idempotent.** Replacing a PSU-named field keeps its key, so re-running the redactor
+   flagged the same keys again — and the boundary check reads "reported something" as "never redacted". It
+   rejected correct writes. Already-redacted values are now left alone and not re-reported, and idempotence
+   is its own test, because a control depending on a property should assert that property.
+2. **Two patterns were eating the invoice TRNs.** A generic long-digit-run rule and an unanchored phone
+   pattern both matched a 15-digit UAE TRN (`100123456700003` contains `00` followed by twelve digits). TRNs
+   are **required** header evidence under IG §10.9, so redaction was destroying a mandatory field and
+   inflating the count an auditor reads. The digit-run rule is gone and the phone prefix is anchored so it
+   cannot match inside a longer number. The residual risk — an account number under a key the list does not
+   recognise — is now stated in the code with where the fix belongs, rather than papered over by a heuristic
+   that destroys required evidence.
+
+**Migration 0040 grants what BILL-13 withheld.** The cross-tenant internal-view read on
+`billing_tpp_cost_document` was deliberately held back until redaction existed; it is now granted, and
+BILL-13's own test was narrowed from a frozen table list to the *condition* (redaction proven), so it still
+fails if `ap_dispatch` — whose `response_payload` is P9's, with no redaction until BILL-16 — ever inherits
+a grant it has not earned.
+
+**Second-person verification, claimed accurately.** `verified_by` is checked against the caller's verified
+P2 subject claim and an upload nominating its own uploader is refused (409), normalised so one human under
+two spellings cannot pass as two people. What that proves is **distinctness**, not that the verifier
+authenticated — a request carries one credential — and the code says so, pointing at four-eyes (202 +
+`approval_request`) as where the stronger control lives. Given how often this track has been caught
+over-claiming a control, the comment matters as much as the check.
+
+**The absence alarm** anchors on the 5th of the month following the period, moving off a weekend only —
+public holidays are an institution calendar the Back Office does not own, so it errs late rather than
+alarming on a day the Hub was never obliged to deliver. It fires only once the anchor has passed, and a
+credit note does not count as an invoice. IG §10.12.2 makes reporting non-receipt the participant's own
+obligation, which is what makes this a compliance control rather than a convenience.
+
+**Gates:** unit 1455/1455; integration 179/179 across 78 files on a pristine PostgreSQL 16.13; Q4.5 PASSED
+with `billing_tpp_cost_document` and `_document_line` now covered, allowed gaps none; typecheck 0; ESLint
+clean; Q1b no weakening detected. `docs:check` earned its keep — the anti-drift gate caught the README's
+stale "93 paths" the moment the spec grew.
+
+**Still open, and inherited rather than introduced:** the directory `OverLimitFees` unit is still
+unconfirmed because the egress policy continues to deny `data.directory.openfinance.ae` (rating stays
+fail-closed), and BD-20 still needs the first real Nebras invoice — which is also what resolves the four
+unmapped categories. Both now carry to BILL-15.

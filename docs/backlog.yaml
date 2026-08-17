@@ -786,7 +786,7 @@ milestones:
             billing_tpp_cost_* table (schema assertion).
       - id: BILL-14
         title: Provider-document ingestion (Nebras-primary taxonomy)
-        status: pending
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-13]
@@ -841,6 +841,43 @@ milestones:
             who actually performed the verified-manual-upload check, stamped from the P2
             subject claim and never from operator-supplied input, and must refuse an upload
             whose verifier equals its uploader.
+        outcome: >-
+          POST /back-office/billing/tpp-cost-documents added spec-first (94 paths). Parsing lives in
+          packages/billing/src/tpp-cost-document.ts behind TppCostDocumentParser so a PDF/EDI/API
+          transport can be added without touching the ingest service. VAT is split by STREAM per ADR
+          0007 D4 - Hub sections VAT-exclusive (+5% on the stated net), underlying-LFI sections
+          VAT-inclusive (5/105 carved out of the stated gross) - and gross is always computed as
+          net+vat so the three reconcile exactly under half-up rounding. Document totals are DERIVED
+          from the lines and then checked against the provider's own; a disagreement is refused rather
+          than silently resolved in either direction. The category map is versioned DATA, and
+          deliberately PARTIAL - five categories map to fee classes we already price, and four are
+          knowingly unmapped: Balance (Discounted) and CoP (Discounted) because the IG 10.9 sample
+          carries a unit anomaly BD-20 must resolve, Payment Data and Setup and Consent because no
+          current fee class corresponds without inventing scheme semantics. Unmapped lines persist with
+          mapped=false and fee_class NULL, tied together by the schema CHECK. Redaction happens at
+          PARSE time, before anything can be persisted, keyed on field NAMES and on identifier SHAPES
+          (so a real value the redactor has never seen is still caught), with the store re-checking at
+          the boundary that makes a write permanent. Two redaction bugs were found by that
+          double-check rather than in review: the redactor was not idempotent (re-running flagged
+          already-redacted keys, so the boundary check rejected correct writes), and a generic
+          long-digit-run rule plus an unanchored phone pattern were both redacting the 15-digit TRNs
+          that IG 10.9 REQUIRES in the header - business identifiers must survive redaction, and the
+          residual risk of an account number under an unrecognised key is now stated rather than
+          papered over with a heuristic that destroys required evidence. Migration 0040 grants the
+          cross-tenant internal-view read on billing_tpp_cost_document that BILL-13 deliberately
+          withheld, now that redaction is proven against a persisted row; ap_dispatch stays withheld
+          for BILL-16 on the same terms. verified_by is bound to the caller's verified P2 claim and an
+          upload nominating its own uploader as verifier is refused (409) - which proves DISTINCTNESS,
+          not that the verifier authenticated, and the code says so rather than over-claiming. The
+          absence alarm anchors on the 5th of the following month, moving off a weekend, fires only
+          once the anchor has passed, and treats a credit note as not-an-invoice. Evidence: unit
+          1455/1455, integration 179/179 across 78 files on a pristine PostgreSQL 16.13, Q4.5 PASSED
+          with both document tables covered and allowed gaps none, typecheck 0, ESLint clean,
+          doc-link-check clean (the anti-drift gate caught a stale README path count), Q1b no
+          weakening detected. STILL OPEN and inherited: the directory OverLimitFees unit remains
+          unconfirmed because the egress policy still denies data.directory.openfinance.ae - rating
+          stays fail-closed - and BD-20 still needs the first REAL Nebras invoice, which is also what
+          resolves the four unmapped categories.
       - id: BILL-15
         title: Three-way payable reconciliation + dispute-window management
         status: pending

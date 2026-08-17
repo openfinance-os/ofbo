@@ -490,17 +490,21 @@ describe('PgBillingTppCostStore', () => {
     }
   })
 
-  it('withholds cross-tenant internal-view reads on the two provider-fed payload tables', async () => {
-    // Least privilege while redaction is still owed by BILL-14/BILL-16: the free-form provider
-    // columns must not be readable across the tenant boundary by inheriting a loop's grant.
+  it('withholds cross-tenant internal-view reads on any provider-fed payload table lacking redaction', async () => {
+    // Least privilege until redaction exists for that table's write path. BILL-13 withheld BOTH
+    // provider-fed tables; BILL-14 then earned the document one by redacting at parse time and
+    // proving it against a persisted row, and granted it in migration 0040. ap_dispatch is still
+    // withheld because its response_payload is P9's, written by BILL-16, with no redaction yet — so
+    // this assertion tracks the CONDITION (redaction proven) rather than a frozen table list.
     const granted = await admin.query(
       `SELECT table_name FROM information_schema.role_table_grants
         WHERE grantee = 'bank_internal_view' AND privilege_type = 'SELECT'
           AND table_name LIKE 'billing_tpp_cost%'`
     )
     const names = granted.rows.map((row) => row.table_name as string)
-    expect(names).not.toContain('billing_tpp_cost_document')
     expect(names).not.toContain('billing_tpp_cost_ap_dispatch')
+    // Granted only once its redaction control shipped and was tested (BILL-14 criterion 5).
+    expect(names).toContain('billing_tpp_cost_document')
     // The schema-constrained, PSU-free relations keep the ratified governed-aggregate access.
     expect(names).toContain('billing_tpp_cost_statement')
     expect(names).toContain('billing_tpp_cost_statement_line')
