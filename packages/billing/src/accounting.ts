@@ -46,7 +46,15 @@ export interface JournalInstruction {
   journalId: string
   period: string
   postingDate: string
-  sourceType: 'pint_ae_invoice' | 'pint_ae_credit_note' | 'hub_payable' | 'net_settlement'
+  /**
+   * Receivable sources plus the five BILL-16 payable ones (ADR 0007 D4). One union, because the
+   * payable and receivable journals post to a single general ledger and a close pack that could not
+   * see both halves would not be a close.
+   */
+  sourceType:
+    | 'pint_ae_invoice' | 'pint_ae_credit_note' | 'hub_payable' | 'net_settlement'
+    | 'nebras_hub_payable' | 'lfi_payment_fee_payable' | 'lfi_data_fee_payable'
+    | 'payable_credit_note' | 'payable_variance'
   sourceId: string
   lines: JournalLine[]
   debitFils: number

@@ -46,6 +46,45 @@ function routedFetch(routes: Array<[match: string, body: unknown, status?: numbe
   }) as unknown as typeof fetch
 }
 
+/**
+ * P9's payable routes, which `routedFetch` cannot serve because they are STATEFUL.
+ *
+ * The port contract requires a retried dispatch to report `replayed: true` with the same
+ * `dispatch_ref`, and that guarantee belongs to the vendor's own idempotency-key dedupe — the
+ * adapter only surfaces it. A fake returning a fixed body would make the enterprise side pass the
+ * replay assertion while proving nothing about it, so this models the dedupe instead.
+ *
+ * Order matters here too: `/payables/{ref}/status` must be answered before the bare `/payables`
+ * POST route and before P9's `/status` route, which it would otherwise match.
+ */
+function financialSystemFetch(): typeof fetch {
+  const dispatched = new Map<string, string>()
+  const base = routedFetch([
+    ['/counterparties', { financial_system_ref: 'fms-org-001' }],
+    ['/status', { invoice_status: 'issued' }],
+    ['/journal-batches', { accepted: true, journal_batch_ref: 'GL-BATCH-2026-06' }],
+    ['/invoice-runs', { accepted: true }]
+  ])
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url)
+    if (u.includes('/payables/') && u.endsWith('/status')) {
+      return json({ payable_status: 'presented' })
+    }
+    if (u.includes('/payables')) {
+      const key = new Headers(init?.headers).get('idempotency-key') ?? ''
+      const existing = dispatched.get(key)
+      if (existing) return json({ accepted: true, dispatch_ref: existing, payable_status: 'dispatched', replayed: true })
+      const ref = `fms-pay-${dispatched.size + 1}`
+      dispatched.set(key, ref)
+      return json({ accepted: true, dispatch_ref: ref, payable_status: 'dispatched', replayed: false })
+    }
+    return (base as unknown as (u: string | URL | Request, i?: RequestInit) => Promise<Response>)(url, init)
+  }) as unknown as typeof fetch
+}
+
 const token = async () => 'bench-token'
 
 /**
@@ -147,14 +186,9 @@ export function buildEnterpriseBench(): { [K in PortName]: PortMap[K] } {
     'p9-financial-system': createFinancialSystemAdapter({
       baseUrl: 'https://fms.bank.example',
       getToken: token,
-      // Order matters — first match wins, and the status path is a SUFFIX of the run path
-      // (`/invoice-runs/{ref}/status`), so it must be listed before `/invoice-runs`.
-      fetchImpl: routedFetch([
-        ['/counterparties', { financial_system_ref: 'fms-org-001' }],
-        ['/status', { invoice_status: 'issued' }],
-        ['/journal-batches', { accepted: true, journal_batch_ref: 'GL-BATCH-2026-06' }],
-        ['/invoice-runs', { accepted: true }]
-      ])
+      // Stateful: the BILL-16 payable routes model the vendor's idempotency-key dedupe, which the
+      // replay assertion in the contract suite is actually about. See financialSystemFetch.
+      fetchImpl: financialSystemFetch()
     }),
 
     'p10-str-workflow': createStrWorkflowAdapter({
