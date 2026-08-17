@@ -3214,3 +3214,42 @@ claim of authority on `main` while asking a human to decide the same question wo
 escalation. One comment line, in the story that surfaced it.
 
 Verified: typecheck 0; unit 1423/1423; ESLint clean.
+
+### BILL-13 addendum 14 — a review reopened a cleared finding, and it was right to
+
+Hard-stop on `7f70892`: FAIL (8). It confirms this branch's fixes landed — it now credits the PSU test
+for asserting "both the absent identifier *value* and the absent `psu` key shape", and notes the diff
+"only corrects a comment that had wrongly cited CLAUDE.md as the unit's source". Seven findings are the
+dispositioned deferrals, each flagged uncertain.
+
+The eighth is one **earlier rounds explicitly cleared**: the `internal_view_select` policy is fail-OPEN
+when `app.tenant_group` is unset — a session holding `bank_internal_view` with nothing pinned reads every
+tenant's rows. Round 6 dismissed it as "verbatim the ratified HOST-02 / ADR 0028 pattern … not new here,
+so not raised". Both readings are factually right, and the later one is more useful: the idiom is
+pre-existing AND this story widens what it covers.
+
+Verified before acting, and it produced a correction in the reviewer's favour and one against it:
+
+- **The fail-open branch is real.** `NULLIF(current_setting('app.tenant_group', true), '') IS NULL OR
+  bank_id IN (…)` passes all rows when unset. It is deliberate single-tenant backward compatibility per
+  ADR 0028, reachable only through `runGovernedAggregate` behind a registered, approved purpose with a
+  High-class-logged bypass — a hardening item, not a live breach.
+- **The blast radius is six tables, not the eight claimed.** 0039's loop excludes
+  `billing_tpp_cost_document` and `billing_tpp_cost_ap_dispatch`. Those are exactly the two provider-fed
+  payload tables the same review flags under FAIL 3 as potential PSU sinks — so the withheld grant from
+  addendum 4 already puts the riskiest two outside the cross-tenant read. The review's own two findings
+  intersect where the story had already closed the gap.
+
+What I did *not* do is change the policy. Deviating in one migration would leave nine policies disagreeing
+about what an unpinned session means, which is worse than a consistent known weakness. What was actually
+missing is an owner: ADR 0028's Consequences records the fix verbatim as a "marked follow-up", its
+prerequisite HOST-02 is `done`, and **no backlog item owned it**. So **HOST-04** now does, carrying the
+measured surface (the idiom appears in nine migrations — 0030 defines it, 0031-0037 and 0039 use it), the
+six-not-eight correction, the requirement that the fix be one pass over the shared idiom rather than
+per-migration patches, and the open question it needs answered: whether unpinned should deny all rows or
+resolve an explicit default group, since the demo profile currently depends on the fallback.
+
+Its acceptance criteria include the anti-vacuous test this story learned to insist on the hard way — prove
+fail-closed directly, and prove the test fails if the fallback clause is restored.
+
+No code changed. Backlog and build log only.

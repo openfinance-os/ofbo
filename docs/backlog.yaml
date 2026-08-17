@@ -345,6 +345,38 @@ milestones:
         acceptance:
           - A Proposed ADR covering custody options, rotation/revocation lifecycle, residency,
             liability allocation, and the audit trail for certificate use; no code changes.
+      - id: HOST-04
+        title: "Fail-closed internal_view_select when app.tenant_group is unpinned"
+        status: pending
+        depends_on: [HOST-02]
+        note: >-
+          ADR 0028 Consequences records this verbatim as a "marked follow-up" and HOST-02 (its
+          prerequisite) is done, but nothing owned it until now - surfaced by BILL-13's hard-stop
+          review, which read the pattern as fail-open. It is. Every internal_view_select policy
+          reads
+          `NULLIF(current_setting('app.tenant_group', true), '') IS NULL OR bank_id IN (...)`,
+          so a session holding bank_internal_view with no tenant_group pinned reads EVERY tenant's
+          rows. That is deliberate single-tenant backward compatibility (ADR 0028), not an
+          oversight, and it is reachable only via runGovernedAggregate behind a registered and
+          approved query purpose with a High-class-logged bypass - so it is a hardening item, not
+          a live breach. MEASURED surface, since it has grown and future stories keep widening it -
+          the idiom now appears in NINE migrations: 0030 (defines it) and 0031, 0032, 0033, 0034,
+          0035, 0036, 0037, 0039. BILL-13 (0039) added SIX tables, not eight - its loop excludes
+          billing_tpp_cost_document and billing_tpp_cost_ap_dispatch, which is why the two
+          provider-fed payload tables that could carry PSU detail are already outside the
+          cross-tenant read. Fixing this must be ONE pass over the shared idiom, not per-migration
+          patches, or the policies drift apart; and it needs a decision on what unpinned should
+          mean (deny all rows, or resolve a default single-tenant group explicitly) since the demo
+          profile relies on the current behaviour.
+        acceptance:
+          - Unpinned app.tenant_group denies rows rather than returning all tenants, across every
+            table carrying internal_view_select, applied as one change to the shared idiom.
+          - The demo single-tenant profile still works, by an explicit group rather than by the
+            absent-setting fallback; seed and all existing tests stay green.
+          - An integration test proves the fail-closed behaviour directly - role held,
+            app.tenant_group unset, zero rows returned - on at least one table per migration
+            family, and proves it FAILS if the fallback clause is restored.
+          - runGovernedAggregate's registered-purpose path is unaffected and still audited.
       - id: INS-01
         title: Insurance module — line types, quote-fee reconciliation, insurance consent purposes
         status: blocked
