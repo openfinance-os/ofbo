@@ -58,6 +58,16 @@ function snapshot(rateMilliFils: number, id: string): DirectoryOverageSnapshot {
   }
 }
 
+/**
+ * The synthetic PSU identifier the metered events carry, and which must never reach the cost ledger.
+ *
+ * Deliberately an OPAQUE uuid with no `psu` substring. A `psu-`-prefixed value would make the
+ * absence assertion below pass on the fixture's own naming rather than on the property under test:
+ * a production-shaped identifier could then sit in `statement_payload` and the test would stay green.
+ * Synthetic and PII-free either way — no Emirates ID, no IBAN, no name (CLAUDE.md hard stop).
+ */
+const SYNTHETIC_PSU_REF = randomUUID()
+
 /** One outbound payment and one overage-bearing data call: a Hub cost and two LFI costs. */
 function outboundEvents(suffix: string) {
   const base = {
@@ -66,7 +76,7 @@ function outboundEvents(suffix: string) {
     tppId: `bank-as-tpp-${suffix}`,
     clientId: 'client-a',
     counterpartyLfiId: 'lfi-alpha',
-    psuId: `psu-${suffix}`
+    psuId: SYNTHETIC_PSU_REF
   }
   const event = (id: string, extra: Record<string, unknown>) => parseBillingCloudEvent({
     specversion: '1.0',
@@ -236,8 +246,18 @@ describe('PgBillingTppCostStore', () => {
       [statementId]
     )
     const serialised = JSON.stringify(dump.rows[0].s) + JSON.stringify(lineDump.rows.map((r) => r.l))
+
+    // The property: the identifier VALUE the events carried is absent. This is what catches a
+    // regression that projects psuId into a statement, because it does not depend on the identifier
+    // being named in a way the regex happens to recognise.
+    expect(SYNTHETIC_PSU_REF).toMatch(/^[0-9a-f-]{36}$/)
+    expect(serialised).not.toContain(SYNTHETIC_PSU_REF)
+    // And no PSU-shaped KEY either, which is the separate failure of leaking the field name.
     expect(serialised).not.toMatch(/psu/i)
+    // The event ids ARE carried, and they are the sanctioned drill-down path to billing_event where
+    // psu_id is already governed — so the absence above is a real exclusion, not an empty payload.
     expect(statement.lines.length).toBeGreaterThan(0)
+    expect(statement.lines.every((line) => line.eventIds.length > 0)).toBe(true)
   })
 
   it('isolates tenants: another bank cannot see or read this statement', async () => {

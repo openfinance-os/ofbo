@@ -3057,3 +3057,72 @@ mis-denominated row is not.
 
 Re-verified on a pristine database: unit 1423/1423; integration **170/170** across 77 files; Q4.5 PASSED,
 allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 9 — two precise details, both handed to the story that will hit them
+
+Contract review on `bad2946`: **DRIFT (7)**, confirming addendum 8's export test and the AED reasoning
+landed. Five findings are previously assessed and unchanged in disposition. Two carried detail worth
+recording, neither a code defect:
+
+1. **On `_rerating`, "join the parent for currency" has no single answer.** Addendum 7 recorded that four
+   tables hold amounts with no `currency` column, so a conformant per-line `Money` needs a parent join.
+   The reviewer noticed what that recording missed: `billing_tpp_cost_rerating` carries **two** statement
+   foreign keys (`previous_statement_id`, `corrected_statement_id`, 0039:371-372), so "the parent" is not
+   singular there and BILL-17 must decide which denominates a delta rather than assume one exists. Added
+   to its criterion.
+2. **`response_status` is the same defect class as `scope_used`, and gets the same treatment.** The two
+   emissions stamp `response_status: 200` from a scheduled monthly job that issues no HTTP response, and
+   the reviewer is right that `:122` is wrong on its own terms — it stamps 200 on the path that reports a
+   *skip*. Checked before deciding: 20 `response_status` occurrences exist across
+   `services/bff/src/billing` with mixed values, so this is a repo-wide pattern, and
+   `AuditEvent.response_status` is an unconstrained integer with no description — the contract does not
+   say what a non-HTTP actor should record. Fixing only these two would recreate exactly the
+   inconsistency that made half-fixing `billing:rate` the wrong call. So CODE-03 now owns both fields, to
+   be settled in one pass with the options named (omit, sentinel, or an explicit outcome field).
+
+Not changed, and stated once so it is not re-litigated: the nine frozen vocabularies, the camelCase jsonb
+exception, the milli-fils unit, and the AED narrowing all keep the dispositions recorded in addenda 4–8.
+The reviewer agrees with each framing and reports them, correctly, so the pre-commitment is on the record
+at the point it happened rather than discovered at BILL-17.
+
+Verified: unit 1423/1423; integration 170/170 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 10 — the PII guard did not guard, which is the third of these
+
+Hard-stop on `bad2946`: FAIL (6), five of them the documented deferrals with unchanged dispositions. The
+sixth is the important one, and it is the **third vacuous-assertion defect this PR has produced**:
+
+> The test carrying the "zero PSU data in the cost ledger" claim asserts it with
+> `expect(serialised).not.toMatch(/psu/i)` against a fixture whose PSU identifier is literally
+> `psu-<uuid>`, so the assertion passes on the substring the fixture was named with rather than on the
+> property.
+
+Right, and it is the worst-placed of the three: the PSU claim is a **regulatory hard stop**, and the
+migration header (`:19-22`) leans on "asserted by test" as its mitigation. A production-shaped identifier —
+an opaque uuid, an IBAN, an Emirates ID — would have satisfied `/psu/i` while sitting in
+`statement_payload`. The reviewer also did the right thing before reporting: it verified the underlying
+claim structurally (no PSU field on `ExpectedTppCostStatement`, `psuId` dropped rather than spread at
+aggregation, no PSU column in any of the eight tables) and reported only the guard, not the property.
+
+Fixed by making the fixture's identifier an **opaque uuid with no `psu` substring** and asserting the
+absence of that specific VALUE, so the test depends on the property rather than on the naming. The
+`/psu/i` check is kept alongside it — it still catches the distinct failure of leaking the field *name* —
+and the assertion that event ids ARE present is kept too, so the absence is a real exclusion rather than
+an empty payload. Proven to discriminate by injecting the exact regression it exists to catch (leaking the
+identifier into the persisted payload): the PSU test turns red, and green again once reverted.
+
+**Three for three, and the pattern is the finding.** C2 was the tenant-composite FK, addendum 8 was the
+portable export, this is the PSU guard. In each case the control was real and the *evidence* was not, and
+in each case I had cited the test in this log as proof the control worked. Writing a control and evidencing
+a control are separate steps; on this story I repeatedly treated the first as discharging the second, and
+only an adversarial reader caught it — three times, on three different controls. The lesson for the next
+ledger story is procedural, not technical: for every control claimed in a build-log entry, break it
+deliberately and watch the test fail before writing the claim down.
+
+Two details from the contract review on the same head were also recorded (addendum 9): the `_rerating`
+two-parent ambiguity for per-line currency, and `response_status` folded into CODE-03 as the same class of
+HTTP-shaped-field-on-a-headless-emitter defect as `scope_used`.
+
+Verified on a pristine database: unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed
+gaps none; typecheck 0; ESLint clean; doc-link-check clean.
