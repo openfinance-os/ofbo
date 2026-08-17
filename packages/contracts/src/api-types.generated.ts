@@ -5502,8 +5502,11 @@ export interface components {
             fee_class?: string | null;
             /** @description The provider's own wording, retained because a billing query cites it back to them. */
             source_category?: string | null;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
             expected_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
             actual_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
             variance_milli_fils: number;
             variance_basis_points: number;
             /** @description Exceeds the tolerance. A wrong recipient is material at zero variance. */
@@ -5515,10 +5518,13 @@ export interface components {
              */
             reconciliation_break_id?: string | null;
         };
+        /** @description Every amount below is an integer in milli-fils — thousandths of a fil — under `currency`. That unit DEVIATES from the binding money convention (integer minor units + ISO 4217) and is unratified; BILL-17 owns resolving it, either by converting to `Money` at this boundary or by ratifying milli-fils. The currency is carried explicitly so the amounts are never bare integers, which is the shape that would make that conversion expensive. */
         TppCostReconciliation: {
             /** @description YYYY-MM */
             period: string;
-            /** @description Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute. Configurable; defaults to one fil. */
+            /** @description ISO 4217 for every milli-fils amount in this object and its breaks. */
+            currency: string;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute. Configurable; defaults to one fil. */
             tolerance_milli_fils: number;
             /** @description IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21). */
             query_window_days: number;
@@ -5536,12 +5542,13 @@ export interface components {
             };
             matched_line_count: number;
             break_count: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). */
             expected_total_net_milli_fils: number;
-            /** @description What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
             actual_total_net_milli_fils: number;
-            /** @description Signed, so opposing errors net. The headline exposure. */
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Signed, so opposing errors net. The headline exposure. */
             net_variance_milli_fils: number;
-            /** @description Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
             gross_variance_milli_fils: number;
             /** @description IG §10.17 penalties matched to a recorded late payment for this period. */
             penalty_lines_accepted: number;

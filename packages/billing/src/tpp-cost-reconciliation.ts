@@ -130,6 +130,15 @@ export function payableBreakToLineType(
 /** The expectation fields reconciliation reads. Structurally satisfied by `ExpectedTppCostStatement`. */
 export interface ReconcilableExpectedStatement {
   period: string
+  /**
+   * Carried through to the result and onto the wire.
+   *
+   * Every amount here is milli-fils, a sub-minor unit that deviates from the binding money convention
+   * and is unratified pending BILL-17. That is a reason to publish the currency beside the amounts,
+   * not to omit it: a bare integer with neither unit nor currency is the shape that makes the eventual
+   * conversion to `Money` expensive, and the sibling `TppCostDocument` schema already requires it.
+   */
+  currency: string
   lines: readonly ExpectedTppCostStatementLine[]
 }
 
@@ -221,6 +230,8 @@ export interface PayableReconciliationPerDocument {
 
 export interface PayableReconciliation {
   period: string
+  /** ISO 4217, carried from the expectation. Every milli-fils amount below is in this currency. */
+  currency: string
   toleranceMilliFils: number
   queryWindowDays: number
   queryDeadline: string
@@ -721,6 +732,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
   })
 
   return {
+    currency: expected.currency,
     documentIds: documents.map((document) => document.documentId),
     perDocument,
     period: expected.period,
@@ -798,11 +810,22 @@ export interface BillingQueryBundle extends BillingQueryBundleInput {
  *   consumed do not come back. Building it partial is worse than not building it.
  * - A closed window means asserting a claim we no longer hold. `daysRemaining` is computed by
  *   `reconcilePayable` from evidence, so this reads a fact rather than a clock.
- * - Customer detail in `transactionDetail` would export PSU data to the scheme. §10.11.3 asks for
- *   "payment/transaction detail" and the obvious reading is to attach the payment; the fields a query
- *   actually needs are the charge's own facts — fee class, category, units, amounts — so the guard
- *   refuses rather than redacts, exactly as BILL-14 does for structured columns. Non-string values are
- *   passed through unexamined because a number cannot carry an identifier shape.
+ * - Customer detail would export PSU data to the scheme. §10.11.3 asks for "payment/transaction
+ *   detail" and the obvious reading is to attach the payment; the fields a query actually needs are
+ *   the charge's own facts — fee class, category, units, amounts — so the guard refuses rather than
+ *   redacts, exactly as BILL-14 does for structured columns.
+ *
+ * Every text field on the bundle is screened, not only `transactionDetail`. `reasonCode` is the one
+ * that makes this more than belt-and-braces: an unmapped line's reason code embeds the provider's own
+ * `sourceCategory`, so provider-supplied text does reach the wire here. BILL-14 already refuses an
+ * identifier-shaped category at ingest, which is the right boundary — but that leaves this artefact
+ * depending on an invariant established two stories away, and it is the artefact that actually leaves
+ * the bank. Re-screening at the point of departure costs nothing and makes the bundle self-sufficient.
+ *
+ * Values are coerced to string before screening rather than skipped when non-string. The shapes
+ * currently all require a letter, dash, `@` or leading `+`/`00`, so a number cannot match one today —
+ * but that is a property of today's list, not of numbers, and a future digit-only rule would other-
+ * wise be silently bypassed by the one type that can carry digits.
  */
 export function buildBillingQueryBundle(input: BillingQueryBundleInput): BillingQueryBundle {
   for (const field of IG_BILLING_QUERY_REQUIRED_FIELDS) {
@@ -821,11 +844,18 @@ export function buildBillingQueryBundle(input: BillingQueryBundleInput): Billing
       `billing query window closed on ${input.queryDeadline}; the claim can no longer be asserted`
     )
   }
-  const strings: Record<string, string> = {}
-  for (const [name, value] of Object.entries(input.transactionDetail)) {
-    if (typeof value === 'string') strings[`transactionDetail.${name}`] = value
+  const screened: Record<string, string> = {
+    queryReference: input.queryReference,
+    invoiceNumber: input.invoiceNumber,
+    interactionId: input.interactionId,
+    lfiName: input.lfiName,
+    tppName: input.tppName,
+    reasonCode: input.reasonCode
   }
-  assertIdentifierFieldsClean(strings)
+  for (const [name, value] of Object.entries(input.transactionDetail)) {
+    screened[`transactionDetail.${name}`] = String(value)
+  }
+  assertIdentifierFieldsClean(screened)
   return { ...input, responseClocks: NEBRAS_RESPONSE_CLOCKS }
 }
 

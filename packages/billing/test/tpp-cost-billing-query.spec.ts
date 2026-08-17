@@ -88,6 +88,33 @@ describe('BILL-15 billing-query bundle (IG v5.0 §10.11.3)', () => {
     }))).toThrow(/email/i)
   })
 
+  it('screens the reason code, which carries provider-supplied text to the wire', () => {
+    // An unmapped line's reason code embeds the provider's own sourceCategory. BILL-14 refuses an
+    // identifier-shaped category at ingest — the right boundary — but this is the artefact that
+    // actually leaves the bank, so it must not depend on an invariant set two stories away.
+    expect(() => buildBillingQueryBundle(input({
+      reasonCode: 'provider category AE000000000000000000000 is not in category map 2026.06.02'
+    }))).toThrow(/iban/i)
+  })
+
+  it('screens the counterparty names too', () => {
+    expect(() => buildBillingQueryBundle(input({ lfiName: 'Bank (billing@example.com)' })))
+      .toThrow(/email/i)
+  })
+
+  it('still admits legitimate numeric detail now that non-strings are screened too', () => {
+    // Honest about what this proves: a REGRESSION guard, not evidence of the screen. Non-string values
+    // are coerced before screening so a future digit-only shape rule cannot be bypassed by the one
+    // type that carries digits — but no shape in today's list can match a bare number, so nothing here
+    // can demonstrate that screen firing. What it does establish is that widening it did not start
+    // refusing the amounts and counts every bundle carries.
+    const bundle = buildBillingQueryBundle(input({
+      transactionDetail: { feeClass: 'hub.standard', units: 1000, expectedNetMilliFils: fils(2500) }
+    }))
+    expect(bundle.transactionDetail.units).toBe(1000)
+    expect(bundle.transactionDetail.expectedNetMilliFils).toBe(fils(2500))
+  })
+
   it('keeps the scheme-shaped references a query is useless without', () => {
     // The refusal above must not eat the very identifiers §10.11.3 requires: an invoice number and an
     // interaction id are long opaque strings too, and a guard that ate them would make every query

@@ -43,8 +43,22 @@ type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
  */
 export const RECONCILIATION_WRITE_SCOPE = 'finance:reconciliation:write'
 
+/**
+ * Carries its OWN remediation.
+ *
+ * The contract defines `remediation` as what the caller can do to resolve the error, so one string
+ * shared across every failure is wrong by construction: telling someone whose document id does not
+ * exist to ingest an expected statement sends them to fix something that is not broken. The route had
+ * exactly that bug, and the route test only asserted the field was PRESENT — which is the difference
+ * between claiming a control and evidencing it.
+ */
 export class TppCostReconcileError extends Error {
-  constructor(readonly code: string, message: string, readonly status: number) {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly status: number,
+    readonly remediation: string
+  ) {
     super(message)
     this.name = 'TppCostReconcileError'
   }
@@ -96,7 +110,14 @@ export class TppCostReconcileService {
     idempotencyKey: string,
     traceId: string
   ): Promise<TppCostReconcileResult> {
-    if (!principal) throw new TppCostReconcileError('BACKOFFICE.UNAUTHENTICATED', 'Authentication required.', 401)
+    // Defence in depth: the auth middleware already guarantees a principal on this route, so this is
+    // unreachable through HTTP. It stays because the service is callable from a scheduled job too.
+    if (!principal) {
+      throw new TppCostReconcileError(
+        'BACKOFFICE.UNAUTHENTICATED', 'Authentication required.', 401,
+        'Present a valid bearer token from the enterprise identity provider (P2).'
+      )
+    }
     assertScope(principal, RECONCILIATION_WRITE_SCOPE)
 
     // The document identifies the period; the period is what is actually reconciled. A Nebras invoice
@@ -112,7 +133,8 @@ export class TppCostReconcileService {
         `No expected cost statement exists for ${period}, so there is nothing to reconcile against. `
         + 'Running anyway would classify every provider line as an unexpected charge, which reads as a '
         + 'provider fault when it is a missing projection on our side.',
-        409
+        409,
+        `Generate the expected cost statement for ${period} (BILL-12) before reconciling its documents.`
       )
     }
 
@@ -159,7 +181,8 @@ export class TppCostReconcileService {
       // Tenant-scoped by the store's own RLS session, so another tenant's document is a 404 here
       // rather than a 403 — the existence of their document is not ours to disclose.
       throw new TppCostReconcileError(
-        'BACKOFFICE.NOT_FOUND', `No cost document ${documentId} for this tenant.`, 404
+        'BACKOFFICE.NOT_FOUND', `No cost document ${documentId} for this tenant.`, 404,
+        'Check the document id against POST /back-office/billing/tpp-cost-documents, which returns it on ingest.'
       )
     }
     return period
@@ -273,6 +296,7 @@ export function billingQueryFor(
 export function tppCostReconciliationWire(result: PayableReconciliation): Record<string, unknown> {
   return {
     period: result.period,
+    currency: result.currency,
     tolerance_milli_fils: result.toleranceMilliFils,
     query_window_days: result.queryWindowDays,
     query_deadline: result.queryDeadline,
@@ -329,8 +353,7 @@ export function tppCostReconcileRoutes(
         } catch (error) {
           if (error instanceof TppCostReconcileError) {
             return c.json(
-              errorEnvelope(error.code, error.message,
-                'Ingest the period\'s expected statement (BILL-12) before reconciling its documents.', DOCS_BASE),
+              errorEnvelope(error.code, error.message, error.remediation, DOCS_BASE),
               error.status as ContentfulStatusCode
             )
           }

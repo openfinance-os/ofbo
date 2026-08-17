@@ -3822,12 +3822,19 @@ components:
           type: string
           nullable: true
           description: The provider's own wording, retained because a billing query cites it back to them.
-        expected_net_milli_fils: { type: integer }
-        actual_net_milli_fils: { type: integer }
-        variance_milli_fils: { type: integer }
+        expected_net_milli_fils:
+          type: integer
+          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
+        actual_net_milli_fils:
+          type: integer
+          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
+        variance_milli_fils:
+          type: integer
+          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
         variance_basis_points: { type: integer }
-        material: { type: boolean, description: Exceeds the tolerance. A wrong recipient is material at zero variance.
-        }
+        material:
+          type: boolean
+          description: Exceeds the tolerance. A wrong recipient is material at zero variance.
         reason_code: { type: string }
         reconciliation_break_id:
           type: string
@@ -3836,18 +3843,29 @@ components:
           description: The E1 break this was escalated as; null until it is escalated.
     TppCostReconciliation:
       type: object
+      description: >
+        Every amount below is an integer in milli-fils — thousandths of a fil — under `currency`. That
+        unit DEVIATES from the binding money convention (integer minor units + ISO 4217) and is
+        unratified; BILL-17 owns resolving it, either by converting to `Money` at this boundary or by
+        ratifying milli-fils. The currency is carried explicitly so the amounts are never bare
+        integers, which is the shape that would make that conversion expensive.
       required:
-        [period, tolerance_milli_fils, query_window_days, query_deadline, query_window_status,
-         days_remaining_at_ingest, response_clocks, matched_line_count, break_count,
-         expected_total_net_milli_fils, actual_total_net_milli_fils, net_variance_milli_fils,
-         gross_variance_milli_fils, penalty_lines_accepted, breaks]
+        [period, currency, tolerance_milli_fils, query_window_days, query_deadline,
+         query_window_status, days_remaining_at_ingest, response_clocks, matched_line_count,
+         break_count, expected_total_net_milli_fils, actual_total_net_milli_fils,
+         net_variance_milli_fils, gross_variance_milli_fils, penalty_lines_accepted, breaks]
       properties:
         period: { type: string, description: 'YYYY-MM' }
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 for every milli-fils amount in this object and its breaks.
         tolerance_milli_fils:
           type: integer
           description: >
-            Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit
-            artefact rather than a dispute. Configurable; defaults to one fil.
+            Integer milli-fils (see BILL-17 — the unit is unratified). Expected values are milli-fils
+            and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute.
+            Configurable; defaults to one fil.
         query_window_days:
           type: integer
           description: IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21).
@@ -3866,19 +3884,25 @@ components:
             escalation_review_days: { type: integer }
         matched_line_count: { type: integer }
         break_count: { type: integer }
-        expected_total_net_milli_fils: { type: integer }
+        expected_total_net_milli_fils:
+          type: integer
+          description: Integer milli-fils (see BILL-17 — the unit is unratified).
         actual_total_net_milli_fils:
           type: integer
           description: >
-            What the provider claims for THIS period. Off-period documents are excluded — they carry
-            their own period_variance break — so this is not the sum of the documents' own totals
-            whenever one is present.
+            Integer milli-fils (see BILL-17 — the unit is unratified). What the provider claims for
+            THIS period. Off-period documents are excluded — they carry their own period_variance
+            break — so this is not the sum of the documents' own totals whenever one is present.
         net_variance_milli_fils:
           type: integer
-          description: Signed, so opposing errors net. The headline exposure.
+          description: >
+            Integer milli-fils (see BILL-17 — the unit is unratified). Signed, so opposing errors net.
+            The headline exposure.
         gross_variance_milli_fils:
           type: integer
-          description: Absolute, so opposing errors do NOT net away. The amount actually in dispute.
+          description: >
+            Integer milli-fils (see BILL-17 — the unit is unratified). Absolute, so opposing errors do
+            NOT net away. The amount actually in dispute.
         penalty_lines_accepted:
           type: integer
           description: IG §10.17 penalties matched to a recorded late payment for this period.

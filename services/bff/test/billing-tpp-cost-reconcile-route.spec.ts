@@ -97,6 +97,10 @@ describe('POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
     expect(body.meta).toHaveProperty('request_id')
     expect(body.data).toMatchObject({
       period: PERIOD,
+      // Milli-fils is an unratified sub-minor unit, which is a reason to publish the currency beside
+      // the amounts rather than to omit it — a bare integer with neither unit nor currency is what
+      // would make BILL-17's conversion to Money expensive. The sibling TppCostDocument requires it.
+      currency: 'AED',
       query_window_status: 'open',
       break_count: 1,
       response_clocks: { first_response_minutes: 10, final_response_days: 10, escalation_review_days: 15 }
@@ -126,7 +130,11 @@ describe('POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
     expect(response.status).toBe(404)
     const body = await response.json() as { error: { code: string; remediation: string } }
     expect(body.error.code).toBe('BACKOFFICE.NOT_FOUND')
-    expect(body.error).toHaveProperty('remediation')
+    // The remediation must fit THIS error. Asserting only that the field exists is what let a single
+    // hardcoded string — "ingest the expected statement" — be returned for a bad document id, sending
+    // the caller to fix something that was not broken.
+    expect(body.error.remediation).toMatch(/document id/i)
+    expect(body.error.remediation).not.toMatch(/expected cost statement/i)
   })
 
   it('answers 409 with the error envelope when the period has no expected statement', async () => {
@@ -136,9 +144,13 @@ describe('POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
       headers: { ...financeHeaders, 'idempotency-key': randomUUID() }
     })
     expect(response.status).toBe(409)
-    const body = await response.json() as { error: { code: string; message: string; docs_url: string } }
+    const body = await response.json() as {
+      error: { code: string; message: string; docs_url: string; remediation: string }
+    }
     expect(body.error.code).toBe('BACKOFFICE.NO_EXPECTED_STATEMENT')
     expect(body.error).toHaveProperty('docs_url')
+    // This is the one error the statement remediation actually fits, and it names the period.
+    expect(body.error.remediation).toMatch(/expected cost statement for 2026-06/i)
   })
 
   it('fails closed when no reconciliation store is configured', async () => {
