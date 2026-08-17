@@ -77,6 +77,52 @@ export function tppCostEvidenceHash(value: unknown): string {
 }
 
 /**
+ * The wall-clock fields on a statement's evidence: WHEN it was generated and rated, as distinct from
+ * WHAT was computed. The monthly worker sets both from its own run clock, so they legitimately differ
+ * between a first run and a resumed or replayed one.
+ */
+const CLOCK_EVIDENCE_FIELDS = ['generatedAt', 'ratingRunAt'] as const
+
+function withoutClockReadings(statement: unknown): unknown {
+  if (statement === null || typeof statement !== 'object') return statement
+  const { evidence, ...rest } = statement as Record<string, unknown>
+  if (evidence === null || typeof evidence !== 'object') return statement
+  const trimmed = { ...(evidence as Record<string, unknown>) }
+  for (const field of CLOCK_EVIDENCE_FIELDS) delete trimmed[field]
+  return { ...rest, evidence: trimmed }
+}
+
+/**
+ * Digest of a statement's SUBSTANCE — every field except the two clock readings above.
+ *
+ * This is what divergence is compared on, and it is deliberately NOT `evidence_hash`. Scheduled jobs
+ * in this repo must be resumable and idempotent (CLAUDE.md, demo profile), and the monthly worker
+ * stamps `generatedAt`/`ratingRunAt` from `billingRunAt`. Comparing the full evidence hash therefore
+ * made a perfectly correct re-run — same meter run, same rate card, same totals, later clock — look
+ * like divergent evidence and throw, taking the whole billing projection down with it. Substance
+ * decides: different totals or lines are a genuine conflict, a different run time is not.
+ *
+ * `evidence_hash` still stores the complete digest, timestamps included: that column is the
+ * provenance record of what was actually written, and the first write's clock is part of it.
+ */
+export function tppCostContentHash(statement: unknown): string {
+  return tppCostEvidenceHash(withoutClockReadings(statement))
+}
+
+/**
+ * The same substance-only digest over a re-rating's `{ previous, corrected }` replay payload, which
+ * nests two statements and so carries two pairs of clock readings.
+ */
+export function tppCostReplayContentHash(replay: unknown): string {
+  if (replay === null || typeof replay !== 'object') return tppCostEvidenceHash(replay)
+  const { previous, corrected } = replay as Record<string, unknown>
+  return tppCostEvidenceHash({
+    previous: withoutClockReadings(previous),
+    corrected: withoutClockReadings(corrected)
+  })
+}
+
+/**
  * Stable identity for a statement line: its cost dimensions, which is exactly what BILL-15 will
  * match a provider document line against. Derived rather than generated so the same traffic always
  * produces the same ref.
@@ -218,10 +264,16 @@ export class PgBillingTppCostStore {
       // A regeneration that produces DIFFERENT content under the same key is a conflict, not a
       // no-op. Returning the stored row silently would hide divergent evidence on an immutable
       // regulated record — the same posture as the tenant-configuration conflict check.
-      if (row.evidence_hash !== evidenceHash) {
+      //
+      // Compared on the CONTENT hash, recomputed from the stored payload rather than read from
+      // evidence_hash: a resumed run re-derives the same statement under a later clock, and that is
+      // idempotence, not divergence. See tppCostContentHash.
+      const storedContentHash = tppCostContentHash(row.statement_payload)
+      const contentHash = tppCostContentHash(statement)
+      if (storedContentHash !== contentHash) {
         throw new Error(
-          `conflicting expected TPP cost statement for meter run ${input.meterRunId}: stored evidence `
-          + `${String(row.evidence_hash)} does not match regenerated ${evidenceHash}`
+          `conflicting expected TPP cost statement for meter run ${input.meterRunId}: stored content `
+          + `${storedContentHash} does not match regenerated ${contentHash}`
         )
       }
       if (created) {
@@ -325,7 +377,9 @@ export class PgBillingTppCostStore {
     }
     const previousNet = input.previous.totals.totalNetMilliFils
     const correctedNet = input.corrected.totals.totalNetMilliFils
-    const replayHash = tppCostEvidenceHash({ previous: input.previous, corrected: input.corrected })
+    // Substance, not clock — a replayed re-rating carries the same two statements under a later run
+    // time. Same reasoning as saveStatement; see tppCostContentHash.
+    const replayHash = tppCostReplayContentHash({ previous: input.previous, corrected: input.corrected })
     const result = await this.asApp(async (client) => {
       const inserted = await client.query(
         `INSERT INTO billing_tpp_cost_rerating
@@ -353,7 +407,7 @@ export class PgBillingTppCostStore {
       }
       if (!row) throw new Error('TPP cost re-rating could not be read after insert')
       // Same correction reference, different replay: a conflict rather than a silent no-op.
-      if (tppCostEvidenceHash(row.replay_payload) !== replayHash) {
+      if (tppCostReplayContentHash(row.replay_payload) !== replayHash) {
         throw new Error(
           `conflicting TPP cost re-rating for reference ${input.correctionReference}: the stored replay `
           + 'does not match the one supplied'

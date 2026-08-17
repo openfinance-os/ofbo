@@ -35,6 +35,28 @@
 -- lineage for tables that actually hold rows) — so nothing may seed them ahead of their story.
 
 -- ---------------------------------------------------------------------------------------------
+-- Prerequisite for the tenant-composite four-eyes foreign key on billing_tpp_cost_ap_dispatch.
+--
+-- approval_request.approval_request_id is globally UNIQUE (0002_tables.sql), which is enough to
+-- reference but NOT enough to reference within a tenant: a single-column FK would let one bank cite
+-- another bank's approval. This adds the composite key the FK below needs. Purely additive — it
+-- constrains nothing that the existing global UNIQUE did not already constrain.
+-- ---------------------------------------------------------------------------------------------
+
+-- Guarded because Postgres has no ADD CONSTRAINT IF NOT EXISTS, and this file is defensive about
+-- re-execution throughout (CREATE TABLE IF NOT EXISTS) even though the runner applies each migration
+-- exactly once.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'approval_request_bank_scoped_key'
+  ) THEN
+    ALTER TABLE approval_request
+      ADD CONSTRAINT approval_request_bank_scoped_key UNIQUE (bank_id, approval_request_id);
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------------------------
 -- Expected cost: what the institution should expect to pay, projected from its own metering.
 -- ---------------------------------------------------------------------------------------------
 
@@ -259,13 +281,15 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   statement_id           uuid NOT NULL,
   reconciliation_id      uuid NOT NULL,
   -- The four-eyes approval that authorised this dispatch, referencing approval_request's own
-  -- approval_request_id (0002_tables.sql). The FK makes the approval's EXISTENCE enforced rather
-  -- than asserted. What the schema cannot enforce, and what BILL-16 must therefore check at write
-  -- time: that the referenced request is in state 'approved', that its expires_at had not passed
-  -- (2-hour adopting-bank default, PRD section 10), and that it belongs to this bank_id — the FK is
-  -- single-column because approval_request_id is globally unique, so it does not by itself constrain
-  -- the tenant.
-  approval_request_id    text NOT NULL REFERENCES approval_request(approval_request_id),
+  -- approval_request_id (0002_tables.sql). The FK is TENANT-COMPOSITE (see the constraint below), so
+  -- one bank cannot cite another bank's approval — the same (bank_id, id) idiom as this table's other
+  -- two foreign keys.
+  --
+  -- What a foreign key still cannot enforce, because both are mutable state on the referenced row,
+  -- and what BILL-16 MUST therefore check at write time: that the request is in state 'approved',
+  -- and that its expires_at had not passed when it was approved (2-hour adopting-bank default,
+  -- PRD section 10).
+  approval_request_id    text NOT NULL,
   -- Initiator recorded alongside approver so self-approval is refused by the CHECK below rather
   -- than only by the approvals service, mirroring approval_request's own constraint.
   initiated_by           text NOT NULL,
@@ -286,6 +310,8 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   classification         ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   FOREIGN KEY (bank_id, statement_id) REFERENCES billing_tpp_cost_statement(bank_id, id),
   FOREIGN KEY (bank_id, reconciliation_id) REFERENCES billing_tpp_cost_reconciliation(bank_id, id),
+  FOREIGN KEY (bank_id, approval_request_id)
+    REFERENCES approval_request(bank_id, approval_request_id),
   -- Four eyes, not one: whoever approved a payable dispatch cannot be whoever initiated it.
   CHECK (approved_by <> initiated_by),
   -- Retry-safe AND progressable: one row per (instruction, state), so re-dispatching the same

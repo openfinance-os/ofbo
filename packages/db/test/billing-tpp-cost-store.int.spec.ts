@@ -191,6 +191,37 @@ describe('PgBillingTppCostStore', () => {
     expect(count.rows[0].n).toBe(1)
   })
 
+  it('is idempotent across a RESUMED run, whose clock has moved on since the first attempt', async () => {
+    // The monthly worker stamps generatedAt/ratingRunAt from its own run clock, and scheduled jobs
+    // in this repo must be resumable (CLAUDE.md, demo profile). So the realistic replay is not the
+    // identical object — it is the same statement re-derived later. Comparing the full evidence hash
+    // would call that divergence and fail the whole billing projection.
+    const snapshotId = `dir-${randomUUID()}`
+    const first = await persistStatement(fils(800), snapshotId)
+    expect(first.created).toBe(true)
+
+    const resumed: ExpectedTppCostStatement = {
+      ...first.statement,
+      evidence: {
+        ...first.statement.evidence,
+        generatedAt: '2026-07-04T06:30:00.000Z',
+        ratingRunAt: '2026-07-04T06:29:00.000Z'
+      }
+    }
+    const again = await store.saveStatement({ meterRunId: first.meterRunId, statement: resumed }, 'trace-resumed')
+
+    expect(again.created).toBe(false)
+    expect(again.record.id).toBe(first.statementId)
+    // Still one statement, and the FIRST write's timestamps are what the ledger records.
+    const row = await admin.query(
+      `SELECT count(*)::int AS n, min(generated_at) AS generated FROM billing_tpp_cost_statement
+        WHERE meter_run_id = $1`,
+      [first.meterRunId]
+    )
+    expect(row.rows[0].n).toBe(1)
+    expect(new Date(row.rows[0].generated as string).toISOString()).toBe('2026-07-03T02:00:00.000Z')
+  })
+
   it('never persists a PSU identifier anywhere in the cost ledger', async () => {
     const { statementId, statement } = await persistStatement(fils(800), `dir-${randomUUID()}`)
 
@@ -311,6 +342,57 @@ describe('PgBillingTppCostStore', () => {
     }, 'trace-bad')).rejects.toThrow(/same meter run/i)
   })
 
+  it('replays a re-rating at a later clock as a no-op, but still raises a genuinely different replay', async () => {
+    const previous = await persistStatement(fils(800), `dir-prev-${randomUUID()}`)
+    const correctedSnapshotId = `dir-corr-${randomUUID()}`
+    const meteredLines = await store.meteredLinesForRun(previous.meterRunId)
+    const rating = rateUsage(meteredLines, SCHEME_RATE_CARD_2026_06_02, '2026-06', [], {
+      overageSnapshot: snapshot(fils(400), correctedSnapshotId)
+    })
+    const corrected = buildExpectedTppCostStatement(rating, {
+      tenantId: TENANCY.bankId,
+      meterRunId: previous.meterRunId,
+      generatedAt: '2026-08-01T02:00:00.000Z',
+      ratingRunAt: '2026-08-01T01:59:00.000Z',
+      pricingEffectiveFrom: SCHEME_RATE_CARD_2026_06_02.effectiveFrom,
+      rateSnapshotHash: `sha256:pricing+${correctedSnapshotId}`,
+      directorySnapshotId: correctedSnapshotId
+    })
+    const correctedSaved = await store.saveStatement(
+      { meterRunId: previous.meterRunId, statement: corrected }, 'trace-corr'
+    )
+    const reference = `CORR-${randomUUID()}`
+    const input = {
+      meterRunId: previous.meterRunId,
+      previousStatementId: previous.statementId,
+      correctedStatementId: correctedSaved.record.id,
+      correctionReference: reference,
+      meteredFactsFingerprint: `sha256:facts-${previous.meterRunId}`,
+      reratedAt: '2026-08-01T02:00:00.000Z',
+      previous: previous.statement,
+      corrected
+    }
+    const first = await store.saveRerating(input, 'trace-corr')
+    expect(first.created).toBe(true)
+
+    // Replayed with both nested statements re-derived under a later clock: same correction.
+    const laterClock = (s: ExpectedTppCostStatement, at: string): ExpectedTppCostStatement =>
+      ({ ...s, evidence: { ...s.evidence, generatedAt: at, ratingRunAt: at } })
+    const replayed = await store.saveRerating({
+      ...input,
+      previous: laterClock(previous.statement, '2026-08-02T09:00:00.000Z'),
+      corrected: laterClock(corrected, '2026-08-02T09:00:00.000Z')
+    }, 'trace-corr-replay')
+    expect(replayed.created).toBe(false)
+    expect(replayed.id).toBe(first.id)
+
+    // But a replay whose SUBSTANCE differs under the same reference is still a conflict.
+    await expect(store.saveRerating({
+      ...input,
+      corrected: { ...corrected, totals: { ...corrected.totals, totalNetMilliFils: corrected.totals.totalNetMilliFils + 1 } }
+    }, 'trace-corr-divergent')).rejects.toThrow(/conflicting TPP cost re-rating/i)
+  })
+
   it('raises a conflict when a regeneration diverges under the same key, rather than silently keeping the old one', async () => {
     const { statementId, meterRunId, statement } = await persistStatement(fils(800), `dir-${randomUUID()}`)
 
@@ -327,9 +409,29 @@ describe('PgBillingTppCostStore', () => {
     expect((await store.statementById(statementId))?.statement.totals).toEqual(statement.totals)
   })
 
+  /** An approval_request owned by `bankId`, so the dispatch FK below has something real to cite. */
+  async function seedApprovalRequest(bankId: string): Promise<string> {
+    const reference = `ar-${randomUUID()}`
+    const client = await admin.connect()
+    try {
+      await client.query(
+        `INSERT INTO approval_request
+           (bank_id, channel, approval_request_id, operation_type, state, initiator,
+            approver_required_scope, expires_at)
+         VALUES ($1,'internal_retail',$2,'billing.tpp_cost.ap_dispatch','approved','finance.analyst',
+                 'billing:write', now() + interval '2 hours')`,
+        [bankId, reference]
+      )
+    } finally {
+      client.release()
+    }
+    return reference
+  }
+
   it('refuses a payable dispatch that one person both initiated and approved', async () => {
     // BILL-16 owns this write path; the four-eyes prohibition is enforced by the schema now so it
     // cannot be asserted in prose and forgotten.
+    const reference = await seedApprovalRequest(TENANCY.bankId)
     const client = await admin.connect()
     try {
       await expect(client.query(
@@ -337,10 +439,31 @@ describe('PgBillingTppCostStore', () => {
            (bank_id, channel, statement_id, reconciliation_id, approval_request_id, initiated_by,
             approved_by, approved_at, dispatch_state, idempotency_key, payable_net_milli_fils,
             evidence_hash)
-         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),'ar-1','finance.analyst',
-                 'finance.analyst',now(),'pending',$2,0,'sha256:x')`,
-        [TENANCY.bankId, randomUUID()]
+         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),$2,'finance.analyst',
+                 'finance.analyst',now(),'pending',$3,0,'sha256:x')`,
+        [TENANCY.bankId, reference, randomUUID()]
       )).rejects.toThrow(/violates check constraint/i)
+    } finally {
+      client.release()
+    }
+  })
+
+  it('refuses a payable dispatch citing ANOTHER bank\'s approval request', async () => {
+    // The four-eyes FK is tenant-composite, so an approval cannot be borrowed across the tenant
+    // boundary — a single-column FK against a globally-unique key would have allowed exactly that.
+    const otherBank = randomUUID()
+    const reference = await seedApprovalRequest(otherBank)
+    const client = await admin.connect()
+    try {
+      await expect(client.query(
+        `INSERT INTO billing_tpp_cost_ap_dispatch
+           (bank_id, channel, statement_id, reconciliation_id, approval_request_id, initiated_by,
+            approved_by, approved_at, dispatch_state, idempotency_key, payable_net_milli_fils,
+            evidence_hash)
+         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),$2,'finance.initiator',
+                 'finance.approver',now(),'pending',$3,0,'sha256:x')`,
+        [TENANCY.bankId, reference, randomUUID()]
+      )).rejects.toThrow(/violates foreign key constraint/i)
     } finally {
       client.release()
     }

@@ -23,8 +23,9 @@ import type { HighClassAuditSink } from '../high-class-audit.js'
  * (BILL-12) — deliberately, because guessing the rate or its unit would mis-state the payable. But
  * a period that cannot be priced must not take the regulated receivable projections down with it,
  * which is exactly the availability trap the BILL-12 review caught. So an unpriceable period is
- * reported as `skipped` with its reason and raised as an operational signal; it is never persisted
- * half-priced, and never silently reported as generated.
+ * reported as `skipped` with its reason and recorded as a High-class audit event; it is never
+ * persisted half-priced, and never silently reported as generated. Routing that to P3/ITSM as an
+ * operational alert is BILL-14's, once a directory source exists that can fail in the first place.
  */
 
 export interface TppCostStatementStore {

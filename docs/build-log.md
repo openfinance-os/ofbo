@@ -2755,3 +2755,59 @@ Carried forward unresolved, both needing a human decision rather than more code:
   structurally rather than procedurally — rating fails closed, so no statement can be written from a
   guessed rate or unit — but the criterion itself carries forward to whichever story first obtains a
   snapshot.
+
+### BILL-13 addendum 3 — the advisory reviews caught a real availability defect I had just introduced
+
+Both ADR 0029 advisory reviews came back non-PASS on `6f87bc6` — hard-stop **FAIL (3)**, contract
+**DRIFT (5)**. Every one of those eight findings is either documented-and-deliberate or already
+escalated, and both reviewers flagged all of theirs as uncertain (see the two rounds above and the
+carried-forward items). But the hard-stop reviewer's *observations* section — the part that counts
+towards no verdict — contained the only genuine defect in the round, and it was **mine, introduced by
+addendum 2's own fix**:
+
+**A resumed monthly run would have failed the entire billing projection.** Addendum 2 added
+evidence-hash divergence detection to `saveStatement`, comparing `tppCostEvidenceHash(statement)` —
+which spans `evidence.generatedAt` and `evidence.ratingRunAt`. The worker stamps both from
+`billingRunAt`, its own run clock. So a resumed or replayed run re-derives an identical statement under
+a later clock, gets a different hash, and the new conflict check throws — surfacing as an
+`AggregateError` that takes the receivable projections down with it. `saveRerating` had the identical
+bug over its `{ previous, corrected }` replay payload, which nests two statements and so two pairs of
+clock readings.
+
+This is the *same class of defect* as the one the BILL-12 review caught (a fail-closed throw bricking
+projections that had nothing to do with the failure), reintroduced two rounds later by a fix aimed at a
+different problem. CLAUDE.md requires scheduled jobs to be resumable and idempotent; the check I added
+made them neither. The reviewer also identified precisely why the tests missed it: the BFF spec uses a
+mock store, and the int spec replayed the *identical object* — neither exercised a moved clock.
+
+Fixed by separating substance from provenance. `tppCostContentHash` digests everything except the two
+clock readings, and divergence is compared on that, recomputed from the stored `statement_payload`
+rather than read from `evidence_hash`; `tppCostReplayContentHash` does the same across a re-rating's two
+nested statements. `evidence_hash` still stores the complete digest including timestamps — it is the
+provenance record of what was written, and the first write's clock belongs in it. Different totals or
+lines remain a hard conflict; a later run time no longer is. Both new tests were confirmed to FAIL
+against the previous comparison, reproducing the exact production error, before the fix was restored.
+
+Two further fixes this round:
+
+1. **The four-eyes FK is now tenant-composite.** The hard-stop reviewer's FAIL 5 was right on its first
+   limb: `REFERENCES approval_request(approval_request_id)` against a globally-unique text key let one
+   bank cite another bank's approval. `approval_request` gains an additive
+   `UNIQUE (bank_id, approval_request_id)` (guarded, since Postgres has no
+   `ADD CONSTRAINT IF NOT EXISTS`) and the dispatch FK is now composite on `(bank_id,
+   approval_request_id)` — the same idiom as this table's other two foreign keys. Proven by a test that
+   a dispatch citing another bank's approval is refused. The reviewer's other two limbs — approved
+   state and unexpired `expires_at` — are mutable state on the referenced row and cannot be expressed
+   as a foreign key at all; they stay a stated write-time requirement on BILL-16, and the migration
+   comment now says exactly that rather than implying the FK covers more than it does.
+2. **Doc-vs-code drift corrected.** The generation service claimed an unpriceable period was "raised as
+   an operational signal"; it emits a High-class audit event and nothing else. The comment now says so,
+   and routing to P3/ITSM is named as BILL-14's, once a directory source exists that can fail.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration
+**167/167** across 77 files (three new tests); Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.
+
+The lesson worth keeping: an advisory review's non-findings are worth as much as its verdict. Both
+verdicts here were, on inspection, noise — and the one item that mattered was filed under
+"observations outside the hard-stop list".
