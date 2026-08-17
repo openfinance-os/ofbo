@@ -448,6 +448,43 @@ describe('PgBillingTppCostStore', () => {
     }
   })
 
+  it('refuses self-approval dressed up as a different string — case and padding do not count', async () => {
+    // The CHECK is normalised, so 'Finance.Analyst' and ' finance.analyst ' are still one person.
+    // What it cannot see — the same human under two different identifier FORMS — is BILL-16's
+    // write-time obligation to stamp both columns from one normalised P2 claim.
+    const reference = await seedApprovalRequest(TENANCY.bankId)
+    const client = await admin.connect()
+    try {
+      await expect(client.query(
+        `INSERT INTO billing_tpp_cost_ap_dispatch
+           (bank_id, channel, statement_id, reconciliation_id, approval_request_id, initiated_by,
+            approved_by, approved_at, dispatch_state, idempotency_key, payable_net_milli_fils,
+            evidence_hash)
+         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),$2,' finance.analyst ',
+                 'Finance.Analyst',now(),'pending',$3,0,'sha256:x')`,
+        [TENANCY.bankId, reference, randomUUID()]
+      )).rejects.toThrow(/violates check constraint/i)
+    } finally {
+      client.release()
+    }
+  })
+
+  it('withholds cross-tenant internal-view reads on the two provider-fed payload tables', async () => {
+    // Least privilege while redaction is still owed by BILL-14/BILL-16: the free-form provider
+    // columns must not be readable across the tenant boundary by inheriting a loop's grant.
+    const granted = await admin.query(
+      `SELECT table_name FROM information_schema.role_table_grants
+        WHERE grantee = 'bank_internal_view' AND privilege_type = 'SELECT'
+          AND table_name LIKE 'billing_tpp_cost%'`
+    )
+    const names = granted.rows.map((row) => row.table_name as string)
+    expect(names).not.toContain('billing_tpp_cost_document')
+    expect(names).not.toContain('billing_tpp_cost_ap_dispatch')
+    // The schema-constrained, PSU-free relations keep the ratified governed-aggregate access.
+    expect(names).toContain('billing_tpp_cost_statement')
+    expect(names).toContain('billing_tpp_cost_statement_line')
+  })
+
   it('refuses a payable dispatch citing ANOTHER bank\'s approval request', async () => {
     // The four-eyes FK is tenant-composite, so an approval cannot be borrowed across the tenant
     // boundary — a single-column FK against a globally-unique key would have allowed exactly that.

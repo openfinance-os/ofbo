@@ -2811,3 +2811,54 @@ clean; doc-link-check clean.
 The lesson worth keeping: an advisory review's non-findings are worth as much as its verdict. Both
 verdicts here were, on inspection, noise — and the one item that mattered was filed under
 "observations outside the hard-stop list".
+
+### BILL-13 addendum 4 — least privilege on the free-form payload tables, and owners for the deferrals
+
+The hard-stop review re-ran on `1b7ca20` and confirmed addendum 3 landed: the tenant-composite FK
+"correctly prevents one bank citing another bank's approval", audit immutability clean (it correctly
+judged the new `ADD CONSTRAINT` additive and non-mutating), PII clean on the statement family, egress
+clean, lineage clean. It then returned **FAIL (6)**, and named the pattern behind three of them exactly:
+*the irreversible artefact lands in this PR while the control that bounds it lands in a later story, held
+only by a SQL comment* — no schema constraint, no test, no gate. That criticism is right, and three of
+the six were worth acting on.
+
+1. **The cross-tenant grant is now withheld from the two provider-fed tables.** The controls loop granted
+   `SELECT` to `bank_internal_view` on all eight tables, including `billing_tpp_cost_document`
+   (`raw_document_ref`, `parsed_payload`) and `billing_tpp_cost_ap_dispatch` (`response_payload`) — the
+   three columns this schema cannot constrain and which a Nebras invoice line or P9 response may fill
+   with payment-level customer detail. Every *other* table under that policy is schema-constrained and
+   PSU-free by construction, which is what makes the governed-aggregate seam an acceptable bypass for
+   them; it is not established for unconstrained payloads. Those two are now excluded from both the
+   policy and the grant, asserted by a test that reads the live privilege catalogue.
+   `billing_tpp_cost_document_line` stays granted — checked, not assumed: it holds only structured
+   dimensions with no jsonb column. Withholding costs nothing today because nothing reads either table,
+   and whichever story needs the read must grant it deliberately, after redaction exists, rather than
+   inherit it from a loop.
+2. **The four-eyes CHECK now says only what it can prove, and proves a little more.** The reviewer was
+   sharp here: the migration comment claimed self-approval "is refused by the CHECK rather than only by
+   the approvals service", which is stronger than `approved_by <> initiated_by` supports — one human
+   under two identifier forms satisfies string inequality. The CHECK is now normalised
+   (`lower(btrim(...))`), so case and padding variants are refused and a test proves it; the comment
+   states the guarantee precisely and names what it cannot see. Closing the rest is a write-time
+   obligation, because it depends on what BILL-16 stamps into those columns.
+3. **The deferrals have owners now, not comments.** A SQL comment is not a gate, so the obligations moved
+   into the acceptance criteria of the stories that must satisfy them: BILL-14 gains a blocking criterion
+   for redaction-at-parse-time (with the withheld grant named as its unlock); BILL-16 gains one covering
+   all three of its inherited obligations — approved state and unexpired `expires_at` at write time, both
+   principals from one normalised P2 claim, and `response_payload` redaction — plus the transition-order
+   rule the append-only UNIQUE cannot express. **CODE-03** tickets the repo-wide `scope_used` pass; the
+   reviewer's best line was that a repo-wide decision with no owner is how drift survives, and it was
+   right that the earlier "wants one pass" reasoning had been recorded without a ticket.
+
+Not changed, with reasons. The dual-domain export finding carries the reviewer's own nuance that
+substantially weakens it: `billing_event`, `billing_meter_run` and `billing_metered_line` were **already**
+in `EXPORT_TABLES` and carry `payable_hub`/`payable_lfi` rows, so TPP-side data was in that artifact
+before this diff — this change labels the crossing rather than creating it, and SEG-01 already records the
+call site. The `billing:rate` audit label stays as-is this round now that CODE-03 owns it. And the
+free-form columns themselves stay created here: settling the ledger's shape in one reviewed migration was
+the deliberate choice, the tables are empty, and the two controls that were missing (the withheld grant
+and an owned acceptance criterion) are what this round added.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration **169/169**
+across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; the live
+privilege catalogue confirms six of eight tables granted to `bank_internal_view`.

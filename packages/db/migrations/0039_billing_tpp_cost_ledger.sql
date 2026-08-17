@@ -290,8 +290,15 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   -- and that its expires_at had not passed when it was approved (2-hour adopting-bank default,
   -- PRD section 10).
   approval_request_id    text NOT NULL,
-  -- Initiator recorded alongside approver so self-approval is refused by the CHECK below rather
-  -- than only by the approvals service, mirroring approval_request's own constraint.
+  -- Initiator recorded alongside approver so the CHECK below can refuse the self-approval it CAN
+  -- see, mirroring approval_request's own constraint.
+  --
+  -- What that CHECK actually guarantees, stated precisely because the guarantee is narrower than
+  -- "self-approval is impossible": the two recorded principal strings differ, compared
+  -- case-insensitively and ignoring surrounding whitespace. It cannot detect one human appearing
+  -- under two DIFFERENT identifier forms — an IdP subject id in one column and a username or e-mail
+  -- in the other would satisfy it. Closing that is a write-time obligation on BILL-16: both columns
+  -- MUST be stamped from the same normalised P2 subject claim, never from operator-supplied input.
   initiated_by           text NOT NULL,
   approved_by            text NOT NULL,
   approved_at            timestamptz NOT NULL,
@@ -313,7 +320,8 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   FOREIGN KEY (bank_id, approval_request_id)
     REFERENCES approval_request(bank_id, approval_request_id),
   -- Four eyes, not one: whoever approved a payable dispatch cannot be whoever initiated it.
-  CHECK (approved_by <> initiated_by),
+  -- Normalised, so trivial variants of one identifier (case, padding) do not slip past a raw <>.
+  CHECK (lower(btrim(approved_by)) <> lower(btrim(initiated_by))),
   -- Retry-safe AND progressable: one row per (instruction, state), so re-dispatching the same
   -- instruction in the same state stays a single row — P9 still cannot be double-paid — while the
   -- outcome of that dispatch can be appended as the next state.
@@ -383,17 +391,30 @@ BEGIN
       CREATE POLICY tenancy_insert ON %I FOR INSERT TO ofbo_app
         WITH CHECK (bank_id = NULLIF(current_setting('app.bank_id', true), '')::uuid);
     EXCEPTION WHEN duplicate_object THEN NULL; END $i$; $p$, immutable_table);
-    EXECUTE format($p$ DO $i$ BEGIN
-      CREATE POLICY internal_view_select ON %I FOR SELECT TO bank_internal_view USING (
-        NULLIF(current_setting('app.tenant_group', true), '') IS NULL
-        OR bank_id IN (
-          SELECT m.bank_id FROM tenant_group_member m
-          WHERE m.tenant_group_id = NULLIF(current_setting('app.tenant_group', true), '')::uuid
-        )
-      );
-    EXCEPTION WHEN duplicate_object THEN NULL; END $i$; $p$, immutable_table);
     EXECUTE format('GRANT SELECT, INSERT ON %I TO ofbo_app', immutable_table);
-    EXECUTE format('GRANT SELECT ON %I TO bank_internal_view', immutable_table);
+
+    -- Cross-tenant internal-view reads are granted to SEVEN of the eight tables, deliberately NOT to
+    -- billing_tpp_cost_document (raw_document_ref, parsed_payload) or billing_tpp_cost_ap_dispatch
+    -- (response_payload) — the three provider-fed free-form columns this schema cannot constrain, per
+    -- the header. Every other relation under this policy is schema-constrained and PSU-free by
+    -- construction, which is what makes the governed-aggregate seam an acceptable bypass for them.
+    --
+    -- Least privilege while the redaction control is still owed by BILL-14/BILL-16: a cross-tenant
+    -- benchmark has no need of raw provider payloads, and withholding the grant now costs nothing
+    -- because nothing reads these two tables yet. Whichever story adds a genuine cross-tenant need
+    -- must grant it deliberately, after redaction exists — not inherit it from a loop.
+    IF immutable_table NOT IN ('billing_tpp_cost_document', 'billing_tpp_cost_ap_dispatch') THEN
+      EXECUTE format($p$ DO $i$ BEGIN
+        CREATE POLICY internal_view_select ON %I FOR SELECT TO bank_internal_view USING (
+          NULLIF(current_setting('app.tenant_group', true), '') IS NULL
+          OR bank_id IN (
+            SELECT m.bank_id FROM tenant_group_member m
+            WHERE m.tenant_group_id = NULLIF(current_setting('app.tenant_group', true), '')::uuid
+          )
+        );
+      EXCEPTION WHEN duplicate_object THEN NULL; END $i$; $p$, immutable_table);
+      EXECUTE format('GRANT SELECT ON %I TO bank_internal_view', immutable_table);
+    END IF;
   END LOOP;
 END $$;
 
