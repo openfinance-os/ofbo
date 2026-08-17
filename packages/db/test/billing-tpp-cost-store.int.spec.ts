@@ -17,7 +17,8 @@ import {
   applyMigrations,
   PgBillingMeteringStore,
   PgBillingTppCostStore,
-  PgLineageEmitter
+  PgLineageEmitter,
+  PgTenantBillingServiceStore
 } from '../src/index.js'
 
 /**
@@ -519,6 +520,33 @@ describe('PgBillingTppCostStore', () => {
     )
     expect(unique.rows.map((row) => (row.def as string).replace(/\s+/g, ' ')))
       .toContain('UNIQUE (bank_id, approval_request_id)')
+  })
+
+  it('carries the payable ledger into the tenant portable export, with rows and not just a table name', async () => {
+    // The claim BILL-13 makes is that a tenant can take its payable evidence with it. Adding the
+    // three tables to EXPORT_TABLES was previously asserted nowhere — dropping any of the names
+    // would not have turned a test red, which is no evidence for a portability guarantee.
+    const { statementId } = await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    const exportStore = new PgTenantBillingServiceStore(
+      DATABASE_URL!,
+      (bankId: string) => new PgLineageEmitter(DATABASE_URL!, { bankId, channel: 'internal_retail' }),
+      { emit: async () => {} }
+    )
+    try {
+      const exported = await exportStore.portableExport(TENANCY.bankId, '2026-08-17T00:00:00.000Z')
+
+      for (const table of ['billing_tpp_cost_statement', 'billing_tpp_cost_statement_line']) {
+        expect(exported.recordCounts[table], `${table} missing from export`).toBeGreaterThanOrEqual(1)
+      }
+      // The statement just written is actually in the payload, not merely counted.
+      expect(exported.tables.billing_tpp_cost_statement?.some((row) => row.id === statementId)).toBe(true)
+      // And the two tables whose provider-fed payloads BILL-13 withholds stay out of it.
+      expect(exported.recordCounts.billing_tpp_cost_document).toBeUndefined()
+      expect(exported.recordCounts.billing_tpp_cost_ap_dispatch).toBeUndefined()
+    } finally {
+      await exportStore.close()
+    }
   })
 
   it('emits BCBS 239 lineage for every cost table it writes', async () => {

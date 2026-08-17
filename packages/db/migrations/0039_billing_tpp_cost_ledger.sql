@@ -66,6 +66,13 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_statement (
   channel                               ofbo_channel NOT NULL,
   meter_run_id                          uuid NOT NULL,
   period                                text NOT NULL CHECK (period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  -- AED is pinned by CHECK, which is NARROWER than the contract's Money.currency (any ISO 4217
+  -- '^[A-Z]{3}$'), and this is the first place in the schema where a currency VALUE is constrained
+  -- rather than merely null-coupled. Recorded as a decision, not an inheritance: every fee in the
+  -- UAE Open Finance commercial model is denominated in AED, so a non-AED payable row would mean a
+  -- parsing or mapping defect, and in an INSERT-only family with no deletion path it is far better
+  -- refused loudly at write time than stored and never removable. Relaxing it if the scheme ever
+  -- prices in another currency is an additive migration; un-storing a mis-denominated row is not.
   currency                              text NOT NULL DEFAULT 'AED' CHECK (currency = 'AED'),
   rate_card_version                     text NOT NULL,
   -- Chains the pricing-document version and the directory snapshot the amounts were priced from.

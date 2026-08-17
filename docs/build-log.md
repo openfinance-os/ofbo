@@ -3021,3 +3021,39 @@ description — are now recorded on BILL-17, which is the story that cannot ship
 
 Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
 typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 8 — the same defect class, caught a second time
+
+Contract review on `82956de`: **DRIFT (7)**. Six are previously assessed — the `billing:rate` sites now
+owned by CODE-03, the camelCase jsonb exception, `approval_request_id text` mirroring 0002, the frozen
+vocabularies owned by BILL-17, and the money-unit question. Its finding 7 was new, and it is the **same
+class of defect the hard-stop review caught in C2, on the same PR**:
+
+> `packages/db/test/tenant-billing-service-store.int.spec.ts:196` asserts only
+> `recordCounts.billing_event >= 1` … Dropping any of the three new names from `EXPORT_TABLES` would not
+> turn a test red.
+
+Correct, and worth stating plainly: BILL-13 claimed a portability guarantee — "a tenant that cannot take
+its payable evidence has not been exported" — added three tables to `EXPORT_TABLES` to deliver it, and
+asserted it nowhere. Twice on this PR now I added a control, cited it in this log as proof, and left it
+without a test that could fail. C2 was the tenant-composite FK; this is the export. The pattern is mine,
+not the reviewers': **claiming a control and evidencing a control are separate steps, and I was treating
+the first as if it discharged the second.**
+
+Fixed with a behavioural test that persists a statement and asserts it actually appears in
+`portableExport` — by `recordCounts` for the statement and line tables, and by finding the specific
+statement id in the payload rather than trusting a count. It also asserts the two withheld provider-payload
+tables stay *out* of the export, so the narrowing from addendum 4 is evidenced too. Proven to discriminate:
+removing the payable tables from `EXPORT_TABLES` turns it red (1 failed / 15 passed), green on restore.
+
+Also from this review, its finding 3, which it verified rather than assumed: `CHECK (currency = 'AED')` is
+narrower than the contract's `Money.currency` (`^[A-Z]{3}$`), and 0039 is the **first** place in the schema
+where a currency *value* is pinned — every earlier migration constrains only null-coupling. The reviewer's
+ask was that the narrowing be "a decision rather than an inheritance", which is fair, so the migration now
+records the reasoning: every UAE Open Finance fee is AED-denominated, a non-AED payable row would mean a
+parsing or mapping defect, and in an INSERT-only family with no deletion path it is far better refused at
+write time than stored unremovably. Relaxing the CHECK later is an additive migration; un-storing a
+mis-denominated row is not.
+
+Re-verified on a pristine database: unit 1423/1423; integration **170/170** across 77 files; Q4.5 PASSED,
+allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
