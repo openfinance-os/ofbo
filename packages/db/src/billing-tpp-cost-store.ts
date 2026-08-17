@@ -64,6 +64,18 @@ export interface StoredBillingTppCostDocument {
   documentReference: string
   evidenceHash: string
   payload: unknown
+  /**
+   * The upload evidence as STORED, which on a replay is not what the current request supplied.
+   *
+   * Dedupe keys on `evidence_hash`, computed over commercial substance (reference, issuer, period,
+   * totals, lines) and deliberately NOT over the raw bytes — two byte-different files stating the same
+   * charges are the same document. So a replay's `document_sha256` legitimately differs from the
+   * stored one, and reporting the request's own hash would hand the caller a value matching no row.
+   */
+  documentSha256: string
+  receivedAt: string
+  verifiedBy: string
+  verifiedAt: string
 }
 
 /**
@@ -516,7 +528,8 @@ export class PgBillingTppCostStore {
       // Idempotency key first: it is the caller's own replay token, so a mismatch under it is a
       // client error rather than a provider restatement, and the two deserve different answers.
       const byKey = (await client.query(
-        `SELECT id, document_reference, evidence_hash, parsed_payload
+        `SELECT id, document_reference, evidence_hash, parsed_payload,
+                document_sha256, received_at, verified_by, verified_at
            FROM billing_tpp_cost_document WHERE idempotency_key = $1`,
         [input.idempotencyKey]
       )).rows[0] as Record<string, unknown> | undefined
@@ -538,7 +551,8 @@ export class PgBillingTppCostStore {
             idempotency_key, parsed_payload, evidence_hash)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20)
          ON CONFLICT (bank_id, issuer_id, document_reference) DO NOTHING
-         RETURNING id, document_reference, evidence_hash, parsed_payload`,
+         RETURNING id, document_reference, evidence_hash, parsed_payload,
+                   document_sha256, received_at, verified_by, verified_at`,
         [this.config.bankId, this.config.channel, document.documentType, document.issuerId,
           document.recipientId, document.documentReference, document.billingPeriod, document.currency,
           document.grossMilliFils, document.vatMilliFils, document.netMilliFils,
@@ -550,7 +564,8 @@ export class PgBillingTppCostStore {
       const created = Boolean(row)
       if (!row) {
         row = (await client.query(
-          `SELECT id, document_reference, evidence_hash, parsed_payload
+          `SELECT id, document_reference, evidence_hash, parsed_payload,
+                  document_sha256, received_at, verified_by, verified_at
              FROM billing_tpp_cost_document
             WHERE issuer_id = $1 AND document_reference = $2`,
           [document.issuerId, document.documentReference]
@@ -590,12 +605,18 @@ export class PgBillingTppCostStore {
         await this.emit('billing_tpp_cost_document_line', DOCUMENT_LINE_LINEAGE, traceId)
       }
     }
+    const asIso = (value: unknown): string =>
+      value instanceof Date ? value.toISOString() : String(value)
     return {
       record: {
         id: result.row.id as string,
         documentReference: result.row.document_reference as string,
         evidenceHash: result.row.evidence_hash as string,
-        payload: result.row.parsed_payload
+        payload: result.row.parsed_payload,
+        documentSha256: result.row.document_sha256 as string,
+        receivedAt: asIso(result.row.received_at),
+        verifiedBy: result.row.verified_by as string,
+        verifiedAt: asIso(result.row.verified_at)
       },
       created: result.created
     }

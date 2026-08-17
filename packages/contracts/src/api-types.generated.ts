@@ -3297,12 +3297,14 @@ export interface paths {
                         };
                     };
                 };
-                /** @description 'Rejected: the same issuer and document reference already exists with different content, or the nominated verifier is the uploader.' */
+                /** @description Rejected for one of three reasons: the same issuer and document reference already exists carrying different content (a provider restatement, not a replay); the nominated verifier is the uploader; or the supplied `Idempotency-Key` was already used for a DIFFERENT document, in which case answering with either one would be wrong. */
                 409: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
                 };
                 default: components["responses"]["Error"];
             };

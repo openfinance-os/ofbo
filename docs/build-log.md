@@ -3395,3 +3395,42 @@ story's), the 409 response declares no `content` (precedent runs both ways in th
 milli-fils unit question — now seven more fields deep — which is still the human decision BILL-17 blocks
 on. PostgreSQL also died four times during this story; each time it was restarted and the run repeated
 from a pristine database rather than reported around.
+
+### BILL-14 addendum 2 — an unvalidated enum, and a replay reporting evidence that matched no row
+
+Second contract review: **DRIFT (10)**. Six were real, four of those defects rather than drift.
+
+**An unchecked cast on a contract-declared enum.** `cost_recipient_type` was
+`section.cost_recipient_type as CostRecipientType` — a TypeScript cast over parsed provider JSON, with
+no validation. Every other provider-supplied discriminator in the parser *is* checked (`vat_treatment`,
+`currency`, `document_type` at the service), so this one was the outlier. A section saying
+`"third_party"` either reached the wire in a closed-enum field, or hit the column CHECK as an unmapped
+5xx instead of the 422 every other malformed field gets. Now validated, refused with the same 422.
+
+**A replay reported evidence that matched no stored row — the subtle one.** On the `200`
+already-ingested path the service returned *this request's* `document_sha256`, `received_at`,
+`verified_by` and `verified_at`. That looks harmless until you notice what dedupe keys on:
+`evidence_hash` is computed over commercial substance — reference, issuer, period, totals, lines — and
+deliberately **not** over the raw bytes, because two byte-different files stating the same charges are
+the same document. So a file differing only in JSON key order, whitespace or `due_at` takes the `200`
+path, and the response then hands back an integrity hash matching nothing in the ledger, breaking
+exactly the reconciliation the field exists for. The root cause was at the seam: the store interface
+returned only `{ id, documentReference }`, discarding evidence `saveDocument` had already read back. It
+now returns the stored values, and the service reports those on a replay.
+
+**My own YAML bug, emitted into a published artifact.** The `409` description used a folded scalar whose
+text began and ended with `'`. In a folded block those are not YAML quoting — they became part of the
+string and were carried verbatim into the generated client. Fixed, and while there the `409` gained the
+`ErrorEnvelope` `content` block it was missing (the implementation returns a body; the spec typed it
+`content?: never`, so a generated client could not see the error it actually receives) and a description
+naming the **third** cause the implementation added — idempotency-key reuse — which the contract had
+never documented.
+
+Recorded, not actioned: `x-rate-limit-per-min` is unenforced repo-wide (inherited); `source_note` is not
+recorded on the `200` path, which is defensible since the contract promises it no durability; and the
+path sits under the LFI-billing section banner while tagged `tpp-billing` — cosmetic, flagged twice now,
+and worth a tidy when the spec is next reorganised.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180**; Q4.5 PASSED; typecheck
+0; ESLint clean. PostgreSQL died a fifth time mid-verification and was restarted before the run was
+repeated — noted because five crashes in one story is an environment signal, not a code one.

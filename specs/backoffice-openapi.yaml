@@ -1917,8 +1917,13 @@ paths:
                       data: { $ref: '#/components/schemas/TppCostDocument' }
         '409':
           description: >
-            'Rejected: the same issuer and document reference already exists with different content,
-            or the nominated verifier is the uploader.'
+            Rejected for one of three reasons: the same issuer and document reference already exists
+            carrying different content (a provider restatement, not a replay); the nominated verifier
+            is the uploader; or the supplied `Idempotency-Key` was already used for a DIFFERENT
+            document, in which case answering with either one would be wrong.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         default: { $ref: '#/components/responses/Error' }
 
   # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------

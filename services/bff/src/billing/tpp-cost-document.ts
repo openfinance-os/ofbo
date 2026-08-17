@@ -58,7 +58,18 @@ export interface TppCostDocumentStore {
       idempotencyKey: string
     },
     traceId: string
-  ): Promise<{ record: { id: string; documentReference: string }; created: boolean }>
+  ): Promise<{
+    record: {
+      id: string
+      documentReference: string
+      /** As STORED. On a replay these differ from what this request supplied — see the store. */
+      documentSha256?: string
+      receivedAt?: string
+      verifiedBy?: string
+      verifiedAt?: string
+    }
+    created: boolean
+  }>
   documentsForPeriod(period: string): Promise<Array<{ id: string; documentType: string; documentReference: string }>>
 }
 
@@ -267,10 +278,15 @@ export class TppCostDocumentIngestService {
       // The verified-manual-upload evidence the endpoint description leans on. An earlier version
       // computed all four and then omitted them from the response, which made the integrity hash and
       // the second-person record unverifiable by the caller that just supplied them.
-      documentSha256,
-      receivedAt: nowIso,
-      verifiedBy: input.verifiedBy,
-      verifiedAt: nowIso
+      //
+      // On a replay we report what is STORED, not what this request carried. Dedupe keys on commercial
+      // substance rather than bytes, so a byte-different file stating the same charges takes the 200
+      // path — and returning this request's own sha256 would hand back a hash matching no stored row,
+      // breaking exactly the reconciliation the field exists for.
+      documentSha256: saved.record.documentSha256 ?? documentSha256,
+      receivedAt: saved.record.receivedAt ?? nowIso,
+      verifiedBy: saved.record.verifiedBy ?? input.verifiedBy,
+      verifiedAt: saved.record.verifiedAt ?? nowIso
     }
   }
 }

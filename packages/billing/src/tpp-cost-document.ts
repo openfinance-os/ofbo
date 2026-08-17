@@ -431,7 +431,18 @@ export function parseNebrasTaxInvoice(
         'section vat_treatment must be exclusive or inclusive (ADR 0007 D4).'
       )
     }
-    const sectionRecipientType = section.cost_recipient_type as CostRecipientType | undefined
+    // Validated, not cast. Every other provider-supplied discriminator here is checked
+    // (vat_treatment, currency, document_type at the service) and this one was an unchecked cast, so a
+    // section saying "third_party" either reached the wire in a contract-declared enum field or hit the
+    // column CHECK as an unmapped 5xx instead of the 422 every other malformed field gets.
+    const rawRecipientType = section.cost_recipient_type
+    if (rawRecipientType !== undefined
+      && rawRecipientType !== 'nebras' && rawRecipientType !== 'underlying_lfi') {
+      throw new UnparseableDocumentError(
+        'section cost_recipient_type must be nebras or underlying_lfi.'
+      )
+    }
+    const sectionRecipientType = rawRecipientType as CostRecipientType | undefined
     const sectionLines = section.lines
     if (!Array.isArray(sectionLines) || sectionLines.length === 0) {
       throw new UnparseableDocumentError('section must carry at least one line')
