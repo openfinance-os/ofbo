@@ -3524,3 +3524,54 @@ silently fails to match, and `pnpm verify:contract` probes only parameter-less G
 Verified on a pristine database: unit **1512/1512**; integration **187/187** across 79 files; Q4.5
 **PASSED** with `billing_tpp_cost_reconciliation` and `billing_tpp_cost_diff_line` now covered;
 typecheck 0; ESLint clean.
+
+## 2026-08-17 — BILL-15 addendum: both reviewers, five fixes (same PR)
+
+Hard-stop **PASS**, no violations. Contract review **DRIFT** with three findings. Every fix below came
+from a reviewer's finding or non-blocking observation — none from the gates, which were green
+throughout. That is now the consistent pattern across BILL-13, BILL-14 and BILL-15.
+
+**The sharpest finding: this diff made the milli-fils deviation worse rather than inheriting it.**
+`TppCostReconciliation` published eight money-valued fields with no ISO 4217 anywhere, while the
+sibling `TppCostDocument` — my own BILL-14 schema — lists `currency` as *required* beside its
+milli-fils amounts. Adjacent schemas in one story family, opposite treatment. The currency was in hand
+at the wire function and simply not emitted, so this was not a case of storage lacking the data. And
+the deferral recorded on BILL-15 covers what diff lines *store*; publishing a currency-less **wire
+contract** went past what was deferred and would have made BILL-17's "convert to `Money` at the
+boundary" option strictly more expensive. Currency now flows through the domain result and is required
+on the schema. That decides nothing about the unit — it stops the amounts being bare integers.
+
+Relatedly, the new fields lacked the `(see BILL-17 — the unit is unratified)` marker BILL-14 puts on
+`unit_price_milli_fils`, and `tolerance_milli_fils` described milli-fils affirmatively as settled
+convention — the reverse of the status the backlog records. Marker added throughout.
+
+**One hardcoded remediation for every error.** The route returned "ingest the period's expected
+statement (BILL-12)" for the 404 and the 401 as well as the 409. The contract defines `remediation` as
+what the caller can do to *resolve* the error, and telling someone whose document id does not exist to
+ingest a statement sends them to fix something that is not broken. The error now carries its own. My
+route test had asserted only that the field was **present** — the claiming-vs-evidencing gap again —
+so it now asserts the remediation fits its error, and that the 404's does *not* mention the statement.
+
+**Two on the billing-query bundle**, from the hard-stop reviewer's non-blocking notes. This is the one
+artefact in the story that crosses the bank boundary toward Nebras, so both were worth taking:
+
+- Only `transactionDetail` was screened. `reasonCode` is the one that matters — an unmapped line's
+  reason code embeds the provider's own `sourceCategory`, so provider-supplied text does reach the
+  wire. BILL-14 already refuses an identifier-shaped category at ingest, which *is* the right boundary,
+  but that left this artefact depending on an invariant established two stories away. Every text field
+  is now screened at the point of departure.
+- Non-string values were skipped, justified in my own comment as "a number cannot carry an identifier
+  shape". True of today's four shapes, not of numbers — a future digit-only rule would be bypassed by
+  the one type that carries digits. Values are coerced before screening.
+
+The test for that last change is labelled for what it actually proves rather than what it suggests: no
+shape in the current list can match a bare number, so nothing can demonstrate that screen firing. It is
+a regression guard that widening the screen did not start refusing the amounts every bundle carries,
+and it says so.
+
+Re-verified on a pristine database: unit **1515/1515**; integration **187/187** across 79 files;
+typecheck 0; ESLint clean; Q1b "6 changed test files — no weakening detected"; doc-link-check clean.
+
+CI could not run on either #320 or #321: every job completes 3–6 seconds after starting with
+`runner_id: 0`, an empty `runner_name` and no `steps` array. That is a GitHub Actions runner-allocation
+failure, verified by fetching the job records rather than inferred from the failure count.
