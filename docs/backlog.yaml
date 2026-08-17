@@ -929,6 +929,12 @@ milestones:
           unblocks. Tests-first; shared classes (scheme reference data, rate cards,
           settlement/sign-off aggregates) must remain readable by both domains -
           over-walling is a failure mode, not a safety margin.
+          Known call site to revisit, surfaced by the BILL-13 hard-stop review: the tenant portable
+          export (packages/db/src/tenant-billing-service-store.ts) now returns the TPP-domain payable
+          ledger alongside the LFI-domain receivable ledger in ONE artifact behind a single
+          billing:read check. Acceptable today - PRD section 2 puts TPP cost management in the Finance
+          Analyst's remit and the export is RLS-scoped to the caller's own bank_id - but it is the
+          first place one read crosses the wall, so it needs the cross_domain_access seam.
         acceptance:
           - A TPP-domain principal cannot invoke LFI-domain reads/writes and vice versa,
             enforced at middleware AND service layer, proven by denial tests.

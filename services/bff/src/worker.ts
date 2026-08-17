@@ -206,6 +206,7 @@ async function runTenantBillingProjection(
     if (failures.length > 0) throw new AggregateError(failures.map((failure) => failure.reason), `billing projection failed for ${bankId}`)
   } finally {
     await Promise.allSettled([
+      tppCostStore.close(),
       reconciliationStore.close(), breakStore.close(), memoStore.close(), assuranceStore.close(), audit.close(), lineage.close()
     ])
   }

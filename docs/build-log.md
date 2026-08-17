@@ -2659,3 +2659,54 @@ Q4.5 lineage gate PASSED with `billing_tpp_cost_statement`, `_statement_line` an
 allowed gaps none, unexpected none; typecheck, ESLint and the coverage gate clean. Note the
 integration suite fails on a *re-seeded* database for the pre-existing non-idempotent-seed reason
 recorded under CODE-02 — verified by re-running on a fresh database, which is how CI runs it.
+
+### BILL-13 addendum — advisory AI review (ADR 0029) outcome
+
+`hard-stop` reviewer: **FAIL (6 findings)** — the first non-PASS on this track, and it was right about
+several. Four were fixed in-branch, all defects in this story's own work:
+
+1. **Four-eyes asserted in prose, enforced nowhere.** `billing_tpp_cost_ap_dispatch` carried a comment
+   promising "never self-approved" while the table had no initiator column and no CHECK. It now carries
+   `initiated_by` and `CHECK (approved_by <> initiated_by)`, mirroring `approval_request`
+   (0002_tables.sql). Fixing it surfaced a second defect the reviewer had not: `approval_request_id`
+   was typed `uuid`, but `approval_request.approval_request_id` is TEXT — BILL-16's foreign key would
+   not have compiled. Corrected to text.
+2. **A divergent regeneration was silently swallowed.** `saveStatement` used `ON CONFLICT DO NOTHING`
+   and re-read the stored row without comparing the recomputed evidence hash, so regenerating a
+   statement with *different* content under the same key returned the old one and reported
+   `created: false`. Divergent evidence on an immutable regulated record is now raised as a conflict,
+   matching the tenant-configuration precedent; `saveRerating` got the same treatment over its replay
+   payload.
+3. **The PSU claim over-reached.** The header said no PSU identifier appears in any of the eight tables
+   "asserted by test", but the test covers the statement family only, and three provider-fed free-form
+   columns (`parsed_payload`, `raw_document_ref`, `response_payload`) cannot be constrained by schema.
+   The claim is now scoped to what is true and enforced, and redaction at parse time is written up as a
+   **requirement on BILL-14 and BILL-16**, which own those write paths.
+4. **A skip decided by regex over error text.** The generation service classified an unpriceable period
+   by matching the error message, so any future error mentioning those words would have been downgraded
+   to a skip. `UnpriceableOverageError` now carries that meaning as a type, and a test proves an
+   impostor message still propagates as a defect.
+
+Also fixed, from the reviewer's non-finding notes: the worker constructed `PgBillingTppCostStore` but
+never closed it, leaking a `pg.Pool` per tenant per monthly run. And from the contract reviewer's
+observations, `tppCostLineRef` omitted `productFamily` while the domain aggregates on it under a UNIQUE
+constraint — unreachable today because `classify()` derives productFamily from feeStream+apiFamily, but
+that is an invariant of `classify()`, not of the identity, so the ref now mirrors the aggregation key
+exactly.
+
+Deliberately **not** changed, with reasons: `scope_used: 'billing:rate'` is an undeclared scope token in
+the audit trail, but it is exact precedent already on main (`memo-reconciliation.ts`) and fixing two of
+four call sites would make the trail less consistent, not more — it wants one repo-wide pass. The
+camelCase keys inside exported jsonb payloads are a ratified byte-stability exception for the portability
+digest, pinned by an existing test on main; the reviewer's own recommendation is to write it into the
+spec description, which is a spec-change story. The ADR 0006 role-domain dimension stays with SEG-01
+(blocked on BD-22); the migration now states the family's domain explicitly so it is unambiguous when
+SEG-01 threads it, and the portable export is recorded on SEG-01 as the first call site where one read
+crosses the wall.
+
+**Milli-fils vs the CLAUDE.md minor-unit money rule has now been flagged by two consecutive contract
+reviews** (BILL-12 and BILL-13) with no ADR ratifying it. It needs a decision: either CLAUDE.md names
+milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go through spec-change.
+
+Re-verified after the fixes: unit 1422/1422; integration 164/164 across 77 files on a pristine
+database; Q4.5 PASSED, allowed gaps none; typecheck and ESLint clean.

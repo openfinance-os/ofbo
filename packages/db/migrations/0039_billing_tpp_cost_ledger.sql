@@ -4,15 +4,29 @@
 -- its own table family rather than shared with the LFI-receivable tables, which is what makes the
 -- dual-role wall enforceable rather than nominal.
 --
+-- ROLE DOMAIN: every table below is TPP-domain (ADR 0006). What is tagged here is sensitivity
+-- (ofbo_classification); the role_domain DIMENSION itself — the scope-layer guard, the RLS
+-- predicate, and the cross_domain_access audit seam — is SEG-01, which ADR 0006 blocks on BD-22.
+-- Recorded here so the domain of this family is unambiguous the day SEG-01 threads it through,
+-- rather than inferred later from table names.
+--
 -- Every relation is an immutable application fact: SELECT + INSERT only for ofbo_app, tenant RLS
 -- FORCED, 24-month hot / 60-month immutable retention, no deletion path. A corrected rate or a
 -- late-arriving document writes a NEW artifact — billing_tpp_cost_rerating for a closed period —
 -- and never updates a statement, a document, or a reconciliation already written.
 --
--- NO PSU IDENTIFIER APPEARS IN ANY TABLE BELOW, by design and asserted by test. Drill-down to a
--- customer runs through event_ids into billing_event, which is where psu_id is already governed;
--- copying it into the cost ledger would widen the PII surface for no analytical gain
--- (CLAUDE.md hard stop).
+-- PSU DATA. No column below is a PSU identifier, and the statement family carries none by
+-- construction — asserted by test. Drill-down to a customer runs through event_ids into
+-- billing_event, which is where psu_id is already governed; copying it here would widen the PII
+-- surface for no analytical gain (CLAUDE.md hard stop).
+--
+-- The claim is narrower than "no PSU data can ever land here", and deliberately so: three columns
+-- carry provider-supplied free-form content that this schema cannot constrain —
+-- billing_tpp_cost_document.parsed_payload, .raw_document_ref, and
+-- billing_tpp_cost_ap_dispatch.response_payload. A Nebras invoice line or a P9 response may well
+-- contain payment-level customer detail. Redacting at parse/ingest time is therefore a REQUIREMENT
+-- ON BILL-14 and BILL-16, which own those write paths, and must be asserted by their tests; it
+-- cannot be delegated to a CHECK constraint.
 --
 -- Three tables are written by BILL-13 (statement, statement_line, rerating). The remaining five are
 -- created here so the ledger's shape is settled in one reviewed migration, and are written by the
@@ -244,8 +258,12 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   channel                ofbo_channel NOT NULL,
   statement_id           uuid NOT NULL,
   reconciliation_id      uuid NOT NULL,
-  -- The four-eyes approval that authorised this dispatch; never nullable, never self-approved.
-  approval_request_id    uuid NOT NULL,
+  -- The four-eyes approval that authorised this dispatch. Text, matching approval_request's own
+  -- approval_request_id (0002_tables.sql), so BILL-16 can reference it without a type change.
+  approval_request_id    text NOT NULL,
+  -- Initiator recorded alongside approver so the self-approval prohibition is ENFORCED here rather
+  -- than asserted in prose, mirroring approval_request's CHECK (0002_tables.sql).
+  initiated_by           text NOT NULL,
   approved_by            text NOT NULL,
   approved_at            timestamptz NOT NULL,
   dispatch_state         text NOT NULL CHECK (dispatch_state IN (
@@ -260,6 +278,8 @@ CREATE TABLE IF NOT EXISTS billing_tpp_cost_ap_dispatch (
   classification         ofbo_classification NOT NULL DEFAULT 'confidential-restricted',
   FOREIGN KEY (bank_id, statement_id) REFERENCES billing_tpp_cost_statement(bank_id, id),
   FOREIGN KEY (bank_id, reconciliation_id) REFERENCES billing_tpp_cost_reconciliation(bank_id, id),
+  -- Four eyes, not one: whoever approved a payable dispatch cannot be whoever initiated it.
+  CHECK (approved_by <> initiated_by),
   -- Retry-safe: the same instruction dispatched twice is one row, so P9 cannot be double-paid.
   UNIQUE (bank_id, idempotency_key)
 );

@@ -80,6 +80,14 @@ export function tppCostEvidenceHash(value: unknown): string {
  * Stable identity for a statement line: its cost dimensions, which is exactly what BILL-15 will
  * match a provider document line against. Derived rather than generated so the same traffic always
  * produces the same ref.
+ *
+ * These dimensions MUST mirror buildExpectedTppCostStatement's aggregation key exactly, in the same
+ * order. The domain produces one line per distinct key, and the ledger enforces
+ * UNIQUE (bank_id, statement_id, line_ref) — so any dimension the domain separates on but the ref
+ * omits is two distinct lines colliding on insert and failing the whole statement. `productFamily`
+ * happens to be functionally determined by feeStream + apiFamily today, which makes such a collision
+ * currently unreachable; that is an invariant of classify(), not of this identity, so it is not
+ * relied on here.
  */
 export function tppCostLineRef(line: ExpectedTppCostStatementLine): string {
   return [
@@ -87,6 +95,7 @@ export function tppCostLineRef(line: ExpectedTppCostStatementLine): string {
     line.costRecipientId,
     line.feeStream,
     line.feeClass,
+    line.productFamily,
     line.apiFamily,
     line.customerSegment,
     line.internalProduct ?? '',
@@ -206,6 +215,15 @@ export class PgBillingTppCostStore {
         )).rows[0] as Record<string, unknown> | undefined
       }
       if (!row) throw new Error('expected TPP cost statement could not be read after insert')
+      // A regeneration that produces DIFFERENT content under the same key is a conflict, not a
+      // no-op. Returning the stored row silently would hide divergent evidence on an immutable
+      // regulated record — the same posture as the tenant-configuration conflict check.
+      if (row.evidence_hash !== evidenceHash) {
+        throw new Error(
+          `conflicting expected TPP cost statement for meter run ${input.meterRunId}: stored evidence `
+          + `${String(row.evidence_hash)} does not match regenerated ${evidenceHash}`
+        )
+      }
       if (created) {
         for (const line of statement.lines) {
           await client.query(
@@ -307,6 +325,7 @@ export class PgBillingTppCostStore {
     }
     const previousNet = input.previous.totals.totalNetMilliFils
     const correctedNet = input.corrected.totals.totalNetMilliFils
+    const replayHash = tppCostEvidenceHash({ previous: input.previous, corrected: input.corrected })
     const result = await this.asApp(async (client) => {
       const inserted = await client.query(
         `INSERT INTO billing_tpp_cost_rerating
@@ -316,7 +335,7 @@ export class PgBillingTppCostStore {
             corrected_total_net_milli_fils, total_delta_net_milli_fils, rerated_at, replay_payload)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,TRUE,$11,$12,$13,$14,$15::jsonb)
          ON CONFLICT (bank_id, previous_statement_id, correction_reference) DO NOTHING
-         RETURNING id`,
+         RETURNING id, replay_payload`,
         [this.config.bankId, this.config.channel, input.meterRunId, input.previousStatementId,
           input.correctedStatementId, input.previous.period, input.correctionReference,
           input.previous.evidence.rateSnapshotHash, input.corrected.evidence.rateSnapshotHash,
@@ -327,12 +346,19 @@ export class PgBillingTppCostStore {
       const created = Boolean(row)
       if (!row) {
         row = (await client.query(
-          `SELECT id FROM billing_tpp_cost_rerating
+          `SELECT id, replay_payload FROM billing_tpp_cost_rerating
             WHERE previous_statement_id = $1 AND correction_reference = $2`,
           [input.previousStatementId, input.correctionReference]
         )).rows[0] as Record<string, unknown> | undefined
       }
       if (!row) throw new Error('TPP cost re-rating could not be read after insert')
+      // Same correction reference, different replay: a conflict rather than a silent no-op.
+      if (tppCostEvidenceHash(row.replay_payload) !== replayHash) {
+        throw new Error(
+          `conflicting TPP cost re-rating for reference ${input.correctionReference}: the stored replay `
+          + 'does not match the one supplied'
+        )
+      }
       return { id: row.id as string, created }
     })
     if (result.created) await this.emit('billing_tpp_cost_rerating', RERATING_LINEAGE, traceId)

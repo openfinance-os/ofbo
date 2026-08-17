@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   SCHEME_RATE_CARD_2026_06_02,
+  UnpriceableOverageError,
   fils,
   type DirectoryOverageSnapshot,
   type MeteredLine
@@ -123,6 +124,21 @@ describe('BILL-13 expected TPP cost statement generation', () => {
     const stale = service(store(hubOnly, { ...RUN, rateCardVersion: '2025.01.01' }), SNAPSHOT)
     expect(await stale.svc.generateStatement('2026-06', SCHEME_RATE_CARD_2026_06_02, '2026-07-03T02:00:00.000Z', 't'))
       .toMatchObject({ status: 'skipped', reason: /not 2026\.06\.02/ })
+  })
+
+  it('classifies the skip by error type, not by matching message text', async () => {
+    // A defect whose message merely mentions the same words must NOT be downgraded to a skip.
+    const impostor: TppCostStatementStore = {
+      async latestMeterRun() { return RUN },
+      async meteredLinesForRun() { throw new Error('directory overage snapshot table is corrupt') },
+      async saveStatement() { throw new Error('unreachable') }
+    }
+    const { svc } = service(impostor, SNAPSHOT)
+    await expect(svc.generateStatement('2026-06', SCHEME_RATE_CARD_2026_06_02, '2026-07-03T02:00:00.000Z', 't'))
+      .rejects.toThrow(/corrupt/)
+
+    // And the genuine refusal is the typed error the service keys on.
+    expect(new UnpriceableOverageError('evt-1', 'x')).toBeInstanceOf(Error)
   })
 
   it('propagates a genuine defect instead of disguising it as a skip', async () => {

@@ -1,4 +1,5 @@
 import {
+  UnpriceableOverageError,
   buildExpectedTppCostStatement,
   rateUsage,
   type DirectoryOverageSnapshot,
@@ -53,8 +54,6 @@ export interface TppCostStatementDeps {
   overage?: DirectoryOverageSource
 }
 
-const UNPRICEABLE = /directory overage snapshot|serving LFI/i
-
 export class TppCostStatementService {
   constructor(private readonly deps: TppCostStatementDeps) {}
 
@@ -89,9 +88,10 @@ export class TppCostStatementService {
         ...(snapshot ? { directorySnapshotId: snapshot.snapshotId } : {})
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      // Only the fail-closed pricing refusal is a skip; anything else is a genuine defect.
-      if (!UNPRICEABLE.test(message)) throw error
+      // Only the fail-closed pricing refusal is a skip, identified by type rather than by matching
+      // message text — anything else is a genuine defect and must surface as one.
+      if (!(error instanceof UnpriceableOverageError)) throw error
+      const message = error.message
       await this.deps.audit.emit({
         event_type: 'billing_tpp_cost_statement_unpriceable',
         acting_principal: 'system:billing-rating-engine',

@@ -311,6 +311,41 @@ describe('PgBillingTppCostStore', () => {
     }, 'trace-bad')).rejects.toThrow(/same meter run/i)
   })
 
+  it('raises a conflict when a regeneration diverges under the same key, rather than silently keeping the old one', async () => {
+    const { statementId, meterRunId, statement } = await persistStatement(fils(800), `dir-${randomUUID()}`)
+
+    // Same (meter run, rate card, rate snapshot) but different content: divergent evidence on an
+    // immutable regulated record must be raised, not swallowed as a no-op.
+    const tampered: ExpectedTppCostStatement = {
+      ...statement,
+      totals: { ...statement.totals, totalVatMilliFils: statement.totals.totalVatMilliFils + 1, totalGrossMilliFils: statement.totals.totalGrossMilliFils + 1 }
+    }
+    await expect(store.saveStatement({ meterRunId, statement: tampered }, 'trace-divergent'))
+      .rejects.toThrow(/conflicting expected TPP cost statement/i)
+
+    // The stored statement is untouched by the rejected attempt.
+    expect((await store.statementById(statementId))?.statement.totals).toEqual(statement.totals)
+  })
+
+  it('refuses a payable dispatch that one person both initiated and approved', async () => {
+    // BILL-16 owns this write path; the four-eyes prohibition is enforced by the schema now so it
+    // cannot be asserted in prose and forgotten.
+    const client = await admin.connect()
+    try {
+      await expect(client.query(
+        `INSERT INTO billing_tpp_cost_ap_dispatch
+           (bank_id, channel, statement_id, reconciliation_id, approval_request_id, initiated_by,
+            approved_by, approved_at, dispatch_state, idempotency_key, payable_net_milli_fils,
+            evidence_hash)
+         VALUES ($1,'internal_retail',gen_random_uuid(),gen_random_uuid(),'ar-1','finance.analyst',
+                 'finance.analyst',now(),'pending',$2,0,'sha256:x')`,
+        [TENANCY.bankId, randomUUID()]
+      )).rejects.toThrow(/violates check constraint/i)
+    } finally {
+      client.release()
+    }
+  })
+
   it('emits BCBS 239 lineage for every cost table it writes', async () => {
     await persistStatement(fils(800), `dir-${randomUUID()}`)
 

@@ -128,6 +128,20 @@ interface PricingContext extends RatingOptions {
 type RateSpec = RateCard['receivable'][keyof RateCard['receivable']] | RateCard['payableHub'][keyof RateCard['payableHub']]
 
 /**
+ * Raised when a chargeable retail overage line cannot be priced: the serving LFI publishes the rate,
+ * so there is nothing to fall back on. A distinct type rather than a message, so callers deciding
+ * whether to skip a projection classify it by identity instead of by matching error text.
+ */
+export class UnpriceableOverageError extends Error {
+  readonly eventId: string
+  constructor(eventId: string, message: string) {
+    super(message)
+    this.name = 'UnpriceableOverageError'
+    this.eventId = eventId
+  }
+}
+
+/**
  * Retail data overage owed to the LFI that served the data. Priced from the effective-dated
  * directory snapshot for that specific LFI — never from the institution's own receivable card,
  * which would assume every counterparty charges what this bank charges.
@@ -138,13 +152,17 @@ function priceServingLfiOverage(line: MeteredLine, snapshot: DirectoryOverageSna
     return { ...line, amountMilliFils: 0, rateDetail: { overageSource: 'within_free_threshold', charges: false } }
   }
   if (!snapshot) {
-    throw new Error(
+    throw new UnpriceableOverageError(
+      line.eventId,
       `${line.eventId}: a chargeable retail data overage line needs a directory overage snapshot to price it — `
       + 'the serving LFI publishes its own rate and the receivable card must not be mirrored for it'
     )
   }
   if (!line.counterpartyLfiId) {
-    throw new Error(`${line.eventId}: retail data overage cannot be priced without the serving LFI (counterpartyLfiId)`)
+    throw new UnpriceableOverageError(
+      line.eventId,
+      `${line.eventId}: retail data overage cannot be priced without the serving LFI (counterpartyLfiId)`
+    )
   }
 
   // Normalise to a UTC calendar day: an offset-form timestamp sliced raw would resolve the wrong
