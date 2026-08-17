@@ -2451,7 +2451,6 @@ corrected — all folded into ADR 0007 / PRD / backlog in this same PR before me
 Evidence: docs gates re-run green (docs:check, discovery waist gate, adr-number-check);
 backlog YAML parses. Still docs-only.
 
-
 ---
 
 ## 2026-08-17 — HARNESS-16 VERIFIED: both reviewers ran end to end (PR #318)
@@ -2598,4 +2597,3 @@ unchanged, so no client sees a new value today.
 Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm the OverLimitFees unit
 from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
 statements — so it blocks where it is actionable instead of lapsing with a `done` status.
-

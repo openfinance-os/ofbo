@@ -9,6 +9,24 @@
   HG-0001 (line 39). Follows ADR 0020 (Q2b doc-drift) and ADR 0021 (mutation testing) as
   precedent for adding a non-Q CI surface in its own workflow file.
 
+### Amendments after acceptance
+
+The **decision** below is unchanged since acceptance. These are corrections to statements of
+*fact* about what had been built and run — recorded here rather than left to git history,
+because an accepted ADR edited in place should say so on its face.
+
+| date | amendment |
+| --- | --- |
+| 2026-08-16 | Parity reworked from a per-engine flag to a harness rule over the whole review control plane; `requires_workflow_parity` removed. A missing credential now fails the job while structural non-runs stay green. |
+| 2026-08-17 | Engine status table corrected — `claude` had been marked "proven in CI" when that meant only "resolves and preflights", and `codex` had been marked "never run end to end" when it had run and failed. The Codex bubblewrap finding was recorded here for the first time, and a verification record added. |
+
+Whether a factual correction to an accepted ADR should instead be a superseding ADR is a
+**governance question for a control-plane owner**, not one the build agent should settle. It was
+raised by the hard-stop reviewer on PR #318, at low confidence, and is flagged rather than
+assumed: the retention hard stop in `CLAUDE.md` binds `audit_high_sensitivity` and regulated
+data stores, not decision records, and no convention in `docs/adrs/` requires supersession for
+factual corrections. If that is wrong, this table is the place a reviewer will notice it.
+
 ## Context
 
 AI review already happens on every story — but only **pre-PR, inside the build agent's own
