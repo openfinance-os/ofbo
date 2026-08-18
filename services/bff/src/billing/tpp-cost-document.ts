@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   UnparseableDocumentError,
+  assertOperatorFieldClean,
   nebrasTaxInvoiceParser,
   type ParsedTppCostDocument,
   type TppCostDocumentParser,
@@ -170,6 +171,23 @@ export class TppCostDocumentIngestService {
         'verified_by is required: a manual upload is only evidence if a second person verified it.',
         400
       )
+    }
+
+    // verified_by is the one field on this path that an operator types freely and that lands
+    // VERBATIM in a column, so nothing downstream can clean it: assertRedactedPayload inspects the
+    // parsed payload, and the sibling free-text source_note is only safe because it goes to the audit
+    // sink, where redactPii runs at emission. The column is INSERT-only with no deletion path and,
+    // since migration 0040, cross-tenant readable — so a customer identifier typed here is permanent
+    // and visible beyond the tenant. Refuse rather than store. Email is deliberately still accepted;
+    // see assertOperatorFieldClean for why screening it would reject the field's likeliest legitimate
+    // value.
+    try {
+      assertOperatorFieldClean({ verified_by: input.verifiedBy })
+    } catch (error) {
+      if (error instanceof UnparseableDocumentError) {
+        throw new TppCostDocumentError('BACKOFFICE.INVALID_BODY', error.message, 400)
+      }
+      throw error
     }
 
     // The uploader comes from the verified claim, never the body. Distinctness is enforced here
