@@ -67,6 +67,17 @@ export interface PayableCloseDeps {
   audit: HighClassAuditSink
 }
 
+/**
+ * One human must not pass as two on a spelling difference.
+ *
+ * The same normalisation BILL-14 applies to uploader-vs-verifier. A raw `===` treats
+ * `Finance.Analyst` and `finance.analyst ` as different principals, which is the cheapest possible
+ * way to defeat a four-eyes check.
+ */
+function normalisePrincipal(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 export class PayableCloseService {
   constructor(private readonly deps: PayableCloseDeps) {}
 
@@ -126,7 +137,22 @@ export class PayableCloseService {
       throw new PayableCloseError('BACKOFFICE.INVALID_PERIOD', `Period ${period} is not YYYY-MM.`, 400,
         'Supply the cost period as YYYY-MM, e.g. 2026-06.')
     }
-    if (initiatedBy && approver === initiatedBy) {
+    // An ABSENT initiator is a refusal, not a skip. The guard used to read
+    // `if (initiatedBy && approver === initiatedBy)`, so a payload carrying no `initiated_by` fell
+    // straight past the four-eyes check — and `POST /approvals` accepts an arbitrary
+    // operation_payload, which makes such a payload reachable rather than hypothetical. The comment
+    // on makePayableCloseOperation says this refusal "holds however the operation is invoked"; the
+    // short-circuit defeated it for precisely the invocation that omits the field.
+    if (!initiatedBy.trim()) {
+      throw new PayableCloseError(
+        'BACKOFFICE.FOUR_EYES_NO_INITIATOR',
+        `The close of ${period} names no initiating principal, so there is nothing for the approver `
+        + 'to be different from. Four eyes cannot be evidenced by one name.',
+        409,
+        'Re-request the close through POST /back-office/billing/payable-close so the initiator is recorded.'
+      )
+    }
+    if (normalisePrincipal(approver) === normalisePrincipal(initiatedBy)) {
       throw new PayableCloseError(
         'BACKOFFICE.FOUR_EYES_SAME_PRINCIPAL',
         `The close of ${period} was initiated and approved by the same principal, which is one person `
