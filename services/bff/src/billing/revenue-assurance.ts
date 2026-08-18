@@ -15,8 +15,6 @@ import {
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
-export const BILLING_ASSURANCE_SCOPE = 'billing:assure'
-
 export interface RevenueAssuranceStore {
   appendRecovery(recovery: RevenueRecovery, traceId: string): Promise<{ id: string; created: boolean }>
   recoveriesForPeriod(period: string): Promise<RevenueRecovery[]>

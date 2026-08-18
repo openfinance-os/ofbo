@@ -9,8 +9,6 @@ import type { FinancialJournalBatch, FinancialSystemPort } from '@ofbo/ports'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
-export const BILLING_POST_SCOPE = 'billing:post'
-
 export interface BillingAccountingDispatchInput {
   batchArtifactId: string
   adapterProfile: 'demo' | 'enterprise'
