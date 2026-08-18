@@ -144,6 +144,37 @@ describe('BILL-14 POST /back-office/billing/tpp-cost-documents', () => {
     }
   })
 
+  it('takes the UPLOADER from the claim only — a body field naming one cannot displace it', async () => {
+    // The half of the control that IS authentication, and the half a review found the spec
+    // over-claiming about. `verified_by` is an operator attestation (ratified, and the spec now says
+    // so), so the uploader is the only authenticated party on this endpoint. If it were ever read
+    // from the body, both names would be caller-supplied and the distinctness refusal would reduce to
+    // comparing two strings the same caller chose.
+    //
+    // Discriminating by construction: `verified_by` here EQUALS the principal's own subject, so the
+    // refusal can fire only if the uploader came from the claim. A decoy `uploaded_by` naming someone
+    // else rides alongside — an implementation that honoured it would see two different names and
+    // answer 201.
+    const { app } = harness()
+    const res = await app.request('/back-office/billing/tpp-cost-documents', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'idempotency-key': randomUUID() },
+      body: upload(
+        {
+          document_type: 'nebras_tax_invoice',
+          billing_period: '2026-06',
+          verified_by: 'demo:finance-analyst@alpha-bank',
+          uploaded_by: 'someone.else'
+        },
+        invoiceFile().file
+      )
+    })
+
+    expect(res.status).toBe(409)
+    expect((await res.json() as { error: Record<string, unknown> }).error)
+      .toMatchObject({ code: 'BACKOFFICE.SELF_VERIFICATION_REFUSED' })
+  })
+
   it('maps an unparseable document to 422 without echoing provider content', async () => {
     const { app } = harness()
     const res = await app.request('/back-office/billing/tpp-cost-documents', {
