@@ -1,6 +1,6 @@
 import { fils } from './money.js'
 import type { BillingFeeClass } from './rate-card.js'
-import { NEBRAS_CATEGORY_MAP, assertIdentifierFieldsClean, type NebrasCategoryMap, type ParsedTppCostDocumentLine, type TppCostDocumentType } from './tpp-cost-document.js'
+import { NEBRAS_CATEGORY_MAP, assertNoCustomerDetail, type NebrasCategoryMap, type ParsedTppCostDocumentLine, type TppCostDocumentType } from './tpp-cost-document.js'
 import type { CostRecipientType, ExpectedTppCostStatementLine, TppCostFeeStream } from './tpp-cost.js'
 
 /**
@@ -815,8 +815,13 @@ export interface BillingQueryBundle extends BillingQueryBundleInput {
  *   the charge's own facts — fee class, category, units, amounts — so the guard refuses rather than
  *   redacts, exactly as BILL-14 does for structured columns.
  *
- * Every text field on the bundle is screened, not only `transactionDetail`. `reasonCode` is the one
- * that makes this more than belt-and-braces: an unmapped line's reason code embeds the provider's own
+ * Screened by NAME and by VALUE, and every text field on the bundle, not only `transactionDetail`.
+ * Both halves of that sentence were once a claim rather than a description — the screen applied value
+ * shapes only, and skipped four fields including the IG-required `occurredAt`. A value-shape screen
+ * cannot see a name or an address, and `transactionDetail` is an open record whose KEYS the caller
+ * chooses, so key-name screening is not belt-and-braces here; it is the half that catches the obvious
+ * case. `reasonCode` is the one that makes the rest more than belt-and-braces: an unmapped line's
+ * reason code embeds the provider's own
  * `sourceCategory`, so provider-supplied text does reach the wire here. BILL-14 already refuses an
  * identifier-shaped category at ingest, which is the right boundary — but that leaves this artefact
  * depending on an invariant established two stories away, and it is the artefact that actually leaves
@@ -844,18 +849,32 @@ export function buildBillingQueryBundle(input: BillingQueryBundleInput): Billing
       `billing query window closed on ${input.queryDeadline}; the claim can no longer be asserted`
     )
   }
+  // EVERY text field, which the paragraph above claimed and this list did not deliver: raisedAt,
+  // occurredAt, billingPeriod and queryDeadline were omitted, and occurredAt is one of the six the IG
+  // REQUIRES. They are free-form strings with no format validation anywhere in this builder — the BFF
+  // threads occurredAt straight through from its caller — so "unlikely to carry PSU data" was an
+  // assumption about callers, not a property of the field.
   const screened: Record<string, string> = {
     queryReference: input.queryReference,
     invoiceNumber: input.invoiceNumber,
     interactionId: input.interactionId,
     lfiName: input.lfiName,
     tppName: input.tppName,
-    reasonCode: input.reasonCode
+    reasonCode: input.reasonCode,
+    raisedAt: input.raisedAt,
+    occurredAt: input.occurredAt,
+    billingPeriod: input.billingPeriod,
+    queryDeadline: input.queryDeadline
   }
   for (const [name, value] of Object.entries(input.transactionDetail)) {
     screened[`transactionDetail.${name}`] = String(value)
   }
-  assertIdentifierFieldsClean(screened)
+  // Both controls, not just the value shapes. `transactionDetail` is an open
+  // Record<string, string | number>, so its KEYS are the caller's too — and a payer name or address
+  // matches none of the four shapes, which made the shape screen alone a control that could not see
+  // the most obvious way PSU data would arrive here. The transactionDetail.* prefix is preserved in
+  // the key, so `transactionDetail.payerName` still matches the `payer` fragment.
+  assertNoCustomerDetail(screened)
   return { ...input, responseClocks: NEBRAS_RESPONSE_CLOCKS }
 }
 

@@ -231,6 +231,33 @@ export interface RedactionResult {
   removedPaths: string[]
 }
 
+/**
+ * Refuse a set of fields that carries customer detail by NAME or by VALUE.
+ *
+ * `assertIdentifierFieldsClean` screens values against four known SHAPES. That is the right control
+ * for a provider document, where the field names are the schema's and only the values are theirs.
+ * It is not sufficient on its own anywhere the field NAMES are open too: a name, an address or a
+ * date of birth matches no shape, so `{ payerName: '…', payerAddress: '…' }` passes a value-shape
+ * screen completely. `redactProviderPayload` has always applied both controls; a caller that reached
+ * for only one of them got the weaker half of a pair that was designed together.
+ *
+ * Refuses rather than redacts, because the callers of this are artefacts that leave the bank or land
+ * in a no-deletion-path table: a `[redacted]` marker in a scheme billing query is not a better
+ * outcome than not sending one.
+ */
+export function assertNoCustomerDetail(fields: Record<string, string | undefined>): void {
+  for (const name of Object.keys(fields)) {
+    if (shouldRedactKey(name)) {
+      throw new UnparseableDocumentError(
+        `refusing: the field ${name} is named for customer detail, and this artefact cannot carry `
+        + 'it. Value shapes are screened separately — a name or an address matches none of them, so '
+        + 'the field name is the only signal there is. (The value is deliberately not echoed.)'
+      )
+    }
+  }
+  assertIdentifierFieldsClean(fields)
+}
+
 function shouldRedactKey(key: string): boolean {
   const lower = key.toLowerCase()
   return PSU_KEY_FRAGMENTS.some((fragment) => lower.includes(fragment))
