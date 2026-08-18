@@ -40,11 +40,31 @@ export interface GatedOperation {
   initiatorScope: string
   approverScope: string
   /**
-   * Runs ONLY on the second principal's approval. `ctx` carries the approving principal so an
-   * operation that records who approved (e.g. four-eyes query-purpose registration → approved_by)
-   * has it; existing operations that don't need it simply ignore the argument.
+   * Runs ONLY on the second principal's approval. `ctx` carries the AUTHORITATIVE facts about the
+   * approval — the ones this service owns and an operation cannot be trusted to supply — so an
+   * operation recording four-eyes evidence takes them from here rather than from its payload.
+   * Operations that don't need them ignore the argument; the field is optional, so adding to it
+   * does not disturb the six existing implementations.
+   *
+   * `initiator`, `approvalRequestId` and `approverIsSuperadmin` were added for BILL-16. Without
+   * them a gated operation had only `operation_payload` to read, and `POST /approvals` accepts an
+   * arbitrary payload — so the recorded initiator was operator-supplied, and the approval id could
+   * not be recorded at all because `requestApproval` mints it AFTER the payload is built. Four-eyes
+   * evidence that names a caller-chosen initiator, and cites no approval, is not evidence.
    */
-  execute(payload: Record<string, unknown>, ctx?: { approver: string; approverPersona: string }): Promise<unknown>
+  execute(
+    payload: Record<string, unknown>,
+    ctx?: {
+      approver: string
+      approverPersona: string
+      /** The request's real initiator, from the approval record — never from the payload. */
+      initiator: string
+      /** The approval being executed, so the operation can cite what authorised it. */
+      approvalRequestId: string
+      /** PRD §2: stamped on every High-class record produced under platform:superadmin. */
+      approverIsSuperadmin: boolean
+    }
+  ): Promise<unknown>
 }
 
 export class ApprovalError extends Error {
@@ -170,7 +190,15 @@ export class ApprovalsService {
     if (!op) throw new ApprovalError(409, 'BACKOFFICE.OPERATION_UNREGISTERED', `${r.operation_type} has no registered executor — refusing to approve silently`)
     r.state = 'approved'
     r.approver = principal.subject
-    r.execution_result = await op.execute(r.operation_payload, { approver: principal.subject, approverPersona: principal.persona })
+    r.execution_result = await op.execute(r.operation_payload, {
+      approver: principal.subject,
+      approverPersona: principal.persona,
+      // From the RECORD and the approving PRINCIPAL, not from the payload: these are the facts this
+      // service established, and they are what four-eyes evidence must be built from.
+      initiator: r.initiator,
+      approvalRequestId: r.approval_request_id,
+      approverIsSuperadmin: principal.scopes.includes('platform:superadmin')
+    })
     await this.store.update(r)
     await this.auditEvent('approval_approved', principal, r.approval_request_id, traceId)
     return r

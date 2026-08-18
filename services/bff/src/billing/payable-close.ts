@@ -74,7 +74,7 @@ export interface PayableCloseDeps {
  * `Finance.Analyst` and `finance.analyst ` as different principals, which is the cheapest possible
  * way to defeat a four-eyes check.
  */
-function normalisePrincipal(value: string): string {
+export function normalisePrincipal(value: string): string {
   return value.trim().toLowerCase()
 }
 
@@ -112,6 +112,10 @@ export class PayableCloseService {
       acting_principal: principal.subject,
       acting_persona: principal.persona,
       scope_used: PAYABLE_CLOSE_SCOPE,
+      // PRD §2: stamped on EVERY High-class record produced under platform:superadmin. The field is
+      // optional on HighClassAuditEvent, so omitting it is silent — and a superadmin close was
+      // indistinguishable from an analyst's on the one record that matters.
+      superadmin_marker: principal.scopes.includes('platform:superadmin'),
       request_trace_id: traceId,
       response_status: 202,
       request_body: { period, approval_request_id: approval.approval_request_id }
@@ -128,11 +132,17 @@ export class PayableCloseService {
    */
   async executeClose(
     period: string,
-    initiatedBy: string,
-    approver: string,
-    approvalRequestId: string | null,
+    /** Every field established by ApprovalsService, not by the caller's payload. */
+    evidence: {
+      initiatedBy: string
+      approver: string
+      approverPersona: string
+      approverIsSuperadmin: boolean
+      approvalRequestId: string | null
+    },
     traceId: string
   ): Promise<{ close_id: string; period: string }> {
+    const { initiatedBy, approver, approverPersona, approverIsSuperadmin, approvalRequestId } = evidence
     if (!PERIOD.test(period)) {
       throw new PayableCloseError('BACKOFFICE.INVALID_PERIOD', `Period ${period} is not YYYY-MM.`, 400,
         'Supply the cost period as YYYY-MM, e.g. 2026-06.')
@@ -176,8 +186,12 @@ export class PayableCloseService {
     await this.deps.audit.emit({
       event_type: 'billing_tpp_cost_period_closed',
       acting_principal: approver,
-      acting_persona: 'finance-analyst',
+      // The REAL persona. `hasScope` lets platform:superadmin satisfy finance:reconciliation:write,
+      // so a hardcoded 'finance-analyst' recorded a superadmin — or any other persona holding the
+      // scope — as an analyst, permanently, in a table with no correction path.
+      acting_persona: approverPersona,
       scope_used: PAYABLE_CLOSE_SCOPE,
+      superadmin_marker: approverIsSuperadmin,
       request_trace_id: traceId,
       response_status: 200,
       request_body: {
@@ -219,15 +233,26 @@ export function makePayableCloseOperation(service: PayableCloseService): GatedOp
     approverScope: PAYABLE_CLOSE_SCOPE,
     async execute(payload, ctx) {
       const period = typeof payload.period === 'string' ? payload.period : ''
-      const initiatedBy = typeof payload.initiated_by === 'string' ? payload.initiated_by : ''
       const traceId = typeof payload.trace_id === 'string' ? payload.trace_id : 'unknown'
-      const approvalRequestId = typeof payload.approval_request_id === 'string' ? payload.approval_request_id : null
       if (!ctx?.approver) {
         throw new PayableCloseError('BACKOFFICE.FOUR_EYES_NO_APPROVER',
           'The close carries no approving principal.', 409,
           'Approve the request through POST /back-office/approvals/{id}:approve.')
       }
-      return service.executeClose(period, initiatedBy, ctx.approver, approvalRequestId, traceId)
+      // BOTH principals and the approval id now come from the approval RECORD (criterion 5(b)),
+      // never from `payload`. `POST /approvals` accepts an arbitrary operation_payload, so a
+      // payload-sourced `initiated_by` let a requester name a third party who never initiated
+      // anything — the close then persisted and audited four-eyes evidence naming two people, one of
+      // whom had nothing to do with the approval. The approval id was worse: `requestClose` CANNOT
+      // put it in the payload, because it is minted afterwards, so it was always null and every
+      // executed close cited no approval at all.
+      return service.executeClose(period, {
+        initiatedBy: ctx.initiator,
+        approver: ctx.approver,
+        approverPersona: ctx.approverPersona,
+        approverIsSuperadmin: ctx.approverIsSuperadmin,
+        approvalRequestId: ctx.approvalRequestId
+      }, traceId)
     }
   }
 }

@@ -97,6 +97,22 @@ describe('BILL-16 payable close — the break gate', () => {
   })
 })
 
+/**
+ * The context ApprovalsService actually passes to `execute` — every field from the approval RECORD
+ * or the approving principal, none from the operation payload. Tests build it here so a change to
+ * what the primitive supplies breaks them in one place.
+ */
+function approvalCtx(over: Partial<Parameters<NonNullable<ReturnType<typeof makePayableCloseOperation>['execute']>>[1]> = {}) {
+  return {
+    approver: 'demo:second-analyst@bank',
+    approverPersona: 'finance-analyst',
+    initiator: CONTROLLER.subject,
+    approvalRequestId: 'apr-0000-4000-8000-000000000001',
+    approverIsSuperadmin: false,
+    ...over
+  }
+}
+
 describe('BILL-16 payable close — execution on the second approval', () => {
   it('RE-CHECKS breaks at execution, not just at request', async () => {
     // Approval is a separate act up to two business hours later. A break raised in between must stop
@@ -106,30 +122,67 @@ describe('BILL-16 payable close — execution on the second approval', () => {
 
     store.openPayableBreaks.mockResolvedValueOnce([{ lineRef: 'NEB-1|SI-9', breakType: 'vat_variance' }])
     const operation = makePayableCloseOperation(service)
-    await expect(operation.execute(
-      { period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject },
-      { approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst' }
-    )).rejects.toMatchObject({ code: 'BACKOFFICE.UNRESOLVED_PAYABLE_BREAKS' })
+    await expect(operation.execute({ period: PERIOD, trace_id: 'trace-2' }, approvalCtx()))
+      .rejects.toMatchObject({ code: 'BACKOFFICE.UNRESOLVED_PAYABLE_BREAKS' })
   })
 
-  it('REFUSES a payload with no initiator rather than skipping the four-eyes check', async () => {
-    // The guard read `if (initiatedBy && approver === initiatedBy)`, so an ABSENT initiator fell past
-    // it entirely and the close proceeded. POST /approvals accepts an arbitrary operation_payload,
-    // which makes such a payload reachable rather than theoretical — and the comment on
-    // makePayableCloseOperation promises this refusal "holds however the operation is invoked".
+  it('REFUSES an empty initiator rather than skipping the four-eyes check', async () => {
+    // The guard read `if (initiatedBy && approver === initiatedBy)`, so an ABSENT initiator fell
+    // past it entirely and the close proceeded.
     const { service, closed } = harness([])
     const operation = makePayableCloseOperation(service)
 
-    for (const payload of [
-      { period: PERIOD, trace_id: 'trace-2' },
-      { period: PERIOD, trace_id: 'trace-2', initiated_by: '' },
-      { period: PERIOD, trace_id: 'trace-2', initiated_by: '   ' }
-    ]) {
-      await expect(operation.execute(payload, {
-        approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst'
-      }), JSON.stringify(payload)).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_NO_INITIATOR' })
+    for (const initiator of ['', '   ']) {
+      await expect(
+        operation.execute({ period: PERIOD, trace_id: 'trace-2' }, approvalCtx({ initiator })),
+        JSON.stringify(initiator)
+      ).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_NO_INITIATOR' })
     }
     expect(closed).toHaveLength(0)
+  })
+
+  it('takes BOTH principals from the approval record, ignoring the operation payload', async () => {
+    // Criterion 5(b). `POST /approvals` accepts an arbitrary operation_payload, so an
+    // `initiated_by` read from there let a requester name a third party who never initiated
+    // anything — and the close then persisted and audited four-eyes evidence naming two people, one
+    // of whom had nothing to do with the approval.
+    //
+    // Discriminating: the payload names a DECOY initiator that differs from the record's, and the
+    // recorded evidence must be the record's. An implementation still reading the payload would
+    // write `mallory` here.
+    const { service, closed, audited } = harness([])
+    const operation = makePayableCloseOperation(service)
+
+    await operation.execute(
+      { period: PERIOD, trace_id: 'trace-2', initiated_by: 'demo:mallory@bank' },
+      approvalCtx()
+    )
+
+    expect(closed[0]).toMatchObject({
+      initiatedBy: CONTROLLER.subject,
+      approvedBy: 'demo:second-analyst@bank',
+      approvalRequestId: 'apr-0000-4000-8000-000000000001'
+    })
+    const closedEvent = audited.find((e) => e.event_type === 'billing_tpp_cost_period_closed')
+    expect(closedEvent?.request_body).toMatchObject({
+      initiated_by: CONTROLLER.subject,
+      approval_request_id: 'apr-0000-4000-8000-000000000001'
+    })
+  })
+
+  it('records the approver\'s REAL persona and superadmin marker, not a hardcoded one', async () => {
+    // `hasScope` lets platform:superadmin satisfy finance:reconciliation:write, so a hardcoded
+    // 'finance-analyst' recorded a superadmin as an analyst — permanently, with no correction path.
+    const { service, audited } = harness([])
+    const operation = makePayableCloseOperation(service)
+
+    await operation.execute({ period: PERIOD, trace_id: 'trace-2' }, approvalCtx({
+      approver: 'demo:super@bank', approverPersona: 'platform-super-admin', approverIsSuperadmin: true
+    }))
+
+    const closedEvent = audited.find((e) => e.event_type === 'billing_tpp_cost_period_closed')
+    expect(closedEvent?.acting_persona).toBe('platform-super-admin')
+    expect(closedEvent?.superadmin_marker).toBe(true)
   })
 
   it('refuses one human spelled two ways as if they were two people', async () => {
@@ -140,10 +193,10 @@ describe('BILL-16 payable close — execution on the second approval', () => {
     const operation = makePayableCloseOperation(service)
 
     for (const approver of [CONTROLLER.subject, ` ${CONTROLLER.subject.toUpperCase()} `]) {
-      await expect(operation.execute(
-        { period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject },
-        { approver, approverPersona: 'finance-analyst' }
-      ), approver).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_SAME_PRINCIPAL' })
+      await expect(
+        operation.execute({ period: PERIOD, trace_id: 'trace-2' }, approvalCtx({ approver })),
+        approver
+      ).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_SAME_PRINCIPAL' })
     }
     expect(closed).toHaveLength(0)
   })
@@ -154,8 +207,7 @@ describe('BILL-16 payable close — execution on the second approval', () => {
 
     const operation = makePayableCloseOperation(service)
     const result = await operation.execute(
-      { period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject },
-      { approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst' }
+      { period: PERIOD, trace_id: 'trace-2' }, approvalCtx()
     ) as { close_id: string }
 
     expect(result.close_id).toBe('close-1')
@@ -170,10 +222,9 @@ describe('BILL-16 payable close — execution on the second approval', () => {
     // Four-eyes means two people. A close whose approver equals its initiator is one person twice.
     const { service } = harness([])
     const operation = makePayableCloseOperation(service)
-    await expect(operation.execute(
-      { period: PERIOD, trace_id: 't', initiated_by: CONTROLLER.subject },
-      { approver: CONTROLLER.subject, approverPersona: 'finance-analyst' }
-    )).rejects.toThrow(/same principal|four-eyes/i)
+    await expect(
+      operation.execute({ period: PERIOD, trace_id: 't' }, approvalCtx({ approver: CONTROLLER.subject }))
+    ).rejects.toThrow(/same principal|four-eyes/i)
   })
 
   it('is registered under both finance scopes, matching the reconciliation gate', () => {
@@ -192,9 +243,7 @@ describe('BILL-16 payable close — monthly sign-off', () => {
     const { service, closed } = harness([])
     await service.requestClose(CONTROLLER, PERIOD, 'trace-1')
     const operation = makePayableCloseOperation(service)
-    await operation.execute({ period: PERIOD, trace_id: 't', initiated_by: CONTROLLER.subject }, {
-      approver: 'demo:second@bank', approverPersona: 'finance-analyst'
-    })
+    await operation.execute({ period: PERIOD, trace_id: 't' }, approvalCtx({ approver: 'demo:second@bank' }))
     expect(closed[0]).toMatchObject({ feedsMonthlySignOff: true })
   })
 
@@ -202,9 +251,7 @@ describe('BILL-16 payable close — monthly sign-off', () => {
     const { service, audited } = harness([])
     await service.requestClose(CONTROLLER, PERIOD, 'trace-1')
     const operation = makePayableCloseOperation(service)
-    await operation.execute({ period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject }, {
-      approver: 'demo:second@bank', approverPersona: 'finance-analyst'
-    })
+    await operation.execute({ period: PERIOD, trace_id: 'trace-2' }, approvalCtx({ approver: 'demo:second@bank' }))
     const closeEvent = audited.find((e) => e.event_type === 'billing_tpp_cost_period_closed')
     expect(closeEvent).toMatchObject({
       scope_used: 'finance:reconciliation:write',

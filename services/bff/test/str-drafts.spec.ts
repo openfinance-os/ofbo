@@ -102,7 +102,8 @@ describe('BACKOFFICE-63 — four-eyes handoff to the STR workflow (P10)', () => 
       strWorkflow: { handoffStrDraft: async ({ str_draft_id }) => { handoffCalls++; return { workflow_ref: `str-wf-${str_draft_id}`, accepted_at: '2026-06-25T00:00:00.000Z' } } },
       audit: new InMemoryHighClassAuditSink()
     })
-    const out = (await op.execute({ str_draft_id: d.str_draft_id, source_consent_id: 'c-9', case_context: 'ctx', trace_id: 't' }, { approver: 'demo:risk-analyst', approverPersona: 'risk-analyst' })) as { workflow_ref: string }
+    const out = (await op.execute({ str_draft_id: d.str_draft_id, source_consent_id: 'c-9', case_context: 'ctx', trace_id: 't' }, { approver: 'demo:risk-analyst', approverPersona: 'risk-analyst',
+        initiator: 'demo:risk-officer', approvalRequestId: 'apr-str-1', approverIsSuperadmin: false })) as { workflow_ref: string }
     expect(handoffCalls).toBe(1)
     expect(out.workflow_ref).toMatch(/^str-wf-/)
     expect((await store.get(d.str_draft_id))!.status).toBe('handed_off')
@@ -119,7 +120,8 @@ describe('BACKOFFICE-63 — fraud-revoke persists the STR draft (links BACKOFFIC
     })
     const res = (await op.execute(
       { consent_id: 'consent-fraud-1', case_context: 'suspected mule account', initiated_by: 'demo:risk-analyst', initiated_by_persona: 'risk-analyst', trace_id: 't' },
-      { approver: 'demo:platform-super-admin', approverPersona: 'platform-super-admin' }
+      { approver: 'demo:platform-super-admin', approverPersona: 'platform-super-admin',
+        initiator: 'demo:risk-analyst', approvalRequestId: 'apr-fraud-1', approverIsSuperadmin: true }
     )) as { str_draft_ref: string }
     const page = await store.list({})
     const draft = page.rows.find((r) => r.source_consent_id === 'consent-fraud-1')

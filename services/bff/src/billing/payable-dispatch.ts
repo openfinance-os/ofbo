@@ -2,7 +2,7 @@ import type { FinancialSystemPort, PayableDispatchStatus } from '@ofbo/ports'
 import { assertScope } from '../rbac.js'
 import type { Principal } from '../auth.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
-import { PAYABLE_CLOSE_OPERATION, PAYABLE_CLOSE_SCOPE } from './payable-close.js'
+import { PAYABLE_CLOSE_OPERATION, PAYABLE_CLOSE_SCOPE, normalisePrincipal } from './payable-close.js'
 import { redactText } from '@ofbo/redaction'
 
 /**
@@ -165,6 +165,7 @@ export class PayableDispatchService {
         acting_principal: principal.subject,
         acting_persona: principal.persona,
         scope_used: PAYABLE_CLOSE_SCOPE,
+        superadmin_marker: principal.scopes.includes('platform:superadmin'),
         request_trace_id: traceId,
         response_status: 200,
         request_body: {
@@ -188,6 +189,7 @@ export class PayableDispatchService {
         acting_principal: principal.subject,
         acting_persona: principal.persona,
         scope_used: PAYABLE_CLOSE_SCOPE,
+        superadmin_marker: principal.scopes.includes('platform:superadmin'),
         request_trace_id: traceId,
         response_status: 502,
         request_body: {
@@ -277,7 +279,8 @@ export class PayableDispatchService {
         'Have a second finance principal approve the close before dispatching.'
       )
     }
-    if (!approval.approver?.trim() || approval.approver === approval.initiator) {
+    if (!approval.approver?.trim()
+      || normalisePrincipal(approval.approver) === normalisePrincipal(approval.initiator)) {
       // Belt and braces on the primitive's own rule. An `approved` row with no approver, or with the
       // initiator as approver, is four eyes on paper and two in fact — and this service is the last
       // place that can refuse before the money moves.
