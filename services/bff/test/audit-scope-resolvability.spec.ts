@@ -125,16 +125,19 @@ function possibleValues(expression: string, constants: ReadonlyMap<string, strin
  * police. Anything that still cannot be resolved is REPORTED as UNRESOLVED rather than skipped,
  * because a value the check cannot read is precisely what it must not wave through.
  */
-function emittedScopeLiterals(): Array<{ file: string; value: string }> {
-  const files = ROOTS.flatMap((root) => sourceFiles(root).map((f) => ({ root, path: f })))
-
-  // Pass one: every `const NAME = 'literal'` anywhere in either tree.
+function declaredConstants(files: ReadonlyArray<{ path: string }>): Map<string, string> {
   const constants = new Map<string, string>()
   for (const { path } of files) {
     for (const m of readFileSync(path, 'utf8').matchAll(/(?:export\s+)?const\s+([A-Z0-9_]+)\s*(?::\s*string)?\s*=\s*'([^']+)'/g)) {
       constants.set(m[1]!, m[2]!)
     }
   }
+  return constants
+}
+
+function emittedScopeLiterals(): Array<{ file: string; value: string }> {
+  const files = ROOTS.flatMap((root) => sourceFiles(root).map((f) => ({ root, path: f })))
+  const constants = declaredConstants(files)
 
   // Pass two: read each emission's expression with a scanner rather than a pattern, and decompose
   // it. Two forms are deliberately not emissions: a TYPE position (`scope_used: string` in an
@@ -148,6 +151,60 @@ function emittedScopeLiterals(): Array<{ file: string; value: string }> {
       if (/\.scope_used(\s+as\s+\w+)?$/.test(expression)) continue
       for (const value of possibleValues(expression, constants)) {
         out.push({ file: path.slice(root.length + 1), value })
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Every emission by a HEADLESS actor, paired with the scope it stamps.
+ *
+ * Resolvability is not the whole control, and believing it was is what let a real defect through.
+ * The check above asks whether a value resolves against the declared inventory — so an invented
+ * token like `billing:rate` fails, but a scheduled job BORROWING a real human scope passes
+ * perfectly. `analytics/ingestion.ts` did exactly that: `system:nebras-ingestion` stamped
+ * `reconciliation:read`, a scope held by a Finance persona that no principal held on that run.
+ *
+ * Borrowing is the harder half of the defect. An invented token at least looks wrong to an auditor;
+ * a borrowed one reads as though a human authorised the job.
+ *
+ * The window is the enclosing emit block, found by scanning back to the `event_type:` that starts it
+ * — every emitter in both trees writes that property first. State the reach plainly: this sees
+ * literal `acting_principal` / `acting_persona` values, not ones passed through a variable, so it is
+ * a floor rather than a proof. It catches the shape that has actually occurred twice.
+ */
+function headlessEmissions(): Array<{ file: string; scope: string; principal: string }> {
+  const files = ROOTS.flatMap((root) => sourceFiles(root).map((f) => ({ root, path: f })))
+  const constants = declaredConstants(files)
+  const out: Array<{ file: string; scope: string; principal: string }> = []
+
+  for (const { root, path } of files) {
+    const text = readFileSync(path, 'utf8')
+    for (const m of text.matchAll(/\bscope_used:\s*/g)) {
+      const blockStart = text.lastIndexOf('event_type:', m.index)
+      if (blockStart < 0) continue
+      const block = text.slice(blockStart, m.index)
+      // `acting_principal`, NOT `acting_persona` — the discriminator CODE-03 ratified. Keying on
+      // the persona produces a false positive on tpp-billing/invoicing.ts:89, which records persona
+      // `system` for a four-eyes execution running on a HUMAN initiator's behalf: acting_principal
+      // is that person, and the scope is the one they actually held, so it correctly keeps both.
+      // A check that flagged it would push a correct emitter towards a false sentinel.
+      //
+      // Resolved through the SAME constant table as the scope, because the first version of this
+      // matched a quoted literal only — and `analytics/ingestion.ts` writes
+      // `acting_principal: RUN_PRINCIPAL`. So the check missed the exact site that motivated it,
+      // which is the failure mode this whole file exists to stop.
+      const principalExpression = scopeExpression(block, block.lastIndexOf('acting_principal:') >= 0
+        ? block.lastIndexOf('acting_principal:') + 'acting_principal:'.length
+        : block.length)
+      const principal = possibleValues(principalExpression, constants)
+        .find((value) => value.startsWith('system:'))
+      if (!principal) continue
+
+      const expression = scopeExpression(text, m.index + m[0].length)
+      for (const scope of possibleValues(expression, constants)) {
+        out.push({ file: path.slice(root.length + 1), scope, principal })
       }
     }
   }
@@ -233,6 +290,22 @@ describe('CODE-03 audit scope resolvability', () => {
       .filter((entry) => !acknowledged.has(`${entry.file}|${entry.value}`))
     const detail = unresolvable.map((e) => `${e.file}: ${e.value}`).sort().join('\n')
     expect(unresolvable, `unresolvable scope_used values:\n${detail}`).toEqual([])
+  })
+
+  it('never lets a HEADLESS actor borrow a human persona scope', () => {
+    // The half the resolvability check cannot see. A scheduled job holds no scope, so the only
+    // honest value is a declared sentinel — a real scope stamped by `system:*` records that a
+    // Finance (or Risk, or Care) persona authorised a run no person touched, permanently, in a
+    // table with no correction path.
+    const sentinels = new Set<string>([SYSTEM_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE, SEED_ACTOR_SCOPE])
+    const borrowed = headlessEmissions().filter((entry) => !sentinels.has(entry.scope))
+    const detail = borrowed.map((e) => `${e.file}: ${e.principal} stamps ${e.scope}`).sort().join('\n')
+
+    expect(borrowed, `headless actors borrowing a declared human scope:\n${detail}`).toEqual([])
+  })
+
+  it('finds the headless emissions at all, so that check cannot pass by scanning nothing', () => {
+    expect(headlessEmissions().length).toBeGreaterThan(10)
   })
 
   it('leaves no raw-SQL writer into audit_high_sensitivity outside the known set', () => {
