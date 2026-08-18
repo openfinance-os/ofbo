@@ -245,6 +245,81 @@ describe('PgBillingTppCostStore — provider documents', () => {
     expect(stillWithheld.rows[0].ok).toBe(false)
   })
 
+  it('scopes that internal-view read to the caller tenant group — one customer cannot read another\'s documents', async () => {
+    // The grant above proves the PRIVILEGE exists. It says nothing about what the reader can then
+    // SEE, and the privilege alone is read-all — everything that narrows it lives in migration
+    // 0040's internal_view_select policy. So this is the assertion that makes the grant safe, on the
+    // one table BILL-13 singled out as too provider-contaminated for the cross-tenant seam.
+    //
+    // HOST-02's own suite proves the IDIOM, but only on audit_high_sensitivity. It cannot show that
+    // 0040 transcribed the idiom correctly onto THIS table — a policy naming the wrong column, or
+    // omitting the bank_id predicate, would satisfy every other assertion in this file and leak
+    // provider free-form content across the tenant boundary.
+    const groupA = randomUUID()
+    const groupB = randomUUID()
+    for (const [bank, group] of [[TENANCY.bankId, groupA], [OTHER_TENANT.bankId, groupB]]) {
+      await admin.query(
+        `INSERT INTO tenant_group_member (bank_id, tenant_group_id, group_slug, display_name, tier)
+         VALUES ($1, $2, 'bill14-doc-iso', 'BILL-14 Document Isolation', 'tier2')
+         ON CONFLICT (bank_id) DO NOTHING`,
+        [bank, group]
+      )
+    }
+    // Read the enrolments back rather than assuming ours won the upsert — another suite may have
+    // enrolled these banks first, in which case the fixture group ids above are not the live ones.
+    const enrolled = await admin.query(
+      `SELECT bank_id, tenant_group_id FROM tenant_group_member WHERE bank_id = ANY($1::uuid[])`,
+      [[TENANCY.bankId, OTHER_TENANT.bankId]]
+    )
+    const groupOf = new Map(enrolled.rows.map((r) => [r.bank_id as string, r.tenant_group_id as string]))
+    expect(groupOf.get(TENANCY.bankId)).toBeDefined()
+    expect(groupOf.get(OTHER_TENANT.bankId)).toBeDefined()
+    // If both banks sat in ONE group the test would prove nothing — it would be asserting that a
+    // reader can see its own group twice. Fail loudly rather than pass vacuously.
+    expect(groupOf.get(TENANCY.bankId)).not.toEqual(groupOf.get(OTHER_TENANT.bankId))
+
+    // A period of this test's own. Every other case in this file asserts over 2026-06, and one of
+    // them asserts OTHER_TENANT sees nothing there — writing this fixture into 2026-06 would make
+    // that neighbour fail on any re-used database while still passing on CI's fresh one, which is
+    // the CODE-02 non-idempotent-seed trap. Isolating the period keeps this suite order-independent.
+    const ISOLATION_PERIOD = '2026-09'
+    const mine = parseNebrasTaxInvoice({ ...invoice(`NEB-${randomUUID()}`), billing_period: ISOLATION_PERIOD })
+    const theirs = parseNebrasTaxInvoice({ ...invoice(`NEB-${randomUUID()}`), billing_period: ISOLATION_PERIOD })
+    await store.saveDocument(ingestInput(mine), 'trace-group-iso-a')
+    await otherStore.saveDocument(ingestInput(theirs), 'trace-group-iso-b')
+
+    const client = await admin.connect()
+    try {
+      await client.query('BEGIN')
+      try {
+        await client.query('SET LOCAL ROLE bank_internal_view')
+      } catch (e) {
+        // Managed environments may forbid assuming a NOLOGIN role. CI runs postgres:16-alpine as
+        // superuser, where this does execute — the skip is a local-environment escape, not the
+        // normal path, so it is surfaced rather than swallowed.
+        console.warn('bank_internal_view SET ROLE not permitted here, skipping:', (e as Error).message)
+        await client.query('ROLLBACK').catch(() => undefined)
+        return
+      }
+      await client.query(`SELECT set_config('app.tenant_group', $1, true)`, [groupOf.get(TENANCY.bankId)])
+      const visible = await client.query(
+        `SELECT bank_id, document_reference FROM billing_tpp_cost_document
+          WHERE document_reference = ANY($1)`,
+        [[mine.documentReference, theirs.documentReference]]
+      )
+      await client.query('COMMIT')
+
+      const refs = visible.rows.map((r) => r.document_reference as string)
+      expect(refs).toContain(mine.documentReference) // sees its own group
+      expect(refs).not.toContain(theirs.documentReference) // NOT the other customer's
+      expect(visible.rows.every((r) => r.bank_id === TENANCY.bankId)).toBe(true)
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined)
+      await client.query('RESET ROLE').catch(() => undefined)
+      client.release()
+    }
+  })
+
   it('emits BCBS 239 lineage for both document tables', async () => {
     const parsed = parseNebrasTaxInvoice(invoice(`NEB-${randomUUID()}`))
     await store.saveDocument(ingestInput(parsed), 'trace-lineage')
