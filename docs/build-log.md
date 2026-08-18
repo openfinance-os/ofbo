@@ -2651,7 +2651,43 @@ ADR 0007 BACKFILLED in the same change — the one known case where document and
 with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
 including a row recording that the table was added retrospectively.
 
-Evidence: 9 guard tests incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+Evidence: 11 guard tests (47 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
 (accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
 EXISTING amendment table does not license silent editing forever after — the defect that would
 quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
+
+---
+
+## 2026-08-18 — ADR 0030 addendum: the review harness caught a bypass in the gate, and a false fix
+
+Two corrections to the entry above, both found by the AI reviewers on PR #324 and both worth
+recording because of what they say about the harness rather than about the gate.
+
+1. RENAME BYPASS IN THE GATE. hard-stop found that `modifiedAdrs` filtered `git diff
+   --name-status` on status `M` exactly, so renaming an accepted ADR while editing it — git
+   reports `R100`/`R087`, never `M` — walked straight past the check. The cheapest possible way
+   around the rule the gate exists to enforce, in the PR that adds the gate. It did not infer
+   this: it REPRODUCED the bypass in a scratch repository and confirmed the gate reports "no
+   accepted ADR modified" and exits 0. Fixed by `parseNameStatus`, which handles `R*` and `C*`
+   and reads base text from the OLD path.
+
+2. A FIX THAT WAS NOT IN THE BRANCH. The first attempt at (1), commit 2e1eb40, claimed a code
+   change and two tests and shipped neither — its stat was ADR prose only. Cause: the "live
+   bypass test" ran `git add -A && git commit` to stage a throwaway probe, sweeping up the
+   still-uncommitted fix and tests, then `git reset --hard HEAD~1` discarded the lot. The ADR
+   prose survived only because it was written after the reset, which is exactly why the branch
+   ended up asserting a behaviour it did not have. Both reviewers caught the discrepancy on the
+   next run — contract-conformance by diffing HEAD against the commit the message described,
+   hard-stop by noticing the stat and the unchanged test count.
+
+   The commit message carried the tell: "11 in this file, 45 across scripts/test". 11 + 36 = 47.
+   The arithmetic did not add up and was not checked.
+
+   Process fix: COMMIT FIRST, THEN PROBE. A destructive probe must never be able to take
+   uncommitted work with it. Applied here — the fix was committed before the rename probe ran,
+   and verified present afterwards.
+
+This is the strongest evidence to date for HARNESS-16, and it is not the green verdicts. The
+harness caught a security-relevant bypass in a merge gate, then caught a false claim that the
+bypass had been fixed. Both times a human reading the diff would have had to diff a commit
+message against its own contents to notice.
