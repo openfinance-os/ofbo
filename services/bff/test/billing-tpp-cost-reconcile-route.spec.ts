@@ -153,14 +153,31 @@ describe('POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
     expect(body.error.remediation).toMatch(/expected cost statement for 2026-06/i)
   })
 
-  it('fails closed when no reconciliation store is configured', async () => {
+  it('fails closed when no reconciliation store is configured, IN THE CONTRACT ENVELOPE', async () => {
     // An unconfigured deployment must refuse, not report a clean period — a reconciliation over no
     // evidence would read as "nothing owed" on a payable the bank has not actually checked.
+    //
+    // The status alone was all this asserted, and it passed while the response was
+    // `500 text/plain: Internal Server Error` — Hono's default, because the app had no onError. Every
+    // operation in the spec declares `default: Error`, so that shape was a contract violation on every
+    // endpoint at once; this route just happens to route a SUPPORTED operational state through it.
     const app = createApp({ highClassAudit: new InMemoryHighClassAuditSink() })
+    const traceId = randomUUID()
     const response = await app.request(PATH, {
       method: 'POST',
-      headers: { ...financeHeaders, 'idempotency-key': randomUUID() }
+      headers: { ...financeHeaders, 'x-fapi-interaction-id': traceId, 'idempotency-key': randomUUID() }
     })
-    expect(response.status).toBeGreaterThanOrEqual(500)
+
+    expect(response.status).toBe(500)
+    expect(response.headers.get('content-type')).toMatch(/application\/json/)
+    const body = await response.json() as { error: Record<string, string> }
+    for (const field of ['code', 'message', 'remediation', 'docs_url']) {
+      expect(body.error, field).toHaveProperty(field)
+    }
+    expect(body.error.code).toBe('BACKOFFICE.INTERNAL_ERROR')
+    // The trace id is the correlation handle, and it is the ONLY thing carried outward: the thrown
+    // message can quote the offending input, and this handler runs ahead of any redaction.
+    expect(body.error.remediation).toContain(traceId)
+    expect(JSON.stringify(body)).not.toMatch(/store is not configured/i)
   })
 })
