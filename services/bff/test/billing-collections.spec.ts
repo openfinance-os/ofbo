@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { aed, type DunningPolicy } from '@ofbo/billing'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
 import { BillingCollectionsService, InMemoryBillingCollectionsStore } from '../src/billing/collections.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/high-class-audit.js'
 
 const policy: DunningPolicy = {
   policyRef: 'LFI-TPP-AGREEMENT-2026-01',
@@ -62,7 +63,11 @@ describe('BILL-05 collections orchestration', () => {
       'billing_collection_overdue_notice',
       'billing_collection_escalation'
     ])
-    expect(audit.events.every((event) => event.scope_used === 'billing:collect')).toBe(true)
+    // CODE-03: a scheduled collections run is authorised by no principal, so it records the declared
+    // system sentinel rather than 'billing:collect' — a token an auditor could not resolve against
+    // the contract, permanently, in an INSERT-only table.
+    expect(audit.events.every((event) => event.scope_used === SYSTEM_ACTOR_SCOPE)).toBe(true)
+    expect(audit.events.every((event) => event.response_status === SYSTEM_ACTOR_RESPONSE_STATUS)).toBe(true)
   })
 
   it('rejects a selected rail that is not eligible for the invoice', async () => {

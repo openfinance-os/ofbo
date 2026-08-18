@@ -3678,14 +3678,28 @@ components:
         event_type: { type: string, example: psu_lookup }
         acting_principal: { type: string }
         acting_persona: { type: string }
-        scope_used: { type: string }
+        scope_used:
+          type: string
+          description: >
+            The declared scope that authorised the action, or the literal `system` for a scheduled
+            actor that no principal authorised. Scheduled jobs previously stamped invented tokens
+            (`billing:rate`, `reconciliation:run`, …) that named scopes an auditor could not resolve
+            against this contract — permanently, since the trail is INSERT-only with a five-year
+            retention and no deletion path. The job's identity is carried by `acting_principal` and
+            `event_type`, so nothing is lost by recording that no scope was involved (CODE-03).
         target_psu_identifier: { type: string, nullable: true }
         target_consent_id: { type: string, format: uuid, nullable: true }
         target_dispute_id: { type: string, format: uuid, nullable: true }
         request_trace_id: { type: string, description: x-fapi-interaction-id }
         superadmin_marker: { type: boolean, description: 'BACKOFFICE-80: stamped true on every record produced under platform:superadmin' }
         request_body_redacted: { type: object }
-        response_status: { type: integer }
+        response_status:
+          type: integer
+          description: >
+            The HTTP status returned to the caller, or `0` for an actor that issues no HTTP response
+            at all. Zero is not a status code, which is why it can carry that meaning without
+            colliding with one. Scheduled jobs previously stamped 200/201/202/502 for responses
+            nobody received, including one path that recorded 200 on a SKIP (CODE-03).
         created_at: { type: string, format: date-time }
     Freshness:
       type: object

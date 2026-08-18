@@ -3,6 +3,7 @@ import type { StoredTppCounterparty, TppCounterpartyListQuery, TppCounterpartyPa
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BACKOFFICE-71 — consuming-TPP registry + Trust Framework Directory sync. The
@@ -127,10 +128,10 @@ export class TppRegistryService {
         event_type: 'tpp_unbilled_traffic_alert',
         acting_principal: 'system:tpp-traffic-monitor',
         acting_persona: 'system',
-        scope_used: 'billing:read',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: { unbilled_count: unbilled.length, organisation_ids: unbilled },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return { unbilled }

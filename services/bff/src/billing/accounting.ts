@@ -7,6 +7,7 @@ import {
 } from '@ofbo/billing'
 import type { FinancialJournalBatch, FinancialSystemPort } from '@ofbo/ports'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export const BILLING_POST_SCOPE = 'billing:post'
 
@@ -92,9 +93,9 @@ export class BillingAccountingService {
     if (artifact.created) {
       await this.deps.audit.emit({
         event_type: 'billing_accounting_batch_generated', acting_principal: 'system:billing-accounting', acting_persona: 'system',
-        scope_used: BILLING_POST_SCOPE, request_trace_id: traceId,
+        scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
         request_body: { batch_id: batch.batchId, period: batch.period, account_profile_ref: batch.accountProfileRef, journal_count: batch.journals.length, debit_fils: batch.debitFils, credit_fils: batch.creditFils },
-        response_status: 201
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     try {
@@ -105,7 +106,7 @@ export class BillingAccountingService {
       })
       await this.deps.audit.emit({
         event_type: 'billing_journal_batch_dispatched', acting_principal: 'system:billing-accounting', acting_persona: 'system',
-        scope_used: BILLING_POST_SCOPE, request_trace_id: traceId,
+        scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
         request_body: { batch_id: batch.batchId, journal_batch_ref: response.journal_batch_ref, adapter_profile: adapterProfile, accepted: response.accepted },
         response_status: response.accepted ? 200 : 502
       })
@@ -115,8 +116,8 @@ export class BillingAccountingService {
       await this.deps.store.appendDispatch({ batchArtifactId: artifact.id, adapterProfile, traceId, accepted: false, status: 'transport_error', errorDetail: detail })
       await this.deps.audit.emit({
         event_type: 'billing_journal_batch_dispatch_failed', acting_principal: 'system:billing-accounting', acting_persona: 'system',
-        scope_used: BILLING_POST_SCOPE, request_trace_id: traceId,
-        request_body: { batch_id: batch.batchId, adapter_profile: adapterProfile, error: detail }, response_status: 502
+        scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
+        request_body: { batch_id: batch.batchId, adapter_profile: adapterProfile, error: detail }, response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
       throw error
     }

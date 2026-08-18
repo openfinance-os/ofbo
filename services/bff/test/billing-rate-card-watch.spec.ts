@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SCHEME_RATE_CARD_2026_06_02 } from '@ofbo/billing'
-import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
+import { InMemoryHighClassAuditSink, SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/high-class-audit.js'
 import {
   BillingRateCardWatcher,
   HttpRateCardSourceFetcher,
@@ -62,7 +62,10 @@ describe('BILL-01 operational rate-card watcher', () => {
       event_type: 'billing_rate_card_upstream_change_detected',
       acting_principal: 'system:billing-rate-card-watcher',
       request_trace_id: 'trace-change',
-      response_status: 202
+      // CODE-03: the watcher issues no HTTP response, so it records the declared non-HTTP sentinel
+      // rather than a 202 nobody received.
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS,
+      scope_used: SYSTEM_ACTOR_SCOPE
     }))
 
     const unchanged = await watcher.run('trace-repeat')
@@ -131,7 +134,7 @@ describe('BILL-01 operational rate-card watcher', () => {
     const first = await watcher.run('trace-failure')
     expect(first).toMatchObject({ checkedSources: 1, failedSources: 1 })
     expect(store.snapshots).toHaveLength(1)
-    expect(audit.events).toContainEqual(expect.objectContaining({ event_type: 'billing_rate_card_watch_failed', response_status: 502 }))
+    expect(audit.events).toContainEqual(expect.objectContaining({ event_type: 'billing_rate_card_watch_failed', response_status: SYSTEM_ACTOR_RESPONSE_STATUS }))
 
     firstFails = false
     const second = await watcher.run('trace-recovered')

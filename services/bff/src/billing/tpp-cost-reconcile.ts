@@ -18,6 +18,7 @@ import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied } from '../errors.js'
 import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
@@ -246,9 +247,9 @@ export class PayableBreakExpiryAlarm {
       event_type: 'billing_tpp_cost_query_window_closing',
       acting_principal: 'system:payable-break-expiry-alarm',
       acting_persona: 'system',
-      scope_used: RECONCILIATION_WRITE_SCOPE,
+      scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
-      response_status: 201,
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS,
       request_body: {
         period,
         query_deadline: queryDeadline,

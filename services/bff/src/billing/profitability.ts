@@ -10,6 +10,7 @@ import {
 } from '@ofbo/billing'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { cbuaeFeeReviewWireBody } from './wire.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export interface BillingProfitabilitySource {
   inputForPeriod(period: string): Promise<ProfitabilityInput | null>
@@ -83,10 +84,10 @@ export class BillingProfitabilityService {
       event_type: 'billing_cbuae_fee_review_exported',
       acting_principal: 'system:billing-profitability',
       acting_persona: 'system',
-      scope_used: 'billing:read',
+      scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
       request_body: { period, scenario_ids: scenarios.map((scenario) => scenario.scenarioId), sha256: result.sha256 },
-      response_status: 200
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS
     })
     return result
   }

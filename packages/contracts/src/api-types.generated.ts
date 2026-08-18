@@ -5368,6 +5368,7 @@ export interface components {
             event_type?: string;
             acting_principal?: string;
             acting_persona?: string;
+            /** @description The declared scope that authorised the action, or the literal `system` for a scheduled actor that no principal authorised. Scheduled jobs previously stamped invented tokens (`billing:rate`, `reconciliation:run`, …) that named scopes an auditor could not resolve against this contract — permanently, since the trail is INSERT-only with a five-year retention and no deletion path. The job's identity is carried by `acting_principal` and `event_type`, so nothing is lost by recording that no scope was involved (CODE-03). */
             scope_used?: string;
             target_psu_identifier?: string | null;
             /** Format: uuid */
@@ -5379,6 +5380,7 @@ export interface components {
             /** @description BACKOFFICE-80: stamped true on every record produced under platform:superadmin */
             superadmin_marker?: boolean;
             request_body_redacted?: Record<string, never>;
+            /** @description The HTTP status returned to the caller, or `0` for an actor that issues no HTTP response at all. Zero is not a status code, which is why it can carry that meaning without colliding with one. Scheduled jobs previously stamped 200/201/202/502 for responses nobody received, including one path that recorded 200 on a SKIP (CODE-03). */
             response_status?: number;
             /** Format: date-time */
             created_at?: string;
