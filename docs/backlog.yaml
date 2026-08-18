@@ -932,8 +932,8 @@ milestones:
             for a regulated record, which is why BILL-13 deferred rather than added it; and
             (c) reconcile variance shape - ReconciliationBreak.variance_amount is a Money
             object while billing_tpp_cost_diff_line stores variance_milli_fils bare, so this
-            depends on the milli-fils decision recorded on BILL-17. RESOLVED: the adopting bank
-            chose Option A - milli-fils is a rating and storage precision only and the wire carries
+            depends on the milli-fils decision recorded on BILL-17. NOW RESOLVED - the adopting
+            bank chose Option A, so milli-fils is a rating and storage precision only and the wire carries
             the binding Money convention. billing_tpp_cost_diff_line keeps variance_milli_fils in
             STORAGE (correct - that is behind the boundary) and the API now emits
             TppCostDiffLine.variance as Money, so the two shapes reconcile at the seam rather than
