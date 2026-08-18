@@ -5450,11 +5450,12 @@ export interface components {
             cost_recipient_type: "nebras" | "underlying_lfi";
             cost_recipient_id: string;
             units: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified) */
+            /** @description A unit RATE in integer milli-fils (thousandths of a fil), NOT a money amount. The binding money convention governs amounts; a scheme tariff of 2.5 fils per call cannot be expressed in minor units without rounding the price itself away, so rates keep sub-minor resolution. */
             unit_price_milli_fils: number;
-            actual_net_milli_fils: number;
-            vat_milli_fils: number;
-            actual_gross_milli_fils: number;
+            actual_net: components["schemas"]["Money"];
+            vat: components["schemas"]["Money"];
+            /** @description Always equals actual_net + vat; derived from the rounded parts so the triple ties. */
+            actual_gross: components["schemas"]["Money"];
         };
         TppCostDocument: {
             /** Format: uuid */
@@ -5466,9 +5467,10 @@ export interface components {
             /** @description YYYY-MM */
             billing_period: string;
             currency: string;
-            net_milli_fils: number;
-            vat_milli_fils: number;
-            gross_milli_fils: number;
+            net: components["schemas"]["Money"];
+            vat: components["schemas"]["Money"];
+            /** @description Always equals net + vat; derived from the rounded parts so the triple ties. */
+            gross: components["schemas"]["Money"];
             document_sha256: string;
             /** Format: date-time */
             issued_at: string;
@@ -5502,12 +5504,10 @@ export interface components {
             fee_class?: string | null;
             /** @description The provider's own wording, retained because a billing query cites it back to them. */
             source_category?: string | null;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
-            expected_net_milli_fils: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
-            actual_net_milli_fils: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
-            variance_milli_fils: number;
+            expected_net: components["schemas"]["Money"];
+            actual_net: components["schemas"]["Money"];
+            /** @description Signed — negative where the provider undercharged. Rounded symmetrically, so a credit is not biased against the bank. */
+            variance: components["schemas"]["Money"];
             variance_basis_points: number;
             /** @description Exceeds the tolerance. A wrong recipient is material at zero variance. */
             material: boolean;
@@ -5518,13 +5518,13 @@ export interface components {
              */
             reconciliation_break_id?: string | null;
         };
-        /** @description Every amount below is an integer in milli-fils — thousandths of a fil — under `currency`. That unit DEVIATES from the binding money convention (integer minor units + ISO 4217) and is unratified; BILL-17 owns resolving it, either by converting to `Money` at this boundary or by ratifying milli-fils. The currency is carried explicitly so the amounts are never bare integers, which is the shape that would make that conversion expensive. */
+        /** @description Money amounts are `Money` (integer minor units + ISO 4217), per the binding convention. Milli-fils — thousandths of a fil — is a RATING AND STORAGE precision only, needed because ADR 0007 prices scheme tariffs at 2.5 and 0.5 fils; it never reaches the wire as an amount. The two integer fields that remain in milli-fils are a matching threshold and a unit rate, neither of which is an amount. */
         TppCostReconciliation: {
             /** @description YYYY-MM */
             period: string;
             /** @description ISO 4217 for every milli-fils amount in this object and its breaks. */
             currency: string;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute. Configurable; defaults to one fil. */
+            /** @description A matching THRESHOLD in integer milli-fils, not a money amount. Expectations are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute — sub-fil resolution is the entire point of the field, and minor units would round it away. Configurable; defaults to one fil. */
             tolerance_milli_fils: number;
             /** @description IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21). */
             query_window_days: number;
@@ -5542,14 +5542,13 @@ export interface components {
             };
             matched_line_count: number;
             break_count: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). */
-            expected_total_net_milli_fils: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
-            actual_total_net_milli_fils: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Signed, so opposing errors net. The headline exposure. */
-            net_variance_milli_fils: number;
-            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
-            gross_variance_milli_fils: number;
+            expected_total_net: components["schemas"]["Money"];
+            /** @description What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
+            actual_total_net: components["schemas"]["Money"];
+            /** @description Signed, so opposing errors net. The headline exposure. */
+            net_variance: components["schemas"]["Money"];
+            /** @description Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
+            gross_variance: components["schemas"]["Money"];
             /** @description IG §10.17 penalties matched to a recorded late payment for this period. */
             penalty_lines_accepted: number;
             breaks: components["schemas"]["TppCostDiffLine"][];

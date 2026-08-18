@@ -80,14 +80,18 @@ export interface ExpectedTppCostStatement {
   /**
    * Every amount below is integer milli-fils in this currency — thousandths of a fil.
    *
-   * This DEVIATES from the binding money convention and is not yet ratified. CLAUDE.md and the
-   * spec's own `Money` schema both state integer MINOR units ("fils for AED"); milli-fils is a
-   * sub-minor unit, chosen because ADR 0007 prices scheme tariffs in fractional fils (2.5 fils,
-   * 0.5 fils) which minor units cannot represent without rounding the payable. An earlier version
-   * of this comment cited CLAUDE.md as the source of the milli-fils convention, which was wrong and
-   * made the deviation look sanctioned. Resolving it is a BLOCKING criterion on BILL-17: either
-   * convert to `Money` at the wire boundary and keep this precision in storage only, or ratify
-   * milli-fils by amending both CLAUDE.md and the `Money` description.
+   * RESOLVED, and the resolution is a boundary rather than an exception. Milli-fils is a RATING AND
+   * STORAGE precision only: ADR 0007 prices scheme tariffs in fractional fils (2.5, 0.5, 0.25) which
+   * minor units cannot hold without rounding the payable at every line, and per-line rounding then
+   * diverges from the invoice total being reconciled against. It never reaches the wire as an amount
+   * — `toWireMoneyTriple` / `toMinorUnitMoney` convert to the binding `Money` convention (integer
+   * minor units + ISO 4217) at the API boundary, and the general ledger already posts in fils.
+   *
+   * So the binding convention is not deviated from; it is upheld everywhere it applies. Two integer
+   * fields legitimately remain in milli-fils on the wire, and neither is an amount: a matching
+   * THRESHOLD (whose purpose is sub-fil resolution) and a unit RATE (where rounding 2.5 fils to 3
+   * would destroy the scheme price). An earlier version of this comment cited CLAUDE.md as the source
+   * of the milli-fils convention, which was wrong and made the deviation look sanctioned.
    */
   currency: 'AED'
   rateCardVersion: string

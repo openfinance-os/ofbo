@@ -1,5 +1,6 @@
 import {
   buildBillingQueryBundle,
+  toMinorUnitMoney,
   reconcilePayable,
   type BillingQueryBundle,
   type ExpectedTppCostStatement,
@@ -293,10 +294,17 @@ export function billingQueryFor(
   })
 }
 
+/** Local shorthand; the currency is carried on the reconciliation, never assumed. */
+function money(milliFils: number, currency: string) {
+  return toMinorUnitMoney(milliFils, currency as 'AED')
+}
+
 export function tppCostReconciliationWire(result: PayableReconciliation): Record<string, unknown> {
   return {
     period: result.period,
     currency: result.currency,
+    // A matching THRESHOLD, not an amount: its whole purpose is sub-fil resolution (documents state
+    // fils, expectations are milli-fils), so expressing it in minor units would round it to nothing.
     tolerance_milli_fils: result.toleranceMilliFils,
     query_window_days: result.queryWindowDays,
     query_deadline: result.queryDeadline,
@@ -309,10 +317,12 @@ export function tppCostReconciliationWire(result: PayableReconciliation): Record
     },
     matched_line_count: result.matchedLineCount,
     break_count: result.breakCount,
-    expected_total_net_milli_fils: result.expectedTotalNetMilliFils,
-    actual_total_net_milli_fils: result.actualTotalNetMilliFils,
-    net_variance_milli_fils: result.netVarianceMilliFils,
-    gross_variance_milli_fils: result.grossVarianceMilliFils,
+    // Amounts cross to Money. These are independent totals rather than a net/VAT/gross triple, so
+    // there is no tie-out to preserve between them and each rounds on its own.
+    expected_total_net: money(result.expectedTotalNetMilliFils, result.currency),
+    actual_total_net: money(result.actualTotalNetMilliFils, result.currency),
+    net_variance: money(result.netVarianceMilliFils, result.currency),
+    gross_variance: money(result.grossVarianceMilliFils, result.currency),
     penalty_lines_accepted: result.penaltyLinesAccepted,
     breaks: result.breaks.map((entry) => ({
       line_ref: entry.lineRef,
@@ -323,9 +333,10 @@ export function tppCostReconciliationWire(result: PayableReconciliation): Record
       cost_recipient_id: entry.costRecipientId,
       fee_class: entry.feeClass,
       source_category: entry.sourceCategory,
-      expected_net_milli_fils: entry.expectedNetMilliFils,
-      actual_net_milli_fils: entry.actualNetMilliFils,
-      variance_milli_fils: entry.varianceMilliFils,
+      expected_net: money(entry.expectedNetMilliFils, result.currency),
+      actual_net: money(entry.actualNetMilliFils, result.currency),
+      // Signed, and toMinorUnitMoney rounds symmetrically, so a credit is not biased against us.
+      variance: money(entry.varianceMilliFils, result.currency),
       variance_basis_points: entry.varianceBasisPoints,
       material: entry.material,
       reason_code: entry.reasonCode,
