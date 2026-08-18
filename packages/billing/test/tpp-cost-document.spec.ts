@@ -283,6 +283,45 @@ describe('BILL-14 redaction at parse time', () => {
     }
   })
 
+  it('locates a malformed line by POSITION, never by the provider line_ref', () => {
+    // The shape guard above only catches four known FORMS (IBAN, formatted national id, email,
+    // phone). `line_ref` is free text, so a provider note that carries customer detail in no
+    // recognised shape sails past it — and these two refusals used to interpolate that free text
+    // straight into a message the service surfaces verbatim in the 422 envelope, ahead of redaction.
+    //
+    // The fix is not to drop the locator: on a several-hundred-line invoice a finance operator has to
+    // be told WHICH line. It is to use an ordinal we derive from the document structure instead of a
+    // string the provider chose.
+    const marker = 'SYNTHETIC-PROVIDER-FREE-TEXT-DO-NOT-ECHO'
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ['unit_price_fils', { line_ref: marker, category: 'Payment Initiation', units: 1, unit_price_fils: -1 }],
+      ['gross_fils', { line_ref: marker, category: 'Corporate Data', units: 1, gross_fils: -1 }]
+    ]
+    for (const [field, bad] of cases) {
+      const treatment = field === 'gross_fils' ? 'inclusive' : 'exclusive'
+      try {
+        parseNebrasTaxInvoice(hubInvoice({
+          sections: [
+            { name: 'Service Initiation', vat_treatment: 'exclusive', lines: [
+              { line_ref: 'SI-1', category: 'Payment Initiation', units: 1, unit_price_fils: 2.5 }
+            ] },
+            { name: 'Second', vat_treatment: treatment, lines: [
+              { line_ref: 'OK-1', category: 'Payment Initiation', units: 1, unit_price_fils: 2.5, gross_fils: 105 },
+              bad
+            ] }
+          ]
+        }))
+        throw new Error(`expected a refusal for ${field}`)
+      } catch (error) {
+        expect(error, field).toBeInstanceOf(UnparseableDocumentError)
+        expect((error as Error).message, field).not.toContain(marker)
+        // Still actionable: the ordinal names the offending line without quoting the provider.
+        expect((error as Error).message, field).toContain('section 2, line 2')
+        expect((error as Error).message, field).toContain(field)
+      }
+    }
+  })
+
   it('is IDEMPOTENT: re-redacting an already-redacted payload reports nothing new', () => {
     // Load-bearing, not cosmetic. The store re-runs the redactor as a boundary check before an
     // unremovable INSERT and treats "reported something" as "this was never redacted". Replacing a
