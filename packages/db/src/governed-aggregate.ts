@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { SYSTEM_ACTOR_SCOPE } from './audit.js'
 import { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 
@@ -142,7 +143,10 @@ export async function runGovernedAggregate<T>(
     event_type: 'cross_fintech_query',
     acting_principal: ctx.actingPrincipal,
     acting_persona: ctx.actingPersona ?? 'system',
-    scope_used: ctx.scopeUsed ?? ctx.purposeCode,
+    // Falls back to the sentinel, not to the purpose code: a purpose is not a scope, and the
+    // purpose is already carried in request_body below, so the old fallback duplicated it into a
+    // column an auditor resolves against the declared scope inventory.
+    scope_used: ctx.scopeUsed ?? SYSTEM_ACTOR_SCOPE,
     request_trace_id: ctx.traceId,
     request_body: { purpose_code: ctx.purposeCode, row_count: out.rowCount },
     response_status: 200

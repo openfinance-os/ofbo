@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from './audit.js'
 import pg from 'pg'
 import { canonicalJson, type ProfitabilityReport, type RevenueAssuranceReport } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
@@ -261,7 +262,7 @@ export class PgTenantBillingServiceStore {
     const row = result.rows[0]
     const tenantCount = Number(row.tenant_count)
     if (tenantCount < 3) throw new Error('cross-tenant billing benchmark requires at least 3 tenants')
-    await this.audit.emit({ event_type: 'cross_tenant_billing_benchmark', acting_principal: input.actingPrincipal, acting_persona: input.actingPersona, scope_used: input.purposeCode, request_trace_id: input.traceId, request_body: { purpose_code: input.purposeCode, period: input.period, tenant_count: tenantCount }, response_status: 200 })
+    await this.audit.emit({ event_type: 'cross_tenant_billing_benchmark', acting_principal: input.actingPrincipal, acting_persona: input.actingPersona, scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: input.traceId, request_body: { purpose_code: input.purposeCode, period: input.period, tenant_count: tenantCount }, response_status: SYSTEM_ACTOR_RESPONSE_STATUS })
     return {
       period: input.period, tenantCount, currency: 'AED',
       averages: {

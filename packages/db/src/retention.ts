@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { SYSTEM_ACTOR_SCOPE } from './audit.js'
 import type { PgAuditEmitter } from './audit.js'
 
 /**
@@ -30,7 +31,9 @@ export function withDenialLogging(audit: PgAuditEmitter, actor: DenialActor) {
             event_type: 'regulated_record_mutation_denied',
             acting_principal: actor.acting_principal,
             acting_persona: actor.acting_persona,
-            scope_used: 'none',
+            // Was the literal 'none' — a second sentinel for the same idea, undeclared and
+            // unresolvable against the contract. Same meaning, one declared value.
+            scope_used: SYSTEM_ACTOR_SCOPE,
             request_trace_id: actor.trace_id,
             request_body: { attempted_table: tableName, error: message.slice(0, 200) },
             response_status: 403

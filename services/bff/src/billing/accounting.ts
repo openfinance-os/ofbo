@@ -108,7 +108,10 @@ export class BillingAccountingService {
         event_type: 'billing_journal_batch_dispatched', acting_principal: 'system:billing-accounting', acting_persona: 'system',
         scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
         request_body: { batch_id: batch.batchId, journal_batch_ref: response.journal_batch_ref, adapter_profile: adapterProfile, accepted: response.accepted },
-        response_status: response.accepted ? 200 : 502
+        // The sentinel, like its two siblings in this method: a scheduled dispatcher issues no HTTP
+        // response, and synthesising one from a port boolean is the fabrication the convention closes.
+        // The outcome is not lost — it is carried by `accepted` in the body and by the dispatch row.
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
       return { batch, closePack, batchArtifactId: artifact.id, accepted: response.accepted, journalBatchRef: response.journal_batch_ref }
     } catch (error) {

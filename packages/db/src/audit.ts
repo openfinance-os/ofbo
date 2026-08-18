@@ -5,6 +5,21 @@ import type { LineageSink } from './lineage.js'
 import { keysetClause } from './keyset.js'
 
 /**
+ * CODE-03 — the `scope_used` value for an actor that no scope authorised, and the `response_status`
+ * for one that issues no HTTP response.
+ *
+ * Declared HERE rather than in the BFF because `audit_high_sensitivity` is written from both trees
+ * through this emitter. Keeping the sentinels BFF-side left `packages/db`'s own emitters outside the
+ * convention and outside the check that polices it — which is how `'none'` and a purpose code ended
+ * up in the scope column.
+ *
+ * Zero is not a status code, so it can mean "no HTTP response issued" without colliding with one, and
+ * it satisfies the NOT NULL column without relaxing a constraint on regulated evidence.
+ */
+export const SYSTEM_ACTOR_SCOPE = 'system'
+export const SYSTEM_ACTOR_RESPONSE_STATUS = 0
+
+/**
  * BACKOFFICE-45: the DB-backed High-class audit emitter. INSERT-only by
  * construction — every statement runs as the ofbo_app role inside a transaction
  * with the tenancy context set, so RLS tenancy and the INSERT-only policies bind
