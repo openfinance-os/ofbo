@@ -76,6 +76,15 @@ export interface StoredBillingTppCostDocument {
   receivedAt: string
   verifiedBy: string
   verifiedAt: string
+  /**
+   * Also as STORED, and for the same reason widened beyond the upload evidence: `evidence_hash`
+   * covers commercial substance only, so a re-upload differing solely in `issued_at` or
+   * `recipient_id` is the SAME document to this ledger. Reporting the request's values for these
+   * would describe something never written.
+   */
+  documentType: string
+  recipientId: string
+  issuedAt: string
 }
 
 /**
@@ -529,7 +538,8 @@ export class PgBillingTppCostStore {
       // client error rather than a provider restatement, and the two deserve different answers.
       const byKey = (await client.query(
         `SELECT id, document_reference, evidence_hash, parsed_payload,
-                document_sha256, received_at, verified_by, verified_at
+                document_sha256, received_at, verified_by, verified_at,
+                document_type, recipient_id, issued_at
            FROM billing_tpp_cost_document WHERE idempotency_key = $1`,
         [input.idempotencyKey]
       )).rows[0] as Record<string, unknown> | undefined
@@ -552,7 +562,8 @@ export class PgBillingTppCostStore {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20)
          ON CONFLICT (bank_id, issuer_id, document_reference) DO NOTHING
          RETURNING id, document_reference, evidence_hash, parsed_payload,
-                   document_sha256, received_at, verified_by, verified_at`,
+                   document_sha256, received_at, verified_by, verified_at,
+                document_type, recipient_id, issued_at`,
         [this.config.bankId, this.config.channel, document.documentType, document.issuerId,
           document.recipientId, document.documentReference, document.billingPeriod, document.currency,
           document.grossMilliFils, document.vatMilliFils, document.netMilliFils,
@@ -565,7 +576,8 @@ export class PgBillingTppCostStore {
       if (!row) {
         row = (await client.query(
           `SELECT id, document_reference, evidence_hash, parsed_payload,
-                  document_sha256, received_at, verified_by, verified_at
+                  document_sha256, received_at, verified_by, verified_at,
+                document_type, recipient_id, issued_at
              FROM billing_tpp_cost_document
             WHERE issuer_id = $1 AND document_reference = $2`,
           [document.issuerId, document.documentReference]
@@ -616,7 +628,12 @@ export class PgBillingTppCostStore {
         documentSha256: result.row.document_sha256 as string,
         receivedAt: asIso(result.row.received_at),
         verifiedBy: result.row.verified_by as string,
-        verifiedAt: asIso(result.row.verified_at)
+        verifiedAt: asIso(result.row.verified_at),
+        // Not covered by evidence_hash, so a replay can differ from the upload in these three. The
+        // stored values are what the ledger holds, and therefore what the 200 must report.
+        documentType: result.row.document_type as string,
+        recipientId: result.row.recipient_id as string,
+        issuedAt: asIso(result.row.issued_at)
       },
       created: result.created
     }
