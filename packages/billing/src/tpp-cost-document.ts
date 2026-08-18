@@ -392,7 +392,10 @@ export function parseNebrasTaxInvoice(
   const documentReference = requireString(doc, 'invoice_number', 'invoice_number')
   const billingPeriod = requireString(doc, 'billing_period', 'billing_period')
   if (!PERIOD.test(billingPeriod)) {
-    throw new UnparseableDocumentError(`billing_period must be YYYY-MM, received ${billingPeriod}`)
+    // The provider value is deliberately NOT echoed, matching every other refusal in this module.
+    // This was the one path that reflected a provider-supplied string back across the API boundary,
+    // which would carry an identifier shape straight out if a document ever put one here.
+    throw new UnparseableDocumentError('billing_period must be YYYY-MM')
   }
   const currency = requireString(doc, 'currency', 'currency')
   if (currency !== 'AED') {
