@@ -82,15 +82,28 @@ unless that PR either adds a dated amendment row to it, or changes its status to
   clothes, and it is caught by pairing the two on the ADR number. Duplicate numbers are
   forbidden elsewhere (Q2b/Q2c), so such a pair always means "same record, rewritten".
 
-**Outright deletion of an accepted ADR remains out of scope, deliberately.** Removing a record
-is a different question from amending one, and this ADR states a rule about modification. Two
-things make that tolerable rather than a hole: `scripts/doc-link-check.mjs` already fails a PR
-that deletes an ADR still referenced by a current-state doc, so *silent* orphaning is blocked;
-and the delete-plus-re-add pairing above closes the case where "deletion" is really a rewrite.
-Whether *unreferenced* deletion should additionally require supersession is a control-plane
-question for this ADR's owner, not something CI should guess at. It is recorded here so the
-omission stays a decision on the record; the `D`-path plumbing added for the pairing rule is the
-handle if it is ever tightened.
+**Outright deletion of an accepted ADR remains out of scope, deliberately** — but with one of its
+two stated justifications now known to be false, which is recorded here rather than quietly
+dropped. Removing a record is a different question from amending one, and this ADR states a rule
+about modification. What still holds: the delete-plus-re-add pairing above closes the case where
+"deletion" is really a rewrite, including when the rewrite is renumbered.
+
+What does **not** hold, and was asserted here as fact until the hard-stop reviewer checked it:
+`scripts/doc-link-check.mjs` does **not** block silent orphaning of an ADR. It resolves
+*file-path* references only, and **no ADR is referenced by path anywhere in the set it scans**
+(`CLAUDE.md`, `README.md`, the PRD, `control-mappings.ts`, and `*.md` under `docs/adrs`,
+`docs/governance`, `.claude/skills`, `.claude/agents`). ADRs are cross-referenced by *number*
+("ADR 0007"), which that check does not resolve. The `docs/adrs/NNNN-*.md` path references that do
+exist live in `docs/backlog.yaml`, `docs/research/`, `docs/reviews/`,
+`services/mcp-gateway/src/index.ts` and `.github/workflows/ai-review.yml` — every one of them
+outside the scanned set. So deleting an accepted ADR outright is, today, green on both gates and
+silent.
+
+That is exactly the failure mode this ADR exists to prevent: a document asserting something its
+history does not support. The carve-out may still be the right decision, but it must now rest on
+its own merits rather than on a control that is not there. **Whether deletion of an accepted ADR
+should require a record is therefore an open control-plane question for this ADR's owner**, and a
+live one rather than a theoretical one. The `D`-path plumbing is the handle if it is tightened.
 
 An unenforced convention is the failure mode this repository has hit repeatedly — a local rule
 wearing a gate's clothes, per HARNESS-09 — and ADR 0007 is the proof that this particular one

@@ -32,6 +32,9 @@ const superseded = '# ADR 0012 — x\n\n- Status: **Superseded by ADR 0016** (20
 /** The real ADR 0004 / 0005 form: emphasis wraps the whole `Status:` label. */
 const boldLabel = '# ADR 0004 — x\n\n- **Status:** Accepted (2026-06-18)\n'
 
+/** `violations` returns `{ path, reason }`; most tests only care which ADRs were flagged. */
+const badPaths = (v) => v.map((x) => x.path)
+
 /** An ADR carrying an amendments table with one row. */
 const withRow = (date) =>
   `${accepted}\n### Amendments after acceptance\n\n| date | amendment |\n| --- | --- |\n| ${date} | corrected a fact |\n`
@@ -148,7 +151,7 @@ test('ANTI-VACUOUS-PASS: the ADR 0007 shape — accepted, corrected, unrecorded 
       headText: `${accepted}\n4. **VAT posture.** Accrue net of VAT.\n`,
     },
   ])
-  assert.deepEqual(bad, ['docs/adrs/0007-tpp-of-record-payables-net-settlement.md'])
+  assert.deepEqual(badPaths(bad), ['docs/adrs/0007-tpp-of-record-payables-net-settlement.md'])
 })
 
 test('the same edit WITH a new dated amendment row passes', () => {
@@ -166,9 +169,10 @@ test('FINDING-2: a carried-over row does NOT satisfy a fresh edit (the rename by
   const base = withRow('2026-08-17')
   const head = `${base}\nA substantive new claim, with no new row.\n`
   assert.ok(!hasNewAmendmentRow(base, head), 'the row exists in BOTH — it is not new')
-  assert.deepEqual(violations([{ path: 'docs/adrs/0007-x.md', baseText: base, headText: head }]), [
-    'docs/adrs/0007-x.md',
-  ])
+  assert.deepEqual(
+    badPaths(violations([{ path: 'docs/adrs/0007-x.md', baseText: base, headText: head }])),
+    ['docs/adrs/0007-x.md'],
+  )
   // Adding a genuinely new row on top of an existing table does satisfy it.
   const withSecond = `${base}| 2026-08-18 | a second, newer correction |\n`
   assert.ok(hasNewAmendmentRow(base, withSecond))
@@ -194,7 +198,7 @@ test('several ADRs in one PR are judged independently', () => {
     { path: 'b.md', baseText: accepted, headText: `${accepted}\nunrecorded\n` },
     { path: 'c.md', baseText: proposed, headText: `${proposed}\ndraft edit\n` },
   ])
-  assert.deepEqual(bad, ['b.md'])
+  assert.deepEqual(badPaths(bad), ['b.md'])
 })
 
 test('REGRESSION: a renamed accepted ADR is still examined', () => {
@@ -218,15 +222,25 @@ test('FINDING-3: delete + re-add of the same ADR number is a modification, not a
     { path: 'docs/adrs/0008-rewritten.md', basePath: 'docs/adrs/0008-plain.md' },
   ])
 
-  // An unrelated D and A (different numbers) is a real deletion plus a real addition — both
-  // exempt, per ADR 0030's stated carve-out.
-  const unrelated = parseNameStatus(
+  // ASSERTION INVERTED IN ROUND 3, AND DELIBERATELY STRENGTHENED RATHER THAN RELAXED.
+  // This previously asserted that a D and an A with DIFFERENT numbers pair to nothing. That was
+  // finding 2: it is exactly how a rewrite escapes — delete accepted `0007-payables.md`, add
+  // `0031-payables-restated.md`, and the gate reported "nothing to check", exit 0. The number is
+  // a label, not the record. Leftovers now pair across numbers, so this case is EXAMINED.
+  const renumbered = parseNameStatus(
     ['D\tdocs/adrs/0008-gone.md', 'A\tdocs/adrs/0031-brand-new.md'].join('\n'),
   )
-  assert.deepEqual(unrelated, [])
+  assert.deepEqual(renumbered, [
+    { path: 'docs/adrs/0031-brand-new.md', basePath: 'docs/adrs/0008-gone.md' },
+  ])
+
+  // A deletion with NO addition left to pair against is a genuine removal — still the documented
+  // carve-out, still exempt. This is the boundary that keeps the pairing from becoming
+  // "deletion is now banned", which would be a decision change this script may not make.
+  assert.deepEqual(parseNameStatus('D\tdocs/adrs/0008-gone.md'), [])
 })
 
-test('name-status parsing: M included, lone A and D exempt, C treated as a rename', () => {
+test('name-status parsing: M included, C treated as a rename, a stray D+A paired', () => {
   const parsed = parseNameStatus(
     [
       'M\tdocs/adrs/0007-a.md',
@@ -239,5 +253,55 @@ test('name-status parsing: M included, lone A and D exempt, C treated as a renam
   assert.deepEqual(parsed, [
     { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
     { path: 'docs/adrs/0031-copy.md', basePath: 'docs/adrs/0005-src.md' },
+    // ADDED IN ROUND 3 (finding 2), not relaxed: the lone `A` and lone `D` in this fixture are
+    // now paired across their numbers rather than both dropped. The test name's "lone A and D
+    // exempt" was the bypass restated as an expectation.
+    { path: 'docs/adrs/0030-new.md', basePath: 'docs/adrs/0011-gone.md' },
   ])
+})
+
+test('FINDING-3 (round 3): an unrecognised git status touching an ADR is not dropped', () => {
+  // The parser enumerated M/R/C/D/A and silently ignored everything else, so a TYPECHANGE (`T`)
+  // — replacing an accepted ADR with a symlink — reported "nothing to check", exit 0. Closed as
+  // a category so the next letter git invents does not reopen it.
+  assert.deepEqual(parseNameStatus('T\tdocs/adrs/0007-a.md'), [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
+  ])
+  assert.deepEqual(parseNameStatus('U\tdocs/adrs/0007-a.md'), [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
+  ])
+  // Non-ADR paths stay out of scope whatever the status letter.
+  assert.deepEqual(parseNameStatus('T\tdocs/build-log.md'), [])
+})
+
+test('FINDING-1 (round 3): EDITING an existing amendment row does not satisfy the rule', () => {
+  // The mirror of the same-day false-RED this branch fixed earlier. Comparing whole rows made an
+  // EDITED row read as "new", so appending one character to an old row licensed an arbitrary
+  // rewrite. The reviewer's reproduction changed the DECISION SCOPE — the one case ADR 0030
+  // routes to supersession — and the gate returned exit 0.
+  const base = withRow('2026-08-17')
+  const head = base
+    .replace('| 2026-08-17 | corrected a fact |', '| 2026-08-17 | corrected a fact. |')
+    .concat('\nThe decision now also covers receivables.\n')
+
+  assert.ok(!hasNewAmendmentRow(base, head), 'an edited row is not a new row')
+  assert.deepEqual(violations([{ path: 'docs/adrs/0007-x.md', baseText: base, headText: head }]), [
+    { path: 'docs/adrs/0007-x.md', reason: 'rewrote-or-removed-existing-row' },
+  ])
+
+  // DELETING an old row is the same offence, and is reported the same way.
+  const dropped = withRow('2026-08-17').replace(/\| 2026-08-17 \|[^\n]*\n/, '')
+  assert.deepEqual(
+    violations([{ path: 'docs/adrs/0007-x.md', baseText: base, headText: dropped }])[0].reason,
+    'rewrote-or-removed-existing-row',
+  )
+
+  // FALSE-RED GUARD, still holding: a second amendment on a day already present is compliant —
+  // every base row survives and a genuinely new row appears.
+  const sameDaySecond = `${base}| 2026-08-17 | a second correction, same day |\n`
+  assert.ok(hasNewAmendmentRow(base, sameDaySecond))
+  assert.deepEqual(
+    violations([{ path: 'docs/adrs/0007-x.md', baseText: base, headText: sameDaySecond }]),
+    [],
+  )
 })

@@ -22,9 +22,14 @@
 //
 // EXEMPT: ADRs ADDED by this branch (nothing has been relied on yet) and ADRs whose base status
 // is `Proposed` (drafts). The rule attaches at acceptance. Outright DELETION of an accepted ADR
-// is also out of scope by ADR 0030's stated decision (doc-link-check already blocks orphaning a
-// referenced ADR); the D+A same-number rewrite below is caught because it is a modification
-// wearing a deletion's clothes, not a genuine removal.
+// is also out of scope by ADR 0030's stated decision; the D+A rewrite below is caught because it
+// is a modification wearing a deletion's clothes, not a genuine removal.
+//
+// CORRECTION (round 3): this header used to justify that carve-out by claiming doc-link-check
+// "already blocks orphaning a referenced ADR". It does not. That check resolves FILE-PATH
+// references, and no ADR is referenced by path in the set it scans — ADRs are cited by NUMBER.
+// Deleting an accepted ADR is green on both gates and silent. ADR 0030 now records this, and
+// whether deletion should require a record is an open question for that ADR's owner.
 //
 // HARDENED after the hard-stop reviewer's FAIL(7) on PR #324 (each finding reproduced):
 //   1  statusOf missed the `- **Status:**` (bold) form — broadened.
@@ -39,6 +44,17 @@
 //      modification, not a deletion — parseNameStatus pairs a `D` and an `A` on the same number.
 //   7  a git failure AFTER the base resolved is an environment fault, not "clean": the
 //      post-resolution calls use mustGit and throw (red), distinct from the intended SKIPPED.
+//
+// HARDENED AGAIN after the reviewer's FAIL(4) on round 3 — all four reproduced, three closed here:
+//   1  route 1 was satisfied by EDITING an existing row, not just adding one. Whole-row comparison
+//      had closed a false-RED and opened its mirror false-GREEN. Now both directions must hold:
+//      a row added AND every base row surviving unmodified (amendmentDelta).
+//   2  the D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
+//      entirely. Leftovers are now paired across numbers, deterministically.
+//   3  the status allow-list dropped a git TYPECHANGE (`T`). Closed as a category, not a letter.
+//   4  NOT a code defect — the deletion carve-out's stated justification was factually wrong. The
+//      claim is corrected above and in ADR 0030; the decision it supported is now an open question
+//      for the ADR's owner rather than something this script should quietly decide.
 //
 // KNOWN LIMITS, recorded rather than coded — raised by the same review as out-of-scope notes:
 //   * The route-2 exemption trusts the status line: flipping an ADR's status to `Superseded`
@@ -130,31 +146,55 @@ export const amendmentRows = (text) => {
   return rows
 }
 
-/** Route 1: the head carries a dated amendment row the base did not. */
-export const hasNewAmendmentRow = (baseText, headText) => {
+/**
+ * What happened to the amendment table between base and head, as whole normalised rows.
+ *
+ * ADDED alone is not enough to satisfy route 1, and that asymmetry is finding 1 of the third
+ * review round. Comparing whole rows closed a false-RED (a same-day second amendment) but opened
+ * the mirror false-GREEN: EDITING an existing row makes it absent from the base set, so it reads
+ * as "new". Appending a single period to an old row while rewriting the decision therefore passed
+ * — and the reproduction used a DECISION-SCOPE change, which ADR 0030 routes to supersession, so
+ * the gate green-lit the one case the convention most wants caught.
+ *
+ * Neither end of that trade is safe on its own. Membership has to be judged in BOTH directions:
+ * the base's rows must survive into head (nothing rewritten or dropped) AND head must carry a row
+ * the base did not.
+ */
+export const amendmentDelta = (baseText, headText) => {
   const before = amendmentRows(baseText)
-  for (const d of amendmentRows(headText)) {
-    if (!before.has(d)) return true
+  const after = amendmentRows(headText)
+  return {
+    added: [...after].filter((r) => !before.has(r)),
+    removed: [...before].filter((r) => !after.has(r)),
   }
-  return false
+}
+
+/** Route 1: a NEW row, and no existing row rewritten or dropped. */
+export const hasNewAmendmentRow = (baseText, headText) => {
+  const { added, removed } = amendmentDelta(baseText, headText)
+  return added.length > 0 && removed.length === 0
+}
+
+/** Why a given ADR fails, or null when it is fine. Distinct reasons get distinct guidance. */
+export const violationFor = (c) => {
+  if (!isAccepted(c.baseText)) return null // added, or Proposed on base — exempt
+  if (isSuperseded(c.headText)) return null // route 2: a decision changed, superseded properly
+  const { added, removed } = amendmentDelta(c.baseText, c.headText)
+  // Checked BEFORE "no new row": a PR that rewrites an old row AND adds a new one is still
+  // editing history, and saying "add a row" to someone who just added one reads as noise.
+  if (removed.length > 0) return 'rewrote-or-removed-existing-row'
+  if (added.length === 0) return 'no-new-row'
+  return null
 }
 
 /**
  * The pure rule, extracted so it is testable without git.
  *
  * @param changes one per changed ADR: { path, baseText, headText }
- * @returns violations — one per accepted ADR modified without being recorded
+ * @returns violations — `{ path, reason }` per accepted ADR modified without being recorded
  */
-export const violations = (changes) => {
-  const found = []
-  for (const c of changes) {
-    if (!isAccepted(c.baseText)) continue // added, or Proposed on base — exempt
-    if (isSuperseded(c.headText)) continue // route 2: a decision changed, superseded properly
-    if (hasNewAmendmentRow(c.baseText, c.headText)) continue // route 1: recorded on the face
-    found.push(c.path)
-  }
-  return found
-}
+export const violations = (changes) =>
+  changes.map((c) => ({ path: c.path, reason: violationFor(c) })).filter((v) => v.reason !== null)
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
 /** Soft: null on any git error. Used only for base-ref PROBING, where failure is expected. */
@@ -210,6 +250,16 @@ export const parseNameStatus = (raw) => {
   for (const [status, a, b] of rows) {
     if (status === 'M' && a && isAdrPath(a)) {
       direct.push({ path: a, basePath: a })
+    } else if (!/^([MRCDA]\d*)$/.test(status) && a && isAdrPath(a)) {
+      // CATCH-ALL, and deliberately ahead of the specific branches for everything except `M`
+      // (finding 3, round 3). The parser used to enumerate M/R/C/D/A and silently drop anything
+      // else, so a git TYPECHANGE (`T` — e.g. replacing an accepted ADR with a symlink) reported
+      // "nothing to check" and exited 0. Enumerating `T` alone would leave the same shape open for
+      // the next letter (`U` unmerged, `X` unknown), so the allow-list is closed as a CATEGORY:
+      // any status git invents that touches an ADR path is treated as a modification of it. The
+      // reviewer rated the symlink case exotic and was unsure it was worth closing; closing the
+      // class rather than the instance is what makes it worth doing once.
+      direct.push({ path: a, basePath: a })
     } else if (/^[RC]\d*$/.test(status) && a && b && isAdrPath(a)) {
       // R100 / R087 / C075 — new path is field 3, old path field 2.
       //
@@ -227,11 +277,45 @@ export const parseNameStatus = (raw) => {
     }
   }
 
+  // PASS 1 — pair a deleted and an added ADR carrying the SAME number. Unambiguous: duplicate
+  // numbers are forbidden elsewhere (Q2b/Q2c), so this always means "same record, rewritten".
   const collisions = []
+  const deletedLeft = new Map(deletedByNum)
+  const addedLeft = new Map(addedByNum)
   for (const [num, addedPath] of addedByNum) {
     const deletedPath = deletedByNum.get(num)
-    if (deletedPath) collisions.push({ path: addedPath, basePath: deletedPath })
+    if (deletedPath) {
+      collisions.push({ path: addedPath, basePath: deletedPath })
+      deletedLeft.delete(num)
+      addedLeft.delete(num)
+    }
   }
+
+  // PASS 2 — pair what is LEFT, across different numbers (finding 2, round 3). Keying the rewrite
+  // detection on the ADR number meant that deleting accepted `0007-payables.md` and adding
+  // `0031-payables-restated.md` produced no collision at all: `nothing to check`, exit 0. The
+  // number is a label, not the record; renumbering while rewriting is the same evasion as renaming
+  // while rewriting, which this script already refuses to honour ("where the author moves it to is
+  // exactly the freedom the bypass exploited").
+  //
+  // ORDER IS DEFINED, NOT INCIDENTAL: both sides are sorted so the pairing is deterministic across
+  // machines and git versions — a gate whose verdict depends on map iteration order is not a gate.
+  //
+  // THE FALSE-RED THIS CAN CAUSE, AND WHY IT IS ACCEPTED. A PR that genuinely deletes one ADR under
+  // the carve-out AND separately adds an unrelated new ADR will pair them and demand a record. That
+  // is a real cost, and it is bounded three ways: an accepted ADR is only exempt-deletable under a
+  // carve-out whose stated justification turned out not to exist (see ADR 0030's amendment table);
+  // a deletion paired against a NON-accepted base is dropped downstream by `isAccepted`, so only
+  // accepted records can trigger it; and the remedy is cheap and obvious — split the PR, or record
+  // the amendment. Silently exempting a rewrite is the worse failure.
+  const deletedRest = [...deletedLeft.values()].sort()
+  const addedRest = [...addedLeft.values()].sort()
+  for (let i = 0; i < Math.min(deletedRest.length, addedRest.length); i++) {
+    collisions.push({ path: addedRest[i], basePath: deletedRest[i] })
+  }
+  // Any deleted ADR with no added counterpart left over is a genuine removal — the documented
+  // out-of-scope carve-out — and is intentionally not returned here.
+
   return [...direct, ...collisions]
 }
 
@@ -271,7 +355,13 @@ const main = () => {
     return
   }
   process.stderr.write('adr-amendment-check: accepted ADR modified without recording the amendment\n\n')
-  for (const p of bad) process.stderr.write(`  ${p}\n`)
+  for (const { path: p, reason } of bad) {
+    const detail =
+      reason === 'rewrote-or-removed-existing-row'
+        ? 'an EXISTING amendment row was rewritten or removed'
+        : 'no new amendment row'
+    process.stderr.write(`  ${p} — ${detail}\n`)
+  }
   process.stderr.write(`
 ADR 0030: an ADR that is Accepted on the base branch may be edited in place for statements of
 FACT, but the edit must be recorded on the document's face. Add a NEW row under:
@@ -286,6 +376,10 @@ Say what changed — "updated for accuracy" is not a row. A reader must be able 
 table alone whether the thing they are relying on is one of the things that moved. The row must
 be NEW (a carried-over row does not count) and must sit under the Amendments heading, not inside
 a code fence.
+
+ROWS ALREADY ON THE DOCUMENT ARE HISTORY: they must survive your edit unchanged. Rewriting an
+existing row does not satisfy this rule — it is the thing the rule exists to prevent. If an old
+row is itself wrong, restore it and add a NEW row saying so.
 
 If the DECISION changed rather than a fact, this is the wrong route: supersede it with a new
 ADR and set this one's status to Superseded (see ADR 0012 -> ADR 0016).\n`)

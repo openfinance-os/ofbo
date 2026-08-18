@@ -2679,7 +2679,52 @@ compliant work is worse than most bypasses: a bypass lets one bad change through
 blocks a good one and teaches people the gate is noise, which is how a control stops being read
 at all. Now compared on whole normalised rows.
 
-Evidence: 16 guard tests (52 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+ROUND THREE: VERDICT: FAIL (4 findings), all four reproduced, three of them code defects I had
+introduced while fixing rounds one and two. This is the entry worth reading twice, because the
+pattern is that EVERY fix opened its own hole.
+
+(1) Route 1 was satisfied by EDITING an existing amendment row rather than adding one. Comparing
+whole rows had closed a false-RED (a same-day second amendment) and opened its exact mirror: an
+edited row is absent from the base set, so it reads as "new". Appending ONE PERIOD to an old row
+licensed an arbitrary rewrite - and the reviewer's reproduction changed the DECISION SCOPE, the
+one case ADR 0030 routes to supersession rather than to a row. The gate green-lit the case the
+convention most exists to catch. Neither end of that trade is safe alone; membership is now judged
+in BOTH directions - a new row must appear AND every base row must survive unmodified.
+
+(2) The D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
+completely. Same evasion as renaming while rewriting, which this script already refused to honour;
+the number is a label, not the record. Leftover deletions and additions now pair across numbers,
+deterministically sorted. Accepted cost, stated: a PR that genuinely deletes one ADR and adds an
+unrelated one will now be flagged. Checked before accepting it - 0001..0030 with no gaps, and NO
+ADR HAS EVER BEEN DELETED in this repo's history, so the false-red is hypothetical while the
+bypass was demonstrated. A lone deletion with nothing to pair against stays exempt.
+
+(3) parseNameStatus enumerated M/R/C/D/A and silently dropped everything else, so a git TYPECHANGE
+(T - replacing an accepted ADR with a symlink) reported "nothing to check". Closed as a CATEGORY
+rather than a letter: any status git invents that touches an ADR path is treated as a
+modification. The reviewer rated this exotic and was unsure it was worth closing; closing the
+class rather than the instance is what made it worth doing once.
+
+(4) NOT a code defect, and the most important of the four. The deletion carve-out was justified in
+ADR 0030 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
+by a current-state doc". That is FALSE, and I verified it independently rather than taking the
+finding on trust: doc-link-check resolves FILE-PATH references, and there are ZERO
+docs/adrs/NNNN-*.md path references anywhere in the set it scans. ADRs are cited by NUMBER. Every
+real path reference lives in docs/backlog.yaml, docs/research/, docs/reviews/, mcp-gateway, and
+ai-review.yml - all outside the scanned set. So deleting an accepted ADR is green on both gates
+and silent, which is precisely the outcome the ADR claimed was prevented. A decision record
+asserting something its own history does not support is the exact failure mode ADR 0030 exists to
+stop, and it was doing it in the paragraph justifying an exemption. Corrected in place; whether
+deletion should require a record is now an OPEN CONTROL-PLANE QUESTION for the ADR's owner, not
+something this script decides quietly.
+
+TWO TEST ASSERTIONS WERE INVERTED, AND THE DISTINCTION MATTERS. Both had encoded a bypass as an
+expectation ("an unrelated D and A ... both exempt"; "lone A and D exempt"). They were changed to
+flag MORE, not less - strictly stronger, which is the opposite of the reward-hacking move the
+tripwire and Q1b exist to block. Recorded explicitly because a test edit accompanying a green run
+should always have to justify its direction.
+
+Evidence: 18 guard tests (54 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
 (accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
 EXISTING amendment table does not license silent editing forever after — the defect that would
 quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
