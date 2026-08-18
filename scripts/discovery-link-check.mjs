@@ -51,9 +51,48 @@ function parseItems(text) {
 
 const field = (text, re) => (text.match(re) || [])[1];
 
+/**
+ * A list item swallowed by a block scalar — the backlog's recurring silent-corruption mode.
+ *
+ * `progress: >-` folds every following line indented at or beyond its content indentation into
+ * prose. A sibling list item written at that same indentation is therefore absorbed: the YAML still
+ * parses, nothing complains, and an acceptance criterion quietly stops being a tracked criterion.
+ * That has now happened repeatedly, and each time it was caught by a human reading the diff rather
+ * than by anything mechanical — which is the definition of a control that does not exist.
+ *
+ * This reads the raw text, not the parsed document, because after parsing the evidence is gone.
+ */
+function swallowedListItems(text) {
+  const lines = text.split('\n');
+  const findings = [];
+  for (let i = 0; i < lines.length; i++) {
+    const scalar = /^(\s*)([A-Za-z_][A-Za-z0-9_]*):\s*[>|][-+]?\s*$/.exec(lines[i]);
+    if (!scalar) continue;
+    const keyIndent = scalar[1].length;
+    // The block's content indentation is set by its first non-blank line.
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() === '') j++;
+    if (j >= lines.length) continue;
+    const contentIndent = indent(lines[j]);
+    if (contentIndent <= keyIndent) continue;
+    for (; j < lines.length; j++) {
+      if (lines[j].trim() === '') continue;
+      if (indent(lines[j]) < contentIndent) break; // block ended
+      if (/^\s*-\s+\S/.test(lines[j]) && indent(lines[j]) === contentIndent) {
+        findings.push(
+          `docs/backlog.yaml:${j + 1}: a list item is indented INSIDE the '${scalar[2]}: ` +
+          `${lines[i].trim().slice(-2)}' block opened at line ${i + 1}, so YAML folds it into that ` +
+          `string instead of tracking it as a list entry: ${lines[j].trim().slice(0, 60)}…`,
+        );
+      }
+    }
+  }
+  return findings;
+}
+
 function check() {
   if (!existsSync(BACKLOG)) return [`${BACKLOG} not found`];
-  const findings = [];
+  const findings = swallowedListItems(readFileSync(BACKLOG, 'utf8'));
   for (const block of parseItems(readFileSync(BACKLOG, 'utf8'))) {
     const id = field(block, /\bid:\s*([A-Za-z0-9-]+)/);
     if (!id || !FEATURE.test(id)) continue; // only PRD feature items are waist-gated
@@ -91,7 +130,8 @@ const findings = check();
 if (findings.length) {
   process.stderr.write('\nDiscovery → delivery waist gate (HG-0007) — FAIL\n\n');
   for (const f of findings) process.stderr.write(`  - ${f}\n`);
-  process.stderr.write('\nA feature backlog item must trace to a green discovery hand-off.\n');
+  process.stderr.write('\nA feature backlog item must trace to a green discovery hand-off,\n');
+  process.stderr.write('and no list item may be folded into a block scalar.\n');
   process.exit(1);
 }
 process.stdout.write('Discovery → delivery waist gate (HG-0007) — OK\n');
