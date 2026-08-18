@@ -2600,3 +2600,58 @@ unchanged, so no client sees a new value today.
 Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm the OverLimitFees unit
 from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
 statements — so it blocks where it is actionable instead of lapsing with a `done` status.
+
+---
+
+## 2026-08-18 — ADR 0030: amending an accepted ADR (in-place for facts, supersession for decisions)
+
+User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
+question rather than assuming an answer after the hard-stop AI reviewer raised it twice on
+PR #318, at explicitly stated low-to-moderate confidence, and declined to rule on it — correctly,
+since it is a governance call for a control-plane owner rather than a reviewer.
+
+THE INVESTIGATION CHANGED THE QUESTION. The practice already existed and was undocumented:
+ADR 0007 was accepted on 2026-08-17 and substantively corrected THE SAME DAY — commit 0f0a79a,
+"correct VAT, query-window, and collection mechanics", 65 insertions and 22 deletions against an
+accepted decision record — by the BILL-11 work stream, with nothing on the document saying so.
+Only `git log` knew. So the choice was never whether to start allowing in-place amendment; it was
+keep doing it silently, stop entirely, or do it with a record. ADR 0029 was not the first case,
+only the first FLAGGED case, and the only one carrying an amendment table.
+
+Also established while checking: there is no written ADR process anywhere (no README in
+docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
+(ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
+for the case at hand. 29 ADRs: 20 Accepted, 5 Proposed, 1 Superseded.
+
+THE RULE. Statement of fact changed (what was built, measured, or proved) -> edit in place and
+add a dated row to an "Amendments after acceptance" table. DECISION changed (option chosen, or
+its scope) -> supersede with a new ADR, the 0012 -> 0016 route. Proposed ADRs are exempt: the
+rule attaches at acceptance, the point at which someone might be building against the document.
+
+ENFORCED, NOT MERELY WRITTEN. scripts/adr-amendment-check.mjs fails a PR that modifies an ADR
+whose BASE-BRANCH status is Accepted unless the diff adds a dated amendment row or flips the
+status to Superseded. This repo's own history is the argument: an unenforced convention is "a
+local convention wearing a gate's clothes" (HARNESS-09), and ADR 0007 is proof this particular
+one would not have held. Discoverability is mechanical rather than documentary — nobody reads a
+process doc before editing a file, so the failure message states the rule at the one moment
+somebody wants it.
+
+Placement follows HARNESS-07 doctrine: a separately guarded step in the EXISTING q2c job, not a
+new job. Q2c already fetches the base ref this check needs, and adding a check-run name would
+strand branch-protection rules pinned to the current ones. Guarded on `!cancelled()` so an
+earlier step's failure cannot skip it — a skipped gate looks exactly like a passing one.
+
+DELIBERATE COST, recorded in the ADR: a typo fix in an accepted ADR also costs a row. The check
+cannot separate substantive from cosmetic without making a judgement call in CI, and a gate that
+guesses is worse than one that is slightly heavy. If it proves noisy the proportionate relaxation
+is to require a row only when the diff REMOVES lines, and that change must itself be an amendment
+to ADR 0030 recorded in its own table.
+
+ADR 0007 BACKFILLED in the same change — the one known case where document and history disagree
+with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
+including a row recording that the table was added retrospectively.
+
+Evidence: 9 guard tests incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+(accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
+EXISTING amendment table does not license silent editing forever after — the defect that would
+quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.

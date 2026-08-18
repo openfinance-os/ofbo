@@ -4,6 +4,20 @@
 - Date: 2026-06-20 (proposed) · 2026-08-17 (accepted)
 - Related: ADR 0006 (LFI↔TPP data segregation — payables are TPP-domain; accepted the same day); BACKOFFICE-71/-72/-73 (consuming-TPP registry + invoicing, receivables); E1 reconciliation (-01/-02/-12 break detection + thresholds, -06 monthly sign-off); BACKOFFICE-76 (`net_settlement_offset`, cross-scheme guard); P9 financial-management port; the OF-UAE dual-role gap analysis (2026-06-20); delivery backlog BILL-11..BILL-17; BD-15, BD-20..BD-22 (PRD §10); Nebras Interaction Guide for LFIs & TPPs **v5.0** §10 (billing, collection, settlement — verified 2026-08-17)
 
+### Amendments after acceptance
+
+The decision below is unchanged since acceptance. These are corrections to statements of *fact*.
+Recorded per ADR 0030; this table is a BACKFILL, added on 2026-08-18 by the change that
+introduced that convention, because this ADR is the case that motivated it — it was corrected in
+place on the day it was accepted with nothing on the document saying so.
+
+| date | amendment |
+| --- | --- |
+| 2026-08-17 | Verified against the Nebras Interaction Guide v5.0 and corrected: VAT posture on the payable side, the query window, and collection mechanics (commit `0f0a79a`, 65 insertions / 22 deletions). |
+| 2026-08-17 | Payable rate-model corrections landed with BILL-12 (expected TPP cost statement). |
+| 2026-08-18 | This amendments table added retrospectively, per ADR 0030. |
+
+
 ## Context
 
 The bank runs **both** UAE Open Finance roles. OFBO's commercial surface is almost
