@@ -170,9 +170,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/adr-number-check.mjs
       # Separately guarded, per HARNESS-07: steps share a runner and run sequentially, so a
-      # failure above would SKIP this one and a skipped gate looks exactly like a passing gate
-      # on the checks tab. Gated on the checkout/setup having succeeded, not a bare
-      # !cancelled(), so a failed setup does not run this with no node available.
+      # failure above would SKIP this one, and a skipped gate looks exactly like a passing gate
+      # on the checks tab. Plain !cancelled() is the right guard here because this check is
+      # DEPENDENCY-FREE — it shells out to git and node only, with no node_modules — matching
+      # the Discovery job's run-validation and waist gates above. The stricter
+      # `steps.install.outcome == 'success'` form is for jobs that install first (Q2, Q4), where
+      # a failed install would otherwise spawn a noise run with nothing to run against.
       # Kept in this job rather than a new one — Q2c already fetches the base ref this check
       # needs, and adding a check-run name strands branch-protection rules pinned to the
       # existing ones.
