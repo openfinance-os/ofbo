@@ -160,3 +160,76 @@ describe('BILL-14 the 200 body describes the STORED document', () => {
     expect(replayed.data.recipient_id).toBe(stored.data.recipient_id)
   })
 })
+
+
+describe('BILL-14 hard-stop review findings on #320', () => {
+  function upload(file: File, verifiedBy = 'finance.reviewer', period = '2026-06') {
+    const fd = new FormData()
+    fd.set('file', file)
+    fd.set('document_type', 'nebras_tax_invoice')
+    fd.set('billing_period', period)
+    fd.set('verified_by', verifiedBy)
+    return fd
+  }
+
+  it('does NOT echo the uploaded file back in the unparseable-JSON error', async () => {
+    // JSON.parse embeds a snippet of the source in its message, and this parse runs BEFORE redaction.
+    // Passing it through would carry raw provider bytes into the error envelope and anything
+    // downstream that records it — the exact content this story exists to redact.
+    // The leak needs the parse to fail at position 0: Node then embeds a 10-character snippet of the
+    // SOURCE in the message ("AE00000000"... is not valid JSON), rather than reporting a position.
+    // An earlier version of this test used a mid-document failure, which reports a position only — so
+    // it passed whether or not the fix was present, and proved nothing.
+    const app = harness()
+    const bad = new File(['AE000000000000000000000 is a customer IBAN'], 'x.json', { type: 'application/json' })
+    const response = await app.request('/back-office/billing/tpp-cost-documents', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'idempotency-key': randomUUID() },
+      body: upload(bad)
+    })
+    expect(response.status).toBe(422)
+    const raw = await response.text()
+    // Assert on the DANGEROUS content only: the source snippet Node embeds, and the parser's own
+    // wording that carries it. The safe replacement message deliberately says "is not valid JSON"
+    // itself, so asserting on that phrase would match the fix rather than the leak.
+    expect(raw).not.toContain('AE00000000')
+    expect(raw).not.toContain('Unexpected token')
+  })
+
+  it('does NOT echo the provider billing_period in its refusal', async () => {
+    // The one parser refusal that reflected a provider-supplied string back across the API boundary.
+    const app = harness()
+    const file = fileFor(`NEB-${randomUUID()}`, { billing_period: 'AE000000000000000000000' })
+    const response = await app.request('/back-office/billing/tpp-cost-documents', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'idempotency-key': randomUUID() },
+      body: upload(file)
+    })
+    expect(response.status).toBeGreaterThanOrEqual(400)
+    expect(await response.text()).not.toContain('AE000000000000000000000')
+  })
+
+  it('does not replay when the same bytes arrive under the same key with a different verified_by', async () => {
+    // verified_by is the endpoint's second-person evidence. Keying the replay on bytes alone replayed
+    // the first response, telling the caller their verifier had been recorded when the first one was.
+    const app = harness()
+    const key = randomUUID()
+    const reference = `NEB-${randomUUID()}`
+
+    const first = await app.request('/back-office/billing/tpp-cost-documents', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'idempotency-key': key },
+      body: upload(fileFor(reference), 'first.verifier')
+    })
+    expect(first.status).toBe(201)
+    expect((await first.json() as { data: Record<string, unknown> }).data.verified_by).toBe('first.verifier')
+
+    const second = await app.request('/back-office/billing/tpp-cost-documents', {
+      method: 'POST',
+      headers: { ...financeHeaders, 'idempotency-key': key },
+      body: upload(fileFor(reference), 'second.verifier')
+    })
+    // Reaches the store rather than replaying, and the store reports the document already exists.
+    expect(second.status).toBe(200)
+  })
+})
