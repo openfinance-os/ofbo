@@ -129,6 +129,41 @@ describe('BILL-16 payable dispatch', () => {
     }
   })
 
+  it('refuses one human spelled two ways on the LAST check before money moves', async () => {
+    // payable-close normalises this comparison precisely because a raw === treats `Finance.Analyst`
+    // and `finance.analyst ` as two people — the cheapest way there is to defeat four eyes. Dispatch,
+    // which its own comment calls "the last place that can refuse before the money moves", used a raw
+    // ===. The existing same-principal case passed byte-identical strings, so the gap was untested.
+    for (const approver of [
+      'DEMO:Finance-Analyst@alpha-bank',
+      ' demo:finance-analyst@alpha-bank ',
+      'demo:FINANCE-ANALYST@ALPHA-BANK'
+    ]) {
+      const { service, port } = harness({}, { approver })
+      await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', `idem-${approver}`, 'trace-1'), approver)
+        .rejects.toThrow(/one person twice/i)
+      expect(port.dispatchPayableInstruction, approver).not.toHaveBeenCalled()
+    }
+  })
+
+  it('stamps the superadmin marker on both dispatch outcomes', async () => {
+    // PRD §2: stamped on EVERY High-class record produced under platform:superadmin. hasScope lets a
+    // superadmin satisfy finance:reconciliation:write, so without it a superadmin authorising a
+    // direct debit is indistinguishable from an analyst on the record that authorises the money.
+    const superadmin = { ...APPROVER, scopes: [...APPROVER.scopes, 'platform:superadmin'] }
+
+    const ok = harness()
+    await ok.service.dispatch(superadmin, 'PAY-2026-06-001', 'idem-ok', 'trace-1')
+    expect(ok.audited.find((e) => e.event_type === 'billing_tpp_cost_payable_dispatched')?.superadmin_marker)
+      .toBe(true)
+
+    const bad = harness()
+    bad.port.dispatchPayableInstruction.mockRejectedValueOnce(new Error('financial-system 503'))
+    await expect(bad.service.dispatch(superadmin, 'PAY-2026-06-001', 'idem-bad', 'trace-1')).rejects.toThrow()
+    expect(bad.audited.find((e) => e.event_type === 'billing_tpp_cost_payable_dispatch_failed')?.superadmin_marker)
+      .toBe(true)
+  })
+
   it('REFUSES a citation that resolves to nothing at all', async () => {
     const { service, port } = harness({}, { get: async () => null })
     await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', 'idem-1', 'trace-1'))
