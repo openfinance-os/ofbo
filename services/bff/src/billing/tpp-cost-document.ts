@@ -15,7 +15,7 @@ import type { Principal } from '../auth.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied } from '../errors.js'
-import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { missingIdempotencyKey, replayCached, type IdempotencyStore } from '../idempotency.js'
 
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
@@ -62,11 +62,21 @@ export interface TppCostDocumentStore {
     record: {
       id: string
       documentReference: string
-      /** As STORED. On a replay these differ from what this request supplied — see the store. */
+      /**
+       * As STORED. On a replay these differ from what this request supplied.
+       *
+       * The set is wider than the upload evidence because `evidence_hash` covers only commercial
+       * substance — reference, issuer, period, totals, lines. A re-upload differing only in
+       * `issued_at` or `recipient_id` hashes identically and takes the 200 path, so reporting those
+       * from the fresh parse would echo values the ledger never received.
+       */
       documentSha256?: string
       receivedAt?: string
       verifiedBy?: string
       verifiedAt?: string
+      documentType?: string
+      recipientId?: string
+      issuedAt?: string
     }
     created: boolean
   }>
@@ -101,11 +111,16 @@ export interface TppCostDocumentIngestResult {
   id: string
   created: boolean
   unmappedLineCount: number
+  /** Describes THIS upload's parse, not the stored row — the count is not a stored column. */
   redactedFieldCount: number
   documentSha256: string
   receivedAt: string
   verifiedBy: string
   verifiedAt: string
+  /** Stored values for the fields `evidence_hash` does not cover. */
+  documentType: string
+  recipientId: string
+  issuedAt: string
 }
 
 const DOCUMENT_TYPES: readonly TppCostDocumentType[] = [
@@ -286,7 +301,13 @@ export class TppCostDocumentIngestService {
       documentSha256: saved.record.documentSha256 ?? documentSha256,
       receivedAt: saved.record.receivedAt ?? nowIso,
       verifiedBy: saved.record.verifiedBy ?? input.verifiedBy,
-      verifiedAt: saved.record.verifiedAt ?? nowIso
+      verifiedAt: saved.record.verifiedAt ?? nowIso,
+      // Same rule, widened. evidence_hash covers commercial substance only, so a re-upload differing
+      // only in issued_at or recipient_id is the SAME document to the ledger and takes the 200 path;
+      // echoing this request's values would report something never written.
+      documentType: saved.record.documentType ?? document.documentType,
+      recipientId: saved.record.recipientId ?? document.recipientId,
+      issuedAt: saved.record.issuedAt ?? document.issuedAt
     }
   }
 }
@@ -304,16 +325,16 @@ export function tppCostDocumentWire(result: TppCostDocumentIngestResult): Record
     received_at: result.receivedAt,
     verified_by: result.verifiedBy,
     verified_at: result.verifiedAt,
-    document_type: document.documentType,
+    document_type: result.documentType,
     issuer_id: document.issuerId,
-    recipient_id: document.recipientId,
+    recipient_id: result.recipientId,
     document_reference: document.documentReference,
     billing_period: document.billingPeriod,
     currency: document.currency,
     net_milli_fils: document.netMilliFils,
     vat_milli_fils: document.vatMilliFils,
     gross_milli_fils: document.grossMilliFils,
-    issued_at: document.issuedAt,
+    issued_at: result.issuedAt,
     unmapped_line_count: document.unmappedLineCount,
     redacted_field_count: document.redactedFieldCount,
     lines: document.lines.map((line) => ({
@@ -343,10 +364,24 @@ export function tppCostDocumentRoutes(
   idempotency: IdempotencyStore
 ): Record<string, Handler> {
   return {
-    'post /back-office/billing/tpp-cost-documents': replayable(
-      idempotency,
-      (_params, subject, key) => `billing:tpp-cost-document|${subject}|${key}`,
-      async (c) => {
+    /**
+     * Uses `replayCached`, not `replayable` — which is exactly what the helper's own documentation
+     * prescribes for "routes that must parse/validate their body BEFORE they can compute the dedup
+     * key". This is one: the key has to include the uploaded bytes, and they only exist after the
+     * multipart parse.
+     *
+     * `replayable` keys on (subject, Idempotency-Key) alone and consults the cache BEFORE the handler
+     * runs, so reusing a key for a DIFFERENT document replayed the first document's `201`. That told
+     * the caller their document was accepted when nothing had been stored, and it made the store's
+     * own conflict unreachable from the route — the contract declares that case a `409`.
+     *
+     * Folding the content hash into the key fixes it without touching the shared helper or any other
+     * route: same key + same bytes replays as before, so a repeated first ingest still returns its
+     * `201` as the `200` description promises; same key + different bytes misses the cache, reaches
+     * the store and gets the `409`. A byte-different file stating the same charges also misses the
+     * cache and is then correctly answered `200` by the store's substance-based dedupe.
+     */
+    'post /back-office/billing/tpp-cost-documents': (async (c) => {
         let fields: { documentType?: string; billingPeriod?: string; verifiedBy?: string; sourceNote?: string }
         let bytes: Uint8Array
         try {
@@ -373,7 +408,11 @@ export function tppCostDocumentRoutes(
         }
 
         const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
-        const idempotencyKey = c.req.header('idempotency-key') ?? ''
+        const idempotencyKey = c.req.header('idempotency-key')
+        if (!idempotencyKey) return c.json(missingIdempotencyKey(), 400)
+        const cacheKey = `billing:tpp-cost-document|${c.get('principal').subject}|${idempotencyKey}`
+          + `|${createHash('sha256').update(bytes).digest('hex')}`
+        return replayCached(c, idempotency, cacheKey, async () => {
         try {
           const result = await service.ingest(c.get('principal'), { ...fields, fileBytes: bytes }, idempotencyKey, traceId)
           return c.json(dataEnvelope(tppCostDocumentWire(result)), result.created ? 201 : 200)
@@ -388,8 +427,8 @@ export function tppCostDocumentRoutes(
           if (denied) return denied
           throw error
         }
-      }
-    )
+        })
+      }) as Handler
   }
 }
 
