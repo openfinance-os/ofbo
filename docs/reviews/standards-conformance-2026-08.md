@@ -62,10 +62,17 @@ To be precise about the blast radius, because it is narrower than it first looks
 
 This is a modelling divergence rather than a live write failure, and the distinction matters because the naive fix is wrong. Nothing today routes a collection on the tenant preferred rail: the write path is typed `DirectCollectionRail` (`packages/billing/src/collections.ts:130`), `eligibleCollectionRails` (`:133-143`) can never return `scheme_net_settlement`, and `services/bff/src/billing/collections.ts:171` throws before any database write if the selected rail is ineligible. The tenant policy value is only read back for display. The CHECK is therefore plausibly **correct by design** — scheme net settlement is not a direct-collection rail — and widening it would be the wrong repair. What is missing is an explicit relationship between the two vocabularies, before someone wires them together. BILLING-domain, with four PRs in flight — flagged here so it is not lost (STD-13, reassignable to BILL).
 
-### 2.7 An undocumented direct-egress path — needs a ruling, not a fix
-`services/bff/src/billing/rate-card-watch.ts:171-183` defines `HttpRateCardSourceFetcher` calling `fetch` directly, and `services/bff/src/worker.ts:336-344` wires the watcher **without** a `fetcher`, so the default takes effect: direct outbound HTTPS from the Worker to `nebras-open-finance.com` and to the CBUAE Confluence page, with no P6 port in the path. CLAUDE.md declares P6 covers "ALL Nebras-bound traffic; no direct egress — non-negotiable."
+### 2.7 The watcher's direct-egress path — ruled 2026-08-18, and the ruling is narrow
+`services/bff/src/billing/rate-card-watch.ts:171-183` defines `HttpRateCardSourceFetcher` calling `fetch` directly, and `services/bff/src/worker.ts:336-344` wires the watcher **without** a `fetcher`, so the default takes effect: direct outbound HTTPS from the Worker to two `nebras-open-finance.com` pricing pages and to the CBUAE Confluence page, with no P6 port in the path. CLAUDE.md declares P6 covers "ALL Nebras-bound traffic; no direct egress — non-negotiable."
 
-The honest reading is that these are *scheme documentation mirrors*, not the Nebras API Hub, so this is probably an intended carve-out — but it is undocumented at the call site and no ADR records it. It becomes load-bearing the moment STD-01 points the same watcher at the errata register. **This is a human ruling (§9), and ADR 0030 must settle it before STD-01 builds on it.**
+**Ruled (a) — public documentation change-detection is outside P6** (ADR 0030, accepted 2026-08-18). Three facts decided it. P6 **cannot carry this as it stands**: `NebrasEgressPort` is seven purpose-built typed methods with no generic fetch, so routing documentation through it means adding a method to a regulated port interface, both adapters and the contract bench — real cost for poor fit. The rule's *purpose* points away from it: CLAUDE.md line 57 scopes P6 to the scheme certificate chain, i.e. authenticated mTLS API traffic, and one of the three watched URLs is CBUAE Confluence rather than a Nebras host at all — so a "P6 for Nebras-domain traffic" reading would leave direct egress anyway. And it will be **mediated regardless**: no bank grants a regulated workload unmediated outbound HTTPS, so in an enterprise estate this call traverses the bank's forward proxy whatever the ADR says.
+
+The carve-out is narrow and conditional, not "docs are exempt": it covers unauthenticated GETs of public scheme documentation carrying no credentials and no PSU or bank data, used only for change detection — and it requires pinning the redirect behaviour (the fetcher currently sets `redirect: 'follow'` on an unauthenticated GET, which is SSRF-adjacent even with no credentials travelling) and keeping the fetcher injectable so a bank can point it at its own proxy without a code change. Net effect: **less** unmanaged egress than before the ruling.
+
+### 2.8 The watcher's failures are invisible — its result is thrown away
+Found while grounding that ruling, and the more consequential half of it. `rate-card-watch.ts:399` returns `{checkedSources, changedSources, failedSources, notificationFailures}` — and `services/bff/src/worker.ts:336` calls `runBillingRateCardWatch` inside `Promise.allSettled` and **discards the resolved value**. `failedSources` is never read anywhere. On a fetch failure the watcher emits one `billing_rate_card_watch_failed` audit row with `response_status: 502` (`:385-395`) and raises nothing else — no ITSM ticket, no risk signal.
+
+So if a bank's forward proxy blocks the watched URLs, or a page moves, or DNS breaks, the watch is **dead and looks alive**: weekly audit rows nobody reads, and a queue that appears to be working. That is precisely the failure class this review is about, turned on the repo's own tooling — and ADR 0030 would have inherited it, pinning the regulatory baseline to a watcher whose silence is indistinguishable from "nothing changed". Hence the ADR's second binding amendment. **Fix: STD-15, which STD-01 now depends on.**
 
 ---
 
@@ -223,12 +230,12 @@ Recording this deliberately — several of these were tested specifically to try
 
 ## 9. Human decision queue
 
-Five items need a person. None should be decided by the build loop.
+Five items needed a person. **Two are now decided** (2026-08-18) and are recorded here rather than removed, so the record shows what was settled and on what basis.
 
-1. **ADR 0030 (filed with this review, `Proposed`)** — accept, amend, or reject the standards-baseline registry. STD-01 is blocked on it.
-2. **The P6 egress ruling (§2.7).** Is fetching scheme *documentation* mirrors direct from the Worker an intended carve-out from "no direct egress"? A yes must be recorded in ADR 0030 (which extends that watcher); a no makes STD-01 a P6 story.
-3. **ADR 0010 (STR/AML).** Still `Proposed` while BACKOFFICE-63 is `done` and diverges from its Option 1 in three ways (§6.1). Accept-as-built, amend, or reject. The missing `acknowledged` state is the substantive question — the bank currently has no evidence an STR was filed. An addendum recording the as-built has been added to ADR 0010 by this review; the decision itself is untouched.
-4. **ADR 0011 (revoke-SLA enforcement).** Same pattern — `Proposed`, already implemented. Should be closed in the same sitting.
+1. ~~**ADR 0030**~~ — **ACCEPTED 2026-08-18**, adopting Option 1 with two binding amendments: the egress ruling below, and *the watch must fail loudly* (§2.8) before a regulatory baseline rides on it. STD-01 is unblocked and now depends on STD-15.
+2. ~~**The P6 egress ruling (§2.7)**~~ — **RULED (a), 2026-08-18**: public-documentation change-detection is outside P6, narrowed to unauthenticated GETs carrying no credentials and no PSU or bank data, and conditional on pinning the redirect behaviour and keeping the fetcher injectable for bank-side mediation. Recorded in ADR 0030 and to be commented at the call site.
+3. **ADR 0010 (STR/AML)** — **parked by the owner, 2026-08-18** ("fine for now"). Recorded so it is not mistaken for resolved: BACKOFFICE-63 remains `done` against a `Proposed` ADR, and the missing `acknowledged` state means the bank still has **no evidence an STR was ever filed**. The as-built note added by this review documents the divergence; the decision stays open.
+4. **ADR 0011 (revoke-SLA enforcement).** Same pattern — `Proposed`, already implemented. Still open.
 5. **STANDARDS block priority.** The new block is placed after M6 and before COMMERCIAL, and ordered internally so `STD-09` is first — so `/next-story` will pick the dependency-free defects ahead of the pending VAL-01 and BILL-13..17. BILL-13 through BILL-16 already have draft PRs in flight (#319, #320, #321, #323). If BILL should finish first, move the whole block to sit beside HARNESS — file position is the only thing that decides this, so it is a placement decision rather than a code one.
 
 **The refuted claim, recorded because the negative is the finding:** we tested the hypothesis that a backlog story already existed for the IG v5.0 reconciliation. It does not, under any id or status. The follow-up promised at `PRD:373` and `build-log.md:2446-2449` was never written into the file the loop reads.
@@ -237,12 +244,14 @@ Five items need a person. None should be decided by the build loop.
 
 ## 10. Sequencing
 
-Fourteen stories, `STD-01..STD-14`, filed in `docs/backlog.yaml`. Spec-first stories open a spec-only PR before implementation, per the repo's own workflow rule.
+Fifteen stories, `STD-01..STD-15`, filed in `docs/backlog.yaml`. Spec-first stories open a spec-only PR before implementation, per the repo's own workflow rule.
 
 **The block is laid out in execution order, not id order**, because `/next-story` picks the first eligible `pending` item in file order (`.claude/skills/next-story/SKILL.md:12`) — so position, not intent, decides what gets built. The dependency-free defects are physically first.
 
 **Now — no dependencies, no contract change:**
-`STD-09` (liability completeness + fail-loud + single-source `NEBRAS_SLA_MS` + fraud-revoke SLA verdict) · `STD-10` (Ozone Connect policy constants) · `STD-11` (fail closed on every demo-only source under the enterprise profile) · `STD-12` (ADR attribution + fixture provenance) · `STD-13` (the two collection-rail vocabularies) · `STD-14` (make the PRD/README ground-truth claims machine-checked, and revive the dead backlog-count gate).
+`STD-09` (liability completeness + fail-loud + single-source `NEBRAS_SLA_MS` + fraud-revoke SLA verdict) · `STD-10` (Ozone Connect policy constants) · `STD-11` (fail closed on every demo-only source under the enterprise profile) · `STD-12` (ADR attribution + fixture provenance) · `STD-13` (the two collection-rail vocabularies) · `STD-14` (make the PRD/README ground-truth claims machine-checked, and revive the dead backlog-count gate) · `STD-15` (§2.8 — make the rate-card watcher's failures visible).
+
+**Then the registry, now that ADR 0030 is accepted:** `STD-01`, depending on `STD-15`.
 
 **Next — the Interaction Guide re-baseline, each spec-first and independent of the others:**
 `STD-02` (dispute clocks + the calendar-day helper) · `STD-03` (service-desk respond/resolve pairs, and the weekend-pause fix from §2.2) · `STD-04` (notice periods, hours granularity).
@@ -250,7 +259,7 @@ Fourteen stories, `STD-01..STD-14`, filed in `docs/backlog.yaml`. Spec-first sto
 **Then — the fidelity chain, in order:**
 `STD-05` (permission codes, consent types, validity, REVOCABLE/ACTIVE alignment) → `STD-06` (simulator state machine, FAPI echo, fault queue, envelopes, seeding coherence) → `STD-07` (P6 simulator surface parity + refund transport + `dao_api_call`). `STD-08` (rail vocabulary) also follows `STD-05` — same generator file.
 
-**Blocked on a human:** `STD-01` (standards-baseline registry + errata watch), pending ADR 0030.
+**Nothing in the block is blocked on a human any more.** ADR 0030's acceptance unblocked the only such story.
 
 Verification per story is recorded in its acceptance criteria. The pinned values that will legitimately change — and must be updated in-story rather than worked around — are `scheme-notifications.spec.ts:50-80`, `operations-console.spec.ts:46`, `port-contracts.spec.ts:153` with `nebras-egress.spec.ts:52`, the simulator's `sim.spec.ts:16-25` (which currently locks in "any id is revocable"), and the `seed-demo.int.spec.ts` TPP fixtures. `respondent-disputes.spec.ts:95-97` does **not** change — those values are correct under v5.0; only their attribution is stale.
 

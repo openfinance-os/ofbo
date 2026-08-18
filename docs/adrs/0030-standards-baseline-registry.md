@@ -1,12 +1,15 @@
 # ADR 0030 — Standards-baseline registry and errata watch (pin the scheme, notice when it moves)
 
-- Status: **Proposed** — awaiting human accept/reject
+- Status: **Accepted** — chosen by the user (2026-08-18). Adopts Option 1 with two amendments:
+  the watch must fail LOUDLY (see Consequences), and the egress question below is ruled **(a)**,
+  narrowed and conditioned as recorded there.
 - Date: 2026-08-18
 - Scope: a **governance mechanism**, not a product feature — it introduces a new named constant set and
   points an existing scheduled watcher at a new source. CLAUDE.md rule 6 says a new platform mechanism is
   invented only via an ADR a human accepts, and rule 6 is the reason this record exists rather than a story.
 - Related: `docs/reviews/standards-conformance-2026-08.md` (the review that raised it, §3), backlog
-  **STD-01** (blocked on this ADR) and **STD-02/03/04** (the drift it would have caught); **ADR 0007**
+  **STD-01** (realises this ADR; unblocked on acceptance) and **STD-15** (the fail-loud prerequisite);
+  **STD-02/03/04** (the drift it would have caught); **ADR 0007**
   (rate-card provenance, whose pattern this copies); **ADR 0020** (the doc-drift gate, the nearest precedent
   for a governance-only control); `packages/billing/src/rate-card.ts`,
   `services/bff/src/billing/rate-card-watch.ts`.
@@ -103,7 +106,7 @@ the repo's only enumerated compliance-deadline register and is precisely the kin
 Home: `@ofbo/contracts` — the package that already owns generated contract canon and is depended on by both
 the BFF and the portal. A bare `standards-baseline.ts` beside the generated types, no new workspace package.
 
-## A sub-decision this ADR must settle: the egress question
+## The egress ruling (settled 2026-08-18)
 
 The review found (§2.7) that `services/bff/src/worker.ts:336-344` wires the rate-card watcher **without** a
 fetcher, so the default `HttpRateCardSourceFetcher` performs direct outbound HTTPS from the Worker to
@@ -115,15 +118,30 @@ fall outside P6's remit — P6 exists to carry FAPI-profiled, mTLS, certificate-
 public documentation page is not. But that reading is nowhere recorded, and this ADR would *extend* the same
 watcher, making the question load-bearing rather than academic.
 
-**This ADR asks the human to rule explicitly**, and the ruling is a precondition for STD-01:
+**Ruled (a) — documentation fetches are outside P6**, narrowly and with conditions. The carve-out is:
 
-- **(a) Documentation fetches are outside P6.** Record the carve-out here, add a comment at the call site
-  naming this ADR, and STD-01 proceeds as an in-code change.
-- **(b) All `*.openfinance.ae` / Nebras-domain traffic goes through P6 regardless of payload.** STD-01 becomes
-  a P6 story: the watcher takes a fetcher backed by the egress port, and the demo profile serves the pages
-  from fixtures.
+> Unauthenticated GETs of **public scheme documentation**, carrying no credentials and no PSU or bank data,
+> whose response is used only for change detection, are outside P6. P6 governs the scheme **API data plane** —
+> the authenticated, certificate-bearing traffic its mTLS/PAR/PKCE posture exists to carry (CLAUDE.md line 57).
 
-Option (a) is the recommendation — but it must be *stated*, because "nobody noticed" is not a carve-out.
+Three facts decided it. **P6 cannot carry this as it stands**: `NebrasEgressPort` is seven purpose-built typed
+methods with no generic fetch, so routing documentation through it means adding a method to a regulated port
+interface, implementing it in both adapters and extending the contract bench — real cost for poor conceptual
+fit. **The rule's purpose points away from P6**: one of the three watched URLs is CBUAE Confluence, not a
+Nebras host at all, so a "P6 for Nebras-domain traffic" reading would still leave direct egress and achieve
+nothing. And **it will be mediated anyway**: no bank grants a regulated workload unmediated outbound HTTPS, so
+in an enterprise estate this call goes through the bank's forward proxy whatever this ADR says.
+
+Two conditions make (a) defensible rather than merely convenient, and both are binding on STD-01:
+
+1. **No uncontrolled redirect.** The fetcher currently sets `redirect: 'follow'` on an unauthenticated GET —
+   SSRF-adjacent. Low blast radius (no credentials travel) but it is an uncontrolled outbound path from a
+   regulated workload. Pin `redirect: 'manual'` or allowlist permitted final hosts.
+2. **The fetcher stays injectable and is configured at enterprise adoption**, so a bank points it at its own
+   forward proxy without a code change. Not P6 — but not unmediated either.
+
+The carve-out is deliberately narrow. It licenses *public documentation change-detection*, not "docs are
+exempt", and it does not extend to anything carrying a credential, a scheme certificate, or bank data.
 
 ## Options considered
 
@@ -168,15 +186,40 @@ merges on a scheme document's contents. Two constraints worth binding into the s
 - **The false-negative risk moves, it does not vanish.** A watcher on a documentation page catches editorial
   churn as readily as substance, and a page that is *replaced* rather than edited may not trip a hash at all.
   The registry's honest claim is "we will notice a change to these pages", not "we are current".
-- **STD-01 is the only story blocked on this record.** STD-02/03/04 re-baseline the Interaction Guide clocks
-  whether or not this ADR is accepted; they simply carry uncited constants if it is rejected.
+- **The watch must fail LOUDLY — this is a binding amendment, not advice.** Today the watcher's result is
+  discarded: `services/bff/src/worker.ts:336` calls `runBillingRateCardWatch` inside `Promise.allSettled` and
+  never reads the returned `failedSources`. A failed source writes one `billing_rate_card_watch_failed` audit
+  row and raises nothing — no ITSM ticket, no risk signal. So if a bank's forward proxy blocks these URLs, or
+  a page moves, the watch is dead and looks alive. Pinning the regulatory baseline to a watcher whose silence
+  is indistinguishable from "nothing changed" would manufacture false assurance, which is worse than no
+  registry at all. **STD-15 fixes this and STD-01 depends on it.**
+- **STD-01 is unblocked by this acceptance** but now depends on STD-15. STD-02/03/04 re-baseline the
+  Interaction Guide clocks independently — they carry an inline scheme citation until the registry lands, and
+  must not stand the registry up by the back door.
 - **No schema change, no new table, no migration**, and therefore no new RLS, retention, classification or
   lineage surface. The Q4.5 lineage gate is unaffected.
-- **Regulatory posture unchanged.** No new egress path under recommendation (a) — only an additional URL on
-  an existing fetcher, plus a recorded rationale. UAE residency, INSERT-only audit, 5-year retention,
-  consent-only-in-Hub, the scope matrix and 202/four-eyes are all untouched. The registry stores public
-  scheme metadata and no PII.
+- **Regulatory posture unchanged, and the egress surface is tightened rather than widened.** Ruling (a) adds
+  URLs to an existing fetcher, but its two conditions remove an uncontrolled redirect and put the fetcher
+  behind bank-configurable mediation — so the estate ends up with *less* unmanaged egress than before this
+  record. UAE residency, INSERT-only audit, 5-year retention, consent-only-in-Hub, the scope matrix and
+  202/four-eyes are all untouched. The registry stores public scheme metadata and no PII.
 - **Certification is not implicated.** Re-certification is triggered by FAPI, functional or CX changes, not
   by an errata bump. Pinning errata3 records a fact; it does not create a certification obligation.
-- **If rejected**, say so in the record and close STD-01. The consequence is accepted and known: the repo
-  keeps four ungoverned external dependencies, and the next guide revision drifts the same way this one did.
+- **Accepted noise.** Content-hashing a rendered wiki page trips on any editorial edit; the watcher
+  normalises whitespace but not structure. This is accepted knowingly — a dismissable review task is cheap
+  relative to a missed erratum. Narrow the hash to an extracted region only if the noise proves annoying in
+  practice, not pre-emptively.
+
+## Decision
+
+**Accepted by the user on 2026-08-18.** Implement Option 1: a deep-frozen `STANDARDS_BASELINE` in
+`@ofbo/contracts` with per-entry version, effective date, source and verified-on; consumers cite baseline
+keys incrementally as they are touched; the existing weekly watcher gains the errata sources with the
+official Confluence page as the primary pin and the community mirror as secondary early warning.
+
+Two amendments carry with the acceptance. **The egress question is ruled (a)** — public documentation
+change-detection is outside P6 — narrowed to the wording above and conditional on pinning the redirect
+behaviour and keeping the fetcher injectable for bank-side mediation; the ruling is to be commented at the
+call site naming this ADR, so the next reader does not re-derive whether it was deliberate. **And the watch
+must fail loudly before the baseline rides on it**: STD-15 makes a failed source raise, and STD-01 depends
+on STD-15.

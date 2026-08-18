@@ -2715,3 +2715,48 @@ backlog YAML parses, 193 items (161 done), STD block field order matches the can
 the simulated next-story pick is STD-09, the first dependency-free defect. Per-tag path
 counts in the repaired PRD table were recomputed from the spec and sum to 93. Docs-only — no source,
 no spec, no tests changed.
+
+---
+
+## 2026-08-18 — STD addendum: ADR 0030 accepted, P6 ruled, and the defect the ruling uncovered
+
+Two of the five parked decisions came back the same day, and grounding one of them turned up a live
+defect that no story owned.
+
+ADR 0030 ACCEPTED (Option 1) with two binding amendments. The P6 question is RULED (a) — public
+scheme-DOCUMENTATION change-detection sits outside P6, which governs the authenticated API data plane.
+Three facts decided it, and none of them is "it seemed fine": `NebrasEgressPort` is seven purpose-built
+typed methods with NO generic fetch, so routing docs through it means a new method on a regulated port
+interface plus both adapters plus the contract bench — real cost, poor fit. CLAUDE.md:57 scopes P6 to
+the scheme certificate chain, i.e. mTLS API traffic, and one of the three watched URLs is CBUAE
+Confluence rather than a Nebras host at all, so a "P6 for Nebras-domain traffic" reading would leave
+direct egress anyway and achieve nothing. And no bank grants a regulated workload unmediated outbound
+HTTPS — at M6 this call traverses the bank's forward proxy whatever any ADR says.
+
+The carve-out is deliberately narrow and CONDITIONAL: unauthenticated GETs of public scheme
+documentation, no credentials, no PSU or bank data, response used only for change detection — and it
+requires pinning the redirect behaviour (`redirect: 'follow'` on an unauthenticated GET is
+SSRF-adjacent even with nothing to steal) and keeping the fetcher injectable so a bank points it at its
+own proxy without a code change. Net effect is LESS unmanaged egress than before the ruling, not more.
+
+THE DEFECT UNDERNEATH IT (new, STD-15). Checking what happens when that egress is blocked exposed a gap
+bigger than the ruling. `rate-card-watch.ts:399` returns `failedSources`; `worker.ts:336` calls
+`runBillingRateCardWatch` inside `Promise.allSettled` and DISCARDS the resolved value. It is never read.
+A failed source writes one `billing_rate_card_watch_failed` audit row and raises nothing — no ITSM
+ticket, no risk signal. So a proxy-blocked or moved page leaves the watch DEAD AND LOOKING ALIVE: weekly
+audit rows nobody reads. That is this review's own thesis turned on the repo's tooling, and ADR 0030
+would have inherited it — pinning a regulatory baseline to a watcher whose silence is indistinguishable
+from "nothing changed" manufactures false assurance, which is worse than no registry. Hence amendment
+(ii): fail loudly first. STD-15 filed, STD-01 depends on it.
+
+Backlog consequences: STD-01 goes blocked -> pending (ADR 0030 accepted) with `depends_on: [STD-15]`,
+and the block re-orders to STD-09..15 -> STD-01 -> STD-02..04 -> STD-05..08. 194 items, 8 blocked (was
+9). Simulated next-story pick is unchanged at STD-09.
+
+ADR 0010 (STR/AML) was PARKED by the owner, not resolved — recorded as such in the review's decision
+queue so it cannot later read as settled. BACKOFFICE-63 stays `done` against a `Proposed` ADR and the
+bank still has no evidence an STR was ever filed. ADR 0011 remains open.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
+ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
+Still docs-only — no source, no spec, no tests changed.

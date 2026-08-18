@@ -247,11 +247,12 @@ milestones:
   # a diff of the repo against UAE OF Standards v2.1-final + errata3, API Hub v8 (2026.19.0/2026.22.0),
   # Nebras Interaction Guide v5.0 (Jun 2026) and the Ozone Connect availability/response-time policies.
   # The architecture is conformant; the drift is operational. Items are laid out in EXECUTION order,
-  # not id order, because next-story picks the first eligible pending item in FILE order: STD-09..14
+  # not id order, because next-story picks the first eligible pending item in FILE order: STD-09..15
   # first — dependency-free defects found while verifying, wrong today rather than merely stale; then
-  # STD-02..04, the IG v5.0 re-baseline the PRD promised at BD-16 and never filed; then STD-05..08,
-  # the fidelity chain. STD-01 sits last because it is blocked on ADR 0030 (standards-baseline
-  # registry) — humans decide before it is built, and no other story may stand that primitive up.
+  # STD-01, the standards-baseline registry, unblocked by ADR 0030's acceptance (2026-08-18) but
+  # dependent on STD-15, since a regulatory baseline must not ride on a watcher whose failure is
+  # silent; then STD-02..04, the IG v5.0 re-baseline the PRD promised at BD-16 and never filed; then
+  # STD-05..08, the fidelity chain.
   - name: STD
     items:
       - id: STD-09
@@ -437,6 +438,82 @@ milestones:
             docs/diagrams/architecture.svg:119 (93 paths).'
           - No count anywhere in the repo is asserted by hand without a gate covering it, or the
             assertion is removed and the doc points at the checked source instead.
+      - id: STD-15
+        title: The rate-card watcher must fail loudly — its result is currently discarded
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        adr: docs/adrs/0030-standards-baseline-registry.md
+        note: >-
+          Found while grounding the ADR 0030 egress ruling. The BILL-01 watcher counts failed sources
+          and returns them (services/bff/src/billing/rate-card-watch.ts:399 returns checkedSources,
+          changedSources, failedSources, notificationFailures), but services/bff/src/worker.ts:336
+          calls runBillingRateCardWatch inside Promise.allSettled and DISCARDS the resolved value —
+          failedSources is never read anywhere. On a fetch failure the watcher emits one
+          billing_rate_card_watch_failed audit row with response_status 502 (rate-card-watch.ts:385-395)
+          and raises nothing else: no ITSM ticket, no risk signal. So if a bank's forward proxy blocks
+          the three watched URLs, or a page moves, or DNS breaks, the watch is DEAD and looks ALIVE —
+          weekly audit rows nobody reads. That is the exact failure class this whole review is about,
+          and ADR 0030 would inherit it, which is why the ADR makes fail-loud a binding amendment and
+          STD-01 depends on this story. Small fix, high leverage — the sinks already exist.
+        acceptance:
+          - A source that cannot be fetched raises an operator-visible signal through the existing
+            ITSM or risk-signal sink, not only an audit row, and the run result is consumed rather
+            than discarded at the worker call site.
+          - 'Repeated failure is distinguishable from steady success — a watch that has not
+            successfully fetched a source for N consecutive runs is visibly stale, so silence can
+            never be read as "nothing changed".'
+          - The notification path itself is covered — notificationFailures is surfaced too, since a
+            review that fires but never reaches Compliance is the same failure wearing a hat.
+          - Tested by injecting a fetcher that throws and asserting the signal is raised; no change
+            to the autoApply-false posture, and the demo profile stays deterministic.
+      - id: STD-01
+        title: Standards-baseline registry and errata watch
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        adr: docs/adrs/0030-standards-baseline-registry.md
+        depends_on: [STD-15]
+        note: >-
+          ADR 0030 ACCEPTED 2026-08-18 with two amendments, both binding here. (i) The egress question
+          is ruled (a) — unauthenticated GETs of PUBLIC SCHEME DOCUMENTATION carrying no credentials
+          and no PSU or bank data, used only for change detection, are outside P6, which governs the
+          authenticated API data plane. The carve-out is conditional: pin redirect handling (the
+          fetcher currently sets redirect follow on an unauthenticated GET, which is SSRF-adjacent)
+          or allowlist permitted final hosts, and keep the fetcher injectable so a bank points it at
+          its own forward proxy without a code change. Comment the ruling at the call site naming
+          ADR 0030. (ii) The watch must fail loudly first — hence depends_on STD-15.
+          No file states the baseline as v2.1-final + errata3; the only standards-version string in
+          the repo is free text in one OpenAPI description (specs/backoffice-openapi.yaml:3164) and
+          the word errata appears three times, all on one line of a research doc. Pin the four scheme
+          documents (Standards + errata level, API Hub release, Interaction Guide, Liability Model)
+          as a deep-frozen constant with version, effectiveFrom, source and verifiedOn per entry, in
+          @ofbo/contracts beside the generated types, copying packages/billing/src/rate-card.ts. Then
+          add errata sources to the EXISTING weekly watcher
+          (services/bff/src/billing/rate-card-watch.ts already fetches three pricing URLs) so a move
+          opens the same High-classification, autoApply-false review task. SOURCE AUTHORITY MATTERS
+          HERE — the Release Notes and Errata register at nebras-open-finance.com is filed in this
+          repo's own research at docs/research/lfi-billing-system-tier2.md:387 under "Scheme
+          (community, unofficial)"; the official records are the CBUAE/OF Confluence pages at :385.
+          Pin the official page as primary and treat the mirror as a secondary early-warning source,
+          per ADR 0030. Scope also covers CBUAE_RELEASE_CALENDAR
+          (services/bff/src/analytics/programme.ts:20-24), three hardcoded scheme deadlines feeding a
+          board-facing view with no source, no version and no watch. The mechanism that would have
+          caught the IG v5.0 drift already exists and is pointed at the wrong pages.
+        acceptance:
+          - The baseline is one deep-frozen exported constant naming every scheme document the code
+            depends on, each carrying its version, effective date, source URL and verified-on date;
+            errata level is recorded per-file because the scheme resolves errata per file.
+          - 'A change to any watched source opens a High-classification review task with autoApply
+            false and requiresApproval true, notifying Compliance and Operations — the watcher never
+            edits the baseline and never gates a merge on a scheme document''s contents.'
+          - A baseline fact the scheme has not settled carries an explicit ASSUMED marker, matching
+            the yearAnchor precedent in the rate card rather than shipping a confident wrong value.
+          - 'The ADR 0030 egress ruling is implemented and commented at the call site naming the ADR —
+            redirect behaviour is pinned or the final host allowlisted, and the fetcher is injectable
+            and bank-configurable — so the next reader does not re-derive whether it was deliberate.'
+          - A watched source that cannot be fetched raises rather than passing quietly (STD-15), so a
+            proxy-blocked or moved page can never read as "nothing changed".
+          - Unit-tested as a pure function against a synthetic before/after pair; no new table, no
+            migration, and no change to RLS, retention, classification or lineage surfaces.
       - id: STD-02
         title: Interaction Guide v5.0 dispute clocks — re-attribute, and add the missing stage clocks
         status: pending
@@ -638,47 +715,6 @@ milestones:
             source, so the codes cannot drift between fixtures, tests and adapters.
           - The V2.2 paymentRail obligation and its Tier 2 dates are recorded against this item so the
             forward requirement has a delivery hook rather than living only in a research doc.
-      - id: STD-01
-        title: Standards-baseline registry and errata watch
-        status: blocked
-        reason: >-
-          ADR 0030 is Proposed and awaits a human accept/reject, and it carries a sub-decision the
-          story depends on — whether fetching scheme documentation pages direct from the Worker is
-          an intended carve-out from the P6 no-direct-egress rule. Ruling (a) makes this an in-code
-          change; ruling (b) makes it a P6 story with a fixture-backed demo profile.
-        research: docs/reviews/standards-conformance-2026-08.md
-        adr: docs/adrs/0030-standards-baseline-registry.md
-        note: >-
-          No file states the baseline as v2.1-final + errata3; the only standards-version string in
-          the repo is free text in one OpenAPI description (specs/backoffice-openapi.yaml:3164) and
-          the word errata appears three times, all on one line of a research doc. Pin the four scheme
-          documents (Standards + errata level, API Hub release, Interaction Guide, Liability Model)
-          as a deep-frozen constant with version, effectiveFrom, source and verifiedOn per entry, in
-          @ofbo/contracts beside the generated types, copying packages/billing/src/rate-card.ts. Then
-          add errata sources to the EXISTING weekly watcher
-          (services/bff/src/billing/rate-card-watch.ts already fetches three pricing URLs) so a move
-          opens the same High-classification, autoApply-false review task. SOURCE AUTHORITY MATTERS
-          HERE — the Release Notes and Errata register at nebras-open-finance.com is filed in this
-          repo's own research at docs/research/lfi-billing-system-tier2.md:387 under "Scheme
-          (community, unofficial)"; the official records are the CBUAE/OF Confluence pages at :385.
-          Pin the official page as primary and treat the mirror as a secondary early-warning source,
-          per ADR 0030. Scope also covers CBUAE_RELEASE_CALENDAR
-          (services/bff/src/analytics/programme.ts:20-24), three hardcoded scheme deadlines feeding a
-          board-facing view with no source, no version and no watch. The mechanism that would have
-          caught the IG v5.0 drift already exists and is pointed at the wrong pages.
-        acceptance:
-          - The baseline is one deep-frozen exported constant naming every scheme document the code
-            depends on, each carrying its version, effective date, source URL and verified-on date;
-            errata level is recorded per-file because the scheme resolves errata per file.
-          - 'A change to any watched source opens a High-classification review task with autoApply
-            false and requiresApproval true, notifying Compliance and Operations — the watcher never
-            edits the baseline and never gates a merge on a scheme document''s contents.'
-          - A baseline fact the scheme has not settled carries an explicit ASSUMED marker, matching
-            the yearAnchor precedent in the rate card rather than shipping a confident wrong value.
-          - The egress ruling recorded in ADR 0030 is implemented and commented at the call site,
-            naming the ADR, so the next reader does not have to re-derive whether it was deliberate.
-          - Unit-tested as a pure function against a synthetic before/after pair; no new table, no
-            migration, and no change to RLS, retention, classification or lineage surfaces.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +
