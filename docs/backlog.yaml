@@ -866,9 +866,17 @@ milestones:
           papered over with a heuristic that destroys required evidence. Migration 0040 grants the
           cross-tenant internal-view read on billing_tpp_cost_document that BILL-13 deliberately
           withheld, now that redaction is proven against a persisted row; ap_dispatch stays withheld
-          for BILL-16 on the same terms. verified_by is bound to the caller's verified P2 claim and an
-          upload nominating its own uploader as verifier is refused (409) - which proves DISTINCTNESS,
-          not that the verifier authenticated, and the code says so rather than over-claiming. The
+          for BILL-16 on the same terms. CORRECTION, and it is a correction of this line: verified_by
+          is NOT bound to a P2 claim. Only the UPLOADER comes from principal.subject; verified_by is
+          read from the multipart body (tpp-cost-document.ts:450), and the refusal (409) when it
+          equals the uploader proves DISTINCTNESS from a free-text string, not that the verifier ever
+          authenticated. The acceptance criterion requires the P2 claim, and the spec description
+          asserts 'neither is taken from the request body' (backoffice-openapi.yaml:1850) while its
+          own schema 24 lines later REQUIRES verified_by as a form field - so the contract contradicts
+          itself and both it and this outcome text claimed a control the code does not implement.
+          OPEN, needs a human decision (BILL-14-followup): either build a real second-person
+          authenticated step, or ratify an operator-attested verifier and correct the spec prose via
+          /spec-change. Nothing here should be read as the criterion being met. The
           absence alarm anchors on the 5th of the following month, moving off a weekend, fires only
           once the anchor has passed, and treats a credit note as not-an-invoice. Evidence: unit
           1455/1455, integration 179/179 across 78 files on a pristine PostgreSQL 16.13, Q4.5 PASSED
