@@ -2621,7 +2621,12 @@ only the first FLAGGED case, and the only one carrying an amendment table.
 Also established while checking: there is no written ADR process anywhere (no README in
 docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
 (ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
-for the case at hand. 29 ADRs: 20 Accepted, 5 Proposed, 1 Superseded.
+for the case at hand. 29 ADRs before this PR: 23 Accepted, 5 Proposed, 1 Superseded (30 / 24 / 5 / 1
+with ADR 0030 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
+— a count that did not even sum to 29, and it is worth recording WHY it was wrong: it was measured
+with the FIRST draft of the classifier, whose status regex silently missed the `- **Status:**` bold
+form. The gate's own bug undercounted the population the gate applies to. Re-measured with the
+fixed exports over the real corpus, enumerated rather than totalled.
 
 THE RULE. Statement of fact changed (what was built, measured, or proved) -> edit in place and
 add a dated row to an "Amendments after acceptance" table. DECISION changed (option chosen, or
