@@ -3239,7 +3239,11 @@ export interface paths {
         put?: never;
         /**
          * Ingest a provider cost document — Nebras invoice primary (verified manual upload, BILL-14)
-         * @description The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted, second-person verification recorded from the verified identity-provider claim — the verifier may not be the uploader, and neither is taken from the request body.
+         * @description The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted, second-person verification recorded.
+         *
+         *     Read `verified_by` for exactly what it is. The UPLOADER is taken from the caller's verified identity-provider claim and is never accepted from the request body. The VERIFIER is operator-attested: `verified_by` is a request field naming the second person, checked against the uploader's own subject and refused when equal. That establishes DISTINCTNESS between the two names — it does not establish that the verifier authenticated, and an uploader can name a colleague who never saw the document.
+         *
+         *     This paragraph previously asserted that neither name came from the request body, which contradicted this operation's own `verified_by` form field twenty-four lines below and described a control the service does not implement. Ratified as operator attestation rather than silently corrected: a real second-person authenticated step belongs on the existing four-eyes primitive (`202` + `approval_request`, initiator ≠ approver, 2-hour expiry), not on a second mechanism invented here. Raise a story if the bank wants that stronger posture.
          *
          *     Provider payloads are redacted at parse time, before the first INSERT: the cost tables are INSERT-only with no deletion path, so any customer detail a provider line carries would be unremovable. Lines whose provider category has no fee-class mapping are stored flagged `mapped: false` rather than dropped.
          *
