@@ -11,7 +11,8 @@
 //
 // THE RULE. A pull request that MODIFIES an ADR whose status ON THE BASE BRANCH is `Accepted`
 // must do one of:
-//   1. add a dated amendment row to that ADR — a table row whose first cell is an ISO date; or
+//   1. add a NEW dated amendment row under the `Amendments after acceptance` heading — a table
+//      row whose first cell is an ISO date that the base version did not already carry; or
 //   2. change that ADR's status to `Superseded` (the ADR 0012 -> 0016 route, for a decision
 //      that actually changed rather than a fact that turned out wrong).
 //
@@ -20,7 +21,24 @@
 // ADR 0030's consequences record the proportionate relaxation if that proves noisy.
 //
 // EXEMPT: ADRs ADDED by this branch (nothing has been relied on yet) and ADRs whose base status
-// is `Proposed` (drafts). The rule attaches at acceptance.
+// is `Proposed` (drafts). The rule attaches at acceptance. Outright DELETION of an accepted ADR
+// is also out of scope by ADR 0030's stated decision (doc-link-check already blocks orphaning a
+// referenced ADR); the D+A same-number rewrite below is caught because it is a modification
+// wearing a deletion's clothes, not a genuine removal.
+//
+// HARDENED after the hard-stop reviewer's FAIL(7) on PR #324 (each finding reproduced):
+//   1  statusOf missed the `- **Status:**` (bold) form — broadened.
+//   6  isAccepted/isSuperseded matched a word anywhere on the line — now anchored to the status
+//      VALUE (the token after the colon), so ADR 0012's "Superseded by … was Accepted" line
+//      classifies as superseded, not accepted.
+//   2+5 row detection is now section-aware and set-based: compare the dated rows UNDER the
+//      `Amendments after acceptance` heading (code fences stripped) in base vs head. A carried-
+//      over row is in both sets → not new; a row inside a fence or a foreign table is ignored.
+//      This also retires `addedLinesFor`, whose new-path-only diff suppressed rename detection.
+//   3  a delete + re-add of the same ADR number (rename below git's similarity threshold) is a
+//      modification, not a deletion — parseNameStatus pairs a `D` and an `A` on the same number.
+//   7  a git failure AFTER the base resolved is an environment fault, not "clean": the
+//      post-resolution calls use mustGit and throw (red), distinct from the intended SKIPPED.
 //
 // Run from the repo root: `node scripts/adr-amendment-check.mjs` (exit 1 on a violation).
 import { execFileSync } from 'node:child_process'
@@ -31,42 +49,86 @@ const ADR_RE = /^(\d{4})-.+\.md$/
 
 export const isAdrPath = (path) => ADR_RE.test(path.split('/').pop() ?? '')
 
-/** First `Status:` line of an ADR body, lowercased; '' when the doc has none. */
-export const statusOf = (text) => {
-  const line = text.split('\n').find((l) => /^\s*-?\s*Status:/i.test(l))
-  return (line ?? '').toLowerCase()
-}
-
-export const isAccepted = (text) => /\baccepted\b/.test(statusOf(text))
-export const isSuperseded = (text) => /\bsuperseded\b/.test(statusOf(text))
+/** The 4-digit ADR number from a path — `docs/adrs/0007-foo.md` → `'0007'`; null if not an ADR. */
+export const adrNumber = (path) => path.split('/').pop()?.match(ADR_RE)?.[1] ?? null
 
 /**
- * A dated amendment row: a markdown table row whose first cell is an ISO date.
- * Matched against ADDED lines only, so an existing table does not satisfy a new edit.
+ * The value of the first `Status:` line — the text AFTER the colon, emphasis stripped, lowered.
+ * '' when the doc has no status line.
+ *
+ * Handles both forms in the tree: `- Status: **Accepted — Option 1**` and `- **Status:** Accepted`.
+ * Anchoring on the value (not the whole line) is finding 6: ADR 0012's line
+ * `- Status: **Superseded by ADR 0016** … was "Accepted — Option 1"` must read as superseded,
+ * and `- Status: **Accepted** … (superseded the interim guidance)` must read as accepted.
  */
-export const AMENDMENT_ROW = /^\s*\|\s*\d{4}-\d{2}-\d{2}\s*\|/
+export const statusValue = (text) => {
+  const line = text.split('\n').find((l) => /^\s*-?\s*\**\s*Status\s*\**\s*:/i.test(l))
+  if (!line) return ''
+  const afterColon = line.slice(line.indexOf(':') + 1)
+  return afterColon.replace(/\*/g, '').trim().toLowerCase()
+}
 
-export const addsAmendmentRow = (addedLines) => addedLines.some((l) => AMENDMENT_ROW.test(l))
+// Kept for back-compat with any external caller; now derived from statusValue.
+export const statusOf = (text) => statusValue(text)
+
+export const isAccepted = (text) => statusValue(text).startsWith('accepted')
+export const isSuperseded = (text) => statusValue(text).startsWith('superseded')
+
+/** A dated amendment-table row: first cell is an ISO date. */
+export const AMENDMENT_ROW = /^\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|/
+
+/** Remove fenced code blocks so an example row inside ``` cannot count as a real amendment. */
+export const stripFences = (text) => text.replace(/```[\s\S]*?```/g, '')
+
+/**
+ * The set of ISO dates on rows under an `Amendments after acceptance` heading.
+ * Section-scoped (finding 5): rows elsewhere in the document, or inside a code fence, do not
+ * count. Returns a Set of date strings — the unit that base-vs-head is compared on.
+ */
+export const amendmentRows = (text) => {
+  const dates = new Set()
+  let inSection = false
+  for (const line of stripFences(text).split('\n')) {
+    const heading = line.match(/^(#{1,6})\s+(.*)$/)
+    if (heading) {
+      inSection = /amendments after acceptance/i.test(heading[2])
+      continue
+    }
+    if (!inSection) continue
+    const row = line.match(AMENDMENT_ROW)
+    if (row) dates.add(row[1])
+  }
+  return dates
+}
+
+/** Route 1: the head carries a dated amendment row the base did not. */
+export const hasNewAmendmentRow = (baseText, headText) => {
+  const before = amendmentRows(baseText)
+  for (const d of amendmentRows(headText)) {
+    if (!before.has(d)) return true
+  }
+  return false
+}
 
 /**
  * The pure rule, extracted so it is testable without git.
  *
- * @param changes one per modified ADR:
- *        { path, baseText, headText, addedLines }
- * @returns violations — one per ADR that was modified without being recorded
+ * @param changes one per changed ADR: { path, baseText, headText }
+ * @returns violations — one per accepted ADR modified without being recorded
  */
 export const violations = (changes) => {
   const found = []
   for (const c of changes) {
     if (!isAccepted(c.baseText)) continue // added, or Proposed on base — exempt
     if (isSuperseded(c.headText)) continue // route 2: a decision changed, superseded properly
-    if (addsAmendmentRow(c.addedLines)) continue // route 1: recorded on the document's face
+    if (hasNewAmendmentRow(c.baseText, c.headText)) continue // route 1: recorded on the face
     found.push(c.path)
   }
   return found
 }
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).trim()
+/** Soft: null on any git error. Used only for base-ref PROBING, where failure is expected. */
 const tryGit = (args) => {
   try {
     return git(args)
@@ -74,6 +136,9 @@ const tryGit = (args) => {
     return null
   }
 }
+/** Hard: throws on git error. Used AFTER the base resolved, where a failure is anomalous
+ * (finding 7) and must go red rather than read as "clean". */
+const mustGit = (args) => git(args)
 
 /** Resolve the base ref, fetching it if this is a shallow CI checkout. Mirrors Q2c's resolver. */
 const resolveBase = () => {
@@ -90,42 +155,58 @@ const resolveBase = () => {
 /**
  * ADRs this branch changes relative to base, as { path, basePath }.
  *
- * RENAMES ARE INCLUDED DELIBERATELY. The first revision filtered on status `M` exactly, which
- * meant renaming an accepted ADR while editing it (git reports `R100`/`R087`, never `M`) walked
- * straight past the gate — the cheapest possible bypass of the rule this check exists to
- * enforce. Found by the hard-stop reviewer on PR #324, which reproduced it in a scratch repo.
- * For a rename the status line carries THREE fields, and the base text must be read from the
- * OLD path, because the new one does not exist on base.
+ * RENAMES (`R*`) and COPIES (`C*`) are included: those status lines carry THREE fields, and the
+ * base text must be read from the OLD path (field 2) because the new one does not exist on base.
  *
- * `A` (added) stays exempt: nothing has been relied on yet. `D` (deleted) is out of scope —
- * removing an accepted ADR outright is a different question from amending one, and ADR 0030
- * states a rule about modification. Recorded so the omission is a decision, not an oversight.
+ * D+A SAME-NUMBER REWRITE (finding 3): deleting an accepted ADR and re-adding a rewritten copy
+ * under a new filename below git's rename-similarity threshold reports a separate `D` and `A`.
+ * Neither is `M`/`R`/`C`, so both were dropped and a full rewrite passed as "nothing to check".
+ * We pair a deleted ADR number with an added one and treat it as a modification of that number —
+ * base text from the deleted path (still present on base). Duplicate ADR numbers are otherwise
+ * forbidden (Q2b/Q2c), so a D+A collision always means "same ADR, rewritten", never two records.
+ *
+ * A plain `A` (new ADR, no matching delete) stays exempt; a plain `D` (outright deletion) is the
+ * documented out-of-scope carve-out.
  */
-export const parseNameStatus = (raw) =>
-  raw
+export const parseNameStatus = (raw) => {
+  const rows = raw
     .split('\n')
     .map((l) => l.split('\t'))
-    .flatMap(([status, a, b]) => {
-      if (!status) return []
-      if (status === 'M' && a && isAdrPath(a)) return [{ path: a, basePath: a }]
-      // R100 / R087 / C075 — the new path is the third field, the old one the second.
-      if (/^[RC]\d*$/.test(status) && b && isAdrPath(b)) return [{ path: b, basePath: a }]
-      return []
-    })
+    .filter(([status]) => status)
+
+  const direct = []
+  const deletedByNum = new Map()
+  const addedByNum = new Map()
+
+  for (const [status, a, b] of rows) {
+    if (status === 'M' && a && isAdrPath(a)) {
+      direct.push({ path: a, basePath: a })
+    } else if (/^[RC]\d*$/.test(status) && b && isAdrPath(b)) {
+      // R100 / R087 / C075 — new path is field 3, old path field 2.
+      direct.push({ path: b, basePath: a })
+    } else if (status === 'D' && a && isAdrPath(a)) {
+      deletedByNum.set(adrNumber(a), a)
+    } else if (status === 'A' && a && isAdrPath(a)) {
+      addedByNum.set(adrNumber(a), a)
+    }
+  }
+
+  const collisions = []
+  for (const [num, addedPath] of addedByNum) {
+    const deletedPath = deletedByNum.get(num)
+    if (deletedPath) collisions.push({ path: addedPath, basePath: deletedPath })
+  }
+  return [...direct, ...collisions]
+}
 
 const changedAdrs = (base) =>
-  parseNameStatus(tryGit(['diff', '--name-status', `${base}...HEAD`, '--', `${ADR_DIR}/`]) ?? '')
-
-const addedLinesFor = (base, path) =>
-  (tryGit(['diff', '--unified=0', `${base}...HEAD`, '--', path]) ?? '')
-    .split('\n')
-    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-    .map((l) => l.slice(1))
+  parseNameStatus(mustGit(['diff', '--name-status', `${base}...HEAD`, '--', `${ADR_DIR}/`]))
 
 const main = () => {
   const base = resolveBase()
   if (base === null) {
-    // A merge gate must not flake on checkout shape; Q2c takes the same posture.
+    // A merge gate must not flake on checkout shape; Q2c takes the same posture. This is the
+    // ONLY soft-skip: past here, a git failure is a real fault and mustGit lets it go red.
     process.stdout.write('adr-amendment-check: base ref unavailable — SKIPPED (not a pull-request run)\n')
     return
   }
@@ -136,9 +217,8 @@ const main = () => {
   }
   const changes = paths.map(({ path, basePath }) => ({
     path,
-    baseText: tryGit(['show', `${base}:${basePath}`]) ?? '',
-    headText: tryGit(['show', `HEAD:${path}`]) ?? '',
-    addedLines: addedLinesFor(base, path),
+    baseText: mustGit(['show', `${base}:${basePath}`]),
+    headText: mustGit(['show', `HEAD:${path}`]),
   }))
   const bad = violations(changes)
   if (bad.length === 0) {
@@ -151,7 +231,7 @@ const main = () => {
   for (const p of bad) process.stderr.write(`  ${p}\n`)
   process.stderr.write(`
 ADR 0030: an ADR that is Accepted on the base branch may be edited in place for statements of
-FACT, but the edit must be recorded on the document's face. Add a section:
+FACT, but the edit must be recorded on the document's face. Add a NEW row under:
 
     ### Amendments after acceptance
 
@@ -160,7 +240,9 @@ FACT, but the edit must be recorded on the document's face. Add a section:
     | YYYY-MM-DD | what became untrue, and what replaced it |
 
 Say what changed — "updated for accuracy" is not a row. A reader must be able to tell from the
-table alone whether the thing they are relying on is one of the things that moved.
+table alone whether the thing they are relying on is one of the things that moved. The row must
+be NEW (a carried-over row does not count) and must sit under the Amendments heading, not inside
+a code fence.
 
 If the DECISION changed rather than a fact, this is the wrong route: supersede it with a new
 ADR and set this one's status to Superseded (see ADR 0012 -> ADR 0016).\n`)

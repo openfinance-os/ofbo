@@ -73,15 +73,31 @@ of the things that changed.
 Q2c job and fails a pull request that modifies an ADR whose base-branch status is `Accepted`
 unless that PR either adds a dated amendment row to it, or changes its status to `Superseded`.
 
-"Modifies" includes a **rename** (git reports `R100`/`R087`, never `M`), because renaming the
-file while editing it would otherwise be the cheapest possible way around the rule — a gap the
-hard-stop reviewer found in the first draft of this very check. **Deletion is out of scope**:
-removing an accepted ADR outright is a different question from amending one, and this ADR states
-a rule about modification. That is a decision, not an oversight, and it is the obvious next thing
-to tighten if it is ever exercised.
+"Modifies" is defined by what actually changes the record, not by git's status letter:
+
+- a **rename** (`R*`/`C*`) — git never reports `M` for one, so renaming while editing would
+  otherwise be the cheapest way around the rule;
+- a **delete-plus-re-add of the same ADR number** — below git's rename-similarity threshold a
+  full rewrite reports a separate `D` and `A`. That is an amendment wearing a deletion's
+  clothes, and it is caught by pairing the two on the ADR number. Duplicate numbers are
+  forbidden elsewhere (Q2b/Q2c), so such a pair always means "same record, rewritten".
+
+**Outright deletion of an accepted ADR remains out of scope, deliberately.** Removing a record
+is a different question from amending one, and this ADR states a rule about modification. Two
+things make that tolerable rather than a hole: `scripts/doc-link-check.mjs` already fails a PR
+that deletes an ADR still referenced by a current-state doc, so *silent* orphaning is blocked;
+and the delete-plus-re-add pairing above closes the case where "deletion" is really a rewrite.
+Whether *unreferenced* deletion should additionally require supersession is a control-plane
+question for this ADR's owner, not something CI should guess at. It is recorded here so the
+omission stays a decision on the record; the `D`-path plumbing added for the pairing rule is the
+handle if it is ever tightened.
+
 An unenforced convention is the failure mode this repository has hit repeatedly — a local rule
 wearing a gate's clothes, per HARNESS-09 — and ADR 0007 is the proof that this particular one
-would not have held on its own.
+would not have held on its own. The first draft of this check proved the same point about
+itself: the hard-stop reviewer returned `VERDICT: FAIL (7 findings)` against it and reproduced
+three live bypasses (a status regex that silently exempted two ADRs, a half-closed rename fix,
+and the delete-plus-rewrite above). All are closed, with a regression test per finding.
 
 ## Consequences
 
