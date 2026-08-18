@@ -40,6 +40,17 @@
 //   7  a git failure AFTER the base resolved is an environment fault, not "clean": the
 //      post-resolution calls use mustGit and throw (red), distinct from the intended SKIPPED.
 //
+// KNOWN LIMITS, recorded rather than coded — raised by the same review as out-of-scope notes:
+//   * The route-2 exemption trusts the status line: flipping an ADR's status to `Superseded`
+//     exempts it without checking that a superseding ADR actually exists. Not coded because
+//     verifying "some other ADR supersedes this one" is a prose-parsing problem that would
+//     false-red, and because writing `Superseded` into a status line is a visible, reviewable
+//     lie sitting in the diff a human reads. The cheap bypass costs an obvious falsehood.
+//   * This step shares the q2c check-run with the ADR-number reservation, so a red here is not
+//     distinguishable from a red there on the checks tab — a mild HARNESS-07 tension. Kept
+//     in-job anyway: a new check-run name strands branch-protection rules pinned to the current
+//     ones, which is the worse failure. The step name and the stderr block name which fired.
+//
 // Run from the repo root: `node scripts/adr-amendment-check.mjs` (exit 1 on a violation).
 import { execFileSync } from 'node:child_process'
 import process from 'node:process'
@@ -81,12 +92,21 @@ export const AMENDMENT_ROW = /^\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|/
 export const stripFences = (text) => text.replace(/```[\s\S]*?```/g, '')
 
 /**
- * The set of ISO dates on rows under an `Amendments after acceptance` heading.
+ * The set of dated rows under an `Amendments after acceptance` heading, each normalised to
+ * `date|text` with runs of whitespace collapsed.
+ *
  * Section-scoped (finding 5): rows elsewhere in the document, or inside a code fence, do not
- * count. Returns a Set of date strings — the unit that base-vs-head is compared on.
+ * count.
+ *
+ * COMPARED ON THE WHOLE ROW, NOT THE DATE. An earlier revision keyed the set on the ISO date
+ * alone, which false-RED a compliant PR: a second genuine amendment made on the same calendar
+ * day as an existing row read as "already there". ADR 0007 already carries two rows dated
+ * 2026-08-17, so this was days from biting. A false red on compliant work is worse than most
+ * bypasses — it blocks correct changes and teaches people the gate is noise. Caught by the
+ * hard-stop reviewer as an out-of-scope robustness note on PR #324.
  */
 export const amendmentRows = (text) => {
-  const dates = new Set()
+  const rows = new Set()
   let inSection = false
   for (const line of stripFences(text).split('\n')) {
     const heading = line.match(/^(#{1,6})\s+(.*)$/)
@@ -95,10 +115,11 @@ export const amendmentRows = (text) => {
       continue
     }
     if (!inSection) continue
-    const row = line.match(AMENDMENT_ROW)
-    if (row) dates.add(row[1])
+    if (AMENDMENT_ROW.test(line)) {
+      rows.add(line.trim().replace(/\s+/g, ' '))
+    }
   }
-  return dates
+  return rows
 }
 
 /** Route 1: the head carries a dated amendment row the base did not. */

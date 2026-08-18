@@ -94,10 +94,26 @@ test('FINDING-5: rows only count under the Amendments heading, outside code fenc
   const wrongSection = `${accepted}\n### Verification timeline\n\n| 2026-08-18 | ran the suite |\n`
   assert.equal(amendmentRows(wrongSection).size, 0, 'a row under another heading is not an amendment')
 
-  assert.deepEqual([...amendmentRows(withRow('2026-08-18'))], ['2026-08-18'])
+  assert.deepEqual([...amendmentRows(withRow('2026-08-18'))], ['| 2026-08-18 | corrected a fact |'])
   // The heading ends at the next heading of any level.
   const afterSection = `${withRow('2026-08-18')}\n## Context\n\n| 2026-09-01 | not an amendment |\n`
-  assert.deepEqual([...amendmentRows(afterSection)], ['2026-08-18'])
+  assert.deepEqual([...amendmentRows(afterSection)], ['| 2026-08-18 | corrected a fact |'])
+})
+
+test('FALSE-RED REGRESSION: a second amendment on the SAME DAY is a new row', () => {
+  // The set was keyed on the ISO date alone, so a second genuine amendment made on the same
+  // calendar day read as "already there" and false-RED a compliant PR. ADR 0007 already carries
+  // two rows dated 2026-08-17, so this was days from biting. A false red on correct work is
+  // worse than most bypasses: it blocks the right change and teaches people the gate is noise.
+  const base = withRow('2026-08-18')
+  const sameDaySecondRow = `${base}| 2026-08-18 | a SECOND, different correction the same day |\n`
+  assert.ok(hasNewAmendmentRow(base, sameDaySecondRow), 'same-day second row must count as new')
+
+  // The finding-2 guarantee must survive: an identical carried-over row is still not new.
+  assert.ok(!hasNewAmendmentRow(base, `${base}\nprose edit, no new row\n`))
+  // Whitespace-only reformatting of an existing row is not a new amendment either.
+  const reflowed = base.replace('| 2026-08-18 | corrected a fact |', '|  2026-08-18  |  corrected a fact  |')
+  assert.ok(!hasNewAmendmentRow(base, reflowed), 'reformatting a row is not an amendment')
 })
 
 test('ANTI-VACUOUS-PASS: the ADR 0007 shape — accepted, corrected, unrecorded — FAILS', () => {
