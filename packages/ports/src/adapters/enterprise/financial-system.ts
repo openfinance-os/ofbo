@@ -118,7 +118,15 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
       }
       const status = body.payable_status
       if (typeof status !== 'string' || !PAYABLE_STATUSES.includes(status as PayableDispatchStatus)) {
-        throw new FinancialSystemError(0, false, `financial-system returned an unknown payable_status: ${String(status)}`)
+        // The value is NOT echoed. This message is what payable-dispatch writes into
+        // audit_high_sensitivity — INSERT-only, five-year retention, no deletion path — so an
+        // unmodelled vendor response body would land there permanently and unredacted. The
+        // dispatch_ref is ours and correlates the row to the vendor's record without quoting it.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned a payable_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message reaches an INSERT-only audit trail'
+        )
       }
       return {
         accepted: true,
@@ -132,7 +140,15 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
       const body = (await res.json()) as { payable_status?: unknown }
       const status = body.payable_status
       if (typeof status !== 'string' || !PAYABLE_STATUSES.includes(status as PayableDispatchStatus)) {
-        throw new FinancialSystemError(0, false, `financial-system returned an unknown payable_status: ${String(status)}`)
+        // The value is NOT echoed. This message is what payable-dispatch writes into
+        // audit_high_sensitivity — INSERT-only, five-year retention, no deletion path — so an
+        // unmodelled vendor response body would land there permanently and unredacted. The
+        // dispatch_ref is ours and correlates the row to the vendor's record without quoting it.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned a payable_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message reaches an INSERT-only audit trail'
+        )
       }
       return { payable_status: status as PayableDispatchStatus }
     }

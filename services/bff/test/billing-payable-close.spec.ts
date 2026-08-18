@@ -106,9 +106,46 @@ describe('BILL-16 payable close — execution on the second approval', () => {
 
     store.openPayableBreaks.mockResolvedValueOnce([{ lineRef: 'NEB-1|SI-9', breakType: 'vat_variance' }])
     const operation = makePayableCloseOperation(service)
-    await expect(operation.execute({ period: PERIOD, trace_id: 'trace-2' }, {
-      approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst'
-    })).rejects.toMatchObject({ code: 'BACKOFFICE.UNRESOLVED_PAYABLE_BREAKS' })
+    await expect(operation.execute(
+      { period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject },
+      { approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst' }
+    )).rejects.toMatchObject({ code: 'BACKOFFICE.UNRESOLVED_PAYABLE_BREAKS' })
+  })
+
+  it('REFUSES a payload with no initiator rather than skipping the four-eyes check', async () => {
+    // The guard read `if (initiatedBy && approver === initiatedBy)`, so an ABSENT initiator fell past
+    // it entirely and the close proceeded. POST /approvals accepts an arbitrary operation_payload,
+    // which makes such a payload reachable rather than theoretical — and the comment on
+    // makePayableCloseOperation promises this refusal "holds however the operation is invoked".
+    const { service, closed } = harness([])
+    const operation = makePayableCloseOperation(service)
+
+    for (const payload of [
+      { period: PERIOD, trace_id: 'trace-2' },
+      { period: PERIOD, trace_id: 'trace-2', initiated_by: '' },
+      { period: PERIOD, trace_id: 'trace-2', initiated_by: '   ' }
+    ]) {
+      await expect(operation.execute(payload, {
+        approver: 'demo:second-analyst@bank', approverPersona: 'finance-analyst'
+      }), JSON.stringify(payload)).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_NO_INITIATOR' })
+    }
+    expect(closed).toHaveLength(0)
+  })
+
+  it('refuses one human spelled two ways as if they were two people', async () => {
+    // A raw === treats `Finance.Controller` and `finance.controller ` as different principals, which
+    // is the cheapest way there is to defeat a four-eyes check. Same normalisation BILL-14 applies
+    // between uploader and verifier.
+    const { service, closed } = harness([])
+    const operation = makePayableCloseOperation(service)
+
+    for (const approver of [CONTROLLER.subject, ` ${CONTROLLER.subject.toUpperCase()} `]) {
+      await expect(operation.execute(
+        { period: PERIOD, trace_id: 'trace-2', initiated_by: CONTROLLER.subject },
+        { approver, approverPersona: 'finance-analyst' }
+      ), approver).rejects.toMatchObject({ code: 'BACKOFFICE.FOUR_EYES_SAME_PRINCIPAL' })
+    }
+    expect(closed).toHaveLength(0)
   })
 
   it('closes on approval and records both principals', async () => {

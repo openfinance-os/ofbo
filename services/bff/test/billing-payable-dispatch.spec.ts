@@ -35,7 +35,10 @@ const APPROVED = {
   documentReference: 'NEB-INV-2026-06-0001'
 }
 
-function harness(overrides: Record<string, unknown> = {}) {
+function harness(
+  overrides: Record<string, unknown> = {},
+  approvalOverrides: Record<string, unknown> = {}
+) {
   const audited: Array<Record<string, unknown>> = []
   const dispatched: Array<Record<string, unknown>> = []
   const port = {
@@ -50,12 +53,29 @@ function harness(overrides: Record<string, unknown> = {}) {
     recordDispatch: vi.fn(async () => ({ dispatchId: 'disp-1', created: true })),
     ...overrides
   }
+  // A LIVE approval by default: approved, for this payable's own period, by someone other than the
+  // initiator, inside its window. Every test that expects a dispatch depends on all of those.
+  const { get: getOverride, ...recordOverrides } = approvalOverrides
+  const approvals = {
+    get: getOverride ?? vi.fn(async () => ({
+      approval_request_id: APPROVED.approvalRequestId,
+      operation_type: 'billing.tpp_cost.period_close',
+      operation_payload: { period: APPROVED.period },
+      state: 'approved',
+      initiator: 'demo:finance-analyst@alpha-bank',
+      approver: 'demo:finance-manager@alpha-bank',
+      expires_at: '2026-07-05T12:00:00.000Z',
+      ...recordOverrides
+    }))
+  }
   const service = new PayableDispatchService({
     store: store as never,
     financialSystem: port as never,
-    audit: { emit: vi.fn(async (e: Record<string, unknown>) => { audited.push(e) }) } as never
+    approvals: approvals as never,
+    audit: { emit: vi.fn(async (e: Record<string, unknown>) => { audited.push(e) }) } as never,
+    now: () => new Date('2026-07-04T00:00:00.000Z')
   })
-  return { service, port, store, audited, dispatched }
+  return { service, port, store, approvals, audited, dispatched }
 }
 
 describe('BILL-16 payable dispatch', () => {
@@ -81,6 +101,38 @@ describe('BILL-16 payable dispatch', () => {
     })
     await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', 'idem-1', 'trace-1'))
       .rejects.toMatchObject({ code: 'BACKOFFICE.PAYABLE_NOT_APPROVED', status: 409 })
+    expect(port.dispatchPayableInstruction).not.toHaveBeenCalled()
+  })
+
+  it('REFUSES every citation that is not a LIVE approval of THIS payable', async () => {
+    // Presence of a non-empty approvalRequestId was the whole of the authorisation. The foreign key
+    // constrains existence and tenant; state, expiry and subject are all mutable on the referenced
+    // row, so none of them was constrained anywhere — and this is the path that reaches P9 and moves
+    // money. Each case below dispatched successfully before this check existed.
+    const cases: Array<[string, Record<string, unknown>, RegExp]> = [
+      ['pending — approved by nobody', { state: 'pending', approver: null, expires_at: '2026-07-05T12:00:00.000Z' }, /is pending/i],
+      ['rejected — somebody said no', { state: 'rejected', approver: null }, /is rejected/i],
+      ['timed out — the 2-hour window passed', { state: 'pending', approver: null, expires_at: '2026-07-03T00:00:00.000Z' }, /timed out/i],
+      ['wrong period — id copied from another close', { operation_payload: { period: '2026-05' } }, /different period/i],
+      ['wrong operation — an id that authorised something else', { operation_type: 'billing.rate_card.publish' }, /not a payable close/i],
+      ['approved but with no second principal', { approver: null }, /one person twice/i],
+      ['approved by its own initiator', { approver: 'demo:finance-analyst@alpha-bank' }, /one person twice/i]
+    ]
+
+    for (const [label, approval, expected] of cases) {
+      const { service, port } = harness({}, approval)
+      await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', `idem-${label}`, 'trace-1'), label)
+        .rejects.toThrow(expected)
+      // Refused BEFORE the port. A request that never leaves is the only way to be sure the debit
+      // was not honoured — a downstream rollback is not available for a scheme direct debit.
+      expect(port.dispatchPayableInstruction, label).not.toHaveBeenCalled()
+    }
+  })
+
+  it('REFUSES a citation that resolves to nothing at all', async () => {
+    const { service, port } = harness({}, { get: async () => null })
+    await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', 'idem-1', 'trace-1'))
+      .rejects.toThrow(/does not exist/i)
     expect(port.dispatchPayableInstruction).not.toHaveBeenCalled()
   })
 
@@ -136,6 +188,27 @@ describe('BILL-16 payable dispatch', () => {
     port.dispatchPayableInstruction.mockRejectedValueOnce(new Error('financial-system 503'))
     await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', 'idem-1', 'trace-1')).rejects.toThrow()
     expect(audited.some((e) => e.event_type === 'billing_tpp_cost_payable_dispatch_failed')).toBe(true)
+  })
+
+  it('REDACTS the failure text before it reaches the INSERT-only trail', async () => {
+    // The audit row is unremovable, and the failure text is COMPOSED by the P9 adapter from the
+    // vendor's response — so "the message only, never the downstream payload" was a claim about how
+    // carefully every adapter words its errors, not a property of this code. One adapter did quote
+    // the vendor's `payable_status` verbatim. That is fixed at source; this asserts the second
+    // control, because P9's response shape belongs to the vendor and can change without us.
+    const { service, audited, port } = harness()
+    port.dispatchPayableInstruction.mockRejectedValueOnce(
+      // Synthetic, and identifier-SHAPED so the redactor has something to key on: 999 prefix, never
+      // the real 784; IBAN bank code 000.
+      new Error('financial-system rejected debtor AE070001234567890123456 for ops@example.com')
+    )
+
+    await expect(service.dispatch(APPROVER, 'PAY-2026-06-001', 'idem-1', 'trace-1')).rejects.toThrow()
+
+    const failed = audited.find((e) => e.event_type === 'billing_tpp_cost_payable_dispatch_failed')
+    const body = JSON.stringify((failed as { request_body: unknown }).request_body)
+    expect(body).not.toContain('AE070001234567890123456')
+    expect(body).not.toContain('ops@example.com')
   })
 
   it('CANNOT mutate billing evidence — its store surface has no write into the ledger', () => {

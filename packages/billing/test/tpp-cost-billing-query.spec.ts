@@ -88,6 +88,54 @@ describe('BILL-15 billing-query bundle (IG v5.0 §10.11.3)', () => {
     }))).toThrow(/email/i)
   })
 
+  it('REFUSES a PSU-NAMED field whose value matches no shape at all', () => {
+    // The gap the shape screen could not see. `transactionDetail` is an open
+    // Record<string, string | number>, so its keys are the caller's; a name, an address or a date of
+    // birth matches none of the four shapes (IBAN, formatted national id, email, phone), which meant
+    // the most obvious way PSU data would reach a scheme-bound artefact passed every guard on it.
+    //
+    // Deliberately non-identifier-shaped values, so this test can ONLY pass via key-name screening.
+    const cases: Array<[string, Record<string, string | number>]> = [
+      ['payer', { feeClass: 'hub.standard', payerName: 'SYNTHETIC-NAME-DO-NOT-EXPORT' }],
+      ['address', { feeClass: 'hub.standard', debtorAddress: 'SYNTHETIC-ADDRESS-DO-NOT-EXPORT' }],
+      ['dob', { feeClass: 'hub.standard', dob: '1990-01-01' }],
+      ['psu', { feeClass: 'hub.standard', psuReference: 'SYNTHETIC-REF' }]
+    ]
+    for (const [fragment, transactionDetail] of cases) {
+      expect(() => buildBillingQueryBundle(input({ transactionDetail })), fragment)
+        .toThrow(/named for customer detail/i)
+    }
+  })
+
+  it('never echoes the offending value when refusing on the field NAME', () => {
+    // The refusal must not become the leak it prevents — the same rule the shape screen follows.
+    const marker = 'SYNTHETIC-NAME-DO-NOT-EXPORT'
+    try {
+      buildBillingQueryBundle(input({ transactionDetail: { feeClass: 'hub.standard', payerName: marker } }))
+      throw new Error('expected a refusal')
+    } catch (error) {
+      expect((error as Error).message).not.toContain(marker)
+      expect((error as Error).message).toMatch(/deliberately not echoed/i)
+    }
+  })
+
+  it('screens the four fields the doc comment claimed but the list omitted', () => {
+    // occurredAt is one of the six the IG REQUIRES, and the BFF threads it straight through from its
+    // caller with no format validation anywhere in the builder. raisedAt, billingPeriod and
+    // queryDeadline were skipped on the same reasoning — an assumption about callers, not a property
+    // of the fields.
+    const cases: Array<[string, Record<string, string>]> = [
+      ['occurredAt', { occurredAt: 'seen at AE000000000000000000000' }],
+      ['raisedAt', { raisedAt: 'raised by someone@example.com' }],
+      ['billingPeriod', { billingPeriod: '2026-06 for AE000000000000000000000' }],
+      ['queryDeadline', { queryDeadline: 'chase someone@example.com by then' }]
+    ]
+    for (const [field, override] of cases) {
+      expect(() => buildBillingQueryBundle(input(override)), field)
+        .toThrow(/iban|email/i)
+    }
+  })
+
   it('screens the reason code, which carries provider-supplied text to the wire', () => {
     // An unmapped line's reason code embeds the provider's own sourceCategory. BILL-14 refuses an
     // identifier-shaped category at ingest — the right boundary — but this is the artefact that

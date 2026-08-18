@@ -2,6 +2,7 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
 import type { ApmPort, CareSurfacePort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
+import { HTTPException } from 'hono/http-exception'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
@@ -174,7 +175,7 @@ import { trustFrameworkRoutes } from './trust-framework/routes.js'
 import { ServiceDeskService, InMemoryServiceDeskCaseStore, type ServiceDeskCaseStore } from './service-desk/service.js'
 import { serviceDeskRoutes } from './service-desk/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
-import { createTelemetryMiddleware } from './telemetry.js'
+import { createTelemetryMiddleware, redactingLog } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
@@ -884,6 +885,49 @@ export function createApp(deps: AppDeps = {}) {
         DOCS_BASE
       ),
       501
+    )
+  })
+
+  /**
+   * The last envelope. Every path here answers the contract's shape, including the ones nobody wrote.
+   *
+   * `default: { $ref: '#/components/responses/Error' }` is declared on every operation, but with no
+   * handler an unhandled throw fell through to Hono's default: `500 text/plain` with the body
+   * `Internal Server Error`. That is a contract violation on EVERY endpoint at once, and it is the
+   * response a client gets from precisely the situations it can least afford to guess about — an
+   * unconfigured store, a `22P02` from a malformed UUID reaching a `uuid` column, a `RangeError` from
+   * a domain invariant.
+   *
+   * The thrown message is deliberately NOT surfaced. A driver error quotes the offending SQL
+   * parameter and a domain error can quote its input, so echoing it here would reintroduce, at every
+   * endpoint simultaneously, the leak the document parser closes one refusal at a time. The trace id
+   * is the correlation handle instead: it is already on the request, already in the audit trail, and
+   * carries nothing about the payload.
+   */
+  const unhandledErrorLog = redactingLog()
+  app.onError((error, c) => {
+    const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+    // An HTTPException already names the status it meant; only its BODY is wrong for us, so keep the
+    // status and re-shape the body. Everything else is genuinely unhandled and is a 500.
+    const status = error instanceof HTTPException ? error.status : 500
+    // redactingLog is the sanctioned operational sink — it masks by key and by shape, so an error
+    // NAME cannot smuggle a value into the log the way the message could.
+    unhandledErrorLog('unhandled_request_error', {
+      trace_id: traceId,
+      path: c.req.path,
+      method: c.req.method,
+      error_name: error.name
+    })
+    return c.json(
+      errorEnvelope(
+        'BACKOFFICE.INTERNAL_ERROR',
+        'The request could not be completed. The underlying error is deliberately not echoed: it can '
+        + 'quote the offending input, and this handler runs before any redaction.',
+        `Quote the x-fapi-interaction-id ${traceId} to support; it correlates to the server-side log `
+        + 'and the audit trail without carrying request content.',
+        DOCS_BASE
+      ),
+      status
     )
   })
 
