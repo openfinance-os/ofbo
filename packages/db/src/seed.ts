@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
 import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
+import { SEED_ACTOR_SCOPE } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
@@ -82,10 +83,10 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
           `INSERT INTO audit_high_sensitivity
              (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
               target_psu_identifier, target_consent_id, request_trace_id, request_body_redacted, response_status)
-           SELECT $1, 'internal_retail', $2, 'seed', 'system', 'seed',
+           SELECT $1, 'internal_retail', $2, 'seed', 'system', $6,
                   $3, $4, $5, '{}'::jsonb, 200
            WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $5)`,
-          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId]
+          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId, SEED_ACTOR_SCOPE]
         )
       }
     }

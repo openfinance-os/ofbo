@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ROUTES } from '@ofbo/contracts'
 import { describe, expect, it } from 'vitest'
+import { SEED_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE } from '@ofbo/db'
 import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/high-class-audit.js'
 
 /**
@@ -50,12 +51,74 @@ function sourceFiles(dir: string): string[] {
 }
 
 /**
- * Every `scope_used:` emission, resolved to a literal.
+ * Read exactly one property value, from just after `scope_used:` to where that value ends.
  *
- * Constants are resolved across the WHOLE tree, not just the declaring file. The first version
- * resolved same-file constants only and silently dropped the rest — which excluded every
- * `SYSTEM_ACTOR_SCOPE` site the CODE-03 fix had just created, i.e. the exact pattern the check exists
- * to police. An emission that cannot be resolved is now reported as UNRESOLVED rather than skipped,
+ * A pattern cannot do this. Matching to end-of-line over-reads a single-line `emit({ ... })` and
+ * swallows the five properties that follow; matching a character class under-reads and goes BLIND on
+ * anything containing a character the class forgot — which is the bug this file is fixing. A scanner
+ * that tracks nesting and quotes reads the same value in both layouts and has nothing to forget.
+ */
+function scopeExpression(text: string, from: number): string {
+  let depth = 0
+  let quote: string | null = null
+  for (let i = from; i < text.length; i += 1) {
+    const ch = text[i]!
+    if (quote) {
+      if (ch === '\\') i += 1
+      else if (ch === quote) quote = null
+      continue
+    }
+    if (ch === "'" || ch === '"' || ch === '`') quote = ch
+    else if (ch === '(' || ch === '[' || ch === '{') depth += 1
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      if (depth === 0) return text.slice(from, i).trim()
+      depth -= 1
+    } else if (depth === 0 && (ch === ',' || ch === '\n')) return text.slice(from, i).trim()
+  }
+  return text.slice(from).trim()
+}
+
+/**
+ * Split one `scope_used:` expression into the values it can actually produce.
+ *
+ * The first version matched the expression with a character class containing neither `:` nor `'`, so
+ * a ternary and a `??`-with-literal produced NO MATCH AT ALL — they were not reported as UNRESOLVED,
+ * they were invisible. That is how `scope_used: event.attempted_scope ?? 'none'` — the one undeclared
+ * literal left in the repo — survived a check written to find exactly that, while the count guard sat
+ * comfortably above its threshold because 92 of 94 sites still matched.
+ *
+ * String literals are masked before splitting, so a `:` inside `'billing:write'` cannot be mistaken
+ * for a ternary arm. A ternary's CONDITION is dropped (it is not a value); both sides of `??` are
+ * kept, because either can be written.
+ */
+function possibleValues(expression: string, constants: ReadonlyMap<string, string>): string[] {
+  const literals: string[] = []
+  let masked = expression.replace(/'([^']*)'/g, (_match, value: string) => {
+    literals.push(value)
+    return `@@LIT${literals.length - 1}@@`
+  })
+
+  // A `?` that is neither `??` nor `?.` opens a ternary; everything before it is the condition.
+  const ternary = masked.search(/(?<!\?)\?(?![?.])/)
+  if (ternary >= 0) masked = masked.slice(ternary + 1)
+
+  return masked
+    .split(/\?\?|:/)
+    .map((part) => part.trim())
+    .filter((part) => part !== '')
+    .map((part) => {
+      const literal = part.match(/^@@LIT(\d+)@@$/)
+      if (literal) return literals[Number(literal[1])]!
+      return constants.get(part) ?? `UNRESOLVED(${part})`
+    })
+}
+
+/**
+ * Every value any `scope_used:` emission can write, across both trees.
+ *
+ * Constants resolve tree-wide, not per-file: resolving same-file only silently dropped every
+ * `SYSTEM_ACTOR_SCOPE` site the CODE-03 fix had just created — the exact pattern this exists to
+ * police. Anything that still cannot be resolved is REPORTED as UNRESOLVED rather than skipped,
  * because a value the check cannot read is precisely what it must not wave through.
  */
 function emittedScopeLiterals(): Array<{ file: string; value: string }> {
@@ -69,25 +132,45 @@ function emittedScopeLiterals(): Array<{ file: string; value: string }> {
     }
   }
 
-  // Pass two: resolve each emission against that table.
-  //
-  // Two things are deliberately NOT emissions and are skipped: a TYPE position (`scope_used: string`
-  // in an interface) and a read-back (`row.scope_used` when serving stored rows outward). Everything
-  // else that cannot be resolved is reported, so a new dynamic site fails until it is justified.
+  // Pass two: read each emission's expression with a scanner rather than a pattern, and decompose
+  // it. Two forms are deliberately not emissions: a TYPE position (`scope_used: string` in an
+  // interface) and a read-back (`row.scope_used`, serving stored rows outward).
   const out: Array<{ file: string; value: string }> = []
   for (const { root, path } of files) {
-    for (const m of readFileSync(path, 'utf8').matchAll(/scope_used:\s*(?:'([^']+)'|([A-Za-z0-9_.?\s|]+?))\s*[,\n]/g)) {
-      const name = m[2]?.trim()
-      if (name && /^(string|number)(\s*\|\s*null)?$/.test(name)) continue
-      if (name && /\.scope_used(\s+as\s+\w+)?$/.test(name)) continue
-      const literal = m[1] ?? (name ? constants.get(name) : undefined)
-      out.push({
-        file: path.slice(root.length + 1),
-        value: literal ?? `UNRESOLVED(${name ?? '?'})`
-      })
+    const text = readFileSync(path, 'utf8')
+    for (const m of text.matchAll(/\bscope_used:\s*/g)) {
+      const expression = scopeExpression(text, m.index + m[0].length)
+      if (/^(string|number)(\s*\|\s*null)?$/.test(expression)) continue
+      if (/\.scope_used(\s+as\s+\w+)?$/.test(expression)) continue
+      for (const value of possibleValues(expression, constants)) {
+        out.push({ file: path.slice(root.length + 1), value })
+      }
     }
   }
   return out
+}
+
+/**
+ * Files that INSERT into audit_high_sensitivity with raw SQL, where no `scope_used:` object literal
+ * exists for the scan above to read.
+ *
+ * The seed writers sat outside CODE-03's inventory for exactly this reason — a seventh token, in the
+ * same regulated table, invisible to a check that only reads TypeScript object literals. This does
+ * not parse SQL. It asserts the set of raw writers is CLOSED, so a new one has to be brought under
+ * the convention deliberately rather than landing unexamined.
+ */
+const RAW_SQL_AUDIT_WRITERS: readonly string[] = ['audit.ts', 'seed-tenants.ts', 'seed.ts']
+
+function rawSqlAuditWriters(): string[] {
+  const found = new Set<string>()
+  for (const root of ROOTS) {
+    for (const path of sourceFiles(root)) {
+      if (/INSERT\s+INTO\s+audit_high_sensitivity/i.test(readFileSync(path, 'utf8'))) {
+        found.add(path.slice(root.length + 1))
+      }
+    }
+  }
+  return [...found].sort()
 }
 
 /**
@@ -101,13 +184,25 @@ const ACKNOWLEDGED_DYNAMIC: ReadonlyArray<{ file: string; value: string; because
   {
     file: 'analytics/exports.ts',
     value: 'UNRESOLVED(scope)',
-    because: 'the caller\'s own asserted scope, taken from the principal that passed assertScope'
+    because: "the caller's own asserted scope, taken from the principal that passed assertScope"
   },
   {
     file: 'governed-aggregate.ts',
-    value: 'UNRESOLVED(ctx.scopeUsed ?? SYSTEM_ACTOR_SCOPE)',
-    because: 'the caller\'s scope when the bypass was initiated by a principal, else the sentinel — '
-      + 'both arms resolve, and the purpose code is carried in request_body rather than here'
+    value: 'UNRESOLVED(ctx.scopeUsed)',
+    because: "the caller's scope when the RLS bypass was initiated by a principal; the other arm of "
+      + 'the ?? is the system sentinel, and both arms are now examined separately'
+  },
+  {
+    file: 'tenant-billing-service-store.ts',
+    value: 'UNRESOLVED(input.scopeUsed)',
+    because: "the calling principal's scope on a human-initiated cross-tenant aggregate read — "
+      + 'required, not optional, so there is no fallback left that could fabricate one'
+  },
+  {
+    file: 'audit.ts',
+    value: 'UNRESOLVED(event.attempted_scope)',
+    because: 'the scope the caller was DENIED, set only by rbac.ts from the generated route table, '
+      + 'so it is a declared scope by construction; the other arm is the auth-event sentinel'
   }
 ]
 
@@ -121,7 +216,12 @@ describe('CODE-03 audit scope resolvability', () => {
   it('every emitted scope_used resolves against the declared inventory or the system sentinel', () => {
     const declared = declaredScopes()
     expect(declared.size).toBeGreaterThan(15)
-    const allowed = new Set([...declared, SYSTEM_ACTOR_SCOPE])
+    // Three declared non-route values, each with a DISTINCT meaning — a headless actor, a human
+    // auth event no scope mediated, demo seed provenance. Not one token stretched over three
+    // situations, which is the overloading CODE-03 was raised about.
+    const allowed = new Set([
+      ...declared, SYSTEM_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE, SEED_ACTOR_SCOPE
+    ])
 
     const acknowledged = new Set(ACKNOWLEDGED_DYNAMIC.map((e) => `${e.file}|${e.value}`))
     const unresolvable = emittedScopeLiterals()
@@ -129,6 +229,12 @@ describe('CODE-03 audit scope resolvability', () => {
       .filter((entry) => !acknowledged.has(`${entry.file}|${entry.value}`))
     const detail = unresolvable.map((e) => `${e.file}: ${e.value}`).sort().join('\n')
     expect(unresolvable, `unresolvable scope_used values:\n${detail}`).toEqual([])
+  })
+
+  it('leaves no raw-SQL writer into audit_high_sensitivity outside the known set', () => {
+    // The scan above reads TypeScript object literals. A raw INSERT writes the same regulated column
+    // and is invisible to it — which is how the seed writers' token stayed outside the inventory.
+    expect(rawSqlAuditWriters()).toEqual([...RAW_SQL_AUDIT_WRITERS].sort())
   })
 
   it('declares the system sentinel and the non-HTTP response sentinel', () => {

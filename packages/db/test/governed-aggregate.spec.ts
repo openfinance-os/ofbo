@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/audit.js'
 import { beginInternalViewTx } from '../src/tenant-tx.js'
 import {
   GovernedQueryError,
@@ -88,7 +89,10 @@ describe('runGovernedAggregate — the gate', () => {
       return { result: 'AGG', rowCount: 42 }
     })
 
-    const out = await runGovernedAggregate(ctx({ pool, audit, purposeCode: 'compliance_reporting', traceId: 't-9' }), queryFn)
+    const out = await runGovernedAggregate(
+      ctx({ pool, audit, purposeCode: 'compliance_reporting', traceId: 't-9', scopeUsed: 'audit:read' }),
+      queryFn
+    )
 
     expect(out).toBe('AGG')
     expect(queryFn).toHaveBeenCalledOnce()
@@ -100,7 +104,30 @@ describe('runGovernedAggregate — the gate', () => {
         acting_principal: 'demo:compliance-officer',
         request_trace_id: 't-9',
         request_body: { purpose_code: 'compliance_reporting', row_count: 42 },
+        // A principal initiated this, so the row names the scope that authorised the bypass and the
+        // status of the response it was served in. Both are facts, not placeholders.
+        scope_used: 'audit:read',
         response_status: 200
+      })
+    )
+  })
+
+  it('records a headless bypass as headless in BOTH columns, not just the scope one', async () => {
+    // CODE-03: the sentinel pair moves together. Applying it to `scope_used` while leaving a literal
+    // 200 beside it writes a row that says "no principal authorised this" and "an HTTP response was
+    // served" at the same time — and this file is where the convention landed half-applied.
+    const { pool } = mockPool(true)
+    const audit = { emit: vi.fn(async () => undefined) }
+
+    await runGovernedAggregate(
+      ctx({ pool, audit, purposeCode: 'compliance_reporting', traceId: 't-10' }),
+      async () => ({ result: 'AGG', rowCount: 7 })
+    )
+
+    expect(audit.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope_used: SYSTEM_ACTOR_SCOPE,
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     )
   })

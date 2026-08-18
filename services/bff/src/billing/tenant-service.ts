@@ -18,6 +18,8 @@ export interface TenantBillingDataPort {
     period: string
     actingPrincipal: string
     actingPersona: string
+    /** The calling principal's own scope — this read is human-initiated, not headless (CODE-03). */
+    scopeUsed: string
     traceId: string
   }): Promise<CrossTenantBillingBenchmark>
 }

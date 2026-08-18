@@ -218,6 +218,7 @@ describe('BILL-10 tenant billing service', () => {
       period: PERIOD,
       actingPrincipal: 'demo:finance-manager',
       actingPersona: 'finance-manager',
+      scopeUsed: 'billing:read',
       traceId: randomUUID()
     })).rejects.toThrow(/not registered\+approved/)
 
@@ -242,11 +243,17 @@ describe('BILL-10 tenant billing service', () => {
       period: PERIOD,
       actingPrincipal: 'demo:finance-manager',
       actingPersona: 'finance-manager',
+      scopeUsed: 'billing:read',
       traceId: randomUUID()
     })
     expect(benchmark.tenantCount).toBe(3)
     expect(benchmark).not.toHaveProperty('tenants')
     expect(benchmark.averages.receivableMilliFils).toBe(BASE_RECEIVABLE + 10_000_000)
+    // CODE-03: this read is human-initiated, so the row must name the scope that authorised it and a
+    // real HTTP status. A sweep that stamped the system sentinel here recorded the opposite —
+    // permanently, in an INSERT-only table — about the most privileged read in the tree.
     expect(auditEvents.at(-1)?.event_type).toBe('cross_tenant_billing_benchmark')
+    expect(auditEvents.at(-1)?.scope_used).toBe('billing:read')
+    expect(auditEvents.at(-1)?.response_status).toBe(200)
   }, 60_000)
 })
