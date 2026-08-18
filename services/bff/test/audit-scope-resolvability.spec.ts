@@ -125,26 +125,37 @@ function possibleValues(expression: string, constants: ReadonlyMap<string, strin
  * police. Anything that still cannot be resolved is REPORTED as UNRESOLVED rather than skipped,
  * because a value the check cannot read is precisely what it must not wave through.
  */
-function declaredConstants(files: ReadonlyArray<{ path: string }>): Map<string, string> {
+/**
+ * Both trees, read ONCE.
+ *
+ * The three scans in this file each walked and re-read every source file, and each is called from
+ * more than one test — roughly six full reads of two trees per execution. That is invisible in the
+ * unit suite (tens of milliseconds) and expensive under Stryker, which re-runs the covering tests
+ * for every one of ~479 mutants; the mutation job crept 23m44s → 24m47s → past its 25-minute cap as
+ * scans were added. Hoisting the I/O to module scope changes nothing about what is asserted.
+ */
+const SOURCES: ReadonlyArray<{ root: string; path: string; text: string }> = ROOTS.flatMap((root) =>
+  sourceFiles(root).map((path) => ({ root, path, text: readFileSync(path, 'utf8') })))
+
+/** Every `const NAME = 'literal'` in either tree, resolved once from the cached sources. */
+const DECLARED_CONSTANTS: ReadonlyMap<string, string> = (() => {
   const constants = new Map<string, string>()
-  for (const { path } of files) {
-    for (const m of readFileSync(path, 'utf8').matchAll(/(?:export\s+)?const\s+([A-Z0-9_]+)\s*(?::\s*string)?\s*=\s*'([^']+)'/g)) {
+  for (const { text } of SOURCES) {
+    for (const m of text.matchAll(/(?:export\s+)?const\s+([A-Z0-9_]+)\s*(?::\s*string)?\s*=\s*'([^']+)'/g)) {
       constants.set(m[1]!, m[2]!)
     }
   }
   return constants
-}
+})()
 
 function emittedScopeLiterals(): Array<{ file: string; value: string }> {
-  const files = ROOTS.flatMap((root) => sourceFiles(root).map((f) => ({ root, path: f })))
-  const constants = declaredConstants(files)
+  const constants = DECLARED_CONSTANTS
 
   // Pass two: read each emission's expression with a scanner rather than a pattern, and decompose
   // it. Two forms are deliberately not emissions: a TYPE position (`scope_used: string` in an
   // interface) and a read-back (`row.scope_used`, serving stored rows outward).
   const out: Array<{ file: string; value: string }> = []
-  for (const { root, path } of files) {
-    const text = readFileSync(path, 'utf8')
+  for (const { root, path, text } of SOURCES) {
     for (const m of text.matchAll(/\bscope_used:\s*/g)) {
       const expression = scopeExpression(text, m.index + m[0].length)
       if (/^(string|number)(\s*\|\s*null)?$/.test(expression)) continue
@@ -175,12 +186,10 @@ function emittedScopeLiterals(): Array<{ file: string; value: string }> {
  * a floor rather than a proof. It catches the shape that has actually occurred twice.
  */
 function headlessEmissions(): Array<{ file: string; scope: string; principal: string }> {
-  const files = ROOTS.flatMap((root) => sourceFiles(root).map((f) => ({ root, path: f })))
-  const constants = declaredConstants(files)
+  const constants = DECLARED_CONSTANTS
   const out: Array<{ file: string; scope: string; principal: string }> = []
 
-  for (const { root, path } of files) {
-    const text = readFileSync(path, 'utf8')
+  for (const { root, path, text } of SOURCES) {
     for (const m of text.matchAll(/\bscope_used:\s*/g)) {
       const blockStart = text.lastIndexOf('event_type:', m.index)
       if (blockStart < 0) continue
@@ -224,12 +233,8 @@ const RAW_SQL_AUDIT_WRITERS: readonly string[] = ['audit.ts', 'seed-tenants.ts',
 
 function rawSqlAuditWriters(): string[] {
   const found = new Set<string>()
-  for (const root of ROOTS) {
-    for (const path of sourceFiles(root)) {
-      if (/INSERT\s+INTO\s+audit_high_sensitivity/i.test(readFileSync(path, 'utf8'))) {
-        found.add(path.slice(root.length + 1))
-      }
-    }
+  for (const { root, path, text } of SOURCES) {
+    if (/INSERT\s+INTO\s+audit_high_sensitivity/i.test(text)) found.add(path.slice(root.length + 1))
   }
   return [...found].sort()
 }
