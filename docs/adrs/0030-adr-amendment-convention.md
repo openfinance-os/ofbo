@@ -72,6 +72,13 @@ of the things that changed.
 **This is enforced, not merely written down.** `scripts/adr-amendment-check.mjs` runs in the
 Q2c job and fails a pull request that modifies an ADR whose base-branch status is `Accepted`
 unless that PR either adds a dated amendment row to it, or changes its status to `Superseded`.
+
+"Modifies" includes a **rename** (git reports `R100`/`R087`, never `M`), because renaming the
+file while editing it would otherwise be the cheapest possible way around the rule — a gap the
+hard-stop reviewer found in the first draft of this very check. **Deletion is out of scope**:
+removing an accepted ADR outright is a different question from amending one, and this ADR states
+a rule about modification. That is a decision, not an oversight, and it is the obvious next thing
+to tighten if it is ever exercised.
 An unenforced convention is the failure mode this repository has hit repeatedly — a local rule
 wearing a gate's clothes, per HARNESS-09 — and ADR 0007 is the proof that this particular one
 would not have held on its own.
