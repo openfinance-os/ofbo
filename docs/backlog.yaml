@@ -243,6 +243,443 @@ milestones:
           Unblock only if the bank adopts Kong; then raise the metering-feed requirement
           (extends BACKOFFICE-73) and/or the P6 adapter, tests-first against port-contracts.spec.ts.
 
+  # Standards conformance — realises docs/reviews/standards-conformance-2026-08.md (18 Aug 2026),
+  # a diff of the repo against UAE OF Standards v2.1-final + errata3, API Hub v8 (2026.19.0/2026.22.0),
+  # Nebras Interaction Guide v5.0 (Jun 2026) and the Ozone Connect availability/response-time policies.
+  # The architecture is conformant; the drift is operational. Items are laid out in EXECUTION order,
+  # not id order, because next-story picks the first eligible pending item in FILE order: STD-09..14
+  # first — dependency-free defects found while verifying, wrong today rather than merely stale; then
+  # STD-02..04, the IG v5.0 re-baseline the PRD promised at BD-16 and never filed; then STD-05..08,
+  # the fidelity chain. STD-01 sits last because it is blocked on ADR 0030 (standards-baseline
+  # registry) — humans decide before it is built, and no other story may stand that primitive up.
+  - name: STD
+    items:
+      - id: STD-09
+        title: Liability and revoke-SLA completeness — fail loud, one source, cover the fraud path
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          Three defects on one theme, all found while verifying. services/bff/src/risk/liability.ts:47
+          returns 0 for any issue absent from the matrix, and the threshold derives from the SAME
+          lookup at :109-111 — so both sides are 0, "accrued >= threshold" is 0 >= 0 which is TRUE,
+          and the class crosses trivially. It does not go quiet: it emits a nebras_liability_approach
+          signal plus two P3 ITSM tickets at :119-122 reporting the exposure as AED 0 at low
+          severity. The signal is not suppressed, it is silently worthless — harder to spot than
+          silence, because the queue looks like it is working. The matrix is genuinely incomplete, missing the scheme's
+          international-payment new-beneficiary breach (AED 15,000 cap for 48 hours after beneficiary
+          creation, per customer per TPP per bank; redress AED 1,000 plus direct losses), and the
+          15,000 figure appears nowhere in the repo. Separately, NEBRAS_SLA_MS 5000 is declared twice
+          (consents/revoke.ts:21 and consents/bulk-revoke.ts:26) and the same NFR-18 threshold is
+          restated a third time in a different unit at analytics/slo.ts:56. And consents/fraud-revoke.ts:89,97
+          records the propagation time but never compares it, so the highest-risk revoke path is the
+          only one with no sla_met verdict in its audit record. Also retire the CoP bundling-window
+          hedge remaining at reconciliation/fee-schedule.ts:12-13 (the PRD half was retired by the
+          review PR) — the scheme is unambiguous at two
+          hours, one balance AND one CoP per payment, and rate-card.ts:295 already encodes it.
+        acceptance:
+          - The new-beneficiary liability row is added with its scheme citation, and an issue absent
+            from the matrix raises rather than returning zero, so an unmodelled class can never again
+            emit an AED 0 low-severity signal that looks like the monitor working.
+          - NEBRAS_SLA_MS has exactly one definition, imported by every consumer, and the SLO row
+            derives from it rather than restating the threshold as an independent literal.
+          - The fraud-revoke path computes and records an sla_met verdict like the other two revoke
+            paths, and a test asserts a breach on that path is visible in the audit record.
+          - The CoP bundling-window hedge is removed from both the code comment and the PRD, replaced
+            by the confirmed two-hour rule cross-referencing the rate card.
+      - id: STD-10
+        title: Encode the Ozone Connect availability and response-time policies
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/analytics/operations-console.ts:26-28 holds SLA_TARGETS with a 500ms
+          end-to-end and 250ms LFI-internal figure, module-private with no config seam. The headline
+          is right but the operative policy since 22 Apr 2026 is finer — 500ms at p95 PER Ozone
+          Connect ENDPOINT measured as TTLB from the Hub issuing the request to the Hub receiving the
+          final byte, with degradation severities (P1 payment-execution p95 above 1000ms for 15
+          minutes or any family above 1500ms; P2 endpoint p95 above 750ms for 30 minutes) and an
+          availability regime of 99.5 percent per CALENDAR MONTH, about 3h39m, with planned
+          maintenance and partial outages both counting, P1 acknowledged in 15 minutes with 30-minute
+          updates, P2 in 1 hour with 2-hour updates, and a PIR within 5 business days. None of that
+          exists in the repo. Scope note — docs/reviews/improvement-plan-2026-08.md:102 already owns
+          per-endpoint latency MEASUREMENT and deliberately needs no per-endpoint SLA config, so this
+          story encodes the POLICY as cited constants and leaves measurement to that story.
+        acceptance:
+          - The policy is a cited constant set naming its source and effective date, covering the p95
+            TTLB target, both degradation severities, the calendar-month availability budget, the
+            acknowledgement and update cadences, and the PIR clock.
+          - 'The two unreconciled uptime numbers in one response are reconciled — ops/ozone-health.ts:30
+            reports 99.8 percent while analytics/slo.ts:58 targets 99.5 percent and nothing compares
+            them.'
+          - The latency objective stops living only in a description string, so a target that cannot
+            currently be evaluated or alerted on becomes machine-readable.
+          - services/bff/test/operations-console.spec.ts:46 currently pins the SLA object with an
+            exact-equality assertion; it is updated in-story to the richer policy object.
+      - id: STD-11
+        title: Enterprise profile must fail closed on every demo-only data source
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          CLAUDE.md requires an unconfigured enterprise adapter to throw a config error rather than
+          silently fall back to a fake. That rule is broken in eight places, none of them
+          profile-selected, because all eight Demo* classes live in services/bff/src rather than
+          packages/ports. Most visible: OperationsConsoleService is constructed at
+          services/bff/src/app.ts:609-615 without its optional slo, certChain and ozone deps in ANY
+          profile, so the console always serves DemoSloReader / DemoCertChainSource /
+          DemoOzoneHealthSource (analytics/operations-console.ts:83,90,92) — a hardcoded 99.8 percent
+          uptime (ops/ozone-health.ts:30) presented as operational truth, while the docstrings claim
+          an enterprise adapter polls the real health via P6. The scheduled worker adds six more
+          unconditionally — DemoLiabilityEventSource (worker.ts:389), DemoTppActivitySource (:398),
+          DemoConsentDriftSource (:402), DemoCertChainSource (:405), DemoCaapEventSource (:408),
+          DemoLiabilityTelemetrySource (:416) — plus one in the request path (app.ts:637). Two are
+          materially worse than a green panel. The CAAP recorder (worker.ts:408 into
+          risk/caap-audit.ts:57-65) writes FABRICATED registration events into audit_high_sensitivity,
+          an INSERT-only table with no deletion path and 5-year immutable retention, and its synthetic
+          spike then drives the >10-per-device-per-hour rule at risk/consent-anomaly.ts:134-136 into
+          raising a real security signal from fake data. The cert monitor (worker.ts:405 into
+          ops/cert-expiry.ts:124-133) always reports the intermediate at +25d and the end-entity at
+          +5d, so an enterprise bank carries a permanent fabricated CRITICAL certificate alarm while
+          the real scheme-certificate expiry is never observed.
+        acceptance:
+          - Under the enterprise profile an unconfigured source — SLO, certificate chain, Ozone
+            health, liability events, TPP activity, consent drift, CAAP events or liability telemetry
+            — throws a config error rather than serving demo values.
+          - 'No Demo* source is constructed outside a profile-selected factory, and a test asserts
+            that services/bff/src contains no unconditional demo-source construction in a scheduled
+            or request path.'
+          - The CAAP recorder does not write to audit_high_sensitivity under the enterprise profile
+            without a configured event source, and the cert monitor does not raise a critical alarm
+            from a synthetic chain.
+          - The demo profile is unchanged and the demo walkthrough still renders every affected view.
+          - The docstrings claiming an enterprise adapter exists are corrected to match reality, or
+            the adapter seam is made real — either way the code and its documentation agree.
+      - id: STD-12
+        title: Attribution and fixture-provenance hygiene
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The P10/STR workflow was attributed to ADR 0022 in eight places at c5ba31b; the review PR
+          corrected CLAUDE.md:19, leaving SEVEN for this story (
+          packages/ports/src/interfaces.ts:178, packages/ports/test/str-workflow.spec.ts:5,
+          services/bff/src/str/service.ts:9, services/bff/src/str/routes.ts:11,
+          services/bff/test/str-drafts.spec.ts:10, apps/portal/src/components/str-draft-queue.tsx:6,
+          apps/portal/test/str-draft-queue.spec.tsx:14) and to ADR 0024 in a ninth
+          (packages/ports/src/adapters/enterprise/str-workflow.ts:5). ADR 0022 is the public
+          /public/* readiness-wizard carve-out and mentions neither STR nor AML; the real record is
+          ADR 0010, which before the review PR was cited nowhere in the codebase. This story corrects
+          the seven remaining source and test sites plus the ADR 0024 one. Second half — institution
+          fixture provenance. packages/db/src/seed-demo.ts:404-412 carries real UAE company names
+          under a deliberate and sound policy comment at :397-399 (real names for healthy states,
+          fictional for adverse ones), but all six fixtures also carry real-format CN registration
+          numbers that the policy comment does not cover, and there is no never-real convention for
+          institution identifiers to match the 999-prefix and 000-bank-code convention documented for
+          person identifiers at packages/synthetic-data/src/index.ts:108-110.
+        acceptance:
+          - Every STR/P10 citation names ADR 0010; no site attributes the feature to ADR 0022 or 0024.
+          - Institution registration numbers in fixtures use a documented never-real format with the
+            same explicitness as the person-identifier convention, and the policy is bound by a test
+            rather than by prose comments in two packages.
+          - packages/db/test/seed-demo.int.spec.ts pins the new format; the real-name-for-healthy-state
+            policy itself is preserved, since it is deliberate and correct.
+      - id: STD-13
+        title: Reconcile the two collection-rail vocabularies before they are wired together
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          Two rail vocabularies sit side by side. TenantCollectionRail has four values including
+          scheme_net_settlement, which is the shipped DEFAULT preferred rail in both code
+          (packages/db/src/tenant-configuration.ts:46) and DDL
+          (packages/db/migrations/0038_tenant_billing_service.sql:15); DirectCollectionRail
+          (packages/billing/src/collections.ts:130) has the three values the
+          billing_collection_invoice.selected_rail CHECK admits
+          (packages/db/migrations/0035_billing_collections.sql:71). So the shipped default preferred
+          rail is not a persistable selected_rail value. Do NOT "fix" this by widening the CHECK —
+          nothing routes a collection on the tenant preferred rail today (eligibleCollectionRails at
+          collections.ts:133-143 can never return it, and services/bff/src/billing/collections.ts:171
+          throws before any DB write), the tenant value is read back only for display, and the CHECK
+          is plausibly correct by design because scheme net settlement is not a DIRECT-collection
+          rail. What is missing is an explicit, tested relationship between the two types, before
+          someone wires them together. BILLING-domain and overlaps BILL-13..16, which are in flight —
+          reassign to the BILLING track if that is the cleaner owner.
+        acceptance:
+          - The relationship between TenantCollectionRail and DirectCollectionRail is explicit in the
+            type system — a documented mapping or narrowing, not two independent string unions that
+            happen to overlap.
+          - It is impossible to configure a tenant preferred rail that cannot be honoured without the
+            mismatch being caught at configuration time rather than at a future write, and a test
+            covers the scheme_net_settlement case specifically.
+          - The CHECK constraint is left as-is unless a decision record says otherwise; any change to
+            it states why scheme net settlement should become a direct-collection rail.
+          - The fix is coordinated with the in-flight BILL payable work rather than conflicting with it.
+      - id: STD-14
+        title: Make the PRD and README ground-truth claims machine-checked, and revive the dead backlog-count gate
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The PRD's "57 paths, 9 tags" rotted to a real 93/12 and its per-tag table drifted to seven
+          of nine numbers wrong, undetected, because scripts/doc-link-check.mjs checks that claim in
+          README.md only — and CLAUDE.md names the PRD spec canon, so the one canonical surface CI
+          cannot check is the one that rotted. The review PR repaired the PRD by hand; this story
+          makes it stick. Worse, the gate's other numeric check is silently DEAD: doc-link-check.mjs:126
+          matches /(\d+) of the (\d+) backlog items are done/ while README.md:5 reads "159 backlog
+          items are done", so claimedBacklog is null and the check never runs — the real figures are
+          161 done of 193 at the time of writing. A gate that is absent looks exactly like a gate that passed, which is this
+          review's own thesis turned on the repo's tooling. Also sweeps the stale claims the review
+          names but no other story owns — README.md:68 and :127 say "BD-01..16" where PRD section 10
+          now runs to BD-22, and docs/diagrams/architecture.svg:119 still says 57 paths.
+        acceptance:
+          - 'The paths-and-tags assertion applied to README.md:69 is extended to the PRD, and a
+            deliberately wrong count in either file makes pnpm docs:check exit 1 — proven by a test
+            that introduces one.'
+          - The backlog-progress regex matches the README's actual phrasing so the check is live
+            again, and a deliberately wrong done-count fails the gate.
+          - 'The stale claims are corrected against the counts current at the time the story lands —
+            README.md:5 (done-of-total), README.md:68 and :127 (BD-01..22) and
+            docs/diagrams/architecture.svg:119 (93 paths).'
+          - No count anywhere in the repo is asserted by hand without a gate covering it, or the
+            assertion is removed and the doc points at the checked source instead.
+      - id: STD-02
+        title: Interaction Guide v5.0 dispute clocks — re-attribute, and add the missing stage clocks
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The follow-up story PRD BD-16 (docs/PRD_Open_Finance_Back_Office.md:373) and
+          docs/build-log.md:2446-2449 both promised and neither filed. Two distinct problems. First,
+          the shipped respondent clocks (3/15/3/3 business days, services/bff/src/respondent-disputes/service.ts:31-34)
+          are CORRECT under v5.0 inter-participant timelines, and the only v4 attribution is in the
+          contract at specs/backoffice-openapi.yaml:685-686 ("Interaction Guide v4 defaults, BD-16");
+          the module header at :14-18 cites "BD-16 defaults" and needs a v5.0 citation ADDED rather
+          than replaced — fix the attribution, never the values. Second, the v5.0 section 8 stage clocks (30 calendar
+          days to submit, 5 LFI/TPP review, 10 Nebras review, 15 respondent review) are not modelled
+          at all, and there is no calendar-day helper anywhere in services/bff/src — business-hours.ts
+          exports only the three business-day functions, so one must be added beside them. Also fix
+          AMBER_WINDOW_MS (:37), a calendar 24h applied to business-day due dates, so a Monday
+          deadline no longer turns amber on Sunday inside the weekend the module treats as paused.
+        acceptance:
+          - Spec-only PR lands first — the v4 attribution at specs/backoffice-openapi.yaml:685-688 is
+            replaced with a v5.0 citation and the RespondentDispute schema gains the four stage-clock
+            fields; contract tests are written failing before any implementation.
+          - 'Calendar-day and business-day arithmetic are distinct, named and separately tested —
+            a 15-business-day clock is about 21 calendar days and the two must never be conflated.'
+          - The four existing business-day values are UNCHANGED and services/bff/test/respondent-disputes.spec.ts:95-97
+            still passes on its current numbers; only attribution and the new stage clocks change.
+          - Additive migration only, on a table that already carries day-one RLS; the stored row
+            records which clock policy produced its due dates so a future re-baselining can be
+            applied to, and evidenced against, already-open cases.
+          - Clocks are a versioned, override-shaped constant object carrying an explicit IG v5.0 §8
+            citation — as a STANDARDS_BASELINE key if STD-01 has landed, inline otherwise, since ADR
+            0030 is explicit that STD-02 is NOT blocked on the registry and this story must not stand
+            that primitive up by the back door — following the AMBER_WINDOW_MS
+            configurable-at-enterprise-adoption precedent; per-tenant wiring stays M6-gated.
+      - id: STD-03
+        title: Service-desk respond and resolve SLA pairs (IG v5.0 §9.4) — and pause the clock at weekends
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/service-desk/service.ts:30 models one clock per priority (P1 4h, P2 24h,
+          P3 3d, P4 5d). IG v5.0 section 9.4 publishes a respond AND a resolve target per priority —
+          P1 2h/4h, P2 3h/6h, P3 10h/3 business days, P4 3 business days/11 business days — so the
+          SHAPE is wrong, not only the numbers, and the units are mixed (calendar hours and business
+          days in one table). Carries a defect found while verifying, in the same file — line 98
+          computes the due date as raw elapsed milliseconds, so the service-desk clock does NOT pause
+          at weekends. PRD §10 makes weekend pausing a binding adopting-bank default, business-hours.ts:2
+          records it, and every other SLA module in the BFF honours it; service-desk is the only one
+          that never imports business-hours. A P2 opened Friday 16:00 currently breaches Saturday 16:00.
+        acceptance:
+          - Spec-only PR first — ServiceDeskCase gains the respond clock and its overdue flag, and the
+            existing sla_due_at description is re-scoped as the resolve clock citing IG v5.0 §9.4.
+          - Respond and resolve are tracked independently per priority, with the mixed calendar-hour
+            and business-day units modelled explicitly rather than normalised into one unit.
+          - 'The weekend-pause defect is fixed and directly tested — a case opened Friday afternoon
+            is not overdue on Saturday — using the existing business-hours helpers, not new arithmetic.'
+          - Additive migration on the existing RLS-enabled table; the persisted row records the policy
+            version that produced its clocks.
+          - services/bff/test/service-desk.spec.ts assertions are STRENGTHENED to the new contract
+            rather than relaxed, and the Q1b test-integrity gate passes without an exemption.
+      - id: STD-04
+        title: Scheme notice periods per Interaction Guide v5.0 §11
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/scheme-notifications/service.ts:29-30 holds BREAKING_CHANGE_NOTICE_DAYS 30
+          and STANDARD_NOTICE_DAYS 10, and :33-35 applies the single 10-day figure to BOTH planned
+          maintenance and version release. IG v5.0 section 11 publishes three distinct notices — 48
+          hours for scheduled downtime, 15 days for release-schedule and patch-management updates, 30
+          days for a new version release. The 48-hour figure forces hours granularity, which the
+          current day-only model cannot express. The contract text at specs/backoffice-openapi.yaml:1516-1517
+          repeats the 10d/30d figures with no version attribution and no calendar/business unit —
+          unlike the respondent block at :685, it does not even say which guide it came from.
+        acceptance:
+          - Spec-only PR first — the SchemeNotification description carries the v5.0 §11 figures with
+            an explicit version attribution and an explicit calendar-day unit.
+          - Notice requirements are expressed with hours granularity so the 48-hour downtime notice is
+            representable, and each notification type maps to its own v5.0 class.
+          - Additive migration; existing notifications keep the notice figures they were created under.
+          - services/bff/test/scheme-notifications.spec.ts pinned values (currently 10 and 30 at lines
+            50-80) are updated in-story to the new contract, strengthened not weakened.
+      - id: STD-05
+        title: UAE Open Finance consent vocabulary, consent types and validity
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          packages/synthetic-data/src/index.ts:179-184 models consent purposes as AISP_DATA_SHARING /
+          SIP_PAYMENT / COP_CONFIRMATION with OAuth-style scopes (accounts:read, payments:initiate),
+          under a comment calling them OF v2.1 data-scope sets. AISP is UK/EU vocabulary; the UAE roles
+          are BDSP/BSIP/ISP and the data vocabulary is the permission-code set (ReadAccountsBasic,
+          ReadBalances, ReadTransactionsDetail and the rest, plus errata2's ReadStatements and
+          ReadProductFinanceRates, as a FLAT string array — errata2 flattened it from array-of-arrays).
+          The contract constrains none of it (purpose is free text at specs/backoffice-openapi.yaml:3241).
+          Consent types (single-use, long-lived, combined) are absent entirely, and the only expiry
+          logic is fixture behaviour giving Expired and Revoked consents a future expires_at. Also
+          carries a display defect on the bulk-revoke path — apps/portal/src/components/care-console.tsx:44
+          counts with REVOCABLE (including AwaitingAuthorization) while services/bff/src/consents/bulk-revoke.ts:34
+          sweeps ACTIVE_STATUSES, so the INITIATOR-facing count can exceed what is actually revoked.
+          Scope it accurately: the approval record is NOT inflated, because the four-eyes wire
+          projection emits only a descriptor for consents.bulk_revoke (approvals/operation-summary.ts:62-67)
+          and the second approver is never shown a count at all.
+        acceptance:
+          - Spec-only PR first — ConsentAdminView gains a consent_type enum and the purpose and scope
+            fields are constrained to UAE permission codes rather than carrying a PSD2 example.
+          - Fixtures emit UAE permission codes as a flat string array including the two added by
+            errata2; no AISP-derived or OAuth-style scope string remains anywhere in the repo.
+          - 'Consent types are modelled with their validity rule — long-lived consents are capped at
+            one year — and a terminal-state consent no longer carries a future expiry date.'
+          - 'The portal and BFF agree on what is revocable — AwaitingAuthorization is not granting
+            access and is not swept — so the count shown to the initiator equals the number of
+            consents the approved sweep will actually revoke, and a test asserts that equality.'
+      - id: STD-06
+        title: Nebras simulator — consent state machine, FAPI header echo, fault queue, one error envelope
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-05]
+        note: >-
+          services/nebras-sim/src/app.ts is a 199-line fixture server, not a Hub model, and four gaps
+          matter. It never echoes x-fapi-interaction-id (the only response header it ever sets is
+          retry-after at :80) even though the demo P6 adapter sends it on every call and the standard
+          makes it mandatory on responses — so the end-to-end propagation guarantee terminates at the
+          Hub boundary. It has no consent state machine, returning a fabricated Authorized for ANY
+          unknown id via the ?? fallback at :105 and always 200 on revoke, where API Hub release
+          2026.22.0 now returns 400 for revoke in a non-revocable state. Its two report surfaces are
+          seeded incoherently with the Consent Manager (measured overlap zero for every 2026 period),
+          so a cross-surface reconciliation silently reads every dataset consent as Authorized. And
+          activeFault at :71-72 finds over an append-only array, so only the first fault of each kind
+          is ever reachable and an exhausted rate-limit fault permanently shadows re-injection.
+        acceptance:
+          - x-fapi-interaction-id is echoed on every simulator response, and a test asserts the value
+            round-trips from the P6 adapter through the simulator unchanged.
+          - 'Unknown consent id returns 404, and revoke in a non-revocable state returns 400 per API
+            Hub 2026.22.0; the Consent Manager and the dataset surface are seeded coherently so ids
+            from one resolve in the other.'
+          - Faults are queued per kind rather than first-match-only, an exhausted fault is removed
+            rather than left shadowing re-injection, and the admin listing reports true state.
+          - One error envelope across all routes; the five admin validation paths stop returning a
+            bare string where hub routes return a structured code and message.
+          - The dispute case-id seed no longer collapses distinct disputes onto one case when the
+            optional originating_payment_id is absent.
+          - 'services/nebras-sim/test/sim.spec.ts is updated in-story — it currently locks in the
+            any-id-is-revocable behaviour at lines 16-25, so the assertions must be strengthened to
+            track the new contract and the Q1b gate must pass without an exemption.'
+          - Existing fault-injection semantics keep working end to end so docs/demo-script.md and the
+            run-ofbo flows are unaffected.
+      - id: STD-07
+        title: Close the P6 port-swap gate — simulator routes for syncDirectory and refund
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-06]
+        note: >-
+          NebrasEgressPort declares seven methods (packages/ports/src/interfaces.ts:85-106) and the
+          simulator serves HTTP routes for five. syncDirectory and dispatchRefund have no route at
+          all — the demo adapter answers them from in-process constants, a hardcoded three-row
+          DIRECTORY at packages/ports/src/adapters/sim.ts:193-197 and a fixed ipp_status ACSP at
+          :276-279 — while the enterprise adapter really calls GET /directory and POST
+          /payment-consents/{id}/refund. CLAUDE.md makes the shared port-contract suite the M6
+          port-swap acceptance gate, so for these two operations the gate is structurally unable to
+          detect a defect in the enterprise call. The fixed ACSP also makes the negative IPP paths
+          unreachable, so a rejected refund cannot be demonstrated. Separately the refund transport
+          disagrees with the scheme — specs/backoffice-openapi.yaml:657-660 and the scheme's own
+          chargeable-endpoint table both describe a GET, the enterprise adapter at
+          packages/ports/src/adapters/enterprise/nebras-egress.ts:90-97 issues a POST.
+        acceptance:
+          - Spec-only PR first for the refund-transport correction — specs/backoffice-openapi.yaml:657-660
+            describes a GET while the enterprise adapter POSTs, so the contract text moves before any
+            adapter does, with contract tests written failing beforehand.
+          - The simulator serves both operations over HTTP, and both adapters are bound by the shared
+            port-contract suite so the M6 gate covers all seven NebrasEgressPort methods.
+          - The refund transport is reconciled to one scheme-faithful shape across the contract text,
+            both adapters and the simulator, with the discrepancy resolved rather than documented.
+          - A refund can return a rejected IPP status in the demo profile, so the negative path is
+            demonstrable instead of hardcoded to ACSP.
+          - LINE_TYPES in packages/synthetic-data/src/index.ts:96 gains dao_api_call, which the
+            contract at :3147 and migration 0021_dao_line_type.sql already carry.
+          - No port-contract test is skipped to make the suite pass; a genuinely inapplicable case is
+            asserted as such with its reason.
+      - id: STD-08
+        title: Payment-rail vocabulary — UAEFTS, rail-dependent terminals, and an enum on ipp_status
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-05]
+        note: >-
+          UAEFTS appears nowhere in the repo. The UAE domestic execution model is LFI-selected —
+          intra-bank for same-LFI, AANI as the primary inter-bank rail with automatic UAEFTS fallback
+          — and the terminal status differs by rail, ACWP on AANI against ACCC on UAEFTS and
+          intra-bank. The repo models five IPP codes (packages/synthetic-data/src/index.ts:190) and
+          neither ACWP nor ACWC exists anywhere, and no rail field exists on any payment object (the
+          rail hits in migrations are BILLING collection rails, a different concept). The contract
+          does not constrain it either — ipp_status at specs/backoffice-openapi.yaml:3278 is a bare
+          string with a prose description and no enum, so a sixth code from a real hub would validate
+          silently, unlike LineType at :3147 which is enumerated. Dated driver, already recorded in
+          this repo at docs/research/lfi-billing-system-tier2.md:80 — Standards V2.2 makes paymentRail
+          mandatory on terminal payment-log entries, Tier 2 release 28 Feb 2027 and go-live 31 May 2027.
+        acceptance:
+          - Spec-only PR first — ipp_status becomes an enum and the payment admin view gains a rail
+            field distinguishing the domestic execution rails.
+          - Rail-dependent terminal statuses are modelled, so an AANI-settled payment and a UAEFTS
+            fallback do not report the same terminal code, and the mapping is directly tested.
+          - The five hardcoded copies of the IPP code list collapse to the contract enum as the single
+            source, so the codes cannot drift between fixtures, tests and adapters.
+          - The V2.2 paymentRail obligation and its Tier 2 dates are recorded against this item so the
+            forward requirement has a delivery hook rather than living only in a research doc.
+      - id: STD-01
+        title: Standards-baseline registry and errata watch
+        status: blocked
+        reason: >-
+          ADR 0030 is Proposed and awaits a human accept/reject, and it carries a sub-decision the
+          story depends on — whether fetching scheme documentation pages direct from the Worker is
+          an intended carve-out from the P6 no-direct-egress rule. Ruling (a) makes this an in-code
+          change; ruling (b) makes it a P6 story with a fixture-backed demo profile.
+        research: docs/reviews/standards-conformance-2026-08.md
+        adr: docs/adrs/0030-standards-baseline-registry.md
+        note: >-
+          No file states the baseline as v2.1-final + errata3; the only standards-version string in
+          the repo is free text in one OpenAPI description (specs/backoffice-openapi.yaml:3164) and
+          the word errata appears three times, all on one line of a research doc. Pin the four scheme
+          documents (Standards + errata level, API Hub release, Interaction Guide, Liability Model)
+          as a deep-frozen constant with version, effectiveFrom, source and verifiedOn per entry, in
+          @ofbo/contracts beside the generated types, copying packages/billing/src/rate-card.ts. Then
+          add errata sources to the EXISTING weekly watcher
+          (services/bff/src/billing/rate-card-watch.ts already fetches three pricing URLs) so a move
+          opens the same High-classification, autoApply-false review task. SOURCE AUTHORITY MATTERS
+          HERE — the Release Notes and Errata register at nebras-open-finance.com is filed in this
+          repo's own research at docs/research/lfi-billing-system-tier2.md:387 under "Scheme
+          (community, unofficial)"; the official records are the CBUAE/OF Confluence pages at :385.
+          Pin the official page as primary and treat the mirror as a secondary early-warning source,
+          per ADR 0030. Scope also covers CBUAE_RELEASE_CALENDAR
+          (services/bff/src/analytics/programme.ts:20-24), three hardcoded scheme deadlines feeding a
+          board-facing view with no source, no version and no watch. The mechanism that would have
+          caught the IG v5.0 drift already exists and is pointed at the wrong pages.
+        acceptance:
+          - The baseline is one deep-frozen exported constant naming every scheme document the code
+            depends on, each carrying its version, effective date, source URL and verified-on date;
+            errata level is recorded per-file because the scheme resolves errata per file.
+          - 'A change to any watched source opens a High-classification review task with autoApply
+            false and requiresApproval true, notifying Compliance and Operations — the watcher never
+            edits the baseline and never gates a merge on a scheme document''s contents.'
+          - A baseline fact the scheme has not settled carries an explicit ASSUMED marker, matching
+            the yearAnchor precedent in the rate card rather than shipping a confident wrong value.
+          - The egress ruling recorded in ADR 0030 is implemented and commented at the call site,
+            naming the ADR, so the next reader does not have to re-derive whether it was deliberate.
+          - Unit-tested as a pure function against a synthetic before/after pair; no new table, no
+            migration, and no change to RLS, retention, classification or lineage surfaces.
+
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +
   # insurers in parallel, Tier 1 M6 deploy as the later upmarket motion. Build order: VAL first
