@@ -207,8 +207,20 @@ export class TppCostDocumentIngestService {
     try {
       document = parser.parse(JSON.parse(raw.toString('utf8')))
     } catch (error) {
-      if (error instanceof UnparseableDocumentError || error instanceof SyntaxError) {
+      // A SyntaxError from JSON.parse embeds a SNIPPET OF THE SOURCE TEXT in its message — and this
+      // parse runs BEFORE redaction, so passing it through would carry raw provider bytes into the
+      // error envelope and into anything downstream that records it. The parser's own
+      // UnparseableDocumentError is written not to echo provider values, so it is safe to surface.
+      if (error instanceof UnparseableDocumentError) {
         throw new TppCostDocumentError('BACKOFFICE.UNPARSEABLE_DOCUMENT', error.message, 422)
+      }
+      if (error instanceof SyntaxError) {
+        throw new TppCostDocumentError(
+          'BACKOFFICE.UNPARSEABLE_DOCUMENT',
+          'The uploaded file is not valid JSON. The parser error is deliberately not echoed, because '
+          + 'it quotes the offending source text and this runs before redaction.',
+          422
+        )
       }
       throw error
     }
@@ -225,9 +237,17 @@ export class TppCostDocumentIngestService {
     try {
       // Retain the original outside the ledger FIRST, so the ledger row can point at it — but only
       // after every refusal above has passed. An earlier version archived before validating, so a
-      // document rejected as a conflict had already had its raw bytes retained. The archive holds
-      // UNREDACTED provider content, which is the point (the original must stay auditable) and also
-      // why it must not accumulate copies of documents we refused.
+      // document rejected for a bad period or a self-verification had already had its raw bytes
+      // retained. The archive holds UNREDACTED provider content, which is the point (the original must
+      // stay auditable) and also why it must not accumulate copies of documents we refused.
+      //
+      // Stated honestly rather than overclaimed: ONE refusal still lands after this write. The store's
+      // conflict (a restatement, or a reused idempotency key) can only be detected by the store, and
+      // the store needs `rawDocumentRef` to insert — so the archive write must precede it. A 409'd
+      // document therefore leaves an archived original. That is the lesser evil of the two available:
+      // the alternative is archiving after the insert, which would leave the ledger pointing at an
+      // artifact that does not exist. Reclaiming those orphans belongs to the archive implementation's
+      // retention policy, alongside the obligations below.
       //
       // Obligations on whoever implements RawDocumentArchive, since the interface cannot enforce them:
       // tenant-scoped access, the same 24-month/5-year retention as the ledger, a classification no
@@ -282,6 +302,25 @@ export class TppCostDocumentIngestService {
           // Counts and key PATHS only — never the redacted values.
           redacted_field_count: document.redactedFieldCount,
           redacted_paths: document.redactedPaths
+        }
+      })
+    } else {
+      // The replay path returns the FULL stored document, every line included. That is a read of
+      // regulated evidence and is audit-relevant on its own terms, so it gets its own record rather
+      // than passing unlogged because nothing was written. Deliberately narrower than the ingest
+      // event: no totals, no redaction paths — nothing was parsed into the ledger here.
+      await this.deps.audit.emit({
+        event_type: 'billing_tpp_cost_document_replayed',
+        acting_principal: uploader,
+        acting_persona: String(principal.persona),
+        scope_used: BILLING_WRITE_SCOPE,
+        request_trace_id: traceId,
+        response_status: 200,
+        request_body: {
+          document_id: saved.record.id,
+          document_reference: document.documentReference,
+          billing_period: document.billingPeriod,
+          issuer_id: document.issuerId
         }
       })
     }
@@ -429,8 +468,17 @@ export function tppCostDocumentRoutes(
         const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
         const idempotencyKey = c.req.header('idempotency-key')
         if (!idempotencyKey) return c.json(missingIdempotencyKey(), 400)
+        // Covers the DECLARED fields as well as the bytes. Keying on bytes alone let a reused key with
+        // an identical file but a different `verified_by` replay the first response — telling the
+        // caller their verifier was recorded when the first one was, and that field is the endpoint's
+        // second-person evidence.
+        const requestFingerprint = createHash('sha256')
+          .update(bytes)
+          .update(`\u0000${fields.documentType ?? ''}\u0000${fields.billingPeriod ?? ''}`)
+          .update(`\u0000${fields.verifiedBy ?? ''}\u0000${fields.sourceNote ?? ''}`)
+          .digest('hex')
         const cacheKey = `billing:tpp-cost-document|${c.get('principal').subject}|${idempotencyKey}`
-          + `|${createHash('sha256').update(bytes).digest('hex')}`
+          + `|${requestFingerprint}`
         return replayCached(c, idempotency, cacheKey, async () => {
         try {
           const result = await service.ingest(c.get('principal'), { ...fields, fileBytes: bytes }, idempotencyKey, traceId)
