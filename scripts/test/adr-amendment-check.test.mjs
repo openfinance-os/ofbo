@@ -36,12 +36,35 @@ const boldLabel = '# ADR 0004 — x\n\n- **Status:** Accepted (2026-06-18)\n'
 const withRow = (date) =>
   `${accepted}\n### Amendments after acceptance\n\n| date | amendment |\n| --- | --- |\n| ${date} | corrected a fact |\n`
 
-test('ADR paths and numbers are recognised by the NNNN- prefix', () => {
+test('an ADR is docs/adrs/NNNN-*.md — both halves', () => {
   assert.ok(isAdrPath('docs/adrs/0030-adr-amendment-convention.md'))
-  assert.ok(!isAdrPath('docs/adrs/README.md'))
+  assert.ok(!isAdrPath('docs/adrs/README.md'), 'wrong basename shape')
   assert.ok(!isAdrPath('docs/build-log.md'))
+  // The directory half is load-bearing: it is what makes a move OUT of docs/adrs/ visible as a
+  // rename of an ADR rather than as a bare deletion (finding 2).
+  assert.ok(!isAdrPath('docs/0007-moved-out.md'), 'right shape, wrong directory')
   assert.equal(adrNumber('docs/adrs/0007-tpp-payables.md'), '0007')
   assert.equal(adrNumber('docs/adrs/README.md'), null)
+})
+
+test('FINDING-1/2: a rename is scoped on the OLD path, wherever it lands', () => {
+  // Testing the DESTINATION let a rename out of the ADR shape walk past the gate entirely.
+  // Both of these were reproduced live on PR #324 and both exited 0 before this fix.
+
+  // 1: renamed to a filename that no longer matches NNNN-*.md
+  assert.deepEqual(
+    parseNameStatus('R051\tdocs/adrs/0007-payables.md\tdocs/adrs/adr-0007-payables.md'),
+    [{ path: 'docs/adrs/adr-0007-payables.md', basePath: 'docs/adrs/0007-payables.md' }],
+  )
+
+  // 2: moved out of docs/adrs/ entirely
+  assert.deepEqual(parseNameStatus('R100\tdocs/adrs/0007-payables.md\tdocs/0007-payables.md'), [
+    { path: 'docs/0007-payables.md', basePath: 'docs/adrs/0007-payables.md' },
+  ])
+
+  // The converse stays exempt: a non-ADR file renamed INTO the ADR shape is a new record,
+  // not a modification of an accepted one.
+  assert.deepEqual(parseNameStatus('R100\tdocs/notes/draft.md\tdocs/adrs/0031-new.md'), [])
 })
 
 test('FINDING-1: the bold `- **Status:**` form is read, not silently exempted', () => {

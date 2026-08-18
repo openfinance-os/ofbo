@@ -2651,7 +2651,30 @@ ADR 0007 BACKFILLED in the same change — the one known case where document and
 with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
 including a row recording that the table was added retrospectively.
 
-Evidence: 11 guard tests (47 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+THE HARNESS EARNED ITS KEEP ON THIS PR, TWICE, AGAINST A GATE I WROTE. HARNESS-16's advisory
+hard-stop reviewer returned VERDICT: FAIL (7 findings) on the first draft of this check and
+REPRODUCED three live bypasses rather than asserting them. Round two returned FAIL (3) and
+reproduced two more — both the same root cause: the rename branch tested `isAdrPath` on the
+DESTINATION path, so renaming an accepted ADR out of the matched shape while rewriting it walked
+past the gate entirely (`0007-payables.md` -> `adr-0007-payables.md`, exit 0, "nothing to check"),
+as did moving it out of `docs/adrs/` (a bare `D` under the old pathspec, read as the documented
+deletion carve-out). Fixed by scoping on the ORIGIN path and dropping the pathspec: what puts a
+change in scope is that the thing being edited WAS an accepted ADR on base — where the author
+moves it to is exactly the freedom the bypass exploited.
+
+Two findings were mine to own, not the reviewer's to catch. A commit claimed a rename fix and two
+tests and shipped NEITHER: a live bypass probe ran `git add -A && git commit` (sweeping
+uncommitted work) then `git reset --hard HEAD~1` (discarding it), and the commit message carried
+the tell in its own test count. Both reviewers caught the empty commit. Process fix adopted and
+held since: COMMIT FIRST, THEN PROBE. Separately the reviewer flagged, out of scope, a FALSE-RED
+I had introduced while fixing finding 2 — `hasNewAmendmentRow` keyed its row set on the ISO date
+alone, so a second genuine amendment on a day the ADR had already been amended read as "already
+there". ADR 0007 carries two rows dated 2026-08-17, so it was days from biting. A false red on
+compliant work is worse than most bypasses: a bypass lets one bad change through, a false red
+blocks a good one and teaches people the gate is noise, which is how a control stops being read
+at all. Now compared on whole normalised rows.
+
+Evidence: 16 guard tests (52 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
 (accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
 EXISTING amendment table does not license silent editing forever after — the defect that would
 quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.

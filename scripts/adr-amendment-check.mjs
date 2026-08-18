@@ -58,7 +58,15 @@ import process from 'node:process'
 const ADR_DIR = 'docs/adrs'
 const ADR_RE = /^(\d{4})-.+\.md$/
 
-export const isAdrPath = (path) => ADR_RE.test(path.split('/').pop() ?? '')
+/**
+ * Is this an ADR *as it lives on the base branch* — i.e. `docs/adrs/NNNN-*.md`?
+ *
+ * Both halves matter, and the directory half is deliberately explicit rather than implied by a
+ * diff pathspec: scoping the git diff to `docs/adrs/` made moving an ADR OUT of the directory
+ * look like a bare deletion (finding 2 on PR #324). The scope test now travels with the path.
+ */
+export const isAdrPath = (path) =>
+  path.startsWith(`${ADR_DIR}/`) && ADR_RE.test(path.split('/').pop() ?? '')
 
 /** The 4-digit ADR number from a path — `docs/adrs/0007-foo.md` → `'0007'`; null if not an ADR. */
 export const adrNumber = (path) => path.split('/').pop()?.match(ADR_RE)?.[1] ?? null
@@ -202,8 +210,15 @@ export const parseNameStatus = (raw) => {
   for (const [status, a, b] of rows) {
     if (status === 'M' && a && isAdrPath(a)) {
       direct.push({ path: a, basePath: a })
-    } else if (/^[RC]\d*$/.test(status) && b && isAdrPath(b)) {
+    } else if (/^[RC]\d*$/.test(status) && a && b && isAdrPath(a)) {
       // R100 / R087 / C075 — new path is field 3, old path field 2.
+      //
+      // SCOPED ON THE OLD PATH, NOT THE NEW ONE. Testing the destination let a rename OUT of
+      // the ADR shape walk past the gate entirely: `0007-x.md` -> `adr-0007-x.md`, or a move to
+      // `docs/0007-x.md`, both stopped matching and the whole change was dropped (findings 1
+      // and 2 on PR #324, both reproduced). What makes a change in scope is that the thing
+      // being edited WAS an accepted ADR on base — where the author moves it to is exactly the
+      // freedom the bypass exploited.
       direct.push({ path: b, basePath: a })
     } else if (status === 'D' && a && isAdrPath(a)) {
       deletedByNum.set(adrNumber(a), a)
@@ -220,8 +235,15 @@ export const parseNameStatus = (raw) => {
   return [...direct, ...collisions]
 }
 
+/**
+ * NO PATHSPEC, deliberately. Restricting the diff to `docs/adrs/` meant git reported a move OUT
+ * of the directory as a bare `D` — indistinguishable from the documented deletion carve-out, so
+ * rewrite-plus-relocate was exempt (finding 2 on PR #324, reproduced). Scoping now lives in
+ * `isAdrPath`, which travels with the path and sees both ends of a rename. The whole-tree
+ * name-status is cheap: one line per changed file, no content.
+ */
 const changedAdrs = (base) =>
-  parseNameStatus(mustGit(['diff', '--name-status', `${base}...HEAD`, '--', `${ADR_DIR}/`]))
+  parseNameStatus(mustGit(['diff', '--name-status', `${base}...HEAD`]))
 
 const main = () => {
   const base = resolveBase()
