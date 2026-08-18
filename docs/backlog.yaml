@@ -1025,6 +1025,10 @@ milestones:
             with no deletion path; redact P9 responses before the first INSERT, asserted by
             test, and only then consider the cross-tenant bank_internal_view SELECT grant
             that BILL-13 deliberately withheld on billing_tpp_cost_ap_dispatch.
+          - Dispatch state advances by APPENDING a row, never by UPDATE — the table is
+            INSERT-only with UNIQUE (bank_id, idempotency_key, dispatch_state). The schema
+            does not constrain transition ORDER, so this story owns rejecting an illegal
+            sequence (e.g. accepted after rejected) at write time.
         progress: >-
           PARTIAL - domain, service and port layers built; the STORE layer is not, so no
           criterion is deliverable end to end yet and criterion 5 is entirely unstarted.
@@ -1057,10 +1061,6 @@ milestones:
           approved_by stamped from one normalised P2 claim AND equal to the cited approval's
           own principals, and P9 response_payload redaction before the first INSERT) live in
           the store write path that does not exist yet.
-          - Dispatch state advances by APPENDING a row, never by UPDATE — the table is
-            INSERT-only with UNIQUE (bank_id, idempotency_key, dispatch_state). The schema
-            does not constrain transition ORDER, so this story owns rejecting an illegal
-            sequence (e.g. accepted after rejected) at write time.
       - id: BILL-17
         title: TPP Cost Management console + governed exports + demo scenarios + hosted smoke
         status: pending
