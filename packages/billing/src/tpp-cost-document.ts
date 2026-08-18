@@ -426,7 +426,7 @@ export function parseNebrasTaxInvoice(
   }
 
   const lines: ParsedTppCostDocumentLine[] = []
-  for (const rawSection of sections) {
+  for (const [sectionIndex, rawSection] of sections.entries()) {
     const section = requireObject(rawSection, 'section')
     const treatment = section.vat_treatment
     if (treatment !== 'exclusive' && treatment !== 'inclusive') {
@@ -451,7 +451,12 @@ export function parseNebrasTaxInvoice(
       throw new UnparseableDocumentError('section must carry at least one line')
     }
 
-    for (const rawLine of sectionLines) {
+    for (const [lineIndex, rawLine] of sectionLines.entries()) {
+      // Ordinal, not `line_ref`. The refusal still has to say WHICH line so a finance operator can
+      // act on a several-hundred-line invoice, but the position is ours (derived from the document
+      // structure) whereas `line_ref` is a free-text provider string that can carry customer detail
+      // — and this message is surfaced verbatim in the 422 envelope, ahead of any redaction.
+      const at = `section ${sectionIndex + 1}, line ${lineIndex + 1}`
       const line = requireObject(rawLine, 'line')
       const lineRef = requireString(line, 'line_ref', 'line.line_ref')
       const sourceCategory = requireString(line, 'category', 'line.category')
@@ -470,7 +475,7 @@ export function parseNebrasTaxInvoice(
         // Hub layout: unit price is a net scheme rate in fils, possibly fractional (2.5, 0.5).
         const unitPriceFils = line.unit_price_fils
         if (typeof unitPriceFils !== 'number' || !Number.isFinite(unitPriceFils) || unitPriceFils < 0) {
-          throw new UnparseableDocumentError(`line ${lineRef} must carry a non-negative unit_price_fils`)
+          throw new UnparseableDocumentError(`${at} must carry a non-negative unit_price_fils`)
         }
         unitPriceMilliFils = fils(unitPriceFils)
         split = splitVatExclusive(unitPriceMilliFils * units)
@@ -478,7 +483,7 @@ export function parseNebrasTaxInvoice(
         // LFI layout: the stated amount is gross and carries VAT at 5/105.
         const grossFils = line.gross_fils
         if (typeof grossFils !== 'number' || !Number.isFinite(grossFils) || grossFils < 0) {
-          throw new UnparseableDocumentError(`line ${lineRef} must carry a non-negative gross_fils`)
+          throw new UnparseableDocumentError(`${at} must carry a non-negative gross_fils`)
         }
         split = splitVatInclusive(fils(grossFils))
         unitPriceMilliFils = units > 0 ? divideHalfUp(split.netMilliFils, units) : 0
