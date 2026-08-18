@@ -5372,7 +5372,17 @@ export interface components {
             event_type?: string;
             acting_principal?: string;
             acting_persona?: string;
-            /** @description The declared scope that authorised the action, or the literal `system` for a scheduled actor that no principal authorised. Scheduled jobs previously stamped invented tokens (`billing:rate`, `reconciliation:run`, …) that named scopes an auditor could not resolve against this contract — permanently, since the trail is INSERT-only with a five-year retention and no deletion path. The job's identity is carried by `acting_principal` and `event_type`, so nothing is lost by recording that no scope was involved (CODE-03). */
+            /**
+             * @description The declared scope that authorised the action, or one of exactly three declared non-scope literals. Scheduled jobs previously stamped invented tokens (`billing:rate`, `reconciliation:run`, …) that named scopes an auditor could not resolve against this contract — permanently, since the trail is INSERT-only with a five-year retention and no deletion path. Identity is carried by `acting_principal` and `event_type`, so nothing is lost by recording that no scope was involved (CODE-03).
+             *
+             *     The three, kept distinct because collapsing them is the blurring the trail exists to prevent — an auditor must be able to tell a headless job from a person whose action no scope mediated:
+             *
+             *     - `system` — a scheduled actor that no principal authorised.
+             *     - `none` — an auth-lifecycle event (signin failure, signout) where a HUMAN acted and no scope was in play. Filing these under `system` would attribute a person's failed signin to a machine.
+             *     - `seed` — demo-profile seed provenance, written by the seed scripts. Never an authorisation; the demo environment is permanently non-prod.
+             *
+             *     This list is the contract half of a closed loop: the three literals are declared once in `packages/db/src/audit.ts`, the CODE-03 resolvability check builds its allow-list from those same constants, and a test asserts every declared constant appears here. An earlier version of this description named only `system` while the code wrote all three, which reproduced CODE-03's own defect — a value an auditor cannot resolve against the contract — inside the change that was supposed to close it.
+             */
             scope_used?: string;
             target_psu_identifier?: string | null;
             /** Format: uuid */

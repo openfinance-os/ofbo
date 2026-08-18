@@ -262,6 +262,29 @@ describe('CODE-03 audit scope resolvability', () => {
       .toEqual(['billing:write'])
   })
 
+  it('declares every sentinel it allows in the CONTRACT, not just in code', () => {
+    // The half that was missing, and it was the CODE-03 defect reproduced inside the CODE-03 fix.
+    // The allow-list above admits three non-scope literals; the spec's own `scope_used` description
+    // named only `system`. So the check was deliberately WIDER than the contract it polices, and two
+    // of the three values remained exactly what the ticket set out to eliminate — a value an auditor
+    // cannot resolve against the contract, written permanently into an INSERT-only table.
+    //
+    // Reading the spec text rather than a copy of it is the point: the constants are declared once in
+    // packages/db/src/audit.ts, the allow-list is built from them, and this asserts the contract
+    // describes the same set. Add a fourth constant without amending the spec and this fails.
+    const spec = readFileSync(join(import.meta.dirname, '../../../specs/backoffice-openapi.yaml'), 'utf8')
+    const start = spec.indexOf('        scope_used:')
+    const end = spec.indexOf('        target_psu_identifier:', start)
+    expect(start, 'AuditEvent.scope_used not found in the spec').toBeGreaterThan(-1)
+    expect(end, 'could not bound the scope_used description').toBeGreaterThan(start)
+    const description = spec.slice(start, end)
+
+    for (const sentinel of [SYSTEM_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE, SEED_ACTOR_SCOPE]) {
+      expect(description, `\`${sentinel}\` is written to scope_used but the contract does not declare it`)
+        .toContain(`\`${sentinel}\``)
+    }
+  })
+
   it('declares the system sentinel and the non-HTTP response sentinel', () => {
     // Named constants rather than bare strings at fourteen call sites, so the convention is one
     // decision rather than fourteen chances to diverge again.

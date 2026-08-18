@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { PgAuditEmitter } from '../src/audit.js'
+import { SYSTEM_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE } from '../src/audit.js'
 import { retentionStatus, withDenialLogging } from '../src/retention.js'
 
 const url = process.env.DATABASE_URL
@@ -60,12 +61,24 @@ describe('BACKOFFICE-50 — retention lifecycle', () => {
       })
     ).rejects.toThrow(/permission denied/)
     const logged = await admin.query(
-      `SELECT event_type, request_body_redacted->>'attempted_table' AS t FROM audit_high_sensitivity
+      `SELECT event_type, scope_used, response_status, acting_principal,
+              request_body_redacted->>'attempted_table' AS t FROM audit_high_sensitivity
        WHERE request_trace_id = $1 AND event_type = 'regulated_record_mutation_denied'`,
       [TRACE]
     )
     expect(logged.rows).toHaveLength(1)
     expect(logged.rows[0].t).toBe('audit_high_sensitivity')
+
+    // CODE-03: the actor here is a PERSON — DenialActor carries their principal and persona, and the
+    // row records it. So the row must not claim a system actor. A sweep that stamped the SYSTEM
+    // sentinel here wrote "no principal authorised this" onto a named human's denied attempt to
+    // mutate a regulated record, permanently, in the one table with no correction path. Nothing
+    // asserted the column, which is why the wrong value survived review.
+    expect(logged.rows[0].acting_principal).toBe('demo:operations-analyst')
+    expect(logged.rows[0].scope_used).toBe(UNSCOPED_AUTH_EVENT_SCOPE)
+    expect(logged.rows[0].scope_used).not.toBe(SYSTEM_ACTOR_SCOPE)
+    // Both halves stay coherent: a human acted, no scope mediated it, a real 403 was served.
+    expect(logged.rows[0].response_status).toBe(403)
   })
 
   it('non-permission errors pass through unlogged (only denials are audit events)', async () => {
