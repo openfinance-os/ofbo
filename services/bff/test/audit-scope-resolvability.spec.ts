@@ -73,7 +73,11 @@ function scopeExpression(text: string, from: number): string {
     else if (ch === ')' || ch === ']' || ch === '}') {
       if (depth === 0) return text.slice(from, i).trim()
       depth -= 1
-    } else if (depth === 0 && (ch === ',' || ch === '\n')) return text.slice(from, i).trim()
+    // `;` terminates too: in an interface, `scope_used: string;` ends there. Omitting it made the
+    // scan depend on SOURCE FORMATTING — the type position resolved as `string` in this repo's
+    // semicolon-free style and as `string;` once Stryker re-printed the file for mutation
+    // testing, which is how a green local run and a red CI run disagreed about the same source.
+    } else if (depth === 0 && (ch === ',' || ch === ';' || ch === '\n')) return text.slice(from, i).trim()
   }
   return text.slice(from).trim()
 }
@@ -235,6 +239,27 @@ describe('CODE-03 audit scope resolvability', () => {
     // The scan above reads TypeScript object literals. A raw INSERT writes the same regulated column
     // and is invisible to it — which is how the seed writers' token stayed outside the inventory.
     expect(rawSqlAuditWriters()).toEqual([...RAW_SQL_AUDIT_WRITERS].sort())
+  })
+
+  it('reads a type position the same way however the source is punctuated', () => {
+    // Not decoration. Stryker re-prints the files it instruments, so `scope_used: string` becomes
+    // `scope_used: string;` — and the first version of this scan, which stopped only at `,` and a
+    // newline, then read the value as `string;`, matched no type pattern, and reported the interface
+    // declaration in high-class-audit.ts as an unresolvable EMISSION. A guard whose verdict depends
+    // on trailing punctuation is a guard that disagrees with itself between two runs of one commit.
+    const constants = new Map<string, string>([['BILLING_WRITE_SCOPE', 'billing:write']])
+    for (const [label, source] of [
+      ['bare', 'scope_used: string'],
+      ['semicolon', 'scope_used: string;'],
+      ['union', 'scope_used: string | null;'],
+      ['comma', 'scope_used: string,']
+    ] as const) {
+      expect(scopeExpression(source, source.indexOf(':') + 2), label)
+        .toMatch(/^string(\s*\|\s*null)?$/)
+    }
+    // And a real emission is unaffected by the same terminator.
+    expect(possibleValues(scopeExpression('scope_used: BILLING_WRITE_SCOPE,', 12), constants))
+      .toEqual(['billing:write'])
   })
 
   it('declares the system sentinel and the non-HTTP response sentinel', () => {
