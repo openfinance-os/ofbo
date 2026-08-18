@@ -837,10 +837,15 @@ milestones:
             Granting that read is part of THIS story only once redaction is proven.
           - verified_by and verified_at (migration 0039) are NOT NULL but bound to nothing —
             denormalised second-person-verification evidence, the same weakness the AP-dispatch
-            principal columns carry. This story owns making them correspond to the principal
-            who actually performed the verified-manual-upload check, stamped from the P2
-            subject claim and never from operator-supplied input, and must refuse an upload
-            whose verifier equals its uploader.
+            principal columns carry. RATIFIED as operator attestation, revised from the original
+            wording after review found the built behaviour differed from it. The UPLOADER is
+            stamped from the P2 subject claim and never from operator-supplied input, while
+            verified_by NAMES the second person from the request and is refused when it equals
+            the uploader. That proves distinctness between two names, NOT that the verifier
+            authenticated, and the code, the spec and this criterion must all say so in those
+            terms. A genuinely authenticated second person belongs on the existing four-eyes
+            primitive (202 + approval_request) as its own story, never on a second mechanism
+            invented at this endpoint.
         outcome: >-
           POST /back-office/billing/tpp-cost-documents added spec-first (94 paths). Parsing lives in
           packages/billing/src/tpp-cost-document.ts behind TppCostDocumentParser so a PDF/EDI/API
@@ -866,17 +871,20 @@ milestones:
           papered over with a heuristic that destroys required evidence. Migration 0040 grants the
           cross-tenant internal-view read on billing_tpp_cost_document that BILL-13 deliberately
           withheld, now that redaction is proven against a persisted row; ap_dispatch stays withheld
-          for BILL-16 on the same terms. CORRECTION, and it is a correction of this line: verified_by
-          is NOT bound to a P2 claim. Only the UPLOADER comes from principal.subject; verified_by is
-          read from the multipart body (tpp-cost-document.ts:450), and the refusal (409) when it
-          equals the uploader proves DISTINCTNESS from a free-text string, not that the verifier ever
-          authenticated. The acceptance criterion requires the P2 claim, and the spec description
-          asserts 'neither is taken from the request body' (backoffice-openapi.yaml:1850) while its
-          own schema 24 lines later REQUIRES verified_by as a form field - so the contract contradicts
-          itself and both it and this outcome text claimed a control the code does not implement.
-          OPEN, needs a human decision (BILL-14-followup): either build a real second-person
-          authenticated step, or ratify an operator-attested verifier and correct the spec prose via
-          /spec-change. Nothing here should be read as the criterion being met. The
+          for BILL-16 on the same terms. CORRECTION, and it corrects an earlier version of this very
+          line, which claimed verified_by was bound to the caller's verified P2 claim. It is not.
+          Only the UPLOADER comes from principal.subject. verified_by is read from the multipart body
+          (tpp-cost-document.ts:450), so the 409 when it equals the uploader proves DISTINCTNESS
+          between a subject and a free-text string - never that the verifier authenticated. The
+          acceptance criterion had demanded the P2 claim, and the spec description asserted 'neither
+          is taken from the request body' while its own schema 24 lines below REQUIRED verified_by as
+          a form field, so the contract contradicted itself and three artefacts described a control
+          the service does not implement. RESOLVED by adopting-bank decision, spec-first. The verifier
+          is ratified as an operator ATTESTATION - the spec prose, the acceptance criterion and this
+          outcome now all say so in those words, and the form field's own description already did. A
+          genuinely authenticated second person is a separate story on the EXISTING four-eyes
+          primitive (202 + approval_request, initiator != approver, 2-hour expiry); it is deliberately
+          not a second verification mechanism invented at this endpoint. The
           absence alarm anchors on the 5th of the following month, moving off a weekend, fires only
           once the anchor has passed, and treats a credit note as not-an-invoice. Evidence: unit
           1455/1455, integration 179/179 across 78 files on a pristine PostgreSQL 16.13, Q4.5 PASSED
