@@ -87,13 +87,34 @@ const resolveBase = () => {
   return null
 }
 
-/** ADRs this branch MODIFIES relative to base (status M — additions are exempt by the rule). */
-const modifiedAdrs = (base) =>
-  (tryGit(['diff', '--name-status', `${base}...HEAD`, '--', `${ADR_DIR}/`]) ?? '')
+/**
+ * ADRs this branch changes relative to base, as { path, basePath }.
+ *
+ * RENAMES ARE INCLUDED DELIBERATELY. The first revision filtered on status `M` exactly, which
+ * meant renaming an accepted ADR while editing it (git reports `R100`/`R087`, never `M`) walked
+ * straight past the gate — the cheapest possible bypass of the rule this check exists to
+ * enforce. Found by the hard-stop reviewer on PR #324, which reproduced it in a scratch repo.
+ * For a rename the status line carries THREE fields, and the base text must be read from the
+ * OLD path, because the new one does not exist on base.
+ *
+ * `A` (added) stays exempt: nothing has been relied on yet. `D` (deleted) is out of scope —
+ * removing an accepted ADR outright is a different question from amending one, and ADR 0030
+ * states a rule about modification. Recorded so the omission is a decision, not an oversight.
+ */
+export const parseNameStatus = (raw) =>
+  raw
     .split('\n')
     .map((l) => l.split('\t'))
-    .filter(([s, p]) => s === 'M' && p && isAdrPath(p))
-    .map(([, p]) => p)
+    .flatMap(([status, a, b]) => {
+      if (!status) return []
+      if (status === 'M' && a && isAdrPath(a)) return [{ path: a, basePath: a }]
+      // R100 / R087 / C075 — the new path is the third field, the old one the second.
+      if (/^[RC]\d*$/.test(status) && b && isAdrPath(b)) return [{ path: b, basePath: a }]
+      return []
+    })
+
+const changedAdrs = (base) =>
+  parseNameStatus(tryGit(['diff', '--name-status', `${base}...HEAD`, '--', `${ADR_DIR}/`]) ?? '')
 
 const addedLinesFor = (base, path) =>
   (tryGit(['diff', '--unified=0', `${base}...HEAD`, '--', path]) ?? '')
@@ -108,14 +129,14 @@ const main = () => {
     process.stdout.write('adr-amendment-check: base ref unavailable — SKIPPED (not a pull-request run)\n')
     return
   }
-  const paths = modifiedAdrs(base)
+  const paths = changedAdrs(base)
   if (paths.length === 0) {
     process.stdout.write('adr-amendment-check: no accepted ADR modified — nothing to check\n')
     return
   }
-  const changes = paths.map((path) => ({
+  const changes = paths.map(({ path, basePath }) => ({
     path,
-    baseText: tryGit(['show', `${base}:${path}`]) ?? '',
+    baseText: tryGit(['show', `${base}:${basePath}`]) ?? '',
     headText: tryGit(['show', `HEAD:${path}`]) ?? '',
     addedLines: addedLinesFor(base, path),
   }))

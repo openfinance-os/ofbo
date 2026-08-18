@@ -15,6 +15,7 @@ import {
   addsAmendmentRow,
   AMENDMENT_ROW,
   violations,
+  parseNameStatus,
 } from '../adr-amendment-check.mjs'
 
 const accepted = '# ADR 0007 — x\n\n- Status: **Accepted** — Option 1 (user decision, 2026-08-17)\n\n## Context\n'
@@ -115,4 +116,32 @@ test('several ADRs in one PR are judged independently', () => {
     { path: 'c.md', baseText: proposed, headText: proposed, addedLines: ['draft'] },
   ])
   assert.deepEqual(bad, ['b.md'])
+})
+
+test('REGRESSION: a renamed accepted ADR is still examined', () => {
+  // Filtering on status 'M' exactly let rename-plus-edit walk past the gate — git reports
+  // R100/R087 for a rename, never M, so the cheapest bypass was to rename the file in the same
+  // commit. Found by the hard-stop reviewer on PR #324, which reproduced it in a scratch repo.
+  const renamed = parseNameStatus('R100\tdocs/adrs/0007-old-name.md\tdocs/adrs/0007-new-name.md')
+  assert.deepEqual(renamed, [
+    { path: 'docs/adrs/0007-new-name.md', basePath: 'docs/adrs/0007-old-name.md' },
+  ])
+  // base text must come from the OLD path — the new one does not exist on base
+  assert.equal(renamed[0].basePath, 'docs/adrs/0007-old-name.md')
+})
+
+test('name-status parsing: M included, A and D exempt, C treated as a rename', () => {
+  const parsed = parseNameStatus(
+    [
+      'M\tdocs/adrs/0007-a.md',
+      'A\tdocs/adrs/0030-new.md',
+      'D\tdocs/adrs/0011-gone.md',
+      'C075\tdocs/adrs/0005-src.md\tdocs/adrs/0031-copy.md',
+      'M\tdocs/adrs/README.md',
+    ].join('\n'),
+  )
+  assert.deepEqual(parsed, [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
+    { path: 'docs/adrs/0031-copy.md', basePath: 'docs/adrs/0005-src.md' },
+  ])
 })
