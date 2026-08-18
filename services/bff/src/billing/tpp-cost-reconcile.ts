@@ -3,6 +3,7 @@ import {
   toMinorUnitMoney,
   reconcilePayable,
   type BillingQueryBundle,
+  type MinorUnitMoney,
   type ExpectedTppCostStatement,
   type LatePaymentRecord,
   type PayableBreak,
@@ -300,12 +301,67 @@ function money(milliFils: number, currency: string) {
   return toMinorUnitMoney(milliFils, currency as 'AED')
 }
 
+/**
+ * Derive a dependent amount from the ROUNDED operands, never by rounding the domain value.
+ *
+ * `toWireMoneyTriple` does exactly this for net/VAT/gross. The same rule binds here, and an earlier
+ * comment on this function denied it — "independent totals … no tie-out to preserve" — which the
+ * source contradicts one file away: `netVarianceMilliFils` IS `actualTotalNet - expectedTotalNet`
+ * (tpp-cost-reconciliation.ts:751) and each break's `variance` IS `actual - expected` (:572, :616).
+ *
+ * Rounding a difference is not the difference of the roundings. Concretely, at the sub-fil scale this
+ * endpoint works at (the default tolerance is one fil, so sub-fil totals are routine):
+ *
+ *   milli-fils  expected 2500  actual 3000  variance 500
+ *   rounded     expected    3  actual    3  variance   1     ← 3 - 3 = 0, not 1
+ *
+ * A finance operator reading a break whose two nets are both 3 fils and whose variance is 1 fil
+ * cannot reconcile the row against itself. Deriving costs nothing: full milli-fils precision is
+ * retained in the store, and the wire's job is to be self-consistent.
+ */
+function derivedMoney(minuend: MinorUnitMoney, subtrahend: MinorUnitMoney): MinorUnitMoney {
+  return { amount: minuend.amount - subtrahend.amount, currency: minuend.currency }
+}
+
 export function tppCostReconciliationWire(result: PayableReconciliation): Record<string, unknown> {
+  // Round the INDEPENDENT amounts once, then derive every amount that is defined in terms of them.
+  const expectedTotalNet = money(result.expectedTotalNetMilliFils, result.currency)
+  const actualTotalNet = money(result.actualTotalNetMilliFils, result.currency)
+
+  const breaks = result.breaks.map((entry) => {
+    const expectedNet = money(entry.expectedNetMilliFils, result.currency)
+    const actualNet = money(entry.actualNetMilliFils, result.currency)
+    // Signed, and derived, so `variance === actual_net - expected_net` holds on the wire.
+    const variance = derivedMoney(actualNet, expectedNet)
+    return {
+      line_ref: entry.lineRef,
+      break_type: entry.breakType,
+      line_type: entry.lineType,
+      presence: entry.presence,
+      cost_recipient_type: entry.costRecipientType,
+      cost_recipient_id: entry.costRecipientId,
+      fee_class: entry.feeClass,
+      source_category: entry.sourceCategory,
+      expected_net: expectedNet,
+      actual_net: actualNet,
+      variance,
+      variance_basis_points: entry.varianceBasisPoints,
+      material: entry.material,
+      reason_code: entry.reasonCode,
+      reconciliation_break_id: entry.reconciliationBreakId ?? null
+    }
+  })
+
   return {
     period: result.period,
     currency: result.currency,
     // A matching THRESHOLD, not an amount: its whole purpose is sub-fil resolution (documents state
     // fils, expectations are milli-fils), so expressing it in minor units would round it to nothing.
+    //
+    // It therefore does NOT share a unit with the Money amounts beside it, and `material` — which is
+    // computed server-side against the unrounded values — must be read from the flag rather than
+    // recomputed from the wire. Comparing |variance| (fils) against this (milli-fils) judges almost
+    // every break immaterial.
     tolerance_milli_fils: result.toleranceMilliFils,
     query_window_days: result.queryWindowDays,
     query_deadline: result.queryDeadline,
@@ -318,31 +374,18 @@ export function tppCostReconciliationWire(result: PayableReconciliation): Record
     },
     matched_line_count: result.matchedLineCount,
     break_count: result.breakCount,
-    // Amounts cross to Money. These are independent totals rather than a net/VAT/gross triple, so
-    // there is no tie-out to preserve between them and each rounds on its own.
-    expected_total_net: money(result.expectedTotalNetMilliFils, result.currency),
-    actual_total_net: money(result.actualTotalNetMilliFils, result.currency),
-    net_variance: money(result.netVarianceMilliFils, result.currency),
-    gross_variance: money(result.grossVarianceMilliFils, result.currency),
+    expected_total_net: expectedTotalNet,
+    actual_total_net: actualTotalNet,
+    net_variance: derivedMoney(actualTotalNet, expectedTotalNet),
+    // "The amount actually in dispute" — the sum of what the breaks beside it publish. Summing the
+    // milli-fils first and rounding once drifts by up to half a fil PER BREAK, so ten sub-fil breaks
+    // could read 5 here against 10 in the array.
+    gross_variance: {
+      amount: breaks.reduce((sum, entry) => sum + Math.abs(entry.variance.amount), 0),
+      currency: result.currency
+    },
     penalty_lines_accepted: result.penaltyLinesAccepted,
-    breaks: result.breaks.map((entry) => ({
-      line_ref: entry.lineRef,
-      break_type: entry.breakType,
-      line_type: entry.lineType,
-      presence: entry.presence,
-      cost_recipient_type: entry.costRecipientType,
-      cost_recipient_id: entry.costRecipientId,
-      fee_class: entry.feeClass,
-      source_category: entry.sourceCategory,
-      expected_net: money(entry.expectedNetMilliFils, result.currency),
-      actual_net: money(entry.actualNetMilliFils, result.currency),
-      // Signed, and toMinorUnitMoney rounds symmetrically, so a credit is not biased against us.
-      variance: money(entry.varianceMilliFils, result.currency),
-      variance_basis_points: entry.varianceBasisPoints,
-      material: entry.material,
-      reason_code: entry.reasonCode,
-      reconciliation_break_id: entry.reconciliationBreakId ?? null
-    }))
+    breaks
   }
 }
 

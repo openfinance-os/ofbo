@@ -5538,7 +5538,7 @@ export interface components {
         TppCostReconciliation: {
             /** @description YYYY-MM */
             period: string;
-            /** @description ISO 4217 for every milli-fils amount in this object and its breaks. */
+            /** @description ISO 4217 for this reconciliation. Every AMOUNT here is a Money carrying its own currency; this field governs the object and the only bare-integer field left on it, `tolerance_milli_fils`, which is a threshold rather than an amount. The previous wording ("for every milli-fils amount in this object") described the pre-CODE-03 shape and survived the sweep that removed those amounts. */
             currency: string;
             /** @description A matching THRESHOLD in integer milli-fils, not a money amount. Expectations are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute — sub-fil resolution is the entire point of the field, and minor units would round it away. Configurable; defaults to one fil. */
             tolerance_milli_fils: number;

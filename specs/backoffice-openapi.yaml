@@ -3918,7 +3918,12 @@ components:
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: ISO 4217 for every milli-fils amount in this object and its breaks.
+          description: >
+            ISO 4217 for this reconciliation. Every AMOUNT here is a Money carrying its own
+            currency; this field governs the object and the only bare-integer field left on it,
+            `tolerance_milli_fils`, which is a threshold rather than an amount. The previous
+            wording ("for every milli-fils amount in this object") described the pre-CODE-03
+            shape and survived the sweep that removed those amounts.
         tolerance_milli_fils:
           type: integer
           description: >
