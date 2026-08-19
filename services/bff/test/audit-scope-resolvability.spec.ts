@@ -319,6 +319,31 @@ describe('CODE-03 audit scope resolvability', () => {
     expect(rawSqlAuditWriters()).toEqual([...RAW_SQL_AUDIT_WRITERS].sort())
   })
 
+  it('lets no raw-SQL writer fabricate an HTTP status for an actor that issues no response', () => {
+    // The half the check above could not see, and it took a review to notice: asserting that the SET
+    // of raw writers is closed says nothing about WHAT they write. CODE-03 replaced the scope token
+    // in both seed inserts and left a literal `200` immediately beside it — the exact fabrication
+    // SYSTEM_ACTOR_RESPONSE_STATUS was introduced to remove, surviving inside the very change that
+    // removed it everywhere else.
+    //
+    // Reads the response_status position of each raw INSERT: these statements end their column list
+    // with `response_status` and their SELECT with the matching value, so a trailing integer literal
+    // is a hardcoded status and a trailing `$n` is a bound parameter.
+    const offenders: string[] = []
+    for (const { root, path, text } of SOURCES) {
+      if (!/INSERT\s+INTO\s+audit_high_sensitivity/i.test(text)) continue
+      for (const stmt of text.match(/INSERT\s+INTO\s+audit_high_sensitivity[\s\S]{0,900}?`/gi) ?? []) {
+        if (!/response_status/i.test(stmt)) continue
+        // The value that closes the SELECT list — literal digits mean a status was invented here.
+        const tail = stmt.match(/'\{\}'::jsonb\s*,\s*([^\s)]+)/)
+        if (tail && /^\d+$/.test(tail[1]!)) {
+          offenders.push(`${path.slice(root.length + 1)} writes response_status ${tail[1]}`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
   it('reads a type position the same way however the source is punctuated', () => {
     // Not decoration. Stryker re-prints the files it instruments, so `scope_used: string` becomes
     // `scope_used: string;` — and the first version of this scan, which stopped only at `,` and a

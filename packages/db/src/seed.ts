@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
 import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
-import { SEED_ACTOR_SCOPE } from './audit.js'
+import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
@@ -84,9 +84,14 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
              (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
               target_psu_identifier, target_consent_id, request_trace_id, request_body_redacted, response_status)
            SELECT $1, 'internal_retail', $2, 'seed', 'system', $6,
-                  $3, $4, $5, '{}'::jsonb, 200
+                  $3, $4, $5, '{}'::jsonb, $7
            WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $5)`,
-          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId, SEED_ACTOR_SCOPE]
+          // The status sentinel as well as the scope one. This row is a raw-SQL seed insert that
+          // issues no HTTP response, so a literal 200 was exactly the fabrication
+          // SYSTEM_ACTOR_RESPONSE_STATUS exists to remove — and CODE-03 applied the scope half here
+          // while leaving the status half untouched immediately beside it.
+          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId,
+            SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS]
         )
       }
     }
