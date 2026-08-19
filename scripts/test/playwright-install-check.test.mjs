@@ -54,7 +54,9 @@ test('portal E2E caches the Playwright browsers, keyed on the resolved version',
 
 test('the apt install and the browser install are separate, individually bounded steps', () => {
   const job = e2eJob()
-  const deps = job.match(/- name: install Playwright system deps\n([\s\S]*?)(?=\n {6}- )/)
+  // Prefix match: the step name carries a trailing annotation, and pinning the exact name would
+  // make the guard fail on a comment edit rather than on a behaviour change.
+  const deps = job.match(/- name: install Playwright system deps[^\n]*\n([\s\S]*?)(?=\n {6}- )/)
   const browser = job.match(/- name: install Playwright Chromium\n([\s\S]*?)(?=\n {6}- )/)
   assert.ok(deps, 'the apt half must be its own step, so a slow mirror is attributable')
   assert.ok(browser, 'the browser download must be its own step')
@@ -68,6 +70,50 @@ test('the apt install and the browser install are separate, individually bounded
       + 'so a cap above 6m is being used to wait out a problem rather than surface it'
     )
   }
+})
+
+test('the fonts step is optional, and ONLY the fonts step is', () => {
+  // The asymmetry is the whole point, and it is the line between "a cosmetic provisioning step may
+  // fail on an external mirror" and "a failing check is being swallowed". If continue-on-error ever
+  // spreads to the browser download or to the suite itself, a genuinely broken E2E job would go
+  // green — so the guard asserts both halves, not just the one that was changed.
+  const job = e2eJob()
+  const deps = job.match(/- name: install Playwright system deps[^\n]*\n([\s\S]*?)(?=\n {6}- )/)
+  assert.ok(deps, 'the fonts step must exist')
+  assert.match(
+    deps[1], /continue-on-error:\s*true/,
+    'the fonts step must stay non-fatal: it installs fonts only, and blocking the suite on an '
+    + 'external Ubuntu mirror failed CI four times in one day'
+  )
+
+  // Counted across the WHOLE job rather than checked step by step. A per-step list would have to
+  // name each step it protects, and would then quietly stop protecting any step that gets renamed
+  // or added — a guard that reports green because it no longer looks. One occurrence, in the
+  // fonts step, is the invariant; anything else is a step that has been made unable to fail.
+  const occurrences = job.match(/continue-on-error/g) ?? []
+  assert.equal(
+    occurrences.length, 1,
+    `q3-e2e has ${occurrences.length} continue-on-error declarations; exactly one is allowed and it `
+    + 'belongs to the fonts step. Every other step — the browser download, the services, the build, '
+    + 'and the E2E suite itself — must be able to red the job.'
+  )
+  assert.match(
+    deps[1], /continue-on-error/,
+    'the single permitted continue-on-error must be the fonts step, not some other step'
+  )
+})
+
+test('the cache key cannot silently degrade to a version-less constant', () => {
+  // `echo "v=$(cmd)"` exits 0 even when cmd fails, so an unresolved version would produce the key
+  // `ms-playwright-Linux-` for EVERY Playwright version — one version's browsers served to another,
+  // with no signal. The resolution step must refuse rather than emit an empty value.
+  const job = e2eJob()
+  const step = job.match(/- name: resolve Playwright version\n([\s\S]*?)(?=\n {6}- )/)
+  assert.ok(step, 'the version-resolution step must exist')
+  assert.match(
+    step[1], /if \[ -z "\$version" \]|::error::/,
+    'the version-resolution step must fail loudly on an empty version rather than emitting one'
+  )
 })
 
 test('--with-deps is not reintroduced on the browser install', () => {

@@ -255,7 +255,17 @@ jobs:
       # control — it must never be raised to make a genuinely failing step pass.
       - name: resolve Playwright version
         id: pw
-        run: echo "version=$(pnpm --filter @ofbo/portal exec playwright --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
+        # Validated, not just interpolated. `echo "v=$(cmd)"` exits 0 even when cmd fails, so a
+        # renamed package or a --filter miss would silently yield an EMPTY version — and the cache
+        # key would degrade to a constant `ms-playwright-Linux-` shared by every Playwright
+        # version, quietly serving one version's browsers to another. Fail loudly instead.
+        run: |
+          version="$(pnpm --filter @ofbo/portal exec playwright --version | tr -dc '0-9.')"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve the Playwright version; refusing to build a cache key that would collide across versions"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -263,8 +273,26 @@ jobs:
           # the Playwright version, so an unrelated dependency bump must not evict 290 MiB.
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - name: install Playwright system deps
-        timeout-minutes: 6
+      # NON-FATAL, on evidence rather than on convenience. This step installs FONTS and nothing
+      # else: on the last healthy run its entire apt output was fonts-freefont-ttf,
+      # fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic and xfonts-*.
+      # Chromium's own libraries were already on the ubuntu-latest image — nothing else was
+      # unpacked — so the browser launches with or without this step.
+      #
+      # It is non-fatal because it has now failed the job FOUR times in one day on an external
+      # Ubuntu mirror, never on anything in this repo. The last run stalled here:
+      #     Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages
+      # and emitted nothing for the following five and a half minutes. Blocking the whole E2E
+      # suite on a mirror outage, to install fonts an English-language portal test does not
+      # exercise, is a worse trade than rendering without them.
+      #
+      # This is NOT swallowing a test failure. The suite itself stays fatal, and so does the
+      # browser download below — only this cosmetic provisioning is optional. If a future runner
+      # image ever does drop a Chromium library, the failure surfaces immediately and legibly in
+      # the E2E step as a browser that will not launch, rather than being hidden here.
+      - name: install Playwright system deps (fonts — non-fatal, see comment)
+        continue-on-error: true
+        timeout-minutes: 4
         run: pnpm --filter @ofbo/portal exec playwright install-deps chromium
       - name: install Playwright Chromium
         # Run unconditionally rather than behind `cache-hit != 'true'`. `playwright install` skips
