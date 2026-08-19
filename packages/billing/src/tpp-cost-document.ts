@@ -210,6 +210,41 @@ export const REDACTED = '[redacted]'
  * This closes a gap the payload redactor left wide open — these columns never passed through it, and
  * `billing_tpp_cost_document_line` is cross-tenant readable under the ratified governed-aggregate seam.
  */
+/**
+ * Refuse an OPERATOR-typed field carrying a shape that can never legitimately name a member of staff.
+ *
+ * Separate from `assertIdentifierFieldsClean` because the threat model is different. That one screens
+ * PROVIDER strings, where all four shapes are malformed. This one screens what a bank operator typed —
+ * today only `verified_by`, which is attested free text (the uploader comes from the P2 claim; the
+ * verifier does not) and lands verbatim in an INSERT-only column with no deletion path that migration
+ * 0040 made cross-tenant readable. Nothing else on that write path reaches it: `assertRedactedPayload`
+ * inspects the parsed payload, and the sibling free-text `source_note` is safe only because it goes to
+ * the audit sink, where `redactPii` runs at emission.
+ *
+ * Email is DELIBERATELY not screened here, and the omission is the whole design of this function.
+ * A work address is a normal way to name a colleague — several adopting banks mint P2 subjects in
+ * exactly that form — so refusing it would reject the field's most likely legitimate value. An IBAN,
+ * an Emirates ID or a phone number is never how one names a verifier, so those three are pure gain:
+ * they cannot produce a false positive, and left unscreened they become unremovable customer detail.
+ *
+ * Stated plainly so the control is not read as wider than it is: this does NOT make `verified_by`
+ * PII-free. A personal name has no detectable shape and passes, exactly as it does at ingest.
+ */
+export function assertOperatorFieldClean(fields: Record<string, string | undefined>): void {
+  for (const [name, value] of Object.entries(fields)) {
+    if (typeof value !== 'string' || value === '') continue
+    const shape = PSU_VALUE_SHAPES.find((s) => s.label !== 'email' && s.pattern.test(value))
+    if (shape) {
+      throw new UnparseableDocumentError(
+        `refusing the upload: ${name} carries a ${shape.label} shape. That field names the person who `
+        + 'verified this document and is stored in a ledger with no deletion path, so a customer '
+        + 'identifier typed there could never be removed. (The offending value is deliberately not '
+        + 'echoed.)'
+      )
+    }
+  }
+}
+
 export function assertIdentifierFieldsClean(fields: Record<string, string | undefined>): void {
   for (const [name, value] of Object.entries(fields)) {
     if (typeof value !== 'string' || value === '') continue
