@@ -4,6 +4,10 @@ import { ROUTES } from '@ofbo/contracts'
 import { describe, expect, it } from 'vitest'
 import { SEED_ACTOR_SCOPE, UNSCOPED_AUTH_EVENT_SCOPE } from '@ofbo/db'
 import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/high-class-audit.js'
+import { SCOPE_MATRIX } from '../src/auth.js'
+
+/** The §2 persona matrix, as built. A persona outside it (and outside 'system') is not a human. */
+const MATRIX_PERSONAS = new Set<string>(Object.keys(SCOPE_MATRIX))
 
 /**
  * CODE-03 — every `scope_used` written to audit_high_sensitivity must resolve.
@@ -207,8 +211,38 @@ function headlessEmissions(): Array<{ file: string; scope: string; principal: st
       const principalExpression = scopeExpression(block, block.lastIndexOf('acting_principal:') >= 0
         ? block.lastIndexOf('acting_principal:') + 'acting_principal:'.length
         : block.length)
-      const principal = possibleValues(principalExpression, constants)
+      let principal = possibleValues(principalExpression, constants)
         .find((value) => value.startsWith('system:'))
+
+      // A `system:` principal is not the only kind of non-human actor, and keying on it alone is
+      // how this check missed caap-audit.ts: a DEVICE ref as the principal (so unresolvable to any
+      // literal) with persona 'caap', recording platform:operations:read — a scope the §2 matrix
+      // grants to human operations and compliance personas, that nothing on that path asserted.
+      // The guard claimed to refuse a headless actor borrowing a declared human scope while a live
+      // instance sat outside it.
+      //
+      // Persona is the discriminator HERE and not above, and the distinction is load-bearing: a
+      // literal persona that is neither a §2 matrix persona nor 'system' names an actor class that
+      // holds no persona scope at all. It cannot false-positive the way a blanket persona check
+      // did — tpp-billing/invoicing.ts carries persona 'system' with a HUMAN initiator and the
+      // scope that human actually held, and 'system' is excluded here precisely so that correct
+      // emitter is not pushed towards a false sentinel.
+      if (!principal) {
+        const personaAt = block.lastIndexOf('acting_persona:')
+        const persona = personaAt < 0
+          ? null
+          : possibleValues(scopeExpression(block, personaAt + 'acting_persona:'.length), constants)[0]
+        // LITERAL personas only. A persona resolved from a runtime expression is unknown, not
+        // non-human — the first version of this branch treated `UNRESOLVED(ctx.actingPersona)` as
+        // outside the matrix and flagged governed-aggregate.ts and tenant-billing-service-store.ts,
+        // whose persona is whatever the caller passes and may well be a human. Claiming those as
+        // "non-human actors borrowing a human scope" would have been the same overreach this check
+        // is meant to catch, committed by the check.
+        if (persona && !persona.startsWith('UNRESOLVED(')
+          && persona !== 'system' && !MATRIX_PERSONAS.has(persona)) {
+          principal = `non-human actor (persona ${persona})`
+        }
+      }
       if (!principal) continue
 
       const expression = scopeExpression(text, m.index + m[0].length)
