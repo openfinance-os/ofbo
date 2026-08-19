@@ -2601,6 +2601,1141 @@ Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm th
 from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
 statements — so it blocks where it is actionable instead of lapsing with a `done` status.
 
+## 2026-08-17 — BILL-13: durable payable ledger + closed-period re-rating
+
+Second slice of TPP Cost Management. Unlike BILL-12, this ran against a **local PostgreSQL 16.13
+matching CI's `postgres:16-alpine`**, so the RLS grants, CHECK constraints and lineage coverage are
+proven rather than discovered downstream — which matters for a story that is almost entirely
+database controls.
+
+**Migration 0039 — eight tables, controls mirroring 0032/0033.** RLS ENABLED and FORCED,
+SELECT+INSERT only for `ofbo_app` (no UPDATE or DELETE grant at all), group-scoped internal-view
+reads, 24/60 retention and confidential-restricted floors registered for all eight. TPP-domain data
+under ADR 0006: its own table family rather than shared with the LFI receivables, which is what makes
+the dual-role wall enforceable rather than nominal. **No PSU identifier in any table** — drill-down
+runs through `event_ids` into `billing_event`, where `psu_id` is already governed.
+
+The schema is **self-reconciling**, so unstorable states are actually unstorable: a statement's three
+streams must sum to its net total; gross must equal net + VAT on both statements and lines; every
+line must carry at least one event id; a re-rating's delta must equal corrected − previous and cannot
+reference the same statement twice; AP dispatch is unique per idempotency key so P9 cannot be
+double-paid; and a document line's `fee_class` is null exactly when `mapped` is false, so an unmapped
+provider category cannot masquerade as mapped.
+
+> **Correction (addendum 5, same PR).** The AP-dispatch clause above is wrong and is left in place only
+> because this log is append-only. The constraint that shipped is `UNIQUE (bank_id, idempotency_key,
+> dispatch_state)` — unique per (key, **state**), not per key. It bounds each state to one row per
+> instruction, so an instruction cannot be recorded as `dispatched` twice; it does **not** by itself make
+> double payment impossible, and it constrains no transition order. See addendum 5 below.
+
+**Store.** `PgBillingTppCostStore` writes the three tables this story owns and never attempts an
+update — immutability is a grant, not a convention. Idempotent on (meter run, rate card version, rate
+snapshot hash), so re-projecting unchanged inputs re-reads the existing statement while a *corrected*
+directory rate becomes a NEW immutable statement. A re-rating is refused unless both statements
+project the same meter run: a meter run is immutable, so sharing one is the proof that a correction
+re-priced unchanged facts; re-pricing a different run is a re-meter and is rejected rather than
+recorded as a rate correction. `tppCostLineRef` derives line identity from cost dimensions rather
+than generating one, which is what BILL-15 will match provider document lines against.
+
+**Generation rides the existing monthly trigger** beside the receivable expected-memo projection —
+no new scheduler, per the story note. It **skips with an audited reason rather than throwing** when a
+chargeable overage line cannot be priced: the fail-closed pricing refusal inherited from BILL-12 is
+correct, but letting it escape would take the regulated receivable projections down with the payable
+one, which is exactly the availability trap the BILL-12 review caught. A genuine defect (an
+unreachable database, say) still propagates — only the pricing refusal is a skip, and the tests pin
+both halves of that distinction. The payable dataset also now travels with the tenant portable
+export, so a tenant exit carries its payable evidence as well as its receivable evidence.
+
+**Five tables are created but unwritten** until BILL-14/15/16 own them. They stay empty, which the
+Q4.5 gate skips (it requires lineage only for tables holding rows) — so the migration header states
+the constraint explicitly: nothing may seed them ahead of their story, or they become lineage gaps
+immediately. I checked this before designing rather than assuming it; the alternative reading would
+have forced the story down to three tables.
+
+**Still not closed:** the OverLimitFees unit criterion. The egress policy still denies
+`data.directory.openfinance.ae`, so no live snapshot has been observed. It is enforced structurally
+rather than procedurally — rating fails closed, so a statement carrying chargeable overage cannot be
+produced without a snapshot that states its unit — and the criterion carries forward to BILL-14.
+Consequently no directory snapshot source is wired into the worker yet: a demo period with overage
+traffic will report `skipped` with an audited reason, which is the honest state rather than a
+statement priced on a guess.
+
+Evidence: unit 1421/1421 (14 new); integration **162/162 across 77 files on a pristine database**;
+Q4.5 lineage gate PASSED with `billing_tpp_cost_statement`, `_statement_line` and `_rerating` covered,
+allowed gaps none, unexpected none; typecheck, ESLint and the coverage gate clean. Note the
+integration suite fails on a *re-seeded* database for the pre-existing non-idempotent-seed reason
+recorded under CODE-02 — verified by re-running on a fresh database, which is how CI runs it.
+
+### BILL-13 addendum — advisory AI review (ADR 0029) outcome
+
+`hard-stop` reviewer: **FAIL (6 findings)** — the first non-PASS on this track, and it was right about
+several. Four were fixed in-branch, all defects in this story's own work:
+
+1. **Four-eyes asserted in prose, enforced nowhere.** `billing_tpp_cost_ap_dispatch` carried a comment
+   promising "never self-approved" while the table had no initiator column and no CHECK. It now carries
+   `initiated_by` and `CHECK (approved_by <> initiated_by)`, mirroring `approval_request`
+   (0002_tables.sql). Fixing it surfaced a second defect the reviewer had not: `approval_request_id`
+   was typed `uuid`, but `approval_request.approval_request_id` is TEXT — BILL-16's foreign key would
+   not have compiled. Corrected to text.
+2. **A divergent regeneration was silently swallowed.** `saveStatement` used `ON CONFLICT DO NOTHING`
+   and re-read the stored row without comparing the recomputed evidence hash, so regenerating a
+   statement with *different* content under the same key returned the old one and reported
+   `created: false`. Divergent evidence on an immutable regulated record is now raised as a conflict,
+   matching the tenant-configuration precedent; `saveRerating` got the same treatment over its replay
+   payload.
+3. **The PSU claim over-reached.** The header said no PSU identifier appears in any of the eight tables
+   "asserted by test", but the test covers the statement family only, and three provider-fed free-form
+   columns (`parsed_payload`, `raw_document_ref`, `response_payload`) cannot be constrained by schema.
+   The claim is now scoped to what is true and enforced, and redaction at parse time is written up as a
+   **requirement on BILL-14 and BILL-16**, which own those write paths.
+4. **A skip decided by regex over error text.** The generation service classified an unpriceable period
+   by matching the error message, so any future error mentioning those words would have been downgraded
+   to a skip. `UnpriceableOverageError` now carries that meaning as a type, and a test proves an
+   impostor message still propagates as a defect.
+
+Also fixed, from the reviewer's non-finding notes: the worker constructed `PgBillingTppCostStore` but
+never closed it, leaking a `pg.Pool` per tenant per monthly run. And from the contract reviewer's
+observations, `tppCostLineRef` omitted `productFamily` while the domain aggregates on it under a UNIQUE
+constraint — unreachable today because `classify()` derives productFamily from feeStream+apiFamily, but
+that is an invariant of `classify()`, not of the identity, so the ref now mirrors the aggregation key
+exactly.
+
+Deliberately **not** changed, with reasons: `scope_used: 'billing:rate'` is an undeclared scope token in
+the audit trail, but it is exact precedent already on main (`memo-reconciliation.ts`) and fixing two of
+four call sites would make the trail less consistent, not more — it wants one repo-wide pass. The
+camelCase keys inside exported jsonb payloads are a ratified byte-stability exception for the portability
+digest, pinned by an existing test on main; the reviewer's own recommendation is to write it into the
+spec description, which is a spec-change story. The ADR 0006 role-domain dimension stays with SEG-01
+(blocked on BD-22); the migration now states the family's domain explicitly so it is unambiguous when
+SEG-01 threads it, and the portable export is recorded on SEG-01 as the first call site where one read
+crosses the wall.
+
+**Milli-fils vs the CLAUDE.md minor-unit money rule has now been flagged by two consecutive contract
+reviews** (BILL-12 and BILL-13) with no ADR ratifying it. It needs a decision: either CLAUDE.md names
+milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go through spec-change.
+
+Re-verified after the fixes: unit 1422/1422; integration 164/164 across 77 files on a pristine
+database; Q4.5 PASSED, allowed gaps none; typecheck and ESLint clean.
+
+### BILL-13 addendum 2 — contract review, second round
+
+`contract-conformance` reviewer, re-run after the hard-stop fixes: **one finding, fixed in-branch.**
+
+**A `sha256:`-prefixed string that was not a digest.** `services/bff/src/billing/tpp-cost.ts` composed the
+statement's `rate_snapshot_hash` as `` `sha256:${rateCard.version}+${snapshot?.digest ?? '…'}` `` — a
+concatenation of the two pricing sources wearing a hash's prefix. On an evidence-chain identifier that is
+worse than an honest opaque string: an auditor reconstructing the pricing basis will try to recompute it,
+and cannot. There is no precedent for the shape anywhere in the repo; every other `sha256:` value on main
+is a real digest. Replaced with `rateSnapshotHash()`, an actual SHA-256 over a canonical, documented
+pre-image (`ofbo.tpp-cost.rate-snapshot.v1` \ `rate-card:<version>` \ `directory:<digest|none>`), with a
+unit test that recomputes the digest independently, asserts the `^sha256:[0-9a-f]{64}$` shape, and proves
+differing sources do not collide.
+
+Three structural fixes also landed in this round, ahead of the stories that depend on them:
+
+1. **The approval link is now a foreign key.** `billing_tpp_cost_ap_dispatch.approval_request_id` was a
+   free-text column; it now `REFERENCES approval_request(approval_request_id)`, so a dispatch cannot cite
+   an approval that does not exist. The accompanying comment states plainly what the schema still cannot
+   enforce — that the referenced approval is *for this dispatch* — rather than implying the FK covers it.
+2. **`billing_tpp_cost_ap_dispatch` is an append-only state log.** The table was INSERT-only yet modelled
+   a mutable lifecycle, so advancing a dispatch's state had no legal write path. `UNIQUE (bank_id,
+   idempotency_key, dispatch_state)` makes each transition its own immutable row — one shape that is both
+   INSERT-only and able to progress, which is what BILL-16 needs.
+3. **`EXPORT_TABLES` narrowed to what this story writes.** The tenant portable export had been widened to
+   all eight payable tables; five of them BILL-13 never writes, so the entry was a claim about future
+   stories' data. It now lists only `billing_tpp_cost_statement`, `_statement_line` and `_rerating`.
+
+Re-verified on a pristine database in CI's exact order (`db:apply` → `db:seed` → integration → gate):
+unit 1423/1423 across 211 files; integration 164/164 across 77 files; Q4.5 PASSED with the three
+row-bearing payable tables covered and allowed gaps none; typecheck 0 errors; ESLint clean; doc-link-check
+59 docs / 29 ADRs clean.
+
+Carried forward unresolved, both needing a human decision rather than more code:
+
+- **Milli-fils vs the CLAUDE.md integer-minor-units money rule** — flagged by every contract review on
+  this track that has looked at it (BILL-12, and both rounds of BILL-13) with no ADR ratifying it. Either
+  CLAUDE.md names milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go
+  through spec-change.
+- **BILL-13's first acceptance criterion** (persist statements priced from a live directory snapshot)
+  remains unmet, because the directory host is unreachable from this environment. It is enforced
+  structurally rather than procedurally — rating fails closed, so no statement can be written from a
+  guessed rate or unit — but the criterion itself carries forward to whichever story first obtains a
+  snapshot.
+
+### BILL-13 addendum 3 — the advisory reviews caught a real availability defect I had just introduced
+
+Both ADR 0029 advisory reviews came back non-PASS on `6f87bc6` — hard-stop **FAIL (3)**, contract
+**DRIFT (5)**. Every one of those eight findings is either documented-and-deliberate or already
+escalated, and both reviewers flagged all of theirs as uncertain (see the two rounds above and the
+carried-forward items). But the hard-stop reviewer's *observations* section — the part that counts
+towards no verdict — contained the only genuine defect in the round, and it was **mine, introduced by
+addendum 2's own fix**:
+
+**A resumed monthly run would have failed the entire billing projection.** Addendum 2 added
+evidence-hash divergence detection to `saveStatement`, comparing `tppCostEvidenceHash(statement)` —
+which spans `evidence.generatedAt` and `evidence.ratingRunAt`. The worker stamps both from
+`billingRunAt`, its own run clock. So a resumed or replayed run re-derives an identical statement under
+a later clock, gets a different hash, and the new conflict check throws — surfacing as an
+`AggregateError` that takes the receivable projections down with it. `saveRerating` had the identical
+bug over its `{ previous, corrected }` replay payload, which nests two statements and so two pairs of
+clock readings.
+
+This is the *same class of defect* as the one the BILL-12 review caught (a fail-closed throw bricking
+projections that had nothing to do with the failure), reintroduced two rounds later by a fix aimed at a
+different problem. CLAUDE.md requires scheduled jobs to be resumable and idempotent; the check I added
+made them neither. The reviewer also identified precisely why the tests missed it: the BFF spec uses a
+mock store, and the int spec replayed the *identical object* — neither exercised a moved clock.
+
+Fixed by separating substance from provenance. `tppCostContentHash` digests everything except the two
+clock readings, and divergence is compared on that, recomputed from the stored `statement_payload`
+rather than read from `evidence_hash`; `tppCostReplayContentHash` does the same across a re-rating's two
+nested statements. `evidence_hash` still stores the complete digest including timestamps — it is the
+provenance record of what was written, and the first write's clock belongs in it. Different totals or
+lines remain a hard conflict; a later run time no longer is. Both new tests were confirmed to FAIL
+against the previous comparison, reproducing the exact production error, before the fix was restored.
+
+Two further fixes this round:
+
+1. **The four-eyes FK is now tenant-composite.** The hard-stop reviewer's FAIL 5 was right on its first
+   limb: `REFERENCES approval_request(approval_request_id)` against a globally-unique text key let one
+   bank cite another bank's approval. `approval_request` gains an additive
+   `UNIQUE (bank_id, approval_request_id)` (guarded, since Postgres has no
+   `ADD CONSTRAINT IF NOT EXISTS`) and the dispatch FK is now composite on `(bank_id,
+   approval_request_id)` — the same idiom as this table's other two foreign keys. Proven by a test that
+   a dispatch citing another bank's approval is refused. The reviewer's other two limbs — approved
+   state and unexpired `expires_at` — are mutable state on the referenced row and cannot be expressed
+   as a foreign key at all; they stay a stated write-time requirement on BILL-16, and the migration
+   comment now says exactly that rather than implying the FK covers more than it does.
+2. **Doc-vs-code drift corrected.** The generation service claimed an unpriceable period was "raised as
+   an operational signal"; it emits a High-class audit event and nothing else. The comment now says so,
+   and routing to P3/ITSM is named as BILL-14's, once a directory source exists that can fail.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration
+**167/167** across 77 files (three new tests); Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.
+
+The lesson worth keeping: an advisory review's non-findings are worth as much as its verdict. Both
+verdicts here were, on inspection, noise — and the one item that mattered was filed under
+"observations outside the hard-stop list".
+
+### BILL-13 addendum 4 — least privilege on the free-form payload tables, and owners for the deferrals
+
+The hard-stop review re-ran on `1b7ca20` and confirmed addendum 3 landed: the tenant-composite FK
+"correctly prevents one bank citing another bank's approval", audit immutability clean (it correctly
+judged the new `ADD CONSTRAINT` additive and non-mutating), PII clean on the statement family, egress
+clean, lineage clean. It then returned **FAIL (6)**, and named the pattern behind three of them exactly:
+*the irreversible artefact lands in this PR while the control that bounds it lands in a later story, held
+only by a SQL comment* — no schema constraint, no test, no gate. That criticism is right, and three of
+the six were worth acting on.
+
+1. **The cross-tenant grant is now withheld from the two provider-fed tables.** The controls loop granted
+   `SELECT` to `bank_internal_view` on all eight tables, including `billing_tpp_cost_document`
+   (`raw_document_ref`, `parsed_payload`) and `billing_tpp_cost_ap_dispatch` (`response_payload`) — the
+   three columns this schema cannot constrain and which a Nebras invoice line or P9 response may fill
+   with payment-level customer detail. Every *other* table under that policy is schema-constrained and
+   PSU-free by construction, which is what makes the governed-aggregate seam an acceptable bypass for
+   them; it is not established for unconstrained payloads. Those two are now excluded from both the
+   policy and the grant, asserted by a test that reads the live privilege catalogue.
+   `billing_tpp_cost_document_line` stays granted — checked, not assumed: it holds only structured
+   dimensions with no jsonb column. Withholding costs nothing today because nothing reads either table,
+   and whichever story needs the read must grant it deliberately, after redaction exists, rather than
+   inherit it from a loop.
+2. **The four-eyes CHECK now says only what it can prove, and proves a little more.** The reviewer was
+   sharp here: the migration comment claimed self-approval "is refused by the CHECK rather than only by
+   the approvals service", which is stronger than `approved_by <> initiated_by` supports — one human
+   under two identifier forms satisfies string inequality. The CHECK is now normalised
+   (`lower(btrim(...))`), so case and padding variants are refused and a test proves it; the comment
+   states the guarantee precisely and names what it cannot see. Closing the rest is a write-time
+   obligation, because it depends on what BILL-16 stamps into those columns.
+3. **The deferrals have owners now, not comments.** A SQL comment is not a gate, so the obligations moved
+   into the acceptance criteria of the stories that must satisfy them: BILL-14 gains a blocking criterion
+   for redaction-at-parse-time (with the withheld grant named as its unlock); BILL-16 gains one covering
+   all three of its inherited obligations — approved state and unexpired `expires_at` at write time, both
+   principals from one normalised P2 claim, and `response_payload` redaction — plus the transition-order
+   rule the append-only UNIQUE cannot express. **CODE-03** tickets the repo-wide `scope_used` pass; the
+   reviewer's best line was that a repo-wide decision with no owner is how drift survives, and it was
+   right that the earlier "wants one pass" reasoning had been recorded without a ticket.
+
+Not changed, with reasons. The dual-domain export finding carries the reviewer's own nuance that
+substantially weakens it: `billing_event`, `billing_meter_run` and `billing_metered_line` were **already**
+in `EXPORT_TABLES` and carry `payable_hub`/`payable_lfi` rows, so TPP-side data was in that artifact
+before this diff — this change labels the crossing rather than creating it, and SEG-01 already records the
+call site. The `billing:rate` audit label stays as-is this round now that CODE-03 owns it. And the
+free-form columns themselves stay created here: settling the ledger's shape in one reviewed migration was
+the deliberate choice, the tables are empty, and the two controls that were missing (the withheld grant
+and an owned acceptance criterion) are what this round added.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration **169/169**
+across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; the live
+privilege catalogue confirms six of eight tables granted to `bank_internal_view`.
+
+### BILL-13 addendum 5 — corrections to my own claims, and the real size of the scope-label drift
+
+Both reviews re-ran on `c578dbe`. Hard-stop went **FAIL (6) → FAIL (4)** and now cites each addendum-4
+fix as the reason its earlier findings are mitigated: the withheld grant and its test, the BLOCKING
+acceptance criteria on BILL-14/BILL-16, and CODE-03. The cross-tenant `internal_view_select` concern
+dropped from a finding to an observation ("verbatim the ratified HOST-02 pattern … not new here, so not
+raised"). Contract returned **DRIFT (4)** — two DRIFT, two SPEC DEFECTS — all pre-existing exceptions or
+the escalated money-unit decision. The four remaining hard-stop findings are the same created-but-unwritten
+deferrals, each flagged uncertain by the reviewer and each now owned by an acceptance criterion.
+
+For the second round running, the genuinely actionable items were in the *observations*, and this time
+both were **my own claims being wrong**:
+
+1. **"P9 cannot be double-paid" overstated what the constraint carries.** When addendum 2 converted the
+   dispatch table to an append-only state log, the comment kept its old retry-safety claim. But
+   `UNIQUE (bank_id, idempotency_key, dispatch_state)` is unique per (key, **state**), not per key: it
+   bounds each state to one row per instruction — an instruction cannot be recorded as `dispatched`
+   twice — and that is all. It does not by itself make double payment impossible, and it constrains no
+   transition order. The comment now says exactly that, and names where the actual guarantee lives
+   (BILL-16 dispatching once under the key, plus P9's own idempotency).
+2. **CODE-03 understated its own surface by more than half.** I recorded "four call sites, one token".
+   Measured against the spec rather than estimated, it is **six undeclared tokens across fourteen
+   `scope_used` emissions**: `billing:rate` ×4, `billing:post` ×3, `reconciliation:run` ×3,
+   `billing:assure` ×2, `billing:reconcile` ×1, `billing:collect` ×1 — none of which appears anywhere in
+   `specs/backoffice-openapi.yaml`, against `billing:read` (10), `billing:write` (4) and
+   `platform:operations:read` (8) which do. The ticket now carries that inventory with file:line for each.
+   It also carries a scoping fact I checked so the next agent need not: `BILLING_POST_SCOPE` and
+   `BILLING_ASSURANCE_SCOPE` are exported constants, which looked like they might gate access — they do
+   not. Neither is ever passed to `assertScope` or any middleware; all fourteen are audit values only. So
+   no privilege is granted anywhere and this is an audit-trail resolvability defect, not an authorisation
+   one. That distinction is what makes it a tidy one-pass fix rather than a security incident.
+
+One further fix from the hard-stop findings themselves. Its third FAIL 5 observed that
+`initiated_by`/`approved_by` are **denormalised copies** with nothing binding them to the
+`approval_request` row they cite — so the recorded four-eyes evidence could name two people unconnected
+to the referenced approval. The reviewer rated its own confidence low (the authoritative
+`CHECK (approver IS NULL OR approver <> initiator)` on `approval_request` still blocks self-approval), but
+the point about *evidence correspondence* is sound and cannot be expressed as a foreign key. BILL-16's
+criterion (b) now requires both columns to equal the cited request's own `initiator`/`approver`.
+
+Not changed: the camelCase-inside-jsonb export exception (pre-existing, ratified in code and build log,
+and rewriting keys would break the digest the evidence chain depends on — the reviewer's own recommended
+close is a CLAUDE.md carve-out or ADR, i.e. spec-change, not code). The contract reviewer also proposed a
+concrete minimum envelope for `GET /back-office/billing/export` — `schema_version`, `bank_id`,
+`generated_at`, `record_counts`, `sha256` declared, with `tables` left opaque — which would have made this
+class of payload drift contract-detectable at all. That is a genuine spec gap and a good proposal; it is
+recorded here rather than actioned, because it is a spec-change PR and not BILL-13's.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423; integration 169/169 across 77 files;
+Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 6 — the correction that was only half-applied
+
+Hard-stop re-ran on `f37f323`: **FAIL (5)**, and its own summary is the fair reading — four of the five
+are the created-but-unwritten deferrals, each now credited as "carried by a BLOCKING acceptance criterion
+rather than prose alone, which is the strongest available mitigation short of not creating the tables
+yet". It also confirmed test integrity explicitly, noting the `UnpriceableOverageError` change preserves
+existing `rejects.toThrow` assertions and that the new BFF spec guards against the type-vs-message
+shortcut.
+
+The fifth finding was a real defect and it was mine, in a way worth recording: **addendum 5 corrected the
+"P9 cannot be double-paid" overclaim in the migration comment and explained it at length here — and left
+the original false claim standing in the two places a reader reaches first.** The reviewer put it
+precisely: "the diff simultaneously ships the correction and leaves the incorrect claim standing in the
+backlog outcome, which is the artifact a reader reaches first." Correcting the code comment while the
+summary that gets read still asserts a payment-duplication control the schema does not carry is worse
+than not having noticed at all.
+
+Fixed in the two places, differently, because they are different kinds of document:
+
+- `docs/backlog.yaml` is current-state metadata, so the claim is corrected outright — uniqueness is per
+  (key, state), what that does and does not bound is stated, and the sentence notes that an earlier draft
+  overstated it.
+- `docs/build-log.md` is append-only history, so the original line stays and carries an inline correction
+  block pointing at addendum 5. Silently rewriting a historical entry to make a past claim look right is
+  not a fix; annotating it is.
+
+Also closed the loop on the reviewer's final observation: `billing_tpp_cost_document.verified_by` /
+`verified_at` are `NOT NULL` but bound to nothing — the same denormalised-evidence weakness as the
+AP-dispatch principal columns, on a table BILL-14 owns. BILL-14 now carries a criterion requiring them to
+correspond to the principal who actually performed the verified-manual-upload check, stamped from the P2
+claim, with verifier ≠ uploader refused.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+The generalisable lesson from rounds 3–6, since it recurred four times: **every actionable defect this
+track produced was in a review's "observations" or non-finding notes, never in its verdict.** The verdicts
+were dominated by documented deferrals the reviewers themselves rated uncertain. Reading only the
+FAIL/PASS line would have missed a resumability bug that would have failed the whole billing projection,
+a cross-tenant grant on unconstrained payload columns, and two false claims in the release record.
+
+Contract review on the same head returned **DRIFT (6)** — the two pre-existing exceptions (camelCase
+inside exported jsonb, `approval_request_id text` mirroring 0002), the two escalated items (`billing:rate`
+now owned by CODE-03, milli-fils), the dual-domain export already routed to SEG-01, and one genuinely new
+*forward* obligation worth acting on: nine state and reason vocabularies are hard-committed as CHECK
+constraints in an INSERT-only family with no OpenAPI counterpart. The reviewer's framing is right — those
+values are expensive to move once rows exist. **BILL-17**, which owns the endpoints that first expose them,
+now carries a blocking criterion that its schemas mirror the sets exactly or the spec-change lands first,
+never a widened CHECK.
+
+### BILL-13 addendum 7 — first hard-stop PASS, and it found a test that could not fail
+
+Hard-stop on `e582b7a`: **VERDICT PASS** — the first on this track. It recorded seven candidates and
+scored none as a violation, six being forward obligations on schema no code writes, each now carried as a
+BLOCKING acceptance criterion on the story that owns the write path. Its own summary of the two hard stops
+this change could most plausibly have broken is the fair one: audit immutability and PII are "not merely
+un-breached but affirmatively tested".
+
+Its one genuine defect (C2) was a **test of mine that could not fail for the reason it claimed**, and it is
+the sharpest finding of the whole track:
+
+> the insert supplies `gen_random_uuid()` for both `statement_id` and `reconciliation_id`, neither of which
+> exists — so it violates this table's statement and reconciliation foreign keys as well as the approval
+> FK. The assertion `rejects.toThrow(/violates foreign key constraint/i)` matches **any** of the three. The
+> test therefore passes identically whether or not the tenant-composite approval FK exists at all.
+
+Exactly right. The control was real; the evidence for it was worthless. Worse, it was the test I cited in
+addendum 4 as proving the cross-tenant fix.
+
+The obvious repair — create real parents so only the approval FK can fail — turns out to be **wrong here**,
+and the reason is worth recording: `billing_tpp_cost_reconciliation` requires a
+`billing_tpp_cost_document` row, and writing that table would make the Q4.5 lineage gate demand lineage
+BILL-13 does not emit for it, because the gate skips only *empty* tables. The behavioural route would fix
+one gate by breaking another. So the assertion now reads the constraint's own definition out of
+`pg_constraint`: that the FK is `(bank_id, approval_request_id) REFERENCES approval_request(bank_id,
+approval_request_id)`, that **no** FK references the approval by its global id alone, and that
+`approval_request` carries the matching `UNIQUE (bank_id, approval_request_id)` without which the composite
+FK could not exist.
+
+Proven to discriminate, not assumed: degrading the schema back to the pre-fix single-column FK turns the
+new test RED (1 failed / 14 passed) and it passes again on restore. The old assertion would have stayed
+green throughout.
+
+The two four-eyes CHECK tests were left as they are, having checked why they are sound where C2 was not:
+they assert `/violates check constraint/`, and Postgres evaluates CHECKs during the row insert but FKs as
+AFTER-ROW triggers, so the CHECK error is what surfaces. Crucially they fail *safe* — if that order ever
+changed, an FK error would not match the assertion and the tests would go red rather than silently pass.
+
+Also this round, from the contract review, a correction to how the money question has been escalated. I had
+been describing it as "CLAUDE.md and the spec disagree, pick one". Measured, that is wrong: the spec's own
+`Money` schema (`specs/backoffice-openapi.yaml:3028`) states the rule verbatim and cites CLAUDE.md —
+"integer minor units", "fils for AED" — so **the spec and CLAUDE.md agree**, and the outliers are two bare
+`*_milli_fils` fields at spec:2926-2927 plus the columns migration 0039 adds. A second measured fact
+sharpens it further: only `billing_tpp_cost_statement` and `_document` carry a `currency` column at all
+(0039:69,156), so the line-level tables hold amounts with no currency and a conformant per-line `Money`
+requires joining the parent. Both facts, and the two viable resolutions — convert at the wire boundary and
+keep the finer precision in storage only, or ratify milli-fils by amending *both* CLAUDE.md and the `Money`
+description — are now recorded on BILL-17, which is the story that cannot ship without the answer.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 8 — the same defect class, caught a second time
+
+Contract review on `82956de`: **DRIFT (7)**. Six are previously assessed — the `billing:rate` sites now
+owned by CODE-03, the camelCase jsonb exception, `approval_request_id text` mirroring 0002, the frozen
+vocabularies owned by BILL-17, and the money-unit question. Its finding 7 was new, and it is the **same
+class of defect the hard-stop review caught in C2, on the same PR**:
+
+> `packages/db/test/tenant-billing-service-store.int.spec.ts:196` asserts only
+> `recordCounts.billing_event >= 1` … Dropping any of the three new names from `EXPORT_TABLES` would not
+> turn a test red.
+
+Correct, and worth stating plainly: BILL-13 claimed a portability guarantee — "a tenant that cannot take
+its payable evidence has not been exported" — added three tables to `EXPORT_TABLES` to deliver it, and
+asserted it nowhere. Twice on this PR now I added a control, cited it in this log as proof, and left it
+without a test that could fail. C2 was the tenant-composite FK; this is the export. The pattern is mine,
+not the reviewers': **claiming a control and evidencing a control are separate steps, and I was treating
+the first as if it discharged the second.**
+
+Fixed with a behavioural test that persists a statement and asserts it actually appears in
+`portableExport` — by `recordCounts` for the statement and line tables, and by finding the specific
+statement id in the payload rather than trusting a count. It also asserts the two withheld provider-payload
+tables stay *out* of the export, so the narrowing from addendum 4 is evidenced too. Proven to discriminate:
+removing the payable tables from `EXPORT_TABLES` turns it red (1 failed / 15 passed), green on restore.
+
+Also from this review, its finding 3, which it verified rather than assumed: `CHECK (currency = 'AED')` is
+narrower than the contract's `Money.currency` (`^[A-Z]{3}$`), and 0039 is the **first** place in the schema
+where a currency *value* is pinned — every earlier migration constrains only null-coupling. The reviewer's
+ask was that the narrowing be "a decision rather than an inheritance", which is fair, so the migration now
+records the reasoning: every UAE Open Finance fee is AED-denominated, a non-AED payable row would mean a
+parsing or mapping defect, and in an INSERT-only family with no deletion path it is far better refused at
+write time than stored unremovably. Relaxing the CHECK later is an additive migration; un-storing a
+mis-denominated row is not.
+
+Re-verified on a pristine database: unit 1423/1423; integration **170/170** across 77 files; Q4.5 PASSED,
+allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 9 — two precise details, both handed to the story that will hit them
+
+Contract review on `bad2946`: **DRIFT (7)**, confirming addendum 8's export test and the AED reasoning
+landed. Five findings are previously assessed and unchanged in disposition. Two carried detail worth
+recording, neither a code defect:
+
+1. **On `_rerating`, "join the parent for currency" has no single answer.** Addendum 7 recorded that four
+   tables hold amounts with no `currency` column, so a conformant per-line `Money` needs a parent join.
+   The reviewer noticed what that recording missed: `billing_tpp_cost_rerating` carries **two** statement
+   foreign keys (`previous_statement_id`, `corrected_statement_id`, 0039:371-372), so "the parent" is not
+   singular there and BILL-17 must decide which denominates a delta rather than assume one exists. Added
+   to its criterion.
+2. **`response_status` is the same defect class as `scope_used`, and gets the same treatment.** The two
+   emissions stamp `response_status: 200` from a scheduled monthly job that issues no HTTP response, and
+   the reviewer is right that `:122` is wrong on its own terms — it stamps 200 on the path that reports a
+   *skip*. Checked before deciding: 20 `response_status` occurrences exist across
+   `services/bff/src/billing` with mixed values, so this is a repo-wide pattern, and
+   `AuditEvent.response_status` is an unconstrained integer with no description — the contract does not
+   say what a non-HTTP actor should record. Fixing only these two would recreate exactly the
+   inconsistency that made half-fixing `billing:rate` the wrong call. So CODE-03 now owns both fields, to
+   be settled in one pass with the options named (omit, sentinel, or an explicit outcome field).
+
+Not changed, and stated once so it is not re-litigated: the nine frozen vocabularies, the camelCase jsonb
+exception, the milli-fils unit, and the AED narrowing all keep the dispositions recorded in addenda 4–8.
+The reviewer agrees with each framing and reports them, correctly, so the pre-commitment is on the record
+at the point it happened rather than discovered at BILL-17.
+
+Verified: unit 1423/1423; integration 170/170 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 10 — the PII guard did not guard, which is the third of these
+
+Hard-stop on `bad2946`: FAIL (6), five of them the documented deferrals with unchanged dispositions. The
+sixth is the important one, and it is the **third vacuous-assertion defect this PR has produced**:
+
+> The test carrying the "zero PSU data in the cost ledger" claim asserts it with
+> `expect(serialised).not.toMatch(/psu/i)` against a fixture whose PSU identifier is literally
+> `psu-<uuid>`, so the assertion passes on the substring the fixture was named with rather than on the
+> property.
+
+Right, and it is the worst-placed of the three: the PSU claim is a **regulatory hard stop**, and the
+migration header (`:19-22`) leans on "asserted by test" as its mitigation. A production-shaped identifier —
+an opaque uuid, an IBAN, an Emirates ID — would have satisfied `/psu/i` while sitting in
+`statement_payload`. The reviewer also did the right thing before reporting: it verified the underlying
+claim structurally (no PSU field on `ExpectedTppCostStatement`, `psuId` dropped rather than spread at
+aggregation, no PSU column in any of the eight tables) and reported only the guard, not the property.
+
+Fixed by making the fixture's identifier an **opaque uuid with no `psu` substring** and asserting the
+absence of that specific VALUE, so the test depends on the property rather than on the naming. The
+`/psu/i` check is kept alongside it — it still catches the distinct failure of leaking the field *name* —
+and the assertion that event ids ARE present is kept too, so the absence is a real exclusion rather than
+an empty payload. Proven to discriminate by injecting the exact regression it exists to catch (leaking the
+identifier into the persisted payload): the PSU test turns red, and green again once reverted.
+
+**Three for three, and the pattern is the finding.** C2 was the tenant-composite FK, addendum 8 was the
+portable export, this is the PSU guard. In each case the control was real and the *evidence* was not, and
+in each case I had cited the test in this log as proof the control worked. Writing a control and evidencing
+a control are separate steps; on this story I repeatedly treated the first as discharging the second, and
+only an adversarial reader caught it — three times, on three different controls. The lesson for the next
+ledger story is procedural, not technical: for every control claimed in a build-log entry, break it
+deliberately and watch the test fail before writing the claim down.
+
+Two details from the contract review on the same head were also recorded (addendum 9): the `_rerating`
+two-parent ambiguity for per-line currency, and `response_status` folded into CODE-03 as the same class of
+HTTP-shaped-field-on-a-headless-emitter defect as `scope_used`.
+
+Verified on a pristine database: unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed
+gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 11 — the third home of the double-paid claim, and the most-read one
+
+Gating CI is green on `9fb2db1` and on every prior head of this branch. Both advisory reviews report
+failure, which is non-gating (ADR 0029); their check-runs endpoint returned 403 and issue comments 404 on
+this attempt, so their bodies were not retrievable — not guessed at either.
+
+While confirming the PR state, the **PR description** turned out to still assert "AP dispatch is unique per
+idempotency key so P9 cannot be double-paid". Addendum 6 corrected that claim in `docs/backlog.yaml` and
+annotated it in this log, because the review named those two locations. Nobody named the third, and it is
+the one a reviewer reads first. Its evidence block was also stale — 1421 unit / 162 integration, from
+before six rounds of fixes.
+
+Fourth instance of the same pattern, and the cleanest illustration of it: a correction is not applied until
+it is applied *everywhere the claim appears*, and searching for the claim beats waiting to be told where it
+lives. The description now states what the constraint actually carries, records what the review rounds
+changed and why, carries the current evidence (unit 1423/1423, integration 170/170, Q4.5 PASSED), and names
+the two decisions that need a human rather than implying they are settled.
+
+No code changed in this addendum.
+
+### BILL-13 addendum 12 — one reviewer claim corrected, one gap the reviewer missed
+
+Contract review on the docs-only head: **DRIFT (12)**. Ten are dispositioned in addenda 4–11. Two were
+new, and checking them produced a correction in each direction.
+
+**DRIFT 10, partly wrong, and the code says so.** It reported `fee_class`, `product_family` and
+`api_family` as unconstrained `text` "while the domain types are closed unions". True for one of the
+three. `TppCostProductFamily` is a closed six-value union — but `apiFamily` is typed plain `string`
+(`apiFamilyForEndpoint` derives it from endpoint shape, not a fixed set), and `fee_class` is an open
+vocabulary the contract itself declares as an unconstrained string. CHECK-constraining either would refuse
+legitimate values the first time the scheme adds an endpoint family. So only `product_family` got a CHECK —
+and it earns one, being part of line identity under a UNIQUE key in a ledger with no UPDATE path, where a
+projection bug inventing a family would corrupt identity irrecoverably. The migration now states which of
+the three are constrained and why the other two are not, so the asymmetry reads as a decision.
+
+**DRIFT 7, right, and it led to something the reviewer did not see.** The payable diff line carries a
+ten-value `break_type` and a `reconciliation_break_id`, with the migration claiming "the payable side
+reuses that workflow" — while `GET /back-office/reconciliation/breaks` classifies by `LineType` (six
+values) and declares no `break_type`. Nothing maps one onto the other. Following that up surfaced a gap the
+review did not report: **`reconciliation_break_id` carries no foreign key at all**, so a payable diff line
+could cite a break that does not exist.
+
+I did not add the FK, and the reasoning matters because it differs from the `approval_request` case in
+addendum 4 where I did. There, the FK already existed and the fix was to widen it to a tenant-composite key
+against an existing global UNIQUE — a one-line tightening. Here there is no FK and no
+`UNIQUE (bank_id, id)` on `reconciliation_break` to reference, so adding one means altering an E1 table and
+deciding `ON DELETE` semantics for a regulated record, on a column BILL-15 writes and whose break-mapping
+question BILL-15 must settle first. Doing that as a drive-by in a payable story would be inventing E1
+design. So it is a BLOCKING criterion on BILL-15 — mapping, FK, and the `variance_amount` `Money`-vs-bare
+`milli_fils` shape — and the migration says the column is unconstrained pending that and must not be
+written. Explicit deferral, not an oversight.
+
+Infrastructure note, since it affected this round's verification: PostgreSQL died mid-session for the second
+time and the restarted cluster came up on a different data directory with password auth, so the scratch
+databases were gone. Rebuilt on `postgres:postgres@localhost` — which matches CI's own connection string —
+rather than editing `pg_hba.conf`, an action the harness correctly refused.
+
+Verified after the change, on a database built from scratch: the CHECK is present in the applied schema;
+unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.
+
+### BILL-13 addendum 13 — the code was citing CLAUDE.md as authority for departing from CLAUDE.md
+
+Contract review on `8df9cc0` confirms the `product_family` CHECK and the BILL-15 criterion landed;
+its eleven findings are the dispositioned set. One aside was not, and it is a defect of mine:
+
+> `packages/billing/src/tpp-cost.ts:80` documents the milli-fils unit as "(CLAUDE.md money convention)".
+> CLAUDE.md does not state that convention; the comment mis-cites it.
+
+Correct, and it is the mechanism behind something the same reviewer noted a round earlier — that the
+milli-fils choice "looks sanctioned when it is not". The comment cited the very document that says the
+opposite (integer minor units, "fils for AED") as the *source* of the deviation. I wrote that line in
+BILL-12, and it has been sitting on `main` asserting a settled position on the question I have been
+escalating as open in every report since.
+
+Fixed here rather than deferred to "whenever the decision lands", because the mis-citation is a factual
+error independent of the decision: the comment now states that milli-fils deviates and is unratified, why
+it was chosen (ADR 0007 prices tariffs at 2.5 and 0.5 fils, which minor units cannot hold without rounding
+the payable), that the earlier citation was wrong, and that BILL-17 owns the resolution. No behaviour
+changes — it is a comment — and correcting it does not pre-judge the decision either way. Grepped for
+other authority claims of the same shape: none.
+
+This touches a file outside the story's diff, which is deliberate and worth justifying: leaving a false
+claim of authority on `main` while asking a human to decide the same question would undermine the
+escalation. One comment line, in the story that surfaced it.
+
+Verified: typecheck 0; unit 1423/1423; ESLint clean.
+
+### BILL-13 addendum 14 — a review reopened a cleared finding, and it was right to
+
+Hard-stop on `7f70892`: FAIL (8). It confirms this branch's fixes landed — it now credits the PSU test
+for asserting "both the absent identifier *value* and the absent `psu` key shape", and notes the diff
+"only corrects a comment that had wrongly cited CLAUDE.md as the unit's source". Seven findings are the
+dispositioned deferrals, each flagged uncertain.
+
+The eighth is one **earlier rounds explicitly cleared**: the `internal_view_select` policy is fail-OPEN
+when `app.tenant_group` is unset — a session holding `bank_internal_view` with nothing pinned reads every
+tenant's rows. Round 6 dismissed it as "verbatim the ratified HOST-02 / ADR 0028 pattern … not new here,
+so not raised". Both readings are factually right, and the later one is more useful: the idiom is
+pre-existing AND this story widens what it covers.
+
+Verified before acting, and it produced a correction in the reviewer's favour and one against it:
+
+- **The fail-open branch is real.** `NULLIF(current_setting('app.tenant_group', true), '') IS NULL OR
+  bank_id IN (…)` passes all rows when unset. It is deliberate single-tenant backward compatibility per
+  ADR 0028, reachable only through `runGovernedAggregate` behind a registered, approved purpose with a
+  High-class-logged bypass — a hardening item, not a live breach.
+- **The blast radius is six tables, not the eight claimed.** 0039's loop excludes
+  `billing_tpp_cost_document` and `billing_tpp_cost_ap_dispatch`. Those are exactly the two provider-fed
+  payload tables the same review flags under FAIL 3 as potential PSU sinks — so the withheld grant from
+  addendum 4 already puts the riskiest two outside the cross-tenant read. The review's own two findings
+  intersect where the story had already closed the gap.
+
+What I did *not* do is change the policy. Deviating in one migration would leave nine policies disagreeing
+about what an unpinned session means, which is worse than a consistent known weakness. What was actually
+missing is an owner: ADR 0028's Consequences records the fix verbatim as a "marked follow-up", its
+prerequisite HOST-02 is `done`, and **no backlog item owned it**. So **HOST-04** now does, carrying the
+measured surface (the idiom appears in nine migrations — 0030 defines it, 0031-0037 and 0039 use it), the
+six-not-eight correction, the requirement that the fix be one pass over the shared idiom rather than
+per-migration patches, and the open question it needs answered: whether unpinned should deny all rows or
+resolve an explicit default group, since the demo profile currently depends on the fallback.
+
+Its acceptance criteria include the anti-vacuous test this story learned to insist on the hard way — prove
+fail-closed directly, and prove the test fails if the fallback clause is restored.
+
+No code changed. Backlog and build log only.
+
+## 2026-08-17 — BILL-14: provider-document ingestion (Nebras-primary taxonomy)
+
+The payable actuals. `POST /back-office/billing/tpp-cost-documents` added **spec-first** (93 → 94 paths,
+client regenerated), then failing tests, then code — the parser tests were confirmed red 14/14 before the
+module existed.
+
+**Parsing behind an adapter.** `TppCostDocumentParser` is the seam; the Nebras tax-invoice parser is the
+one implementation, so a PDF/EDI/API transport can be added without touching the ingest service. VAT is
+split by **stream**, not by document (ADR 0007 D4): Hub sections are VAT-exclusive so 5% is added to the
+stated net, underlying-LFI sections are VAT-inclusive so 5/105 is carved out of the stated gross. Gross is
+always computed as net + vat rather than net × 1.05, so the three reconcile exactly under half-up rounding
+at every amount — asserted across a range, not one example. Document totals are **derived from the lines**
+and then checked against the provider's own; a disagreement is refused, because "trust the header" and
+"trust the lines" are both wrong when they conflict.
+
+**A deliberately partial category map.** Five categories map to fee classes we already price. Four are
+knowingly unmapped: `Balance (Discounted)` and `CoP (Discounted)` because the IG §10.9 sample carries a
+unit anomaly (0.25 vs 0.005) that BD-20 must resolve on a real invoice, and `Payment Data` and
+`Setup and Consent` because no current fee class corresponds without inventing scheme semantics. Mapping
+them now would silently mis-state the payable; flagging them cannot. Unmapped lines persist with
+`mapped: false` and `fee_class NULL`, which the schema CHECK ties together. The map is versioned data with
+a cited source, so a correction is config, not a release.
+
+### The redaction control, and two bugs the double-check caught
+
+Criterion 5 was the load-bearing one: these tables are INSERT-only with no deletion path, so customer
+detail must be removed **before** the first INSERT. Redaction keys on field NAMES and on identifier
+SHAPES — and the shape choice matters more than it looks. The repo's PII guard refuses real-shaped
+fixtures, forcing synthetic forms (national-identifier prefix 999, IBAN bank code 000). That pushed the
+redactor to match `\d{3}-\d{4}-\d{7}-\d` and `AE` + 21 digits **structurally** rather than by prefix or
+bank code — which is precisely what makes it catch a real value it has never been shown. A hook that
+looked like an obstacle produced a better control.
+
+The parser redacts and has no accessor for the raw payload; the store re-checks at the boundary that makes
+a write permanent. That second check found two defects that no review had to:
+
+1. **Redaction was not idempotent.** Replacing a PSU-named field keeps its key, so re-running the redactor
+   flagged the same keys again — and the boundary check reads "reported something" as "never redacted". It
+   rejected correct writes. Already-redacted values are now left alone and not re-reported, and idempotence
+   is its own test, because a control depending on a property should assert that property.
+2. **Two patterns were eating the invoice TRNs.** A generic long-digit-run rule and an unanchored phone
+   pattern both matched a 15-digit UAE TRN (`100123456700003` contains `00` followed by twelve digits). TRNs
+   are **required** header evidence under IG §10.9, so redaction was destroying a mandatory field and
+   inflating the count an auditor reads. The digit-run rule is gone and the phone prefix is anchored so it
+   cannot match inside a longer number. The residual risk — an account number under a key the list does not
+   recognise — is now stated in the code with where the fix belongs, rather than papered over by a heuristic
+   that destroys required evidence.
+
+**Migration 0040 grants what BILL-13 withheld.** The cross-tenant internal-view read on
+`billing_tpp_cost_document` was deliberately held back until redaction existed; it is now granted, and
+BILL-13's own test was narrowed from a frozen table list to the *condition* (redaction proven), so it still
+fails if `ap_dispatch` — whose `response_payload` is P9's, with no redaction until BILL-16 — ever inherits
+a grant it has not earned.
+
+**Second-person verification, claimed accurately.** `verified_by` is checked against the caller's verified
+P2 subject claim and an upload nominating its own uploader is refused (409), normalised so one human under
+two spellings cannot pass as two people. What that proves is **distinctness**, not that the verifier
+authenticated — a request carries one credential — and the code says so, pointing at four-eyes (202 +
+`approval_request`) as where the stronger control lives. Given how often this track has been caught
+over-claiming a control, the comment matters as much as the check.
+
+**The absence alarm** anchors on the 5th of the month following the period, moving off a weekend only —
+public holidays are an institution calendar the Back Office does not own, so it errs late rather than
+alarming on a day the Hub was never obliged to deliver. It fires only once the anchor has passed, and a
+credit note does not count as an invoice. IG §10.12.2 makes reporting non-receipt the participant's own
+obligation, which is what makes this a compliance control rather than a convenience.
+
+**Gates:** unit 1455/1455; integration 179/179 across 78 files on a pristine PostgreSQL 16.13; Q4.5 PASSED
+with `billing_tpp_cost_document` and `_document_line` now covered, allowed gaps none; typecheck 0; ESLint
+clean; Q1b no weakening detected. `docs:check` earned its keep — the anti-drift gate caught the README's
+stale "93 paths" the moment the spec grew.
+
+**Still open, and inherited rather than introduced:** the directory `OverLimitFees` unit is still
+unconfirmed because the egress policy continues to deny `data.directory.openfinance.ae` (rating stays
+fail-closed), and BD-20 still needs the first real Nebras invoice — which is also what resolves the four
+unmapped categories. Both now carry to BILL-15.
+
+### BILL-14 addendum — the redactor covered the payload and not the columns beside it
+
+Both advisory reviews ran on the first push. The hard-stop reviewer found the one that mattered, and it
+is the **fourth** instance of this track's recurring pattern — a control claimed more broadly than it was
+built:
+
+> `redactProviderPayload` is applied to exactly one thing: the JSON blob. The per-line fields are read
+> straight off the provider document and copied verbatim … The module header says "there is no code path
+> that yields the raw one" — true of `payload`, not true of the columns beside it.
+
+Exactly right, and worse than it first looks: `line_ref`, `source_category`, `cost_recipient_id`, the
+document reference, the issuer/recipient ids and the TRNs all bypassed the redactor into structured
+columns — and `billing_tpp_cost_document_line` was *already* cross-tenant readable from 0039's loop.
+
+**Refused rather than redacted, and the distinction is the fix.** Redaction cannot apply to these fields:
+`line_ref` is part of a UNIQUE key and `source_category` is the evidence a fee-class mapping derives
+from, so a marker would destroy identity rather than protect anyone. `assertIdentifierFieldsClean` now
+refuses the whole document when any of them carries a customer-detail shape — in a family with no
+deletion path, rejecting an upload beats storing something unremovable. Tested per field, header and
+line, plus a test that the refusal message does not itself echo the offending value (it crosses the API
+boundary as a 422).
+
+Also from the hard-stop review: **the archive ran before validation**, so a document later refused as a
+conflict had already had its raw bytes retained. Archiving now happens only after every refusal has
+passed, and the obligations the interface cannot enforce — tenant scoping, matching retention,
+classification floor, no cross-tenant read — are written at the call site. Provider values were also
+being interpolated into parse-error messages that cross the API boundary; those now name the field and
+say the value is deliberately not echoed.
+
+The contract review found six more real ones, three of them defects rather than drift:
+
+1. **A reused `Idempotency-Key` raised a bare 23505 → 500.** The table carries `UNIQUE (bank_id,
+   idempotency_key)` as well as the issuer/reference key, and `saveDocument` handled only the second —
+   while its own doc comment claimed idempotency on the first. Same claim-without-evidence shape. Both
+   keys are now honoured: same key + same document replays, same key + different document conflicts.
+2. **The response omitted the four fields that ARE the verified-upload evidence** — `document_sha256`,
+   `received_at`, `verified_by`, `verified_at`. All four were computed and then dropped, so the caller
+   could not verify the integrity hash or the second-person record it had just supplied.
+3. **`source_note` was accepted and silently discarded.** There is no column for it, so it is now
+   recorded in the INSERT-only audit trail, which is where "email received 3 Jul, from …" provenance
+   belongs anyway.
+4. **`issued_at` was any non-empty string** while the contract declares `format: date-time`; Postgres
+   would accept "3 July 2026" and the response would echo it. Now RFC 3339 or refused.
+5. **Neither response schema declared `required`**, which is precisely why (2) was invisible to
+   validation. Both now do — 18 fields on `TppCostDocument` — so that class of omission fails a
+   validator instead of shipping.
+6. **Five of six `document_type` values always 400** because only the Nebras invoice has a transport
+   wired. The spec now says so on the field rather than advertising a taxonomy that half-rejects.
+
+And the gap behind all of it: **no test exercised the HTTP route.** The service was tested directly, so
+the envelope, the 201/200 selection, the error mapping and the wire shape were unasserted —
+`verify:contract` cannot help, it probes only parameter-less GETs. Six route-level tests through
+`createApp` now bind them, including that a same-document re-upload under a new key returns 200 rather
+than 201, and that every response key is snake_case.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180** across 78 files; Q4.5
+PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; Q1b **5 changed test files, no
+weakening detected**.
+
+Left as recorded rather than fixed: `x-rate-limit-per-min` is unenforced repo-wide (inherited, not this
+story's), the 409 response declares no `content` (precedent runs both ways in the same file), and the
+milli-fils unit question — now seven more fields deep — which is still the human decision BILL-17 blocks
+on. PostgreSQL also died four times during this story; each time it was restarted and the run repeated
+from a pristine database rather than reported around.
+
+### BILL-14 addendum 2 — an unvalidated enum, and a replay reporting evidence that matched no row
+
+Second contract review: **DRIFT (10)**. Six were real, four of those defects rather than drift.
+
+**An unchecked cast on a contract-declared enum.** `cost_recipient_type` was
+`section.cost_recipient_type as CostRecipientType` — a TypeScript cast over parsed provider JSON, with
+no validation. Every other provider-supplied discriminator in the parser *is* checked (`vat_treatment`,
+`currency`, `document_type` at the service), so this one was the outlier. A section saying
+`"third_party"` either reached the wire in a closed-enum field, or hit the column CHECK as an unmapped
+5xx instead of the 422 every other malformed field gets. Now validated, refused with the same 422.
+
+**A replay reported evidence that matched no stored row — the subtle one.** On the `200`
+already-ingested path the service returned *this request's* `document_sha256`, `received_at`,
+`verified_by` and `verified_at`. That looks harmless until you notice what dedupe keys on:
+`evidence_hash` is computed over commercial substance — reference, issuer, period, totals, lines — and
+deliberately **not** over the raw bytes, because two byte-different files stating the same charges are
+the same document. So a file differing only in JSON key order, whitespace or `due_at` takes the `200`
+path, and the response then hands back an integrity hash matching nothing in the ledger, breaking
+exactly the reconciliation the field exists for. The root cause was at the seam: the store interface
+returned only `{ id, documentReference }`, discarding evidence `saveDocument` had already read back. It
+now returns the stored values, and the service reports those on a replay.
+
+**My own YAML bug, emitted into a published artifact.** The `409` description used a folded scalar whose
+text began and ended with `'`. In a folded block those are not YAML quoting — they became part of the
+string and were carried verbatim into the generated client. Fixed, and while there the `409` gained the
+`ErrorEnvelope` `content` block it was missing (the implementation returns a body; the spec typed it
+`content?: never`, so a generated client could not see the error it actually receives) and a description
+naming the **third** cause the implementation added — idempotency-key reuse — which the contract had
+never documented.
+
+Recorded, not actioned: `x-rate-limit-per-min` is unenforced repo-wide (inherited); `source_note` is not
+recorded on the `200` path, which is defensible since the contract promises it no durability; and the
+path sits under the LFI-billing section banner while tagged `tpp-billing` — cosmetic, flagged twice now,
+and worth a tidy when the spec is next reorganised.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180**; Q4.5 PASSED; typecheck
+0; ESLint clean. PostgreSQL died a fifth time mid-verification and was restarted before the run was
+repeated — noted because five crashes in one story is an environment signal, not a code one.
+
+## 2026-08-17 — BILL-15: three-way payable reconciliation + dispute-window management
+
+Own metering ↔ expected statement ↔ provider document. The comparison itself is a pure function in
+`packages/billing/src/tpp-cost-reconciliation.ts` — no clock, no store, no I/O, every timestamp
+arriving on the input — so a reconciliation is reproducible from its inputs alone. That mattered
+immediately: three of this story's defects were only findable because the function could be probed
+directly.
+
+**Matching.** At the `(costRecipientType, costRecipientId, feeClass)` grain under a configurable
+tolerance defaulting to `fils(1)`. Expectations are milli-fils and documents state fils, so exact
+equality is never the test and the tolerance is what makes a match mean anything. Variance class is
+decided in a deliberate precedence — units, then net, then VAT. Units first because a volume
+difference is settled against metering and a rate argument built on the wrong volume wastes the
+§10.13 window; VAT last because it is the residual once net agrees, a treatment error rather than a
+pricing dispute, and it goes to a different desk.
+
+**One difference, one break.** An expectation and a document line disagreeing on the counterparty
+produce a single `wrong_recipient`, not a missing charge plus an unexpected one — two half-truths
+would open two queries against two counterparties for a single charge and neither would be
+answerable. The pairing REFUSES when two document lines share the fee class: nothing in the evidence
+says which one our expectation meant, and a guessed pairing names the wrong counterparty in the query.
+
+`duplicate_charge` is detected across documents only. Within one document a provider may legitimately
+split a category over several rows, so those aggregate; the same charge on the Nebras invoice and an
+LFI self-invoice is a different claim, because the Nebras invoice reconciles both cost components
+(IG §10.2).
+
+`unmatched_expected_line` earns its place in the taxonomy by distinguishing our mapping gap from
+their omission: a fee class the Hub could never name on an invoice is not a missing charge and must
+not be queried with them. It is fixed by extending the category map, not by writing to Nebras.
+
+**Three defects I found in my own first implementation**, each now pinned by a test proven to fail
+without the fix:
+
+- An **off-period document anchored the query deadline a month early**. A 2026-05 invoice issued in
+  June dragged the 2026-06 deadline from 2026-08-02 back to 2026-07-03. My own comment had warned
+  about overstating the time remaining; this understated it, which is just as wrong — abandoning a
+  live query early loses the same right as missing a dead one.
+- A **duplicated charge reported a net variance of zero**. `actualTotalNetMilliFils` was accumulated
+  only on the matched, wrong-recipient and unexpected paths, so an invoice pair over-billing us by a
+  full line showed no exposure on the one number BILL-16 decides what to pay from.
+- The **wrong-recipient pairing guessed** via `.find()` among several candidates.
+
+**Criterion 6(a) — `break_type` → `LineType`.** The line class follows the cost RECIPIENT, not the
+break class: `line_type` names which stream a break belongs to, and a rate variance is the same kind
+of line whether over- or under-rated. IG §10.2's two payable components map one-to-one — Hub fees to
+`nebras_fees`, underlying-LFI API access to `lfi_access_log`. `payment_settlement` is deliberately
+unused because it means money movement, not fee liability. That leaves `breakType` as a guard rather
+than a routing input, and it is used as one: it validates against the frozen ten-value taxonomy and
+throws, so an eleventh break class added without revisiting this mapping fails loudly instead of
+being silently filed as a Hub fee.
+
+**Criterion 6(b) — the deferred foreign key**, landed as migration `0041`. `UNIQUE (bank_id, id)` on
+`reconciliation_break` (additive; `id` is already the primary key, so it constrains nothing new and
+exists only to give the composite FK a target) plus the tenant-composite FK BILL-13 deferred.
+`ON DELETE` is deliberately absent — NO ACTION, meaning a delete of a referenced break is refused.
+For a table with a 5-year immutable retention obligation the alternatives are both wrong: CASCADE
+would let one delete propagate into the payables ledger, and SET NULL would sever the link between a
+payable variance and the break it was raised as while reporting success. `MATCH SIMPLE` is
+load-bearing and easy to misread: the nullable break id keeps the reference optional, and the FK is
+enforced in full only when it is set.
+
+**Criterion 5 — the billing-query bundle** refuses three ways, and refusal is the point since the
+bundle crosses the bank boundary through P6. A missing §10.11.3 field produces a query Nebras rejects
+for incompleteness and the days it consumed do not come back. A closed window means asserting a claim
+we no longer hold. Identifier-shaped `transactionDetail` would export PSU data to the scheme —
+§10.11.3 asks for "payment/transaction detail" and the tempting reading is to attach the payment, so
+the guard reuses BILL-14's `assertIdentifierFieldsClean` rather than adding a second redaction path.
+A test pins that the refusal does not eat the invoice number and interaction id the query is useless
+without.
+
+**Not done, stated plainly.** Criterion 3 is half-built: `openPayableBreaks()` is the gate query and
+is tested tenant-scoped over a real database, but the refusal it feeds lives in BILL-16, so the
+end-to-end blocked path cannot be tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the
+money-unit decision — `ReconciliationBreak.variance_amount` is a `Money` object while
+`billing_tpp_cost_diff_line` stores `variance_milli_fils` bare, and reconciling those shapes needs
+the answer BILL-17 owns. No Money-shaped variance is written in the meantime.
+
+Contract: `POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile` added spec-first
+(94 → 95 paths) on `finance:reconciliation:write`, mirroring `billing-records:reconcile` because
+judging a counterparty's figures against our own is one capability regardless of which way the money
+flows. It runs synchronously rather than returning 202 like its receivable twin: it compares stored
+evidence rather than fetching from the Hub, so there is nothing to wait on. A route test was written
+alongside the service tests — a `:reconcile` suffix on a path parameter is exactly the shape a router
+silently fails to match, and `pnpm verify:contract` probes only parameter-less GETs.
+
+Verified on a pristine database: unit **1512/1512**; integration **187/187** across 79 files; Q4.5
+**PASSED** with `billing_tpp_cost_reconciliation` and `billing_tpp_cost_diff_line` now covered;
+typecheck 0; ESLint clean.
+
+## 2026-08-17 — BILL-15 addendum: both reviewers, five fixes (same PR)
+
+Hard-stop **PASS**, no violations. Contract review **DRIFT** with three findings. Every fix below came
+from a reviewer's finding or non-blocking observation — none from the gates, which were green
+throughout. That is now the consistent pattern across BILL-13, BILL-14 and BILL-15.
+
+**The sharpest finding: this diff made the milli-fils deviation worse rather than inheriting it.**
+`TppCostReconciliation` published eight money-valued fields with no ISO 4217 anywhere, while the
+sibling `TppCostDocument` — my own BILL-14 schema — lists `currency` as *required* beside its
+milli-fils amounts. Adjacent schemas in one story family, opposite treatment. The currency was in hand
+at the wire function and simply not emitted, so this was not a case of storage lacking the data. And
+the deferral recorded on BILL-15 covers what diff lines *store*; publishing a currency-less **wire
+contract** went past what was deferred and would have made BILL-17's "convert to `Money` at the
+boundary" option strictly more expensive. Currency now flows through the domain result and is required
+on the schema. That decides nothing about the unit — it stops the amounts being bare integers.
+
+Relatedly, the new fields lacked the `(see BILL-17 — the unit is unratified)` marker BILL-14 puts on
+`unit_price_milli_fils`, and `tolerance_milli_fils` described milli-fils affirmatively as settled
+convention — the reverse of the status the backlog records. Marker added throughout.
+
+**One hardcoded remediation for every error.** The route returned "ingest the period's expected
+statement (BILL-12)" for the 404 and the 401 as well as the 409. The contract defines `remediation` as
+what the caller can do to *resolve* the error, and telling someone whose document id does not exist to
+ingest a statement sends them to fix something that is not broken. The error now carries its own. My
+route test had asserted only that the field was **present** — the claiming-vs-evidencing gap again —
+so it now asserts the remediation fits its error, and that the 404's does *not* mention the statement.
+
+**Two on the billing-query bundle**, from the hard-stop reviewer's non-blocking notes. This is the one
+artefact in the story that crosses the bank boundary toward Nebras, so both were worth taking:
+
+- Only `transactionDetail` was screened. `reasonCode` is the one that matters — an unmapped line's
+  reason code embeds the provider's own `sourceCategory`, so provider-supplied text does reach the
+  wire. BILL-14 already refuses an identifier-shaped category at ingest, which *is* the right boundary,
+  but that left this artefact depending on an invariant established two stories away. Every text field
+  is now screened at the point of departure.
+- Non-string values were skipped, justified in my own comment as "a number cannot carry an identifier
+  shape". True of today's four shapes, not of numbers — a future digit-only rule would be bypassed by
+  the one type that carries digits. Values are coerced before screening.
+
+The test for that last change is labelled for what it actually proves rather than what it suggests: no
+shape in the current list can match a bare number, so nothing can demonstrate that screen firing. It is
+a regression guard that widening the screen did not start refusing the amounts every bundle carries,
+and it says so.
+
+Re-verified on a pristine database: unit **1515/1515**; integration **187/187** across 79 files;
+typecheck 0; ESLint clean; Q1b "6 changed test files — no weakening detected"; doc-link-check clean.
+
+CI could not run on either #320 or #321: every job completes 3–6 seconds after starting with
+`runner_id: 0`, an empty `runner_name` and no `steps` array. That is a GitHub Actions runner-allocation
+failure, verified by fetching the job records rather than inferred from the failure count.
+
+---
+
+## 2026-08-18 — STD: UAE Open Finance standards-conformance review (docs-only; 14 stories filed)
+
+A conformance diff of the repo against the current scheme baseline — Standards v2.1-final +
+errata3, API Hub v8 (releases 2026.19.0 and 2026.22.0), Nebras Interaction Guide v5.0 (Jun 2026),
+the Limitation of Liability Model v2.1, and the Ozone Connect availability/response-time/data-quality
+policies. No source changed; the output is `docs/reviews/standards-conformance-2026-08.md`, ADR 0030,
+a new STANDARDS block of STD-01..STD-14 in the backlog (laid out in EXECUTION order, not id order,
+because next-story picks by file position), an as-built note on ADR 0010, the one-word P10 citation
+fix in `CLAUDE.md` (ADR 0022 -> ADR 0010), and PRD repairs — the §6 API-surface table rebuilt with
+verified per-tag counts and real scope strings, §7.6 re-attributed to IG v5.0, BD-16 updated, and the
+BACKOFFICE-01 CoP bundling-window hedge retired.
+
+METHOD. Every claim was produced by one pass and then re-verified by a second, adversarial pass that
+opened the file and read the lines, with instructions to try to refute rather than confirm. 45 claims
+were tested: 33 CONFIRMED, 11 CORRECTED, 1 REFUTED. The finished documents were then put through a
+second, five-way critique against the tree, which returned FIX_FIRST from all five and corrected nine
+further defects — three of them in the review's own §2, where the MECHANISM was wrong rather than the
+citation: the liability lookup does not go silent (it emits an AED 0 signal), the fail-closed breach is
+not confined to the console (eight sites), and the bulk-revoke count never reaches the second approver
+at all. A tenth correction reordered the backlog block, because file position — not the comment
+claiming an order — is what next-story actually obeys. The corrections were material and are the reason
+the passes were run — the ADR-0022 mis-citation is in EIGHT sites, not the four first found; the
+respondent-clock constants are at `respondent-disputes/service.ts:31-34`, not 30-36; the case-id
+collision is conditional on an omitted optional field rather than unconditional; `slo.ts` has no
+default-target constant at all. Line numbers in the review are as at c5ba31b.
+
+THE HEADLINE IS NOT DRIFT. The architecture is conformant and that is the hard part: consent
+source-of-truth stays in the Hub with the local record a mirror, P6 is the only egress for Nebras API
+Hub traffic (the documentation-mirror fetches in the rate-card watcher sit outside it — that is the
+open ruling below), the
+LFI backend is called Ozone Connect and never a resource server, there is no AML GO client anywhere,
+the 7-state consent enum is byte-exact, and the liability matrix and rate card match the published
+schedules. What is missing is a mechanism that NOTICES when the scheme moves.
+
+THE PROOF OF THAT, exactly. Interaction Guide v5.0 arrived 2026-08-17. It was read, and its deltas
+were written into PRD BD-16. Then nothing: the code still runs v4 figures, the runtime adoption
+catalogue still advertises "Interaction Guide v4 figures" to users (`readiness/catalog.ts:195`), and
+the follow-up story the PRD and build-log both PROMISED was never written into `docs/backlog.yaml`.
+That was the refuted claim — we tested the hypothesis that the story existed, under any id or status,
+and it does not. The loop could never have picked it up. Filing STD-02/-03/-04 is the single
+highest-value output here.
+
+The fix for the general case is nearly free and is the substance of ADR 0030: `rate-card-watch.ts`
+already fetches three scheme URLs on a weekly cron and opens a High-classification, `autoApply: false`
+review task when a content hash moves. The scheme's Release Notes and Errata register — cited in this
+repo at `docs/research/lfi-billing-system-tier2.md:387` — is simply not one of them. The mechanism
+that would have caught the v5.0 drift exists and is pointed at the wrong pages.
+
+SEVEN DEFECTS FOUND WHILE VERIFYING, which outrank the drift because they are wrong today:
+- The Operations Console serves fabricated numbers under `DEPLOY_PROFILE=enterprise`. The `slo`,
+  `certChain` and `ozone` deps are never injected in ANY profile (`app.ts:609-615`) and no enterprise
+  implementation exists, so a bank sees a hardcoded 99.8% uptime as operational truth. CLAUDE.md's
+  fail-closed rule is broken in the console and in seven more places besides — six demo sources wired
+  unconditionally in the scheduled worker (`worker.ts:389,398,402,405,408,416`) and one in the request
+  path. Two are worse than a green panel: the CAAP recorder writes FABRICATED registration events into
+  the INSERT-only `audit_high_sensitivity` table, and the cert monitor watches a fake chain that is
+  permanently "critical in 5 days", so a real scheme-certificate expiry would never be seen. (STD-11)
+- The service-desk SLA clock does not pause at weekends (`service-desk/service.ts:98`, raw elapsed ms)
+  though PRD §10 makes that a binding default and every other SLA module honours it. A P2 opened
+  Friday 16:00 breaches Saturday 16:00. (STD-03)
+- `liability.ts:47` returns 0 for any unmodelled issue, and the threshold derives from the same
+  lookup — so both sides are 0, `0 >= 0` is true, and the class crosses trivially: it emits a signal
+  and two P3 tickets reporting AED 0 at `low` severity. Not suppressed, silently worthless — harder to
+  spot than silence. The scheme's AED 15,000 / 48-hour new-beneficiary class has no row at all. (STD-09)
+- Fraud revoke is the only revoke path that records no `sla_met` verdict, so a <5s breach on the
+  highest-risk revocation is invisible. `NEBRAS_SLA_MS` is defined twice and restated a third time in
+  a different unit. (STD-09)
+- The four-eyes bulk-revoke count can exceed what is revoked — the portal counts with `REVOCABLE`
+  (including `AwaitingAuthorization`), the sweep uses `ACTIVE_STATUSES`. Approving "12" and revoking 9
+  is an integrity defect, not a cosmetic one. (STD-05)
+- `scheme_net_settlement` is the shipped DEFAULT collection rail but the `selected_rail` CHECK admits
+  only three other values, so any collection on the default is rejected by Postgres at write time.
+  BILLING-domain, flagged rather than fixed here. (STD-13)
+- An undocumented direct-egress path: the rate-card watcher fetches scheme pages with plain `fetch`,
+  no P6. Probably an intended carve-out (documentation mirrors, not the API Hub) but recorded nowhere
+  — and ADR 0030 would extend that very watcher, so it needs a ruling before STD-01 builds on it.
+
+CONFORMANCE GAPS PROPER, in brief: the simulator never echoes `x-fapi-interaction-id` (mandatory on
+responses per the standard, and the correlation key Nebras support requires on every ticket), has no
+consent state machine (any unknown id returns a fabricated `Authorized`; API Hub 2026.22.0 now returns
+400 for revoke in a non-revocable state), and seeds its dataset and Consent Manager surfaces
+incoherently — measured overlap zero for every 2026 period, so a cross-surface reconciliation reads
+every consent as Authorized. Consent vocabulary is PSD2 (`AISP_DATA_SHARING`, `accounts:read`) rather
+than UAE permission codes; consent types are absent entirely. UAEFTS appears nowhere, ACWP/ACWC
+nowhere, and `ipp_status` has no enum in the contract — while V2.2 already makes `paymentRail`
+mandatory with Tier 2 dates of 28 Feb 2027 / 31 May 2027. Two of the seven `NebrasEgressPort`
+operations have no simulator route, so the M6 port-swap gate structurally cannot detect a defect in
+those enterprise calls.
+
+DELIBERATELY NOT DONE. No source file was touched — every code fix is a story, because comment-only
+edits are still source edits under the worktree rule and because several of them need a spec-only PR
+first. The respondent-dispute clock VALUES were left alone on purpose: 3/15/3/3 business days are
+correct under v5.0, only the attribution is stale, and "fixing" the numbers would introduce a real
+error while correcting a cosmetic one. errata3 was pinned but not scheduled — it touches international
+payment creditors only, OFBO initiates no payments, and re-certification is change-triggered rather
+than errata-triggered.
+
+FOR A HUMAN (five, none decidable by the loop): ADR 0030 accept/reject; the P6 documentation-fetch
+ruling; ADR 0010, still `Proposed` while BACKOFFICE-63 is `done` and diverges from its Option 1 in
+three ways — the missing `acknowledged` state means the bank has no evidence an STR was ever filed;
+ADR 0011, the same Proposed-but-implemented pattern; and STANDARDS block priority, since placing it
+before COMMERCIAL means the loop takes conformance ahead of BILL-13..17, which have four PRs in
+flight. An as-built note was appended to ADR 0010 recording the divergence; its `## Decision` section
+is byte-identical to HEAD (the diff on that file is purely additive), so the human rules on the record
+as it stood.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, no broken references or duplicate
+numbers; `discovery:link` OK (STD- ids are outside the `^BACKOFFICE-\d+$` waist regex, so unaffected);
+backlog YAML parses, 193 items (161 done), STD block field order matches the canonical sequence and
+the simulated next-story pick is STD-09, the first dependency-free defect. Per-tag path
+counts in the repaired PRD table were recomputed from the spec and sum to 93. Docs-only — no source,
+no spec, no tests changed.
+
+---
+
+## 2026-08-18 — STD addendum: ADR 0030 accepted, P6 ruled, and the defect the ruling uncovered
+
+Two of the five parked decisions came back the same day, and grounding one of them turned up a live
+defect that no story owned.
+
+ADR 0030 ACCEPTED (Option 1) with two binding amendments. The P6 question is RULED (a) — public
+scheme-DOCUMENTATION change-detection sits outside P6, which governs the authenticated API data plane.
+Three facts decided it, and none of them is "it seemed fine": `NebrasEgressPort` is seven purpose-built
+typed methods with NO generic fetch, so routing docs through it means a new method on a regulated port
+interface plus both adapters plus the contract bench — real cost, poor fit. CLAUDE.md:57 scopes P6 to
+the scheme certificate chain, i.e. mTLS API traffic, and one of the three watched URLs is CBUAE
+Confluence rather than a Nebras host at all, so a "P6 for Nebras-domain traffic" reading would leave
+direct egress anyway and achieve nothing. And no bank grants a regulated workload unmediated outbound
+HTTPS — at M6 this call traverses the bank's forward proxy whatever any ADR says.
+
+The carve-out is deliberately narrow and CONDITIONAL: unauthenticated GETs of public scheme
+documentation, no credentials, no PSU or bank data, response used only for change detection — and it
+requires pinning the redirect behaviour (`redirect: 'follow'` on an unauthenticated GET is
+SSRF-adjacent even with nothing to steal) and keeping the fetcher injectable so a bank points it at its
+own proxy without a code change. Net effect is LESS unmanaged egress than before the ruling, not more.
+
+THE DEFECT UNDERNEATH IT (new, STD-15). Checking what happens when that egress is blocked exposed a gap
+bigger than the ruling. `rate-card-watch.ts:399` returns `failedSources`; `worker.ts:336` calls
+`runBillingRateCardWatch` inside `Promise.allSettled` and DISCARDS the resolved value. It is never read.
+A failed source writes one `billing_rate_card_watch_failed` audit row and raises nothing — no ITSM
+ticket, no risk signal. So a proxy-blocked or moved page leaves the watch DEAD AND LOOKING ALIVE: weekly
+audit rows nobody reads. That is this review's own thesis turned on the repo's tooling, and ADR 0030
+would have inherited it — pinning a regulatory baseline to a watcher whose silence is indistinguishable
+from "nothing changed" manufactures false assurance, which is worse than no registry. Hence amendment
+(ii): fail loudly first. STD-15 filed, STD-01 depends on it.
+
+Backlog consequences: STD-01 goes blocked -> pending (ADR 0030 accepted) with `depends_on: [STD-15]`,
+and the block re-orders to STD-09..15 -> STD-01 -> STD-02..04 -> STD-05..08. 194 items, 8 blocked (was
+9). Simulated next-story pick is unchanged at STD-09.
+
+ADR 0010 (STR/AML) was PARKED by the owner, not resolved — recorded as such in the review's decision
+queue so it cannot later read as settled. BACKOFFICE-63 stays `done` against a `Proposed` ADR and the
+bank still has no evidence an STR was ever filed. ADR 0011 remains open.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
+ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
+Still docs-only — no source, no spec, no tests changed.
+
 ---
 
 ## 2026-08-18 — ADR 0030: amending an accepted ADR (in-place for facts, supersession for decisions)

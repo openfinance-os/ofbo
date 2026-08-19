@@ -30,6 +30,7 @@ export {
   type BillingMemoReconciliationInput,
   type BillingReratingInput
 } from './billing-memo-store.js'
+export * from './billing-tpp-cost-store.js'
 export {
   PgBillingEInvoicingStore,
   type BillingEInvoiceArtifactInput,

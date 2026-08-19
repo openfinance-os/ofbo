@@ -59,7 +59,16 @@ const EXPORT_TABLES = [
   'billing_collection_invoice', 'billing_collection_action',
   'billing_accounting_batch', 'billing_journal_instruction', 'billing_journal_line', 'billing_journal_dispatch',
   'billing_revenue_recovery', 'billing_revenue_assurance_report', 'billing_revenue_assurance_finding',
-  'billing_benchmark_snapshot'
+  'billing_benchmark_snapshot',
+  // BILL-13 — the TPP-of-record payable ledger travels with a tenant exit exactly as the receivable
+  // ledger does; a tenant that cannot take its payable evidence has not been exported.
+  //
+  // Only the tables BILL-13 writes are listed. The document and AP-dispatch families are
+  // deliberately absent: their payloads are provider-supplied and cannot be schema-validated
+  // (see 0039's header), so BILL-14 and BILL-16 add their own table here together with the
+  // redaction proof for it — putting the exposure and the obligation in the same change rather
+  // than pre-wiring an export path for content no test yet constrains.
+  'billing_tpp_cost_statement', 'billing_tpp_cost_statement_line', 'billing_tpp_cost_rerating'
 ] as const
 
 function hash(value: unknown): string {
