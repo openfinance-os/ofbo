@@ -3768,12 +3768,15 @@ Four changes:
    fails fast and names itself instead of silently consuming the job budget.
 3. The apt step is now `continue-on-error: true`. It installs fonts an English-language portal suite
    does not exercise; blocking every PR on an external Ubuntu mirror to get them is the worse trade.
+   *(SUPERSEDED — see "DECIDED" below. The step was made non-fatal first; once CI proved
+   the suite runs with no packages installed at all, it was removed outright and q3-e2e now
+   carries no `continue-on-error`.)*
 4. The version resolution refuses an empty value. `echo "v=$(cmd)"` exits 0 even when cmd fails, and
    the pipe through `tr` swallows the status, so a `--filter` miss would have produced the key
    `ms-playwright-Linux-` shared by every Playwright version — one version's browsers served to
    another, with no signal at all.
 
-THE PART THAT NEEDED THE MOST CARE was (3), because "make the failing step non-fatal" is the shape
+THE PART THAT NEEDED THE MOST CARE was (3) — while it still existed — because "make the failing step non-fatal" is the shape
 of reward-hacking even when it is correct here. So the guard pins the ASYMMETRY, not the change:
 `continue-on-error` must appear EXACTLY ONCE in q3-e2e, and in the fonts step. The browser download,
 the services, the portal build and the suite itself must all still be able to red the job.
