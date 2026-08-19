@@ -27,6 +27,7 @@ import {
   PgBillingCollectionsStore,
   PgBillingAccountingStore,
   PgBillingRevenueAssuranceStore,
+  PgBillingTppCostStore,
   PgBillingProfitabilityStore,
   PgTenantBillingServiceStore,
   PgInvoiceRunStore,
@@ -62,6 +63,7 @@ import {
 import { BillingMemoReconciliationService } from './billing/memo-reconciliation.js'
 import { isExpectedMemoGenerationDay, previousUtcMonth } from './billing/pg-memo-reconciliation.js'
 import { RevenueAssuranceService } from './billing/revenue-assurance.js'
+import { TppCostStatementService } from './billing/tpp-cost.js'
 import { BillingProfitabilityService } from './billing/profitability.js'
 import { BillingTenantService } from './billing/tenant-service.js'
 
@@ -173,9 +175,14 @@ async function runTenantBillingProjection(
   const breakStore = new PgReconciliationBreakStore(url, tenancy, lineage)
   const memoStore = new PgBillingMemoStore(url, tenancy, lineage)
   const assuranceStore = new PgBillingRevenueAssuranceStore(url, tenancy, lineage)
+  const tppCostStore = new PgBillingTppCostStore(url, tenancy, lineage)
   const workflow = new ReconciliationService({ store: reconciliationStore, breakStore, audit })
   const memoService = new BillingMemoReconciliationService({ store: memoStore, workflow, audit })
   const assuranceService = new RevenueAssuranceService({ store: assuranceStore, evidence: assuranceStore, audit })
+  // BILL-13 — the payable projection rides the same monthly trigger. No directory snapshot source
+  // exists yet, so a period carrying chargeable retail overage reports `skipped` with an audited
+  // reason rather than persisting a statement it cannot price (ADR 0007 open items).
+  const tppCostService = new TppCostStatementService({ store: tppCostStore, audit, tenantId: bankId })
   const period = previousUtcMonth(billingRunAt)
   try {
     const jobs: Promise<unknown>[] = [assuranceService.generatePeriod({
@@ -192,12 +199,14 @@ async function runTenantBillingProjection(
     }, crypto.randomUUID())]
     if (isExpectedMemoGenerationDay(billingRunAt)) {
       jobs.push(memoService.generateExpectedMemo(period, rateCard, billingRunAt.toISOString(), crypto.randomUUID()))
+      jobs.push(tppCostService.generateStatement(period, rateCard, billingRunAt.toISOString(), crypto.randomUUID()))
     }
     const results = await Promise.allSettled(jobs)
     const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
     if (failures.length > 0) throw new AggregateError(failures.map((failure) => failure.reason), `billing projection failed for ${bankId}`)
   } finally {
     await Promise.allSettled([
+      tppCostStore.close(),
       reconciliationStore.close(), breakStore.close(), memoStore.close(), assuranceStore.close(), audit.close(), lineage.close()
     ])
   }
