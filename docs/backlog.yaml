@@ -1515,7 +1515,16 @@ milestones:
             sequence (e.g. accepted after rejected) at write time.
         progress: >-
           PARTIAL - domain, service and port layers built; the STORE layer is not, so no
-          criterion is deliverable end to end yet and criterion 5 is entirely unstarted.
+          criterion is deliverable end to end yet. Criterion 5 is PART-DONE, not unstarted -
+          an earlier version of this line said unstarted and was wrong by the time it was
+          read. 5(a) is implemented in the dispatch write path (state, period, operation
+          type, both principals, and - via migration 0042 - that the approval happened
+          INSIDE its window, with a missing timestamp refused rather than assumed) and 5(b)
+          is implemented for the close (both principals taken from the approval RECORD, not
+          the operator payload, and stored normalised). What remains of 5 is 5(c): redaction
+          at the store INSERT for the P9 response, of which dispatch_ref is now redacted and
+          the caller-supplied idempotency_key is NOT - it is the dedupe key, so the fix is to
+          store a hash, which belongs to the unbuilt store layer rather than to this slice.
           Done: (1) payable-accounting.ts implements ADR 0007 D4's accrual -> acceptance ->
           settlement. The exact-reversal property is designed for rather than hoped for -
           the reversal reads the fils actually POSTED rather than recomputing from

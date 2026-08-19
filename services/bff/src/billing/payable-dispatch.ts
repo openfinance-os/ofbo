@@ -156,7 +156,17 @@ export class PayableDispatchService {
 
       await this.deps.store.recordDispatch({
         payableId: payable.payableId,
-        dispatchRef: result.dispatch_ref,
+        // Redacted at the SUCCESS path too, which it was not before. `dispatch_ref` is the one
+        // field on P9's response that stays vendor-shaped — `payable_status` beside it is
+        // enum-validated, this is checked only for being a non-empty string — and it lands in an
+        // INSERT-only family with no deletion path. Criterion 5(c) asks for redaction "before the
+        // first INSERT", and this line is that INSERT.
+        //
+        // redactText masks recognised identifier patterns rather than replacing the value, so a
+        // well-formed reference passes through unchanged and stays usable for correlation. The
+        // cost is nil; the failure path already argued the principle and the success path was
+        // simply not following it.
+        dispatchRef: redactText(result.dispatch_ref),
         status: result.payable_status,
         approvalRequestId: payable.approvalRequestId,
         idempotencyKey
@@ -177,7 +187,11 @@ export class PayableDispatchService {
           amount_fils: payable.amountFils,
           currency: payable.currency,
           approval_request_id: payable.approvalRequestId,
-          dispatch_ref: result.dispatch_ref,
+          // Same reasoning as the store write above. PgAuditEmitter does run redactPii at
+          // emission, but that is the sink's control, not this service's — and the comment on the
+          // failure path already rejects "the emitter will catch it" as sufficient justification
+          // for handing it something unredacted.
+          dispatch_ref: redactText(result.dispatch_ref),
           payable_status: result.payable_status,
           replayed: result.replayed
         }

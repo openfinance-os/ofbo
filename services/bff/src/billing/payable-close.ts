@@ -154,7 +154,10 @@ export class PayableCloseService {
         `The close of ${period} names no initiating principal, so there is nothing for the approver `
         + 'to be different from. Four eyes cannot be evidenced by one name.',
         409,
-        'Re-request the close through POST /back-office/billing/payable-close so the initiator is recorded.'
+        // No endpoint path named here on purpose: this story ships no route, and a remediation
+        // citing POST /back-office/billing/payable-close sent an operator to a 404. It reaches a
+        // human verbatim, so it has to describe the action rather than a URL that does not exist.
+        'Re-request the close so the approval records who initiated it.'
       )
     }
     if (normalisePrincipal(approver) === normalisePrincipal(initiatedBy)) {

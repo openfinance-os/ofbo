@@ -166,7 +166,14 @@ export class ApprovalsService {
   async getFor(principal: Principal, id: string, traceId: string): Promise<ApprovalRecord> {
     const r = await this.store.get(id)
     if (!r) throw new ApprovalError(404, 'BACKOFFICE.APPROVAL_NOT_FOUND', `approval ${id} does not exist`)
-    const isParty = r.initiator === principal.subject || hasScope(principal.scopes, r.approver_required_scope)
+    // Normalised for the same reason as approve(), and it is the last raw comparison of these two
+    // values in the class. It fails in the safe direction — a re-spelled initiator loses the party
+    // grant rather than gaining one, so the worst case is a 403 to the legitimate initiator, not an
+    // escalation — but a legitimate initiator locked out of their own request is still a defect, and
+    // leaving one raw comparison behind is exactly the partial application that created the approve()
+    // gap in the first place.
+    const isParty = normalisePrincipal(r.initiator) === normalisePrincipal(principal.subject)
+      || hasScope(principal.scopes, r.approver_required_scope)
     if (!isParty) throw new ApprovalError(403, 'BACKOFFICE.SCOPE_DENIED', 'reading an approval requires being its initiator or holding its approver scope')
     return this.settleExpiry(r, principal, traceId)
   }
