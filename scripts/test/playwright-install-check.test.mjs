@@ -83,8 +83,14 @@ test('--with-deps is not reintroduced on the browser install', () => {
 
 test('the q3-e2e job timeout is not raised to paper over a slow install', () => {
   const job = e2eJob()
-  const cap = job.match(/timeout-minutes:\s*(\d+)/)
-  assert.ok(cap, 'q3-e2e must keep a job timeout')
+  // Anchored to the JOB's indent (4 spaces), not "the first timeout-minutes in the block".
+  // The unanchored version read whichever cap appeared first, which is only the job cap because
+  // this file happens to put job keys above `steps:`. YAML does not require that: move the job
+  // cap below `steps:` and the match becomes a step's `timeout-minutes: 6`, which sails through
+  // `<= 20` — a guard passing on the wrong number while reporting on the right one. Indent
+  // identifies the job mapping's own key regardless of where in the mapping it sits.
+  const cap = job.match(/^ {4}timeout-minutes:\s*(\d+)/m)
+  assert.ok(cap, 'q3-e2e must keep a JOB-level timeout (4-space indent), not only per-step caps')
   assert.ok(
     Number(cap[1]) <= 20,
     `q3-e2e job timeout is ${cap[1]}m, above the 20m it has held. A healthy run is ~4m30s; raising `
