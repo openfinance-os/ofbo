@@ -233,8 +233,13 @@ describe('BILL-16 payable dispatch', () => {
     // control, because P9's response shape belongs to the vendor and can change without us.
     const { service, audited, port } = harness()
     port.dispatchPayableInstruction.mockRejectedValueOnce(
-      // Synthetic, and identifier-SHAPED so the redactor has something to key on: 999 prefix, never
-      // the real 784; IBAN bank code 000.
+      // Synthetic, and identifier-SHAPED on purpose: a redaction assertion is worthless unless the
+      // input is something the redactor actually recognises, so this must match the IBAN and email
+      // detectors in packages/redaction. Both values are unusable — the IBAN carries the
+      // unallocated bank code 000 and fails the ISO 13616 mod-97 check (remainder 49, not 1), and
+      // example.com is the RFC 2606 reserved domain. No Emirates ID appears here; an earlier
+      // version of this comment cited the 999-vs-784 national-identifier convention, which
+      // describes a value this fixture does not contain.
       new Error('financial-system rejected debtor AE070001234567890123456 for ops@example.com')
     )
 

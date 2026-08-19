@@ -1,4 +1,4 @@
-import type { AuthAuditSink, Principal } from '../auth.js'
+import { normalisePrincipal, type AuthAuditSink, type Principal } from '../auth.js'
 import { hasScope } from '../rbac.js'
 import { addBusinessHours } from '../business-hours.js'
 import { summariseOperation } from './operation-summary.js'
@@ -181,8 +181,14 @@ export class ApprovalsService {
     const r = await this.getFor(principal, id, traceId)
     if (r.state === 'timed_out') throw new ApprovalError(409, 'BACKOFFICE.APPROVAL_EXPIRED', 'the approval window (2 business hours) has passed; the request timed out')
     if (r.state !== 'pending') throw new ApprovalError(409, 'BACKOFFICE.APPROVAL_NOT_PENDING', `approval is already ${r.state}`)
-    // initiator ≠ approver, regardless of scope — incl. platform:superadmin
-    if (r.initiator === principal.subject) throw new ApprovalError(409, 'BACKOFFICE.SELF_APPROVAL', 'the initiator cannot approve their own request (four-eyes)')
+    // initiator ≠ approver, regardless of scope — incl. platform:superadmin.
+    // Compared as IDENTITIES, not strings: a raw === let one human approve their own request by
+    // re-typing their subject with different case or padding, which is the cheapest possible way
+    // to defeat four-eyes. Every gated operation registered here inherits this check, so the
+    // normalisation has to live at the primitive rather than in the operations that remembered it.
+    if (normalisePrincipal(r.initiator) === normalisePrincipal(principal.subject)) {
+      throw new ApprovalError(409, 'BACKOFFICE.SELF_APPROVAL', 'the initiator cannot approve their own request (four-eyes)')
+    }
     if (!hasScope(principal.scopes, r.approver_required_scope)) {
       throw new ApprovalError(403, 'BACKOFFICE.SCOPE_DENIED', `approving requires ${r.approver_required_scope}`)
     }

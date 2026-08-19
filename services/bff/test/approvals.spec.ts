@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAdapter } from '@ofbo/ports'
-import { InMemoryAuthAuditSink } from '../src/auth.js'
+import { InMemoryAuthAuditSink, type Principal } from '../src/auth.js'
 import { mintScopes } from '../src/auth.js'
 import { ApprovalsService, InMemoryApprovalStore } from '../src/approvals/service.js'
 import { addBusinessHours } from '../src/business-hours.js'
@@ -245,6 +245,60 @@ describe('BACKOFFICE-44 — review-driven hardening', () => {
     nowRef.now = new Date('2026-06-10T11:00:01Z')
     await app.request(`/approvals/${data.approval_request_id}`, { headers: asPersona('finance-analyst') })
     expect(audit.events.map((e) => e.event_type)).toContain('approval_timed_out')
+  })
+})
+
+describe('four-eyes: the initiator ≠ approver check compares IDENTITIES, not strings', () => {
+  /**
+   * The gap this closes: payable-close.ts and tpp-cost-document.ts each normalised principals
+   * before comparing, on the stated grounds that a raw `===` is the cheapest way to defeat
+   * four-eyes — while ApprovalsService, the primitive EVERY gated operation inherits, still
+   * compared raw. The control was asserted in two features and absent from the thing they extend.
+   *
+   * Driven against the service rather than the HTTP route on purpose: over HTTP the subject comes
+   * from the verified token, so a route test cannot vary its spelling and would pass either way.
+   */
+  const SAME_HUMAN = ['Finance.Analyst@bank', '  finance.analyst@BANK  ', 'FINANCE.ANALYST@bank']
+
+  const asSubject = (subject: string) =>
+    ({ subject, persona: 'finance-analyst', scopes: ['finance:reconciliation:write'] }) as Principal
+
+  const svcWith = (executed: unknown[]) =>
+    new ApprovalsService(new InMemoryAuthAuditSink(), {
+      operations: {
+        demo_echo: {
+          initiatorScope: 'finance:reconciliation:write',
+          approverScope: 'finance:reconciliation:write',
+          execute: async (payload) => { executed.push(payload); return {} }
+        }
+      }
+    })
+
+  for (const respelling of SAME_HUMAN.slice(1)) {
+    it(`refuses self-approval when the approver re-spells their subject as ${JSON.stringify(respelling)}`, async () => {
+      const executed: unknown[] = []
+      const svc = svcWith(executed)
+      const r = await svc.requestApproval(
+        asSubject(SAME_HUMAN[0]!), { operation_type: 'demo_echo', operation_payload: {} }, 'trace-1'
+      )
+
+      await expect(svc.approve(asSubject(respelling), r.approval_request_id, 'trace-2'))
+        .rejects.toMatchObject({ code: 'BACKOFFICE.SELF_APPROVAL' })
+
+      // A refused four-eyes check that still runs the operation is no check at all.
+      expect(executed).toHaveLength(0)
+    })
+  }
+
+  it('still admits a genuinely different second principal — the check must not refuse everyone', async () => {
+    const executed: unknown[] = []
+    const svc = svcWith(executed)
+    const r = await svc.requestApproval(
+      asSubject(SAME_HUMAN[0]!), { operation_type: 'demo_echo', operation_payload: {} }, 'trace-1'
+    )
+    const approved = await svc.approve(asSubject('other.analyst@bank'), r.approval_request_id, 'trace-2')
+    expect(approved.state).toBe('approved')
+    expect(executed).toHaveLength(1)
   })
 })
 
