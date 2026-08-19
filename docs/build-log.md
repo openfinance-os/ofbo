@@ -3793,3 +3793,20 @@ q3-e2e step table shows one `continue-on-error`, caps 4m/6m, job cap unchanged a
 
 Not settled here, and left for a human: dropping `--with-deps` (and this step) entirely is the
 larger lever — 89% of the install — but it is a behaviour change on CI shared by every PR.
+
+**CI evidence, and it is stronger than a clean run would have been.** On the verifying run
+([32237329042](https://github.com/openfinance-os/ofbo/actions/runs/32237329042)) the apt mirror was
+**still hanging** — the log carries
+`##[error]The action 'install Playwright system deps' has timed out after 4 minutes` — so the fonts
+step was killed at its cap, `continue-on-error` absorbed it, and the browser download, the services,
+the portal build and the E2E suite all ran and passed. That is the fifth mirror failure today, and
+under the previous shape it would have been the fifth `cancelled` in a row. All ten gating jobs
+green; q3-e2e finished in 410s against its 1200s cap, and the cache saved
+(`Cache saved with key: ms-playwright-Linux-1.60.0`), which also settles the unverified
+`actions/cache@v4` major.
+
+One caveat worth naming rather than leaving for someone to trip over: the jobs API reports that step
+as `conclusion: success`, because `continue-on-error` rewrites a failed step's conclusion. The
+timeout is in the log and raised as a run annotation, but a reader scanning the step table sees
+green. The step's cost while the mirror is down is four wasted minutes per run — which sharpens, but
+does not decide, the question left to a human above.
