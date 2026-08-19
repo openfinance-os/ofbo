@@ -148,6 +148,25 @@ export class PgApprovalStore {
     return rows[0] ? toRecord(rows[0]) : null
   }
 
+  async claimForApproval(id: string, approver: string, approvedAt: string): Promise<boolean> {
+    // `WHERE ... AND state = 'pending'` is the compare-and-swap. One statement, so the database
+    // serialises the two racing approvers for us: the loser's UPDATE matches zero rows and
+    // rowCount tells us which one we were. Doing this as SELECT-then-UPDATE would reopen exactly
+    // the window it exists to close.
+    const claimed = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE approval_request
+            SET state = 'approved', approver = $2,
+                approved_at = COALESCE(approval_request.approved_at, $3::timestamptz)
+          WHERE approval_request_id = $1 AND state = 'pending'`,
+        [id, approver, approvedAt]
+      )
+      return res.rowCount === 1
+    })
+    if (claimed) await this.emitLineage()
+    return claimed
+  }
+
   async update(r: StoredApprovalRecord): Promise<void> {
     await this.asApp((c) =>
       c.query(

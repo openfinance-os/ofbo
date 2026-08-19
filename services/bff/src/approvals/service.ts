@@ -43,6 +43,22 @@ export interface ApprovalStore {
   get(id: string): Promise<ApprovalRecord | null>
   update(record: ApprovalRecord): Promise<void>
   listPending(): Promise<ApprovalRecord[]>
+  /**
+   * Atomically move a row from `pending` to `approved`, returning false if it was NOT pending —
+   * i.e. somebody else claimed it first.
+   *
+   * This exists because `update()` cannot express it. `update` sets `state` unconditionally, so
+   * the read-check-execute-then-persist sequence in `approve()` left a window in which two
+   * approvers both saw `pending`, both passed every check, and both ran the gated operation. For
+   * `billing.tpp_cost.period_close` that closes a period twice; for any money-moving operation it
+   * moves the money twice.
+   *
+   * The claim happens BEFORE the operation runs, which chooses the safer of the two failure modes:
+   * a claim that succeeds and an execution that then fails leaves an `approved` row with no
+   * `execution_result` — visible, and recoverable — whereas executing first risks doing the
+   * irreversible thing twice.
+   */
+  claimForApproval(id: string, approver: string, approvedAt: string): Promise<boolean>
 }
 
 
@@ -236,6 +252,21 @@ export class ApprovalsService {
       throw new ApprovalError(
         409, 'BACKOFFICE.APPROVAL_EXPIRED',
         'the approval window (2 business hours) closed between reading this request and approving it'
+      )
+    }
+    // CLAIM BEFORE EXECUTE. Everything above is a check on a snapshot read at line 203; nothing
+    // between that read and here stops a second approver reaching the same point on the same
+    // `pending` row. This is the compare-and-swap that makes the gate hold: exactly one caller
+    // transitions pending -> approved, and only that caller runs the operation.
+    //
+    // Raised as FAIL 5 by the hard-stop review of PR #323. The ordering predates BILL-16, but
+    // migration 0042 made it load-bearing, and a four-eyes gate that executes twice under a race
+    // is not a gate.
+    const claimed = await this.store.claimForApproval(r.approval_request_id, r.approver, r.approved_at)
+    if (!claimed) {
+      throw new ApprovalError(
+        409, 'BACKOFFICE.APPROVAL_NOT_PENDING',
+        'this request was already settled by another approver while this approval was in flight'
       )
     }
     r.execution_result = await op.execute(r.operation_payload, {

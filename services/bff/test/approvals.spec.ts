@@ -313,3 +313,77 @@ describe('business-hours clock (adopting-bank default: clocks pause weekends)', 
     expect([1].includes(out.getUTCDay())).toBe(true) // lands on Monday
   })
 })
+
+/**
+ * Raised as FAIL 5 by the hard-stop reviewer on PR #323, against `service.ts:241`.
+ *
+ * `approve()` read the record, checked it was `pending`, ran the gated operation, and only THEN
+ * persisted `approved` — with `store.update` setting `state` unconditionally rather than
+ * conditioning on the row still being pending. Two approvers acting on one pending request can
+ * both pass every check before either write lands, so both execute.
+ *
+ * That is the four-eyes gate failing to gate. For `billing.tpp_cost.period_close` it closes a
+ * period twice; for any money-moving gated operation it moves the money twice. The reviewer was
+ * right that the ordering predates BILL-16 — it is fixed here because migration 0042 made it
+ * load-bearing and because this PR is where it was found.
+ */
+describe('BILL-16 — the approval gate holds under concurrency', () => {
+  it('executes a gated operation ONCE when two approvers race on one pending request', async () => {
+    let executions = 0
+    // Held open so BOTH approvers get past every check before either finishes. Without a
+    // compare-and-swap that is precisely the window in which both execute.
+    let releaseExecute: () => void = () => {}
+    const executeGate = new Promise<void>((resolve) => { releaseExecute = resolve })
+
+    const store = new InMemoryApprovalStore()
+    const service = new ApprovalsService({ record: async () => {} } as never, {
+      store,
+      operations: {
+        demo_race: {
+          initiatorScope: 'finance:reconciliation:write',
+          approverScope: 'platform:operations:write',
+          execute: async () => {
+            executions += 1
+            await executeGate
+            return { ok: true }
+          }
+        }
+      }
+    })
+
+    const initiator = {
+      subject: 'demo:initiator@bank', persona: 'finance-analyst',
+      scopes: ['finance:reconciliation:write'], bankId: '11111111-1111-4111-8111-111111111111'
+    } as Principal
+    const approverOf = (subject: string) => ({
+      subject, persona: 'platform-operations',
+      scopes: ['platform:operations:write'], bankId: initiator.bankId
+    }) as Principal
+
+    const created = await service.requestApproval(
+      initiator,
+      { operation_type: 'demo_race', operation_payload: { period: '2026-06' } },
+      'trace-race'
+    )
+
+    const both = Promise.allSettled([
+      service.approve(approverOf('demo:approver-one@bank'), created.approval_request_id, 'trace-a'),
+      service.approve(approverOf('demo:approver-two@bank'), created.approval_request_id, 'trace-b')
+    ])
+    // Both approvals are now past their checks; let the operation finish for whoever claimed it.
+    await new Promise((r) => setTimeout(r, 10))
+    releaseExecute()
+    const results = await both
+
+    expect(executions).toBe(1)
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    const loser = results.find((r) => r.status === 'rejected') as PromiseRejectedResult
+    expect(loser).toBeDefined()
+    expect(String(loser.reason?.code ?? loser.reason)).toContain('APPROVAL_NOT_PENDING')
+
+    // And the row is approved exactly once, by the approver that actually won.
+    const stored = await store.get(created.approval_request_id)
+    expect(stored?.state).toBe('approved')
+    expect(['demo:approver-one@bank', 'demo:approver-two@bank']).toContain(stored?.approver)
+  })
+})
