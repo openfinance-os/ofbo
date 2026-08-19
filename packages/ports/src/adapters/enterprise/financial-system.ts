@@ -77,7 +77,17 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
       const body = (await res.json()) as { invoice_status?: string }
       const status = body.invoice_status
       if (!status || !SETTLEMENT_STATUSES.includes(status as SettlementStatus)) {
-        throw new FinancialSystemError(0, false, `financial-system returned an unknown invoice_status: ${String(status)}`)
+        // Same rule as the two payable methods below, and this is the sibling that was left on the
+        // old side of it: a vendor value interpolated into a thrown message can reach
+        // audit_high_sensitivity, which is INSERT-only with a five-year floor and no deletion path.
+        // No caller routes this method's error to the audit sink TODAY — the exposure is latent,
+        // not live — but a control that holds only while nobody wires up the obvious caller is not
+        // a control. The ref is ours and correlates the failure without quoting the vendor.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned an invoice_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message can reach an INSERT-only audit trail'
+        )
       }
       return { invoice_status: status as SettlementStatus }
     },

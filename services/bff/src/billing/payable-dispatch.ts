@@ -195,7 +195,14 @@ export class PayableDispatchService {
         request_body: {
           payable_id: payable.payableId,
           approval_request_id: payable.approvalRequestId,
-          idempotency_key: idempotencyKey,
+          // Redacted for the same reason as `failure`, and it took a review to notice the
+          // inconsistency: this one is CALLER-supplied. Idempotency-Key is an inbound header, so
+          // its content is whatever the operator or an integrating system put there — convention
+          // says opaque UUID, nothing enforces it. Writing it raw into a 5-year immutable row with
+          // no deletion path makes any customer detail typed into that header permanent. The
+          // adjacent `failure` field was already redacted; leaving the header beside it unredacted
+          // was the field that got missed, not a decision.
+          idempotency_key: redactText(idempotencyKey),
           // Redacted, not merely "the message only". The old comment claimed this service never
           // writes downstream content — but the message is COMPOSED by the P9 adapter from the
           // vendor's response, so the claim held only as long as every adapter chose its wording

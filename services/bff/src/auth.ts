@@ -34,6 +34,23 @@ export const SCOPE_MATRIX = {
   'platform-super-admin': ['platform:superadmin']
 } as const satisfies Record<string, readonly string[]>
 
+/**
+ * Compare two principal identifiers as IDENTITIES, not as strings.
+ *
+ * One human must not pass as two on a spelling difference. A raw `===` treats `Finance.Analyst`
+ * and `finance.analyst ` as different principals, which is the cheapest possible way to defeat a
+ * four-eyes check — and four-eyes is the control the whole approval primitive exists to provide.
+ *
+ * It lives HERE, beside Principal, rather than in whichever feature first needed it. BILL-14 wrote
+ * a copy for uploader-vs-verifier and BILL-16 wrote another for payable close; the shared
+ * ApprovalsService, which every gated operation depends on, had neither and still compared raw.
+ * Three copies and one gap is how a control ends up asserted in new code while the primitive it
+ * extends does not hold it.
+ */
+export function normalisePrincipal(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 export type Persona = keyof typeof SCOPE_MATRIX
 export const ALL_PERSONAS = Object.keys(SCOPE_MATRIX) as Persona[]
 

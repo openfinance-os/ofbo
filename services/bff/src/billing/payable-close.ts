@@ -1,5 +1,5 @@
 import { assertScope } from '../rbac.js'
-import type { Principal } from '../auth.js'
+import { normalisePrincipal, type Principal } from '../auth.js'
 import type { GatedOperation } from '../approvals/service.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 
@@ -68,15 +68,10 @@ export interface PayableCloseDeps {
 }
 
 /**
- * One human must not pass as two on a spelling difference.
- *
- * The same normalisation BILL-14 applies to uploader-vs-verifier. A raw `===` treats
- * `Finance.Analyst` and `finance.analyst ` as different principals, which is the cheapest possible
- * way to defeat a four-eyes check.
+ * Re-exported, not redefined. This module used to carry its own copy, which is how the codebase
+ * ended up with three normalisers and a shared ApprovalsService that had none — see auth.ts.
  */
-export function normalisePrincipal(value: string): string {
-  return value.trim().toLowerCase()
-}
+export { normalisePrincipal }
 
 export class PayableCloseService {
   constructor(private readonly deps: PayableCloseDeps) {}
