@@ -3822,3 +3822,32 @@ succeeded rather than failing quietly. 10/10 gates green again, q3-e2e 331s.
 So both paths are now exercised: the cold run proved the fix holds when the mirror is down, and the
 warm run proved the cache restores. The measured cache saving is the ~11s predicted — the fix that
 mattered was making the fonts step unable to take the job with it.
+
+**DECIDED: the apt step is removed entirely** (handed back to me with "you decide", so the call and
+its evidence are recorded here rather than left open).
+
+The run above is the experiment that settles it. On 32237329042 the fonts step hung inside
+`apt-get update` and was killed at its cap having logged **zero `Setting up` lines** — not one
+package was installed — and the portal E2E suite then ran and passed in 25s. The suite has therefore
+already been observed working with no fonts present. Supporting checks, all negative: no screenshot
+or snapshot assertion anywhere in `apps/portal` (no `toHaveScreenshot`/`toMatchSnapshot`), no Arabic
+or RTL content, no `font-family` or `next/font` declaration, and the spec's only non-ASCII characters
+are `§ — →`, all in the base DejaVu set on the runner image.
+
+Against that: the step failed the job four times in one day on an external Ubuntu mirror, and on the
+two runs after that cost 253s (killed at the cap) and 145s, versus a ~92s healthy cost and an ~11s
+browser download. It is 89% of the install and buys nothing this suite uses.
+
+The consequence I care about most is that **`continue-on-error` is now gone from q3-e2e entirely** —
+which is what both advisory reviewers singled out as the thing a human should look at. There is no
+longer any step here whose failure is cosmetic, so the guard asserts the count is **zero**, not
+"one, on the harmless step". Residual risk, unchanged and accepted: if a future runner image drops a
+real Chromium library, the failure surfaces in the E2E step as a browser that will not launch —
+fatal, legible and attributable — instead of being absorbed by a provisioning step.
+
+The guard's comment-stripping is load-bearing and was proved, not assumed: the workflow's own
+comment block now discusses both `continue-on-error` and `install-deps`, so a guard counting raw
+text fails two assertions on an *unmodified* file. Verified by running the no-strip variant against
+a clean `ci.yml` — 2 failures. Six mutations checked in all (reintroduce the apt step, restore
+`--with-deps`, make the browser download non-fatal, delete the cache, drop the version-emptiness
+check, raise the job cap below `steps:`), each caught by exactly its own assertion.

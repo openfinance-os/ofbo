@@ -273,27 +273,32 @@ jobs:
           # the Playwright version, so an unrelated dependency bump must not evict 290 MiB.
           path: ~/.cache/ms-playwright
           key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      # NON-FATAL, on evidence rather than on convenience. This step installs FONTS and nothing
-      # else: on the last healthy run its entire apt output was fonts-freefont-ttf,
-      # fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic and xfonts-*.
-      # Chromium's own libraries were already on the ubuntu-latest image — nothing else was
-      # unpacked — so the browser launches with or without this step.
+      # NO apt STEP, DELIBERATELY. `playwright install-deps chromium` was removed rather than
+      # retried, capped, or made non-fatal, and the evidence is that it installs FONTS and nothing
+      # else. On the last healthy run its entire apt output was fonts-freefont-ttf,
+      # fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic and xfonts-*;
+      # apt resolves the FULL chromium dependency set and installs what is missing, so "only fonts
+      # were missing" is the same statement as "Chromium's libraries are already on the
+      # ubuntu-latest image".
       #
-      # It is non-fatal because it has now failed the job FOUR times in one day on an external
-      # Ubuntu mirror, never on anything in this repo. The last run stalled here:
-      #     Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages
-      # and emitted nothing for the following five and a half minutes. Blocking the whole E2E
-      # suite on a mirror outage, to install fonts an English-language portal test does not
-      # exercise, is a worse trade than rendering without them.
+      # Proven in CI, not argued: on run 32237329042 this step hung inside `apt-get update` and was
+      # killed at its cap having logged ZERO `Setting up` lines — no package was installed — and the
+      # portal E2E suite then ran and passed in 25s. That run is the experiment; the suite already
+      # works with no fonts installed.
       #
-      # This is NOT swallowing a test failure. The suite itself stays fatal, and so does the
-      # browser download below — only this cosmetic provisioning is optional. If a future runner
-      # image ever does drop a Chromium library, the failure surfaces immediately and legibly in
-      # the E2E step as a browser that will not launch, rather than being hidden here.
-      - name: install Playwright system deps (fonts — non-fatal, see comment)
-        continue-on-error: true
-        timeout-minutes: 4
-        run: pnpm --filter @ofbo/portal exec playwright install-deps chromium
+      # The suite is also insensitive to the fonts by construction: no screenshot or snapshot
+      # assertion (no toHaveScreenshot/toMatchSnapshot anywhere in apps/portal), no Arabic or RTL
+      # content, no font-family or next/font declaration, and the only non-ASCII characters in the
+      # spec are § — →, all present in the base DejaVu set that ships on the runner image.
+      #
+      # Cost of keeping it: it failed the job four times on 2026-08-19 on an external Ubuntu mirror,
+      # and on the two runs after that it cost 253s (killed at the cap) and 145s — against a ~92s
+      # healthy cost and an ~11s browser download. Cost of dropping it: if a future runner image
+      # ever does drop a real Chromium library, the failure surfaces in the E2E step as a browser
+      # that will not launch — fatal, legible, and attributable — instead of here.
+      #
+      # Consequence worth stating: q3-e2e now contains NO `continue-on-error`. Every step in this
+      # job can red it. scripts/test/playwright-install-check.test.mjs asserts that count is zero.
       - name: install Playwright Chromium
         # Run unconditionally rather than behind `cache-hit != 'true'`. `playwright install` skips
         # a browser that is already present, so a warm cache costs ~1s — and an incomplete or
