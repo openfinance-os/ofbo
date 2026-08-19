@@ -3735,3 +3735,61 @@ bank still has no evidence an STR was ever filed. ADR 0011 remains open.
 Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
 ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
 Still docs-only — no source, no spec, no tests changed.
+
+## 2026-08-19 — HARNESS-17: the portal E2E install stops eating the job (PR #328)
+
+The Q3 portal E2E job failed four times on 2026-08-19, every time on
+`playwright install --with-deps chromium` and never on anything in this repo. Three of those runs
+consumed the full 20-minute job cap and reported `cancelled`, which reads as neither pass nor fail —
+the suite never started, so the gate produced no evidence either way.
+
+MEASURED FIRST, AND THE MEASUREMENT KILLED THE OBVIOUS FIX. On the last healthy run (job
+95996474055) the combined step cost 103s, split:
+
+    apt, via --with-deps    07:50:15 -> 07:51:47    ~92s   (89%)
+    browser downloads       07:51:47 -> 07:51:58    ~11s   (11%)
+
+Caching the browsers — what I proposed to the user before looking — would have saved about eleven
+seconds and fixed nothing. apt is both the cost and the hang risk. Recorded because the wrong answer
+was already on the table when the numbers arrived.
+
+WHAT apt WAS ACTUALLY INSTALLING, from that same run's output: fonts-freefont-ttf,
+fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic, xfonts-*. Nothing else
+was unpacked — Chromium's own libraries are already on the ubuntu-latest image, so the browser
+launches with or without the step. The last failure stalled at
+`Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages` and emitted
+nothing for five and a half minutes.
+
+Four changes:
+
+1. Cache `~/.cache/ms-playwright`, keyed on the RESOLVED Playwright version rather than a lockfile
+   hash — an unrelated dependency bump must not evict 290 MiB of browsers.
+2. Split apt from the download into separate, individually capped steps (4m / 6m) so a slow mirror
+   fails fast and names itself instead of silently consuming the job budget.
+3. The apt step is now `continue-on-error: true`. It installs fonts an English-language portal suite
+   does not exercise; blocking every PR on an external Ubuntu mirror to get them is the worse trade.
+4. The version resolution refuses an empty value. `echo "v=$(cmd)"` exits 0 even when cmd fails, and
+   the pipe through `tr` swallows the status, so a `--filter` miss would have produced the key
+   `ms-playwright-Linux-` shared by every Playwright version — one version's browsers served to
+   another, with no signal at all.
+
+THE PART THAT NEEDED THE MOST CARE was (3), because "make the failing step non-fatal" is the shape
+of reward-hacking even when it is correct here. So the guard pins the ASYMMETRY, not the change:
+`continue-on-error` must appear EXACTLY ONCE in q3-e2e, and in the fonts step. The browser download,
+the services, the portal build and the suite itself must all still be able to red the job.
+
+Counting across the whole job rather than checking named steps is load-bearing, and the first draft
+got it wrong. That draft guarded the suite via `if (suite) { ... }` keyed on its literal
+`- run: pnpm --filter @ofbo/portal e2e` line — which goes vacuous the moment someone gives that step
+a `name:`. Proved it rather than asserting it: rename the suite step AND mark it continue-on-error,
+so a failing E2E test would no longer red CI, and the branch form reports green while the count form
+catches it. Same defect class this session kept finding elsewhere — a control claimed more broadly
+than it was built — this time in the guard written to prevent it.
+
+Evidence: harness suite 82/82. Every new assertion mutation-checked and caught by its own guard
+alone — remove `continue-on-error` from the fonts step; add it to the browser download; delete the
+version-emptiness check — with `ci.yml` restored byte-for-byte after each. ci.yml parses and the
+q3-e2e step table shows one `continue-on-error`, caps 4m/6m, job cap unchanged at 20m.
+
+Not settled here, and left for a human: dropping `--with-deps` (and this step) entirely is the
+larger lever — 89% of the install — but it is a behaviour change on CI shared by every PR.
