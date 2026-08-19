@@ -75,6 +75,8 @@ export interface PayableApprovalReader {
     initiator: string
     approver: string | null
     expires_at: string
+    /** Migration 0042 — when the approval happened, so "in time" is a fact and not an inference. */
+    approved_at?: string | null
   } | null>
 }
 
@@ -284,6 +286,34 @@ export class PayableDispatchService {
         `Approval ${approvalId} is ${approval.state}, so nothing has authorised honouring this debit.`,
         409,
         'Have a second finance principal approve the close before dispatching.'
+      )
+    }
+    // The half of criterion 5(a) that the schema could not carry until migration 0042: not merely
+    // "is approved" but "was approved IN TIME". The expiry test above only fires on a `pending` row,
+    // so an approved row whose window had already closed passed both checks — the state column says
+    // THAT it was approved and, before 0042, nothing said WHEN.
+    //
+    // A missing timestamp on an approved row is refused rather than waved through. The obligation
+    // exists to be independent of ApprovalsService, so "that service would have refused a late
+    // approval" is exactly the reasoning it forbids; and this is the last check before money moves,
+    // where absence of evidence is not evidence. Nothing dispatches today, so failing closed costs
+    // nothing, and defaulting permissive would be a decision nobody took.
+    if (!approval.approved_at) {
+      throw new PayableDispatchError(
+        'BACKOFFICE.APPROVAL_TIME_UNPROVEN',
+        `Approval ${approvalId} is approved but carries no approved_at, so it cannot be shown to `
+        + 'have been approved within its window. Refusing rather than assuming.',
+        409,
+        'Re-request the close so the approval records when it was granted (migration 0042).'
+      )
+    }
+    if (new Date(approval.approved_at).getTime() > new Date(approval.expires_at).getTime()) {
+      throw new PayableDispatchError(
+        'BACKOFFICE.APPROVAL_EXPIRED',
+        `Approval ${approvalId} was approved at ${approval.approved_at}, after its window closed at `
+        + `${approval.expires_at} (2 business hours, PRD §10). A late approval authorises nothing.`,
+        409,
+        'Re-request the close so a live approval authorises the dispatch.'
       )
     }
     if (!approval.approver?.trim()

@@ -23,6 +23,17 @@ export interface ApprovalRecord {
   approver_required_scope: string
   approver: string | null
   expires_at: string
+  /**
+   * When the approval actually happened. Null while pending, and on rows written before
+   * migration 0042 added the column.
+   *
+   * `expires_at` is a DEADLINE, not a record of what occurred: from state alone a later reader can
+   * see THAT a request was approved and not WHETHER it was approved in time. BILL-13's migration
+   * 0039 made "approved, and expires_at had not passed when approved" a blocking obligation on the
+   * dispatch write path, deliberately independent of this service — so the fact has to be recorded,
+   * not inferred from this service having refused a late approval.
+   */
+  approved_at?: string | null
   reject_reason: string | null
   execution_result?: unknown
 }
@@ -196,6 +207,10 @@ export class ApprovalsService {
     if (!op) throw new ApprovalError(409, 'BACKOFFICE.OPERATION_UNREGISTERED', `${r.operation_type} has no registered executor — refusing to approve silently`)
     r.state = 'approved'
     r.approver = principal.subject
+    // Stamped from this service's own clock at the moment the window check above passed, so the
+    // row carries evidence the approval was in time rather than requiring a later reader to take
+    // this service's word for it.
+    r.approved_at = this.now().toISOString()
     r.execution_result = await op.execute(r.operation_payload, {
       approver: principal.subject,
       approverPersona: principal.persona,
