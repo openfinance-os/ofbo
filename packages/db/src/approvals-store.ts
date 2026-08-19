@@ -21,6 +21,8 @@ export interface StoredApprovalRecord {
   approver_required_scope: string
   approver: string | null
   expires_at: string
+  /** Migration 0042. Null while pending, and on rows written before the column existed. */
+  approved_at?: string | null
   reject_reason: string | null
   execution_result?: unknown
 }
@@ -34,6 +36,7 @@ const APPROVAL_COLUMNS = [
 const SELECT_COLUMNS = `approval_request_id, operation_type, operation_payload, state,
   initiator, approver_required_scope, approver,
   to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS expires_at,
+  to_char(approved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS approved_at,
   reject_reason, execution_result`
 
 interface ApprovalRow {
@@ -45,6 +48,7 @@ interface ApprovalRow {
   approver_required_scope: string
   approver: string | null
   expires_at: string
+  approved_at: string | null
   reject_reason: string | null
   execution_result: unknown
 }
@@ -59,6 +63,7 @@ function toRecord(row: ApprovalRow): StoredApprovalRecord {
     approver_required_scope: row.approver_required_scope,
     approver: row.approver,
     expires_at: row.expires_at,
+    approved_at: row.approved_at,
     reject_reason: row.reject_reason,
     ...(row.execution_result === null ? {} : { execution_result: row.execution_result })
   }
@@ -147,14 +152,16 @@ export class PgApprovalStore {
     await this.asApp((c) =>
       c.query(
         `UPDATE approval_request
-            SET state = $2, approver = $3, reject_reason = $4, execution_result = $5::jsonb
+            SET state = $2, approver = $3, reject_reason = $4, execution_result = $5::jsonb,
+                approved_at = $6::timestamptz
           WHERE approval_request_id = $1`,
         [
           r.approval_request_id,
           r.state,
           r.approver,
           r.reject_reason,
-          r.execution_result === undefined ? null : JSON.stringify(r.execution_result)
+          r.execution_result === undefined ? null : JSON.stringify(r.execution_result),
+          r.approved_at ?? null
         ]
       )
     )

@@ -65,6 +65,9 @@ function harness(
       initiator: 'demo:finance-analyst@alpha-bank',
       approver: 'demo:finance-manager@alpha-bank',
       expires_at: '2026-07-05T12:00:00.000Z',
+      // Approved INSIDE its window (migration 0042). Part of "live" — an approval that happened
+      // after its own deadline authorises nothing, and before 0042 the row could not say either way.
+      approved_at: '2026-07-03T18:00:00.000Z',
       ...recordOverrides
     }))
   }
@@ -116,7 +119,12 @@ describe('BILL-16 payable dispatch', () => {
       ['wrong period — id copied from another close', { operation_payload: { period: '2026-05' } }, /different period/i],
       ['wrong operation — an id that authorised something else', { operation_type: 'billing.rate_card.publish' }, /not a payable close/i],
       ['approved but with no second principal', { approver: null }, /one person twice/i],
-      ['approved by its own initiator', { approver: 'demo:finance-analyst@alpha-bank' }, /one person twice/i]
+      ['approved by its own initiator', { approver: 'demo:finance-analyst@alpha-bank' }, /one person twice/i],
+      // The two cases the schema could not express before migration 0042. Both rows are state
+      // 'approved', so the pending-only expiry test above never fires on them — each dispatched
+      // successfully until approved_at existed to be checked.
+      ['approved AFTER its own window closed', { approved_at: '2026-07-06T09:00:00.000Z' }, /after its window closed/i],
+      ['approved, but the row cannot say when', { approved_at: null }, /cannot be shown to have been approved/i]
     ]
 
     for (const [label, approval, expected] of cases) {
