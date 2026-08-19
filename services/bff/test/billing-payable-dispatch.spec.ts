@@ -158,7 +158,16 @@ describe('BILL-16 payable dispatch', () => {
     // PRD §2: stamped on EVERY High-class record produced under platform:superadmin. hasScope lets a
     // superadmin satisfy finance:reconciliation:write, so without it a superadmin authorising a
     // direct debit is indistinguishable from an analyst on the record that authorises the money.
-    const superadmin = { ...APPROVER, scopes: [...APPROVER.scopes, 'platform:superadmin'] }
+    // persona AND scope together. Keeping persona 'finance-analyst' while adding
+    // platform:superadmin builds a principal the §2 matrix cannot mint — platform-super-admin is
+    // its own persona, not a scope a finance analyst may hold — and this fixture is what the
+    // audit assertion below pins acting_persona against.
+    const superadmin = {
+      ...APPROVER,
+      persona: 'platform-super-admin',
+      subject: 'demo:platform-super-admin@alpha-bank',
+      scopes: [...APPROVER.scopes, 'platform:superadmin']
+    }
 
     const ok = harness()
     await ok.service.dispatch(superadmin, 'PAY-2026-06-001', 'idem-ok', 'trace-1')

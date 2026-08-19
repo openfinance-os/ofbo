@@ -141,6 +141,30 @@ describe('BILL-16 payable close — execution on the second approval', () => {
     expect(closed).toHaveLength(0)
   })
 
+  it('stores the four-eyes evidence NORMALISED, not in whatever spelling arrived', async () => {
+    // Criterion 5(b) asks for both principals "stamped from the same normalised P2 subject claim".
+    // The four-eyes DECISION already normalised; the stored copies did not, which left the
+    // denormalised evidence in a form where the schema's case-insensitive CHECK was the only thing
+    // between it and two rows that read as different humans.
+    //
+    // Discriminating by construction: both principals arrive with case and padding differences, so
+    // an implementation that persists them verbatim writes those differences and fails here. The
+    // pre-existing assertions could not catch this — their fixtures were already lowercase, so they
+    // passed whether or not anything normalised.
+    const { service, closed } = harness([])
+    const operation = makePayableCloseOperation(service)
+
+    await operation.execute(
+      { period: PERIOD, trace_id: 'trace-n' },
+      approvalCtx({ approver: '  Second.Analyst@BANK  ', initiator: '  Demo:Controller@Bank  ' })
+    )
+
+    expect(closed[0]).toMatchObject({
+      initiatedBy: 'demo:controller@bank',
+      approvedBy: 'second.analyst@bank'
+    })
+  })
+
   it('takes BOTH principals from the approval record, ignoring the operation payload', async () => {
     // Criterion 5(b). `POST /approvals` accepts an arbitrary operation_payload, so an
     // `initiated_by` read from there let a requester name a third party who never initiated

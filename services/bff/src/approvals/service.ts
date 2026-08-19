@@ -211,6 +211,22 @@ export class ApprovalsService {
     // row carries evidence the approval was in time rather than requiring a later reader to take
     // this service's word for it.
     r.approved_at = this.now().toISOString()
+    // Checked HERE, before the operation runs, and not left to migration 0042's CHECK.
+    //
+    // This method executes the gated operation and only then persists the approved state. That
+    // ordering predates this story, but 0042 gave the persisting UPDATE a NEW way to fail — a
+    // stamp after expires_at now violates a constraint — and a failure there lands after the
+    // money has already moved, with the row still `pending` and therefore still approvable. So
+    // the constraint would have turned a sub-millisecond race into a double execution.
+    //
+    // Refusing here means the DB constraint can never be the thing that fails on this path: it
+    // stays a backstop against some future caller, which is what a backstop is for.
+    if (new Date(r.approved_at).getTime() > new Date(r.expires_at).getTime()) {
+      throw new ApprovalError(
+        409, 'BACKOFFICE.APPROVAL_EXPIRED',
+        'the approval window (2 business hours) closed between reading this request and approving it'
+      )
+    }
     r.execution_result = await op.execute(r.operation_payload, {
       approver: principal.subject,
       approverPersona: principal.persona,

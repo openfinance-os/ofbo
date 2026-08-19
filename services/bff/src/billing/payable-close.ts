@@ -170,8 +170,14 @@ export class PayableCloseService {
 
     const saved = await this.deps.store.saveClose({
       period,
-      initiatedBy,
-      approvedBy: approver,
+      // Stored NORMALISED, which criterion 5(b) asks for and the decision above already relies on.
+      // The decision compared normalised identities; persisting the raw spellings left the stored
+      // evidence in a form where the schema's own case-insensitive CHECK is the only thing standing
+      // between it and two rows that look like different humans. Evidence a reader has to normalise
+      // before trusting is weaker than evidence that arrives comparable — and these two columns are
+      // denormalised copies whose whole purpose is to be read back later.
+      initiatedBy: normalisePrincipal(initiatedBy),
+      approvedBy: normalisePrincipal(approver),
       approvalRequestId,
       // The close is a precondition the BACKOFFICE-06 monthly sign-off consumes, never a sign-off of
       // its own. Recorded on the row so the relationship is data rather than convention.
