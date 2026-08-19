@@ -31,6 +31,7 @@ import { createOpenLineageAdapter } from '../../src/adapters/enterprise/openline
 import { createOnboardingHandoverAdapter } from '../../src/adapters/enterprise/onboarding-handover.js'
 import { createFinancialSystemAdapter } from '../../src/adapters/enterprise/financial-system.js'
 import { createStrWorkflowAdapter } from '../../src/adapters/enterprise/str-workflow.js'
+import { createEInvoicingAspAdapter } from '../../src/adapters/enterprise/einvoicing-asp.js'
 
 /** Route a fake vendor response by URL substring. First match wins; `fallback` covers the rest. */
 function routedFetch(routes: Array<[match: string, body: unknown, status?: number]>, fallback: unknown = { ok: true }) {
@@ -151,6 +152,7 @@ export function buildEnterpriseBench(): { [K in PortName]: PortMap[K] } {
       fetchImpl: routedFetch([
         ['/counterparties', { financial_system_ref: 'fms-org-001' }],
         ['/status', { invoice_status: 'issued' }],
+        ['/journal-batches', { accepted: true, journal_batch_ref: 'GL-BATCH-2026-06' }],
         ['/invoice-runs', { accepted: true }]
       ])
     }),
@@ -159,6 +161,17 @@ export function buildEnterpriseBench(): { [K in PortName]: PortMap[K] } {
       baseUrl: 'https://str.bank.example',
       getToken: token,
       fetchImpl: routedFetch([['/str-drafts', { workflow_ref: 'STR-WF-2026-001', accepted_at: '2026-07-04T00:00:00.000Z' }]])
+    }),
+
+    'p11-einvoicing-asp': createEInvoicingAspAdapter({
+      baseUrl: 'https://einvoicing.bank.example',
+      getToken: token,
+      fetchImpl: routedFetch([['/pint-ae/documents', {
+        accepted: true,
+        submission_ref: 'ASP-INV-2026-06-TPP-A',
+        document_status: 'accepted',
+        tdd_status: 'reported'
+      }]])
     })
   }
 }

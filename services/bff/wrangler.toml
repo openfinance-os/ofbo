@@ -16,13 +16,14 @@ NEBRAS_SIM_URL = "https://nebras-sim-production.up.railway.app"
 enabled = true
 
 # ── Scheduled triggers (DEMO-01) ─────────────────────────────────────────────────────
-# Two schedules, dispatched on event.cron in worker.ts scheduled():
+# Three schedules, dispatched on event.cron in worker.ts scheduled():
 #   "0 1 * * *"   → the daily three-way reconciliation + ingestion + risk monitors (the job).
+#   "0 2 * * 1"   → weekly BILL-01 rate-card upstream change watch.
 #   "*/5 * * * *" → demo-warmth ping: one cheap SELECT 1 that keeps the Supabase free-tier DB
 #                   from auto-pausing and the Hyperdrive pool warm, so a presenter's first click
 #                   never lands on a cold connect (the residual hosted-demo cold-start risk).
 [triggers]
-crons = ["0 1 * * *", "*/5 * * * *"]
+crons = ["0 1 * * *", "0 2 * * 1", "*/5 * * * *"]
 
 # ── Hyperdrive (fixes the ~12s/screen hosted latency) ────────────────────────────────
 # The Worker runs at the edge but Supabase is in ap-northeast-2; a fresh Postgres connect +

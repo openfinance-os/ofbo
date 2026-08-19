@@ -145,7 +145,7 @@ export async function validateLineageCoverage(
 ): Promise<{ covered: string[]; gaps: string[] }> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
-    const tables = await regulatedTables(pool)
+    const tables = [...new Set([...(await regulatedTables(pool)), 'tenant_configuration'])].sort()
     const covered: string[] = []
     const gaps: string[] = []
     for (const t of tables) {

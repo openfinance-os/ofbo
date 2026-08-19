@@ -13,6 +13,7 @@
  * ("verify against current scheme docs"); only the per-call rate is modelled here.
  */
 
+import { SCHEME_RATE_CARD_2026_06_02 } from '@ofbo/billing'
 import type { Money } from '@ofbo/ports'
 
 export type ReconLineType = 'nebras_fees' | 'payment_settlement' | 'consent_record' | 'tpp_aas_pass_through' | 'lfi_access_log' | 'dao_api_call'
@@ -25,13 +26,13 @@ interface FeeRate {
 /** Line types whose fee follows the pricing model. `nebras_fees` is the Nebras
  *  charge line itself — a pass-through with no bank-computed expectation. */
 export const FEE_SCHEDULE_V1: Record<Exclude<ReconLineType, 'nebras_fees'>, FeeRate> = {
-  payment_settlement: { milli_fils: 2500 }, // 2.5 fils per payment initiation
-  consent_record: { milli_fils: 500 }, // 0.5 fils per balance / CoP-with-payment
-  lfi_access_log: { milli_fils: 25 }, // data sharing: 2.5 fils / 100 lines
-  tpp_aas_pass_through: { milli_fils: 25 }, // data sharing pass-through to the consuming TPP
+  payment_settlement: { milli_fils: SCHEME_RATE_CARD_2026_06_02.reconciliationUnitRates.payment_settlement.milliFils },
+  consent_record: { milli_fils: SCHEME_RATE_CARD_2026_06_02.reconciliationUnitRates.consent_record.milliFils },
+  lfi_access_log: { milli_fils: SCHEME_RATE_CARD_2026_06_02.reconciliationUnitRates.lfi_access_log.milliFils },
+  tpp_aas_pass_through: { milli_fils: SCHEME_RATE_CARD_2026_06_02.reconciliationUnitRates.tpp_aas_pass_through.milliFils },
   // BACKOFFICE-68 — Dynamic Account Opening API calls priced at the data-sharing rate
   // as default until DAO volumes are observed (PRD §7).
-  dao_api_call: { milli_fils: 25 }
+  dao_api_call: { milli_fils: SCHEME_RATE_CARD_2026_06_02.reconciliationUnitRates.dao_api_call.milliFils }
 }
 
 export const AED = 'AED'

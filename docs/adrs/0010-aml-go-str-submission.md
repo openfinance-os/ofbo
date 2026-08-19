@@ -48,6 +48,41 @@ submission via P6; sim adapter now, enterprise (real AML GO) at M6. Where a real
 integration isn't available before M6, **Option 2's signed export is the interim**, but
 the back office must still track submission status so drafts are never silently unfiled.
 
+## As-built note (2026-08-18) — recorded by the standards-conformance review, decision untouched
+
+This ADR is still `Proposed`, but **BACKOFFICE-63 shipped and is marked `done`**
+(`docs/backlog.yaml`). The as-built diverges from the Option 1 recommended above in three
+ways, recorded here so the human decision below is taken against what exists rather than
+what was proposed. Nothing in the Decision, Options or Recommendation has been altered.
+
+1. **No AML GO client, by design.** What shipped is a one-way handoff to the bank's own STR
+   workflow (port **P10**, `StrWorkflowPort`), which is the system of record that files with
+   CBUAE — the Back Office never submits to AML GO itself. This is a *different* decision
+   from Option 1's "submits an STR draft to AML GO via P6 egress", and it is arguably the
+   better one: it matches the P10 description in CLAUDE.md and keeps the bank's existing AML
+   system authoritative. It was simply never recorded as a decision.
+2. **No `acknowledged` state.** Requirement §Auditability above specifies
+   drafted → submitted → **acknowledged**. The shipped states are
+   `draft | awaiting_handoff | handed_off`. Once P10 returns a `workflow_ref` the Back Office
+   has no evidence the report was actually filed — which is precisely the risk stated in
+   Context ("a bank could wrongly assume reports are filed") and restated in Consequences.
+   **This is the substantive open question for the human**, not the numbering.
+3. **STR egress is direct.** Requirement §Controls says "routed via the bank's egress, never
+   direct"; the enterprise adapter calls its configured STR endpoint with `globalThis.fetch`.
+   This is not a P6 violation — P6 is scoped to Nebras-bound traffic — but no ADR records the
+   exemption for AML-sensitive traffic.
+
+Attribution, separately: nine code and test sites cite an ADR for the P10/STR work and **none
+of them cites this one** — eight cite ADR 0022 (the unrelated public-readiness carve-out) and
+one cites ADR 0024. Backlog **STD-12** corrects them to ADR 0010; `CLAUDE.md` was corrected by
+the review PR. Full evidence: `docs/reviews/standards-conformance-2026-08.md` §6.1.
+
+**For the human's consideration, not a decision:** given the three divergences above, the live
+choice is narrower than when this record was written — accept the shipped P10 handoff as the
+decision (amending Option 1 to match), or require the missing `acknowledged` state and the
+egress routing before BACKOFFICE-63 can stand as `done`. Option 2's interim signed export
+remains on the record either way; nothing here removes an option.
+
 ## Decision
 
 _Pending._ Once chosen: open the spec-change for the submission endpoint + status, add

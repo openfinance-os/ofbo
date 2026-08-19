@@ -1,0 +1,2976 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OFBO — Billing Module (prototype)</title>
+<style>
+  :root{
+    --demo:#b8430f; --bg:#f7f8fa; --card:#fff; --line:#e5e7eb; --line-soft:#eef0f3;
+    --ink:#111827; --ink-2:#374151; --ink-3:#6b7280; --ink-4:#9ca3af;
+    --accent:#dee4fc; --accent-ink:#1e2a5a; --navy:#1f2a44; --chip:#e8ecf6;
+    /* chart roles — validated (light, surface #fff): CVD ΔE 24.7, normal 33.6, both ≥3:1 */
+    --series-1:#2a78d6; --series-2:#eb6834; --neutral:#9aa1ac;
+    --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .demo{background:var(--demo);color:#fff;font-size:13px;font-weight:700;text-align:center;padding:11px 8px;letter-spacing:.01em}
+  .shell{display:flex;min-height:calc(100vh - 40px)}
+  /* ── sidebar ─────────────────────────────────────────────── */
+  .side{width:240px;flex:none;background:#fff;border-right:1px solid var(--line);padding:22px 0 18px;display:flex;flex-direction:column}
+  .brand{padding:0 20px 20px}
+  .brand h1{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .brand p{margin:4px 0 0;font-size:12px;color:var(--ink-3)}
+  .nav{display:flex;flex-direction:column;gap:2px;padding:0 12px}
+  .nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:8px;font-size:15px;color:var(--ink-2);text-decoration:none}
+  .nav a:hover{background:#f4f5f7}
+  .nav a.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+  .nav svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6}
+  .side-foot{margin-top:auto;padding:0 12px}
+  /* ── topbar ──────────────────────────────────────────────── */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 22px}
+  .burger{width:18px;height:14px;position:relative;flex:none}
+  .burger i{position:absolute;left:0;right:0;height:1.6px;background:var(--ink-2);border-radius:2px}
+  .burger i:nth-child(1){top:0}.burger i:nth-child(2){top:6px}.burger i:nth-child(3){top:12px}
+  .search{background:#f1f2f4;border:none;border-radius:999px;padding:9px 18px;font-size:14px;color:var(--ink-3);width:250px}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-3)}
+  .pill{border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:600}
+  .pill.ghost{background:#fff;border:1px solid var(--line);color:var(--ink-2)}
+  .pill.dark{background:#1f2937;color:#fff}
+  .pill.red{background:#c81e1e;color:#fff}
+  /* ── content ─────────────────────────────────────────────── */
+  .content{padding:22px 26px 60px;max-width:1500px}
+  .page-head{display:flex;align-items:flex-start;gap:16px;margin-bottom:6px}
+  .page-head h2{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .page-head .sub{margin:5px 0 0;font-size:13.5px;color:var(--ink-3)}
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-3)}
+  .btn{border-radius:8px;padding:9px 15px;font-size:13px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink-2);cursor:pointer}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+  .btn:hover{filter:brightness(.97)}
+  .tabs{display:flex;gap:2px;margin:18px 0 18px;border-bottom:1px solid var(--line);overflow-x:auto}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;padding:10px 15px;font-size:14px;font-weight:500;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+  .tab:hover{color:var(--ink)}
+  .tab.on{color:var(--accent-ink);border-bottom-color:#4c5fd7;font-weight:650}
+  .tab small{display:block;font-size:10.5px;color:var(--ink-4);font-weight:500;letter-spacing:.03em}
+  .panel{display:none}.panel.on{display:block}
+  /* ── cards ───────────────────────────────────────────────── */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+  .card>h3{margin:0;padding:13px 18px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .card>h3 .badge{background:var(--chip);color:var(--accent-ink);border-radius:999px;padding:2px 9px;font-size:11.5px;letter-spacing:0}
+  .card>h3 .right{margin-left:auto;font-weight:500;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-3)}
+  .card .body{padding:16px 18px}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  @media(max-width:1100px){.g4,.g3,.g2{grid-template-columns:1fr}}
+  /* ── stat tiles ──────────────────────────────────────────── */
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:15px 17px}
+  .kpi .lbl{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+  .kpi .val{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:7px 0 3px;font-variant-numeric:tabular-nums}
+  .kpi .val .cur{font-size:14px;font-weight:600;color:var(--ink-3);margin-right:5px}
+  .kpi .note{font-size:12.5px;color:var(--ink-3)}
+  .kpi.flag{border-color:#f3c9c9;background:#fdf7f7}
+  /* ── tables ──────────────────────────────────────────────── */
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{text-align:left;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mono{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+  tr.click{cursor:pointer}
+  tr.click:hover td{background:#f8f9fc}
+  tr.sel td{background:#eef2ff}
+  .tot td{font-weight:700;border-top:1px solid var(--line);background:#fafbfc}
+  /* ── status ──────────────────────────────────────────────── */
+  .tag{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .tag.ok{background:#e7f6e7;color:#0a6b0a}
+  .tag.warn{background:#fdf3d9;color:#8a6100}
+  .tag.bad{background:#fbe9e9;color:#a02222}
+  .tag.info{background:#e8ecf6;color:#2c3b6b}
+  .tag.mute{background:#f1f2f4;color:var(--ink-3)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+  .note-box{border-left:3px solid var(--series-1);background:#f4f8fd;padding:11px 14px;border-radius:0 8px 8px 0;font-size:13.5px;color:var(--ink-2);margin:0 0 12px}
+  .note-box.warn{border-left-color:var(--warning);background:#fefaf0}
+  .note-box.bad{border-left-color:var(--critical);background:#fdf5f5}
+  .note-box b{color:var(--ink)}
+  /* ── timeline ────────────────────────────────────────────── */
+  .cyc{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  @media(max-width:1100px){.cyc{grid-template-columns:1fr}}
+  .step{border:1px solid var(--line);border-radius:9px;padding:12px 13px;cursor:pointer;background:#fff;text-align:left;font:inherit}
+  .step:hover{border-color:#c3cbe0;background:#fafbff}
+  .step .d{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--series-1);text-transform:uppercase}
+  .step .t{font-size:13.5px;font-weight:650;margin:5px 0 4px}
+  .step .x{font-size:12px;color:var(--ink-3);line-height:1.45}
+  .step .st{margin-top:8px}
+  /* ── charts ──────────────────────────────────────────────── */
+  .chart{width:100%;max-width:820px;display:block}
+  .chart text{font-family:inherit}
+  .axis-lbl{font-size:11.5px;fill:var(--ink-3)}
+  .val-lbl{font-size:11.5px;fill:var(--ink-2);font-variant-numeric:tabular-nums}
+  .gridline{stroke:var(--line-soft);stroke-width:1}
+  .legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink-2);margin-bottom:10px;flex-wrap:wrap}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:11px;height:11px;border-radius:3px;flex:none}
+  .tip{position:fixed;pointer-events:none;background:#111827;color:#fff;border-radius:7px;padding:7px 10px;font-size:12.5px;line-height:1.45;opacity:0;transition:opacity .1s;z-index:50;max-width:280px}
+  .tip b{font-weight:650}
+  .toggle{font-size:12px;color:var(--ink-3);background:none;border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer}
+  /* ── detail drawer ───────────────────────────────────────── */
+  .detail{border:1px solid #c8d2ea;background:#fbfcff;border-radius:10px;padding:0;margin-top:14px;overflow:hidden}
+  .detail h4{margin:0;padding:12px 16px;font-size:13px;font-weight:700;background:#eef2fb;border-bottom:1px solid #dde4f5;display:flex;align-items:center;gap:10px}
+  .detail h4 .right{margin-left:auto;font-weight:500;font-size:12px;color:var(--ink-3)}
+  .detail .in{padding:15px 16px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px;margin:0}
+  .kv dt{color:var(--ink-3)}
+  .kv dd{margin:0;font-variant-numeric:tabular-nums}
+  pre{background:#11172a;color:#d7e0f5;padding:14px 16px;border-radius:8px;overflow:auto;font-family:var(--mono);font-size:11.5px;line-height:1.55;margin:0;max-height:420px}
+  pre .t{color:#7fb3ff}pre .a{color:#8fd6a8}pre .c{color:#7b8398;font-style:italic}
+  details{border-top:1px solid var(--line-soft)}
+  details summary{cursor:pointer;padding:10px 0;font-size:13.5px;font-weight:600;color:var(--ink-2);list-style:none;display:flex;align-items:center;gap:8px}
+  details summary::-webkit-details-marker{display:none}
+  details summary:before{content:"▸";color:var(--ink-4);font-size:11px}
+  details[open] summary:before{content:"▾"}
+  details .in{padding:2px 0 14px}
+  .foot{font-size:12px;color:var(--ink-4);padding:14px 0 0;border-top:1px solid var(--line);margin-top:22px;line-height:1.7}
+  .foot code{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+</style>
+</head>
+<body data-palette="#2a78d6,#eb6834">
+<div class="demo">DEMO — synthetic data only. No real PSU data, ever. Open Finance Back Office (non-prod).</div>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><h1>OFBO Portal</h1><p>Open Finance Infrastructure</p></div>
+    <nav class="nav">
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 10-8 0 4 4 0 008 0z"/><path d="M4 21c0-3.3 3.6-6 8-6"/><path d="M17 18h5M19.5 15.5V21"/></svg>Approvals</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1116 0v5a3 3 0 01-3 3h-2"/><rect x="3" y="11" width="4" height="6" rx="1.5"/><rect x="17" y="11" width="4" height="6" rx="1.5"/></svg>Customer Care</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V10M19 21V10M12 3l9 5H3l9-5zM9.5 21V10M14.5 21V10"/></svg>Finance</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 5-7 4 4"/></svg>Analytics</a>
+      <a href="#" class="on"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="15" height="18" rx="2"/><path d="M8 8h7M8 12h7M8 16h4"/></svg>TPP Billing</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3v18M7 8l-4 6h8l-4-6zM17 8l-4 6h8l-4-6zM6 21h12"/></svg>Compliance</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V6l8-3z"/></svg>Risk</a>
+      <a href="#"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 20V9M11 20V4M16 20v-8M21 20v-5"/></svg>Operations</a>
+      <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h4M7 14h8"/></svg>Audit Log</a>
+    </nav>
+    <div class="side-foot"><nav class="nav"><a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>Switch persona</a></nav></div>
+  </aside>
+  <div class="main">
+    <div class="top">
+      <div class="burger"><i></i><i></i><i></i></div>
+      <input class="search" placeholder="Find PSU by customer" disabled>
+      <div class="top-right">
+        <span class="pill ghost">Comfortable</span>
+        <span class="pill dark">platform-super-admin</span>
+        <span class="pill red">super-admin</span>
+        <span>21 scopes</span>
+      </div>
+    </div>
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <h2>Billing Module <span style="font-size:14px;font-weight:600;color:var(--ink-3);vertical-align:middle;margin-left:6px">prototype</span></h2>
+          <p class="sub">Cycle <b id="hdr-period"></b> · rate card <b id="hdr-card"></b> · every figure computed by the engine in <code style="font-family:var(--mono);font-size:12px">engine/</code>, nothing hand-typed</p>
+        </div>
+        <div class="head-right">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+          Actions here are recorded to the immutable audit trail.
+        </div>
+      </div>
+      <div class="tabs" id="tabs"></div>
+      <div id="panels"></div>
+      <div class="foot" id="foot"></div>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+const RUN = {
+  "generated_for": "2026-06",
+  "seed": 20260601,
+  "supplier": {
+    "name": "Tier 2 Licensed Financial Institution (demo)",
+    "trn": "100200300400003",
+    "tin": "1002003004"
+  },
+  "rate_card": {
+    "version": "2026.06.02",
+    "label": "CBUAE Commercial & Pricing Model — page state 2 Jun 2026",
+    "effective_from": "2026-06-02",
+    "source": "https://openfinanceuae.atlassian.net/wiki/spaces/OF/pages/124846096/Commercial+and+Pricing+Model",
+    "currency": "AED",
+    "year_anchor": {
+      "date": "2025-10-01",
+      "status": "ASSUMED",
+      "note": "Scheme has not published the Year-1 anchor. Tenant-configurable; every stepped fee below depends on it."
+    },
+    "receivable": {
+      "payment.merchant_collection": {
+        "label": "Merchant collections",
+        "basis": "bps_of_value",
+        "schedule_bps": [
+          38,
+          35,
+          32,
+          29,
+          25
+        ],
+        "cap": 5000000,
+        "free_allowance": {
+          "per": "merchant_per_day",
+          "value": 20000000,
+          "requires": "merchant_id_present",
+          "since": "2026-06-02"
+        },
+        "cite": "C&P §Open Banking — Service Initiation (Retail & SME)"
+      },
+      "payment.p2p_sme": {
+        "label": "P2P / SME-to-SME",
+        "basis": "flat",
+        "flat": 25000,
+        "cite": "C&P §Service Initiation"
+      },
+      "payment.me_to_me": {
+        "label": "Me-to-me",
+        "basis": "flat_stepped",
+        "schedule": [
+          20000,
+          18000,
+          17000
+        ],
+        "cite": "C&P §Service Initiation"
+      },
+      "payment.sme_bulk": {
+        "label": "SME bulk / batch",
+        "basis": "flat",
+        "flat": 25000,
+        "batch_cap": 250000,
+        "cite": "C&P §Service Initiation — no limit on tx per batch"
+      },
+      "payment.large_value": {
+        "label": "Large value / rent / invoice collection",
+        "basis": "flat",
+        "flat": 400000,
+        "threshold": 500000000,
+        "cite": "C&P §Service Initiation — embedded payment link > AED 5,000"
+      },
+      "payment.corporate": {
+        "label": "Corporate payments (incl. bulk)",
+        "basis": "flat",
+        "flat": 250000,
+        "cite": "C&P §Service Initiation (Corporate)"
+      },
+      "data.corporate_page": {
+        "label": "Corporate data sharing",
+        "basis": "per_page",
+        "flat": 40000,
+        "cite": "C&P §Data Sharing (Corporate) — page = 100 lines"
+      },
+      "data.retail_page": {
+        "label": "Retail data sharing (overage)",
+        "basis": "per_page_over_free_tier",
+        "free_tier": {
+          "attended": 15,
+          "unattended": 5,
+          "per": "psu_per_day"
+        },
+        "overage": 950000,
+        "overage_source": "directory ApiMetadata.OverLimitFees (tenant-published)",
+        "cite": "C&P §Data Sharing (Retail & SME)"
+      }
+    },
+    "payable_hub": {
+      "hub.standard": {
+        "label": "API Hub call",
+        "basis": "flat",
+        "flat": 2500,
+        "cite": "C&P §API Hub Fees"
+      },
+      "hub.paired": {
+        "label": "API Hub call — balance/CoP paired with a payment",
+        "basis": "flat",
+        "flat": 500,
+        "window_hours": 2,
+        "cite": "C&P §API Hub Fees — one balance AND one CoP per payment"
+      },
+      "hub.quote": {
+        "label": "API Hub quote creation (tiered)",
+        "basis": "tiered_by_providers",
+        "tiers": [
+          [
+            4,
+            5000
+          ],
+          [
+            10,
+            7500
+          ],
+          [
+            25,
+            10000
+          ],
+          [
+            null,
+            12500
+          ]
+        ],
+        "cite": "C&P §Quotes API Fees"
+      }
+    },
+    "chargeable_endpoints": {
+      "POST /payments": "payment",
+      "GET /accounts": "data",
+      "GET /accounts/{id}/transactions": "data",
+      "GET /accounts/{id}/balances": "data_pairable",
+      "POST /confirmation": "cop_pairable",
+      "GET /accounts/{id}/statements": "data",
+      "GET /parties": "data",
+      "POST /motor-insurance-quotes": "quote",
+      "GET /tpp-reports": "reporting"
+    },
+    "free_endpoints": [
+      "POST /par",
+      "POST /token",
+      "GET /payments/{id}",
+      "PATCH /account-access-consents/{id}",
+      "GET /account-access-consents/{id}",
+      "POST /discovery",
+      "GET /participants",
+      "GET /products",
+      "GET /atms"
+    ]
+  },
+  "change_watch": {
+    "watched": [
+      "Commercial and Pricing Model (Confluence)",
+      "nebras-open-finance.com/pricing/endpoints/",
+      "nebras-open-finance.com/pricing/lfi-rates/"
+    ],
+    "observed": [
+      {
+        "date": "2025-11-27",
+        "change": "Page restructured; CBUAE TPP licence fees added; insurance + FX commission defaults published",
+        "absorbed": true
+      },
+      {
+        "date": "2026-01-10",
+        "change": "Life-assurance clawback window extended 2y → 5y",
+        "absorbed": true
+      },
+      {
+        "date": "2026-05-13",
+        "change": "Chargeable-endpoint tables enumerated; GET /tpp-reports became chargeable",
+        "absorbed": true
+      },
+      {
+        "date": "2026-06-02",
+        "change": "Merchant AED 200/day exemption made conditional on Merchant ID being populated",
+        "absorbed": true
+      }
+    ],
+    "pending": [
+      {
+        "date": "2026-08-03",
+        "change": "Upstream page edit detected — quote-tier wording changed; no numeric delta parsed",
+        "absorbed": false,
+        "action": "Review task raised to Finance + Compliance; card version unchanged pending human confirmation"
+      }
+    ]
+  },
+  "year_step": 1,
+  "tpps": [
+    {
+      "id": "TPP-0001",
+      "org_id": "ORG-77120",
+      "name": "Falcon Pay",
+      "role": "PISP",
+      "resident": true,
+      "trn": "100412778900003",
+      "p9_registered": true,
+      "segment": "merchant"
+    },
+    {
+      "id": "TPP-0002",
+      "org_id": "ORG-77304",
+      "name": "Marid Financial",
+      "role": "AISP+PISP",
+      "resident": true,
+      "trn": "100558991200003",
+      "p9_registered": true,
+      "segment": "retail"
+    },
+    {
+      "id": "TPP-0003",
+      "org_id": "ORG-77415",
+      "name": "Nomad Wallet",
+      "role": "PISP",
+      "resident": false,
+      "trn": null,
+      "p9_registered": true,
+      "segment": "p2p",
+      "residence": "Singapore"
+    },
+    {
+      "id": "TPP-0004",
+      "org_id": "ORG-77502",
+      "name": "Sirocco Data",
+      "role": "AISP",
+      "resident": true,
+      "trn": "100774310500003",
+      "p9_registered": true,
+      "segment": "corporate"
+    },
+    {
+      "id": "TPP-0005",
+      "org_id": "ORG-77661",
+      "name": "Qasr Collections",
+      "role": "PISP",
+      "resident": true,
+      "trn": "100889223100003",
+      "p9_registered": false,
+      "segment": "invoice"
+    }
+  ],
+  "clients": [
+    {
+      "id": "FIN-0001",
+      "name": "Dhow Lending",
+      "markup_pct": 18
+    },
+    {
+      "id": "FIN-0002",
+      "name": "Souq Analytics",
+      "markup_pct": 12
+    }
+  ],
+  "metering": {
+    "stats": {
+      "events_total": 18514,
+      "classified": 18440,
+      "chargeable": 9674,
+      "free": 5380,
+      "free_to_lfi": 3197,
+      "excluded_unsuccessful": 189,
+      "unknown_endpoint": 74,
+      "inbound": 16971,
+      "outbound": 1543,
+      "coverage_pct": 99.6
+    },
+    "evidence": {
+      "pairing": [
+        {
+          "payment": "evt-2026-06-000625",
+          "paired_call": "evt-2026-06-000626",
+          "endpoint": "GET /accounts/{id}/balances",
+          "gap_h": 1.08,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        },
+        {
+          "payment": "evt-2026-06-000636",
+          "paired_call": "evt-2026-06-000638",
+          "endpoint": "GET /accounts/{id}/balances",
+          "gap_h": 1.3,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        },
+        {
+          "payment": "evt-2026-06-000636",
+          "paired_call": "evt-2026-06-000637",
+          "endpoint": "POST /confirmation",
+          "gap_h": 0.85,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        },
+        {
+          "payment": "evt-2026-06-000630",
+          "paired_call": "evt-2026-06-000631",
+          "endpoint": "GET /accounts/{id}/balances",
+          "gap_h": 1.45,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        },
+        {
+          "payment": "evt-2026-06-000649",
+          "paired_call": "evt-2026-06-000650",
+          "endpoint": "POST /confirmation",
+          "gap_h": 0.4,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        },
+        {
+          "payment": "evt-2026-06-000658",
+          "paired_call": "evt-2026-06-000659",
+          "endpoint": "POST /confirmation",
+          "gap_h": 1.42,
+          "effect": "2.5 fils → 0.5 fils on the institution's Hub invoice"
+        }
+      ],
+      "free_tier": [
+        {
+          "event": "evt-2026-06-000337",
+          "psu": "PSU-9990367",
+          "day": "2026-06-01",
+          "mode": "unattended",
+          "pages": 7,
+          "free_pages": 4,
+          "billable_pages": 3,
+          "tier": 5
+        },
+        {
+          "event": "evt-2026-06-000350",
+          "psu": "PSU-9990012",
+          "day": "2026-06-01",
+          "mode": "unattended",
+          "pages": 9,
+          "free_pages": 5,
+          "billable_pages": 4,
+          "tier": 5
+        },
+        {
+          "event": "evt-2026-06-000338",
+          "psu": "PSU-9990367",
+          "day": "2026-06-01",
+          "mode": "unattended",
+          "pages": 1,
+          "free_pages": 0,
+          "billable_pages": 1,
+          "tier": 5
+        },
+        {
+          "event": "evt-2026-06-000219",
+          "psu": "PSU-9990092",
+          "day": "2026-06-01",
+          "mode": "unattended",
+          "pages": 6,
+          "free_pages": 4,
+          "billable_pages": 2,
+          "tier": 5
+        },
+        {
+          "event": "evt-2026-06-000385",
+          "psu": "PSU-9990160",
+          "day": "2026-06-01",
+          "mode": "unattended",
+          "pages": 2,
+          "free_pages": 0,
+          "billable_pages": 2,
+          "tier": 5
+        }
+      ],
+      "merchant_allowance": [
+        {
+          "event": "evt-2026-06-000018",
+          "merchant": "MER-007",
+          "day": "2026-06-01",
+          "free_mf": 20000000,
+          "charged_mf": 16700000
+        },
+        {
+          "event": "evt-2026-06-000022",
+          "merchant": "MER-010",
+          "day": "2026-06-01",
+          "free_mf": 20000000,
+          "charged_mf": 26000000
+        },
+        {
+          "event": "evt-2026-06-000013",
+          "merchant": "MER-005",
+          "day": "2026-06-01",
+          "free_mf": 20000000,
+          "charged_mf": 69500000
+        },
+        {
+          "event": "evt-2026-06-000023",
+          "merchant": "MER-006",
+          "day": "2026-06-01",
+          "free_mf": 20000000,
+          "charged_mf": 1874100000
+        },
+        {
+          "event": "evt-2026-06-000016",
+          "merchant": "MER-002",
+          "day": "2026-06-01",
+          "free_mf": 6800000,
+          "charged_mf": 0
+        }
+      ],
+      "blind_spot": [
+        {
+          "event": "evt-2026-06-000621",
+          "endpoint": "GET /accounts/{id}/direct-debits",
+          "ts": "2026-06-01T11:06:00Z",
+          "tpp": "TPP-0004"
+        },
+        {
+          "event": "evt-2026-06-000620",
+          "endpoint": "GET /accounts/{id}/direct-debits",
+          "ts": "2026-06-01T11:10:00Z",
+          "tpp": "TPP-0004"
+        },
+        {
+          "event": "evt-2026-06-000619",
+          "endpoint": "GET /accounts/{id}/direct-debits",
+          "ts": "2026-06-01T11:48:00Z",
+          "tpp": "TPP-0004"
+        }
+      ]
+    },
+    "batches": 24,
+    "sample": [
+      {
+        "event_id": "evt-2026-06-000323",
+        "ts": "2026-06-01T00:04:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990219",
+        "trace_id": "d0051b5b-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 41
+      },
+      {
+        "event_id": "evt-2026-06-000343",
+        "ts": "2026-06-01T00:05:00Z",
+        "tpp": "TPP-0004",
+        "psu": "PSU-9990318",
+        "trace_id": "695bbe00-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 28
+      },
+      {
+        "event_id": "evt-2026-06-000675",
+        "ts": "2026-06-01T00:05:00Z",
+        "tpp": "SELF",
+        "psu": null,
+        "trace_id": "f9e1225f-fapi",
+        "endpoint": "GET /tpp-reports",
+        "direction": "outbound",
+        "client": "FIN-0001",
+        "counterparty_lfi": "LFI-TIER1-A",
+        "side": "payable_hub",
+        "units": 1,
+        "paired": false,
+        "fee_class": "hub.standard",
+        "note": "chargeable since 13 May 2026"
+      },
+      {
+        "event_id": "evt-2026-06-000187",
+        "ts": "2026-06-01T00:15:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990346",
+        "trace_id": "94450139-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "attended",
+        "lines": 86
+      },
+      {
+        "event_id": "evt-2026-06-000247",
+        "ts": "2026-06-01T00:22:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990145",
+        "trace_id": "48f4b6ed-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 2,
+        "mode": "unattended",
+        "lines": 140
+      },
+      {
+        "event_id": "evt-2026-06-000363",
+        "ts": "2026-06-01T00:25:00Z",
+        "tpp": "TPP-0004",
+        "psu": "PSU-9990284",
+        "trace_id": "efaa11de-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 71
+      },
+      {
+        "event_id": "evt-2026-06-000211",
+        "ts": "2026-06-01T00:30:00Z",
+        "tpp": "TPP-0004",
+        "psu": "PSU-9990189",
+        "trace_id": "aa027c4c-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 2,
+        "mode": "unattended",
+        "lines": 107
+      },
+      {
+        "event_id": "evt-2026-06-000238",
+        "ts": "2026-06-01T00:44:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990160",
+        "trace_id": "108f0a3a-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 5,
+        "mode": "unattended",
+        "lines": 423
+      },
+      {
+        "event_id": "evt-2026-06-000351",
+        "ts": "2026-06-01T00:44:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990241",
+        "trace_id": "3ee3ebb3-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 2,
+        "mode": "attended",
+        "lines": 159
+      },
+      {
+        "event_id": "evt-2026-06-000214",
+        "ts": "2026-06-01T00:49:00Z",
+        "tpp": "TPP-0004",
+        "psu": "PSU-9990196",
+        "trace_id": "02192352-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 28
+      },
+      {
+        "event_id": "evt-2026-06-000367",
+        "ts": "2026-06-01T01:07:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990121",
+        "trace_id": "e75ce03b-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 73
+      },
+      {
+        "event_id": "evt-2026-06-000205",
+        "ts": "2026-06-01T01:16:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990071",
+        "trace_id": "445d714b-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "attended",
+        "lines": 77
+      },
+      {
+        "event_id": "evt-2026-06-000231",
+        "ts": "2026-06-01T01:18:00Z",
+        "tpp": "TPP-0004",
+        "psu": "PSU-9990169",
+        "trace_id": "32da3a78-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "attended",
+        "lines": 99
+      },
+      {
+        "event_id": "evt-2026-06-000287",
+        "ts": "2026-06-01T01:18:00Z",
+        "tpp": "TPP-0002",
+        "psu": "PSU-9990263",
+        "trace_id": "9da8a8f8-fapi",
+        "endpoint": "GET /accounts/{id}/transactions",
+        "direction": "inbound",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 0,
+        "free_units": 1,
+        "mode": "unattended",
+        "lines": 94
+      }
+    ],
+    "by_class": [
+      {
+        "fee_class": "data.retail_page",
+        "side": "receivable",
+        "events": 5865,
+        "units": 1188
+      },
+      {
+        "fee_class": "no_lfi_charge",
+        "side": "free_to_lfi",
+        "events": 3197,
+        "units": 3197
+      },
+      {
+        "fee_class": "hub.standard",
+        "side": "payable_hub",
+        "events": 1031,
+        "units": 1031
+      },
+      {
+        "fee_class": "payment.merchant_collection",
+        "side": "receivable",
+        "events": 941,
+        "units": 941
+      },
+      {
+        "fee_class": "payment.p2p_sme",
+        "side": "receivable",
+        "events": 690,
+        "units": 690
+      },
+      {
+        "fee_class": "data.corporate_page",
+        "side": "receivable",
+        "events": 564,
+        "units": 4901
+      },
+      {
+        "fee_class": "payment.sme_bulk",
+        "side": "receivable",
+        "events": 398,
+        "units": 398
+      },
+      {
+        "fee_class": "hub.paired",
+        "side": "payable_hub",
+        "events": 364,
+        "units": 364
+      },
+      {
+        "fee_class": "payment.corporate",
+        "side": "receivable",
+        "events": 223,
+        "units": 223
+      },
+      {
+        "fee_class": "payment.me_to_me",
+        "side": "receivable",
+        "events": 216,
+        "units": 216
+      },
+      {
+        "fee_class": "hub.quote",
+        "side": "payable_hub",
+        "events": 126,
+        "units": 126
+      },
+      {
+        "fee_class": "payment.large_value",
+        "side": "receivable",
+        "events": 102,
+        "units": 102
+      }
+    ]
+  },
+  "rating": {
+    "card_version": "2026.06.02",
+    "year_step": 1,
+    "statements": [
+      {
+        "tpp": "TPP-0002",
+        "receivable": [
+          {
+            "fee_class": "data.retail_page",
+            "units": 787,
+            "events": 3663,
+            "amount_mf": 747650000,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "payment.sme_bulk",
+            "units": 398,
+            "events": 398,
+            "amount_mf": 5750000,
+            "value_mf": 67775400000
+          },
+          {
+            "fee_class": "payment.p2p_sme",
+            "units": 203,
+            "events": 203,
+            "amount_mf": 5075000,
+            "value_mf": 26898600000
+          },
+          {
+            "fee_class": "payment.me_to_me",
+            "units": 97,
+            "events": 97,
+            "amount_mf": 1940000,
+            "value_mf": 12149100000
+          }
+        ],
+        "receivable_total_mf": 760415000
+      },
+      {
+        "tpp": "TPP-0004",
+        "receivable": [
+          {
+            "fee_class": "data.retail_page",
+            "units": 397,
+            "events": 1613,
+            "amount_mf": 377150000,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "data.corporate_page",
+            "units": 4901,
+            "events": 564,
+            "amount_mf": 196040000,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "payment.corporate",
+            "units": 223,
+            "events": 223,
+            "amount_mf": 55750000,
+            "value_mf": 2127964900000
+          }
+        ],
+        "receivable_total_mf": 628940000
+      },
+      {
+        "tpp": "TPP-0001",
+        "receivable": [
+          {
+            "fee_class": "payment.merchant_collection",
+            "units": 712,
+            "events": 712,
+            "amount_mf": 227711760,
+            "value_mf": 122797300000
+          }
+        ],
+        "receivable_total_mf": 227711760
+      },
+      {
+        "tpp": "TPP-0005",
+        "receivable": [
+          {
+            "fee_class": "payment.merchant_collection",
+            "units": 229,
+            "events": 229,
+            "amount_mf": 68640260,
+            "value_mf": 40217300000
+          },
+          {
+            "fee_class": "payment.large_value",
+            "units": 102,
+            "events": 102,
+            "amount_mf": 40800000,
+            "value_mf": 357351700000
+          }
+        ],
+        "receivable_total_mf": 109440260
+      },
+      {
+        "tpp": "TPP-0003",
+        "receivable": [
+          {
+            "fee_class": "payment.p2p_sme",
+            "units": 230,
+            "events": 230,
+            "amount_mf": 5750000,
+            "value_mf": 28140100000
+          },
+          {
+            "fee_class": "payment.me_to_me",
+            "units": 119,
+            "events": 119,
+            "amount_mf": 2380000,
+            "value_mf": 13906000000
+          }
+        ],
+        "receivable_total_mf": 8130000
+      }
+    ],
+    "tppaas": [
+      {
+        "client": "FIN-0001",
+        "name": "Dhow Lending",
+        "payable_hub": [
+          {
+            "fee_class": "hub.standard",
+            "units": 686,
+            "events": 686,
+            "amount_mf": 1715000,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "hub.paired",
+            "units": 221,
+            "events": 221,
+            "amount_mf": 110500,
+            "value_mf": 0
+          }
+        ],
+        "payable_lfi": [
+          {
+            "fee_class": "payment.p2p_sme",
+            "units": 155,
+            "events": 155,
+            "amount_mf": 3875000,
+            "value_mf": 15243300000
+          },
+          {
+            "fee_class": "data.retail_page",
+            "units": 4,
+            "events": 349,
+            "amount_mf": 3800000,
+            "value_mf": 0
+          }
+        ],
+        "hub_mf": 1825500,
+        "lfi_mf": 7675000,
+        "cost_mf": 9500500,
+        "markup_pct": 18,
+        "rebill_mf": 11210590,
+        "margin_mf": 1710090
+      },
+      {
+        "client": "FIN-0002",
+        "name": "Souq Analytics",
+        "payable_hub": [
+          {
+            "fee_class": "hub.quote",
+            "units": 126,
+            "events": 126,
+            "amount_mf": 1152500,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "hub.standard",
+            "units": 345,
+            "events": 345,
+            "amount_mf": 862500,
+            "value_mf": 0
+          },
+          {
+            "fee_class": "hub.paired",
+            "units": 143,
+            "events": 143,
+            "amount_mf": 71500,
+            "value_mf": 0
+          }
+        ],
+        "payable_lfi": [
+          {
+            "fee_class": "payment.p2p_sme",
+            "units": 102,
+            "events": 102,
+            "amount_mf": 2550000,
+            "value_mf": 9508800000
+          },
+          {
+            "fee_class": "data.retail_page",
+            "units": 0,
+            "events": 240,
+            "amount_mf": 0,
+            "value_mf": 0
+          }
+        ],
+        "hub_mf": 2086500,
+        "lfi_mf": 2550000,
+        "cost_mf": 4636500,
+        "markup_pct": 12,
+        "rebill_mf": 5192880,
+        "margin_mf": 556380
+      }
+    ],
+    "cap_adjustments": [
+      {
+        "batch": "BATCH-2026-06-6-0",
+        "tx": 24,
+        "gross_mf": 600000,
+        "capped_mf": 250000,
+        "saved_mf": 350000
+      },
+      {
+        "batch": "BATCH-2026-06-6-1",
+        "tx": 23,
+        "gross_mf": 575000,
+        "capped_mf": 250000,
+        "saved_mf": 325000
+      },
+      {
+        "batch": "BATCH-2026-06-9-1",
+        "tx": 23,
+        "gross_mf": 575000,
+        "capped_mf": 250000,
+        "saved_mf": 325000
+      },
+      {
+        "batch": "BATCH-2026-06-9-0",
+        "tx": 13,
+        "gross_mf": 325000,
+        "capped_mf": 250000,
+        "saved_mf": 75000
+      },
+      {
+        "batch": "BATCH-2026-06-9-2",
+        "tx": 25,
+        "gross_mf": 625000,
+        "capped_mf": 250000,
+        "saved_mf": 375000
+      },
+      {
+        "batch": "BATCH-2026-06-12-0",
+        "tx": 18,
+        "gross_mf": 450000,
+        "capped_mf": 250000,
+        "saved_mf": 200000
+      },
+      {
+        "batch": "BATCH-2026-06-12-1",
+        "tx": 20,
+        "gross_mf": 500000,
+        "capped_mf": 250000,
+        "saved_mf": 250000
+      },
+      {
+        "batch": "BATCH-2026-06-15-1",
+        "tx": 23,
+        "gross_mf": 575000,
+        "capped_mf": 250000,
+        "saved_mf": 325000
+      },
+      {
+        "batch": "BATCH-2026-06-15-2",
+        "tx": 16,
+        "gross_mf": 400000,
+        "capped_mf": 250000,
+        "saved_mf": 150000
+      },
+      {
+        "batch": "BATCH-2026-06-15-0",
+        "tx": 13,
+        "gross_mf": 325000,
+        "capped_mf": 250000,
+        "saved_mf": 75000
+      },
+      {
+        "batch": "BATCH-2026-06-18-2",
+        "tx": 25,
+        "gross_mf": 625000,
+        "capped_mf": 250000,
+        "saved_mf": 375000
+      },
+      {
+        "batch": "BATCH-2026-06-18-0",
+        "tx": 12,
+        "gross_mf": 300000,
+        "capped_mf": 250000,
+        "saved_mf": 50000
+      },
+      {
+        "batch": "BATCH-2026-06-18-1",
+        "tx": 21,
+        "gross_mf": 525000,
+        "capped_mf": 250000,
+        "saved_mf": 275000
+      },
+      {
+        "batch": "BATCH-2026-06-24-1",
+        "tx": 17,
+        "gross_mf": 425000,
+        "capped_mf": 250000,
+        "saved_mf": 175000
+      },
+      {
+        "batch": "BATCH-2026-06-27-1",
+        "tx": 21,
+        "gross_mf": 525000,
+        "capped_mf": 250000,
+        "saved_mf": 275000
+      },
+      {
+        "batch": "BATCH-2026-06-27-0",
+        "tx": 12,
+        "gross_mf": 300000,
+        "capped_mf": 250000,
+        "saved_mf": 50000
+      },
+      {
+        "batch": "BATCH-2026-06-30-0",
+        "tx": 21,
+        "gross_mf": 525000,
+        "capped_mf": 250000,
+        "saved_mf": 275000
+      },
+      {
+        "batch": "BATCH-2026-06-30-1",
+        "tx": 21,
+        "gross_mf": 525000,
+        "capped_mf": 250000,
+        "saved_mf": 275000
+      }
+    ],
+    "receivable_total_mf": 1734637020,
+    "payable_hub_total_mf": 3912000,
+    "payable_lfi_total_mf": 10225000,
+    "tppaas_rebill_mf": 16403470,
+    "tppaas_margin_mf": 2266470,
+    "free_to_lfi_events": 3197,
+    "capped_count": 31,
+    "no_mid_count": 52
+  },
+  "memo": {
+    "issued": "2026-07-05",
+    "channel": "email (billing@nebrasopenfinance.ae)",
+    "ref": "NEB-CM-2026-06",
+    "lines": [
+      {
+        "tpp": "TPP-0002",
+        "fee_class": "data.retail_page",
+        "side": "receivable",
+        "units": 787,
+        "amount_mf": 747650000
+      },
+      {
+        "tpp": "TPP-0002",
+        "fee_class": "payment.sme_bulk",
+        "side": "receivable",
+        "units": 398,
+        "amount_mf": 5750000
+      },
+      {
+        "tpp": "TPP-0002",
+        "fee_class": "payment.p2p_sme",
+        "side": "receivable",
+        "units": 203,
+        "amount_mf": 5075000
+      },
+      {
+        "tpp": "TPP-0002",
+        "fee_class": "payment.me_to_me",
+        "side": "receivable",
+        "units": 97,
+        "amount_mf": 1940000
+      },
+      {
+        "tpp": "TPP-0004",
+        "fee_class": "data.retail_page",
+        "side": "receivable",
+        "units": 397,
+        "amount_mf": 377150000
+      },
+      {
+        "tpp": "TPP-0004",
+        "fee_class": "data.corporate_page",
+        "side": "receivable",
+        "units": 4682,
+        "amount_mf": 187280000
+      },
+      {
+        "tpp": "TPP-0004",
+        "fee_class": "payment.corporate",
+        "side": "receivable",
+        "units": 223,
+        "amount_mf": 55750000
+      },
+      {
+        "tpp": "TPP-0001",
+        "fee_class": "payment.merchant_collection",
+        "side": "receivable",
+        "units": 712,
+        "amount_mf": 275005920
+      },
+      {
+        "tpp": "TPP-0005",
+        "fee_class": "payment.merchant_collection",
+        "side": "receivable",
+        "units": 229,
+        "amount_mf": 68640260
+      },
+      {
+        "tpp": "TPP-0005",
+        "fee_class": "payment.large_value",
+        "side": "receivable",
+        "units": 102,
+        "amount_mf": 40800000
+      },
+      {
+        "tpp": "TPP-0003",
+        "fee_class": "payment.p2p_sme",
+        "side": "receivable",
+        "units": 230,
+        "amount_mf": 5750000
+      },
+      {
+        "tpp": "TPP-0003",
+        "fee_class": "payment.me_to_me",
+        "side": "receivable",
+        "units": 119,
+        "amount_mf": 2380000
+      },
+      {
+        "tpp": "FIN-0001",
+        "fee_class": "hub.standard",
+        "side": "payable_hub",
+        "units": 686,
+        "amount_mf": 1715000
+      },
+      {
+        "tpp": "FIN-0001",
+        "fee_class": "hub.paired",
+        "side": "payable_hub",
+        "units": 221,
+        "amount_mf": 390500
+      },
+      {
+        "tpp": "FIN-0002",
+        "fee_class": "hub.quote",
+        "side": "payable_hub",
+        "units": 126,
+        "amount_mf": 1152500
+      },
+      {
+        "tpp": "FIN-0002",
+        "fee_class": "hub.standard",
+        "side": "payable_hub",
+        "units": 345,
+        "amount_mf": 862500
+      },
+      {
+        "tpp": "FIN-0002",
+        "fee_class": "hub.paired",
+        "side": "payable_hub",
+        "units": 143,
+        "amount_mf": 71500
+      }
+    ],
+    "applied": [
+      {
+        "code": "V1",
+        "title": "AED 50 cap not applied",
+        "direction": "memo_high",
+        "fee_class": "payment.merchant_collection",
+        "detail": "Memo prices 3 high-value merchant collections at full bps with no cap applied.",
+        "tpp": "TPP-0001",
+        "delta_mf": 51098720,
+        "evidence_events": [
+          "evt-2026-06-014947",
+          "evt-2026-06-006381",
+          "evt-2026-06-013555"
+        ]
+      },
+      {
+        "code": "V2",
+        "title": "Missing corporate data lines",
+        "direction": "memo_low",
+        "fee_class": "data.corporate_page",
+        "detail": "Memo omits one day of corporate data pages — under-collection, i.e. revenue leakage if accepted silently.",
+        "tpp": "TPP-0004",
+        "delta_mf": -8760000,
+        "evidence_events": [
+          "evt-2026-06-010377",
+          "evt-2026-06-010389",
+          "evt-2026-06-010388",
+          "evt-2026-06-010373"
+        ],
+        "day": "2026-06-17"
+      },
+      {
+        "code": "V3",
+        "title": "Merchant exemption granted without Merchant ID",
+        "direction": "memo_low",
+        "fee_class": "payment.merchant_collection",
+        "detail": "Memo applies the AED 200/day free allowance to requests with no Merchant ID, contrary to the 2 Jun 2026 condition.",
+        "tpp": "TPP-0001",
+        "delta_mf": -3804560,
+        "evidence_events": [
+          "evt-2026-06-000005",
+          "evt-2026-06-000001",
+          "evt-2026-06-000698",
+          "evt-2026-06-001377"
+        ],
+        "affected_events": 52
+      },
+      {
+        "code": "V4",
+        "title": "Paired discount not honoured",
+        "direction": "memo_high",
+        "fee_class": "hub.paired",
+        "detail": "Memo bills paired balance/CoP calls at the standard 2.5 fils instead of the 0.5 fils paired rate.",
+        "tpp": "FIN-0001",
+        "delta_mf": 280000,
+        "evidence_events": [
+          "evt-2026-06-000638",
+          "evt-2026-06-000626",
+          "evt-2026-06-000637",
+          "evt-2026-06-000631"
+        ],
+        "affected_events": 140
+      }
+    ],
+    "playbook": [
+      {
+        "code": "V1",
+        "title": "AED 50 cap not applied",
+        "direction": "memo_high",
+        "fee_class": "payment.merchant_collection",
+        "detail": "Memo prices 3 high-value merchant collections at full bps with no cap applied."
+      },
+      {
+        "code": "V2",
+        "title": "Missing corporate data lines",
+        "direction": "memo_low",
+        "fee_class": "data.corporate_page",
+        "detail": "Memo omits one day of corporate data pages — under-collection, i.e. revenue leakage if accepted silently."
+      },
+      {
+        "code": "V3",
+        "title": "Merchant exemption granted without Merchant ID",
+        "direction": "memo_low",
+        "fee_class": "payment.merchant_collection",
+        "detail": "Memo applies the AED 200/day free allowance to requests with no Merchant ID, contrary to the 2 Jun 2026 condition."
+      },
+      {
+        "code": "V4",
+        "title": "Paired discount not honoured",
+        "direction": "memo_high",
+        "fee_class": "hub.paired",
+        "detail": "Memo bills paired balance/CoP calls at the standard 2.5 fils instead of the 0.5 fils paired rate."
+      }
+    ]
+  },
+  "reconciliation": {
+    "rows": [
+      {
+        "tpp": "TPP-0002",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 787,
+        "own_mf": 747650000,
+        "memo_mf": 747650000,
+        "p9_mf": 747650000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0002",
+        "side": "receivable",
+        "fee_class": "payment.sme_bulk",
+        "units": 398,
+        "own_mf": 5750000,
+        "memo_mf": 5750000,
+        "p9_mf": 5750000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0002",
+        "side": "receivable",
+        "fee_class": "payment.p2p_sme",
+        "units": 203,
+        "own_mf": 5075000,
+        "memo_mf": 5075000,
+        "p9_mf": 5075000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0002",
+        "side": "receivable",
+        "fee_class": "payment.me_to_me",
+        "units": 97,
+        "own_mf": 1940000,
+        "memo_mf": 1940000,
+        "p9_mf": 1940000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0004",
+        "side": "receivable",
+        "fee_class": "data.retail_page",
+        "units": 397,
+        "own_mf": 377150000,
+        "memo_mf": 377150000,
+        "p9_mf": 377150000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0004",
+        "side": "receivable",
+        "fee_class": "data.corporate_page",
+        "units": 4901,
+        "own_mf": 196040000,
+        "memo_mf": 187280000,
+        "p9_mf": 196040000,
+        "variance_mf": -8760000,
+        "status": "BREAK",
+        "break_id": "BRK-2026-06-001"
+      },
+      {
+        "tpp": "TPP-0004",
+        "side": "receivable",
+        "fee_class": "payment.corporate",
+        "units": 223,
+        "own_mf": 55750000,
+        "memo_mf": 55750000,
+        "p9_mf": 55750000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0001",
+        "side": "receivable",
+        "fee_class": "payment.merchant_collection",
+        "units": 712,
+        "own_mf": 227711760,
+        "memo_mf": 275005920,
+        "p9_mf": 227711760,
+        "variance_mf": 47294160,
+        "status": "BREAK",
+        "break_id": "BRK-2026-06-002"
+      },
+      {
+        "tpp": "TPP-0005",
+        "side": "receivable",
+        "fee_class": "payment.merchant_collection",
+        "units": 229,
+        "own_mf": 68640260,
+        "memo_mf": 68640260,
+        "p9_mf": 68640260,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0005",
+        "side": "receivable",
+        "fee_class": "payment.large_value",
+        "units": 102,
+        "own_mf": 40800000,
+        "memo_mf": 40800000,
+        "p9_mf": 40800000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0003",
+        "side": "receivable",
+        "fee_class": "payment.p2p_sme",
+        "units": 230,
+        "own_mf": 5750000,
+        "memo_mf": 5750000,
+        "p9_mf": 5750000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "TPP-0003",
+        "side": "receivable",
+        "fee_class": "payment.me_to_me",
+        "units": 119,
+        "own_mf": 2380000,
+        "memo_mf": 2380000,
+        "p9_mf": 2380000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "FIN-0001",
+        "side": "payable_hub",
+        "fee_class": "hub.standard",
+        "units": 686,
+        "own_mf": 1715000,
+        "memo_mf": 1715000,
+        "p9_mf": 1715000,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "FIN-0001",
+        "side": "payable_hub",
+        "fee_class": "hub.paired",
+        "units": 221,
+        "own_mf": 110500,
+        "memo_mf": 390500,
+        "p9_mf": 110500,
+        "variance_mf": 280000,
+        "status": "BREAK",
+        "break_id": "BRK-2026-06-003"
+      },
+      {
+        "tpp": "FIN-0002",
+        "side": "payable_hub",
+        "fee_class": "hub.quote",
+        "units": 126,
+        "own_mf": 1152500,
+        "memo_mf": 1152500,
+        "p9_mf": 1152500,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "FIN-0002",
+        "side": "payable_hub",
+        "fee_class": "hub.standard",
+        "units": 345,
+        "own_mf": 862500,
+        "memo_mf": 862500,
+        "p9_mf": 862500,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      },
+      {
+        "tpp": "FIN-0002",
+        "side": "payable_hub",
+        "fee_class": "hub.paired",
+        "units": 143,
+        "own_mf": 71500,
+        "memo_mf": 71500,
+        "p9_mf": 71500,
+        "variance_mf": 0,
+        "status": "MATCHED"
+      }
+    ],
+    "breaks": [
+      {
+        "id": "BRK-2026-06-001",
+        "tpp": "TPP-0004",
+        "side": "receivable",
+        "fee_class": "data.corporate_page",
+        "units": 4901,
+        "own_mf": 196040000,
+        "memo_mf": 187280000,
+        "p9_mf": 196040000,
+        "variance_mf": -8760000,
+        "status": "BREAK",
+        "direction": "MEMO_LOWER",
+        "cause_code": "V2",
+        "cause": "Missing corporate data lines",
+        "detail": "Memo omits one day of corporate data pages — under-collection, i.e. revenue leakage if accepted silently.",
+        "contributions": [
+          {
+            "code": "V2",
+            "title": "Missing corporate data lines",
+            "delta_mf": -8760000,
+            "events": 4
+          }
+        ],
+        "gross_error_mf": 8760000,
+        "evidence_events": [
+          "evt-2026-06-010377",
+          "evt-2026-06-010389",
+          "evt-2026-06-010388",
+          "evt-2026-06-010373"
+        ],
+        "action": "Raise Nebras billing query + withhold line from TPP invoice",
+        "query_deadline": "2026-07-31",
+        "sla_days_remaining": 26
+      },
+      {
+        "id": "BRK-2026-06-002",
+        "tpp": "TPP-0001",
+        "side": "receivable",
+        "fee_class": "payment.merchant_collection",
+        "units": 712,
+        "own_mf": 227711760,
+        "memo_mf": 275005920,
+        "p9_mf": 227711760,
+        "variance_mf": 47294160,
+        "status": "BREAK",
+        "direction": "MEMO_HIGHER",
+        "cause_code": "V1+V3",
+        "cause": "AED 50 cap not applied · Merchant exemption granted without Merchant ID",
+        "detail": "Memo prices 3 high-value merchant collections at full bps with no cap applied. Memo applies the AED 200/day free allowance to requests with no Merchant ID, contrary to the 2 Jun 2026 condition.",
+        "contributions": [
+          {
+            "code": "V1",
+            "title": "AED 50 cap not applied",
+            "delta_mf": 51098720,
+            "events": 3
+          },
+          {
+            "code": "V3",
+            "title": "Merchant exemption granted without Merchant ID",
+            "delta_mf": -3804560,
+            "events": 52
+          }
+        ],
+        "gross_error_mf": 54903280,
+        "evidence_events": [
+          "evt-2026-06-014947",
+          "evt-2026-06-006381",
+          "evt-2026-06-013555",
+          "evt-2026-06-000005",
+          "evt-2026-06-000001",
+          "evt-2026-06-000698",
+          "evt-2026-06-001377"
+        ],
+        "action": "Raise Nebras billing query (30-day window)",
+        "query_deadline": "2026-07-31",
+        "sla_days_remaining": 26
+      },
+      {
+        "id": "BRK-2026-06-003",
+        "tpp": "FIN-0001",
+        "side": "payable_hub",
+        "fee_class": "hub.paired",
+        "units": 221,
+        "own_mf": 110500,
+        "memo_mf": 390500,
+        "p9_mf": 110500,
+        "variance_mf": 280000,
+        "status": "BREAK",
+        "direction": "MEMO_HIGHER",
+        "cause_code": "V4",
+        "cause": "Paired discount not honoured",
+        "detail": "Memo bills paired balance/CoP calls at the standard 2.5 fils instead of the 0.5 fils paired rate.",
+        "contributions": [
+          {
+            "code": "V4",
+            "title": "Paired discount not honoured",
+            "delta_mf": 280000,
+            "events": 140
+          }
+        ],
+        "gross_error_mf": 280000,
+        "evidence_events": [
+          "evt-2026-06-000638",
+          "evt-2026-06-000626",
+          "evt-2026-06-000637",
+          "evt-2026-06-000631"
+        ],
+        "affected_events": 140,
+        "action": "Raise Nebras billing query (30-day window)",
+        "query_deadline": "2026-07-31",
+        "sla_days_remaining": 26
+      }
+    ],
+    "threshold_mf": 1000,
+    "matched": 14,
+    "unmatched": 3,
+    "match_rate_pct": 82.4,
+    "net_variance_mf": 38814160,
+    "abs_variance_mf": 56334160
+  },
+  "invoicing": {
+    "period": "2026-06",
+    "issue_date": "2026-07-13",
+    "due_date": "2026-07-28",
+    "invoices": [
+      {
+        "id": "INV-2026-06-0001",
+        "tpp": "TPP-0002",
+        "tpp_name": "Marid Financial",
+        "period": "2026-06",
+        "issue_date": "2026-07-13",
+        "due_date": "2026-07-28",
+        "buyer": {
+          "trn": "100558991200003",
+          "endpoint_scheme": "0235",
+          "endpoint_id": "1005589912",
+          "resident": true
+        },
+        "lines": [
+          {
+            "no": 1,
+            "fee_class": "data.retail_page",
+            "units": 787,
+            "gross_mf": 747650000,
+            "partially_withheld": false
+          },
+          {
+            "no": 2,
+            "fee_class": "payment.sme_bulk",
+            "units": 398,
+            "gross_mf": 5750000,
+            "partially_withheld": false
+          },
+          {
+            "no": 3,
+            "fee_class": "payment.p2p_sme",
+            "units": 203,
+            "gross_mf": 5075000,
+            "partially_withheld": false
+          },
+          {
+            "no": 4,
+            "fee_class": "payment.me_to_me",
+            "units": 97,
+            "gross_mf": 1940000,
+            "partially_withheld": false
+          }
+        ],
+        "withheld_lines": [],
+        "gross_mf": 760415000,
+        "net_mf": 724204762,
+        "vat_mf": 36210238,
+        "vat_rate": 5,
+        "tax_category": "S",
+        "transaction_type": [],
+        "doc_type": "380",
+        "pint_ae": {
+          "customization": "urn:peppol:pint:billing-1@ae-1",
+          "profile": "urn:peppol:bis:billing",
+          "version": "PINT AE v1.0.3"
+        },
+        "collection": {
+          "rail": "OF Invoice Collection (pay-by-bank)",
+          "fee": "AED 4 capped",
+          "note": "Embedded payment link on the e-invoice"
+        },
+        "p9_registered": true,
+        "status": "ISSUED"
+      },
+      {
+        "id": "INV-2026-06-0002",
+        "tpp": "TPP-0004",
+        "tpp_name": "Sirocco Data",
+        "period": "2026-06",
+        "issue_date": "2026-07-13",
+        "due_date": "2026-07-28",
+        "buyer": {
+          "trn": "100774310500003",
+          "endpoint_scheme": "0235",
+          "endpoint_id": "1007743105",
+          "resident": true
+        },
+        "lines": [
+          {
+            "no": 1,
+            "fee_class": "data.retail_page",
+            "units": 397,
+            "gross_mf": 377150000,
+            "partially_withheld": false
+          },
+          {
+            "no": 2,
+            "fee_class": "data.corporate_page",
+            "units": 4901,
+            "gross_mf": 187280000,
+            "partially_withheld": true
+          },
+          {
+            "no": 3,
+            "fee_class": "payment.corporate",
+            "units": 223,
+            "gross_mf": 55750000,
+            "partially_withheld": false
+          }
+        ],
+        "withheld_lines": [
+          {
+            "fee_class": "data.corporate_page",
+            "units": 4901,
+            "gross_mf": 8760000,
+            "of_class_total_mf": 196040000,
+            "break_id": "BRK-2026-06-001",
+            "cause": "Missing corporate data lines",
+            "carry": "Scheme statement is lower than our records — amount at risk until the query resolves"
+          }
+        ],
+        "gross_mf": 620180000,
+        "net_mf": 590647619,
+        "vat_mf": 29532381,
+        "vat_rate": 5,
+        "tax_category": "S",
+        "transaction_type": [],
+        "doc_type": "380",
+        "pint_ae": {
+          "customization": "urn:peppol:pint:billing-1@ae-1",
+          "profile": "urn:peppol:bis:billing",
+          "version": "PINT AE v1.0.3"
+        },
+        "collection": {
+          "rail": "OF Invoice Collection (pay-by-bank)",
+          "fee": "AED 4 capped",
+          "note": "Embedded payment link on the e-invoice"
+        },
+        "p9_registered": true,
+        "status": "ISSUED"
+      },
+      {
+        "id": "INV-2026-06-0003",
+        "tpp": "TPP-0001",
+        "tpp_name": "Falcon Pay",
+        "period": "2026-06",
+        "issue_date": "2026-07-13",
+        "due_date": "2026-07-28",
+        "buyer": {
+          "trn": "100412778900003",
+          "endpoint_scheme": "0235",
+          "endpoint_id": "1004127789",
+          "resident": true
+        },
+        "lines": [
+          {
+            "no": 1,
+            "fee_class": "payment.merchant_collection",
+            "units": 712,
+            "gross_mf": 180417600,
+            "partially_withheld": true
+          }
+        ],
+        "withheld_lines": [
+          {
+            "fee_class": "payment.merchant_collection",
+            "units": 712,
+            "gross_mf": 47294160,
+            "of_class_total_mf": 227711760,
+            "break_id": "BRK-2026-06-002",
+            "cause": "AED 50 cap not applied · Merchant exemption granted without Merchant ID",
+            "carry": "Scheme statement is higher than our records — invoiced at our rated figure, excess queried"
+          }
+        ],
+        "gross_mf": 180417600,
+        "net_mf": 171826286,
+        "vat_mf": 8591314,
+        "vat_rate": 5,
+        "tax_category": "S",
+        "transaction_type": [],
+        "doc_type": "380",
+        "pint_ae": {
+          "customization": "urn:peppol:pint:billing-1@ae-1",
+          "profile": "urn:peppol:bis:billing",
+          "version": "PINT AE v1.0.3"
+        },
+        "collection": {
+          "rail": "Aani Request to Pay",
+          "fee": "—",
+          "note": "Below the AED 50,000 rail limit"
+        },
+        "p9_registered": true,
+        "status": "ISSUED"
+      },
+      {
+        "id": "INV-2026-06-0004",
+        "tpp": "TPP-0005",
+        "tpp_name": "Qasr Collections",
+        "period": "2026-06",
+        "issue_date": "2026-07-13",
+        "due_date": "2026-07-28",
+        "buyer": {
+          "trn": "100889223100003",
+          "endpoint_scheme": "0235",
+          "endpoint_id": "1008892231",
+          "resident": true
+        },
+        "lines": [
+          {
+            "no": 1,
+            "fee_class": "payment.merchant_collection",
+            "units": 229,
+            "gross_mf": 68640260,
+            "partially_withheld": false
+          },
+          {
+            "no": 2,
+            "fee_class": "payment.large_value",
+            "units": 102,
+            "gross_mf": 40800000,
+            "partially_withheld": false
+          }
+        ],
+        "withheld_lines": [],
+        "gross_mf": 109440260,
+        "net_mf": 104228819,
+        "vat_mf": 5211441,
+        "vat_rate": 5,
+        "tax_category": "S",
+        "transaction_type": [],
+        "doc_type": "380",
+        "pint_ae": {
+          "customization": "urn:peppol:pint:billing-1@ae-1",
+          "profile": "urn:peppol:bis:billing",
+          "version": "PINT AE v1.0.3"
+        },
+        "collection": {
+          "rail": "Aani Request to Pay",
+          "fee": "—",
+          "note": "Below the AED 50,000 rail limit"
+        },
+        "p9_registered": false,
+        "status": "BLOCKED_NO_P9_COUNTERPARTY"
+      },
+      {
+        "id": "INV-2026-06-0005",
+        "tpp": "TPP-0003",
+        "tpp_name": "Nomad Wallet",
+        "period": "2026-06",
+        "issue_date": "2026-07-13",
+        "due_date": "2026-07-28",
+        "buyer": {
+          "trn": null,
+          "endpoint_scheme": "0235",
+          "endpoint_id": null,
+          "resident": false,
+          "residence": "Singapore"
+        },
+        "lines": [
+          {
+            "no": 1,
+            "fee_class": "payment.p2p_sme",
+            "units": 230,
+            "gross_mf": 5750000,
+            "partially_withheld": false
+          },
+          {
+            "no": 2,
+            "fee_class": "payment.me_to_me",
+            "units": 119,
+            "gross_mf": 2380000,
+            "partially_withheld": false
+          }
+        ],
+        "withheld_lines": [],
+        "gross_mf": 8130000,
+        "net_mf": 8130000,
+        "vat_mf": 0,
+        "vat_rate": 0,
+        "tax_category": "Z",
+        "transaction_type": [
+          "EXPORTS"
+        ],
+        "doc_type": "380",
+        "pint_ae": {
+          "customization": "urn:peppol:pint:billing-1@ae-1",
+          "profile": "urn:peppol:bis:billing",
+          "version": "PINT AE v1.0.3"
+        },
+        "collection": {
+          "rail": "Cross-border transfer",
+          "fee": "—",
+          "note": "Non-resident TPP; scheme settlement preferred"
+        },
+        "p9_registered": true,
+        "status": "ISSUED"
+      }
+    ],
+    "four_eyes": {
+      "required": true,
+      "initiator": "finance.analyst",
+      "approver": "finance.controller",
+      "approved_at": "2026-07-13T09:14:00Z",
+      "note": "Invoice runs are four-eyes gated; a run over unreconciled lines returns 409."
+    },
+    "total_gross_mf": 1569142600,
+    "total_vat_mf": 74333933,
+    "total_withheld_mf": 56054160,
+    "pint": [
+      {
+        "id": "INV-2026-06-0001",
+        "tpp": "Marid Financial",
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- PINT AE Billing — exchanged supplier → ASP → buyer's ASP → buyer (5-corner DCTCE);\n     the Tax Data Document is reported to the FTA platform by each ASP in parallel. -->\n<Invoice xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"\n         xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n         xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n  <cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID>\n  <cbc:ProfileID>urn:peppol:bis:billing</cbc:ProfileID>\n  <cbc:ID>INV-2026-06-0001</cbc:ID>\n  <cbc:IssueDate>2026-07-13</cbc:IssueDate>\n  <cbc:DueDate>2026-07-28</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:Note>Open Finance scheme fees, billing period 2026-06. Amounts derive from VAT-inclusive scheme rates (tax extracted at 5/105).</cbc:Note>\n  <cbc:DocumentCurrencyCode>AED</cbc:DocumentCurrencyCode>\n  <cbc:TaxCurrencyCode>AED</cbc:TaxCurrencyCode>\n  <cac:InvoicePeriod>\n    <cbc:StartDate>2026-06-01</cbc:StartDate><cbc:EndDate>2026-06-30</cbc:EndDate>\n  </cac:InvoicePeriod>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1002003004</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Tier 2 Licensed Financial Institution (demo)</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>100200300400003</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1005589912</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Marid Financial</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"AED\">362.10</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"AED\">7242.05</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"AED\">362.10</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"AED\">7242.05</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"AED\">7242.05</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"AED\">7604.15</cbc:TaxInclusiveAmount>\n    <cbc:PayableAmount currencyID=\"AED\">7604.15</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">787</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">7120.48</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance retail data sharing above free tier (per page)</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">9.04762</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>2</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">398</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">54.76</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance SME bulk payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.13759</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>3</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">203</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">48.33</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance P2P / SME payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.23810</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>4</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">97</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">18.48</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance me-to-me payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.19048</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>"
+      },
+      {
+        "id": "INV-2026-06-0002",
+        "tpp": "Sirocco Data",
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- PINT AE Billing — exchanged supplier → ASP → buyer's ASP → buyer (5-corner DCTCE);\n     the Tax Data Document is reported to the FTA platform by each ASP in parallel. -->\n<Invoice xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"\n         xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n         xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n  <cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID>\n  <cbc:ProfileID>urn:peppol:bis:billing</cbc:ProfileID>\n  <cbc:ID>INV-2026-06-0002</cbc:ID>\n  <cbc:IssueDate>2026-07-13</cbc:IssueDate>\n  <cbc:DueDate>2026-07-28</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:Note>Open Finance scheme fees, billing period 2026-06. Amounts derive from VAT-inclusive scheme rates (tax extracted at 5/105).</cbc:Note>\n  <cbc:DocumentCurrencyCode>AED</cbc:DocumentCurrencyCode>\n  <cbc:TaxCurrencyCode>AED</cbc:TaxCurrencyCode>\n  <cac:InvoicePeriod>\n    <cbc:StartDate>2026-06-01</cbc:StartDate><cbc:EndDate>2026-06-30</cbc:EndDate>\n  </cac:InvoicePeriod>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1002003004</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Tier 2 Licensed Financial Institution (demo)</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>100200300400003</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1007743105</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Sirocco Data</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"AED\">295.32</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"AED\">5906.48</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"AED\">295.32</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"AED\">5906.48</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"AED\">5906.48</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"AED\">6201.80</cbc:TaxInclusiveAmount>\n    <cbc:PayableAmount currencyID=\"AED\">6201.80</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">397</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">3591.90</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance retail data sharing above free tier (per page)</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">9.04762</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>2</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">4901</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">1783.62</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance corporate data sharing (per page of 100 lines)</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.36393</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>3</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">223</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">530.95</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance corporate payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">2.38095</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>"
+      },
+      {
+        "id": "INV-2026-06-0003",
+        "tpp": "Falcon Pay",
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- PINT AE Billing — exchanged supplier → ASP → buyer's ASP → buyer (5-corner DCTCE);\n     the Tax Data Document is reported to the FTA platform by each ASP in parallel. -->\n<Invoice xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"\n         xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n         xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n  <cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID>\n  <cbc:ProfileID>urn:peppol:bis:billing</cbc:ProfileID>\n  <cbc:ID>INV-2026-06-0003</cbc:ID>\n  <cbc:IssueDate>2026-07-13</cbc:IssueDate>\n  <cbc:DueDate>2026-07-28</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:Note>Open Finance scheme fees, billing period 2026-06. Amounts derive from VAT-inclusive scheme rates (tax extracted at 5/105).</cbc:Note>\n  <cbc:DocumentCurrencyCode>AED</cbc:DocumentCurrencyCode>\n  <cbc:TaxCurrencyCode>AED</cbc:TaxCurrencyCode>\n  <cac:InvoicePeriod>\n    <cbc:StartDate>2026-06-01</cbc:StartDate><cbc:EndDate>2026-06-30</cbc:EndDate>\n  </cac:InvoicePeriod>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1002003004</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Tier 2 Licensed Financial Institution (demo)</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>100200300400003</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1004127789</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Falcon Pay</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"AED\">85.91</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"AED\">1718.26</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"AED\">85.91</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"AED\">1718.26</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"AED\">1718.26</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"AED\">1804.18</cbc:TaxInclusiveAmount>\n    <cbc:PayableAmount currencyID=\"AED\">1804.18</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">712</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">1718.26</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance merchant collections — payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>S</cbc:ID>\n        <cbc:Percent>5.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">2.41329</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>"
+      },
+      {
+        "id": "INV-2026-06-0005",
+        "tpp": "Nomad Wallet",
+        "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- PINT AE Billing — exchanged supplier → ASP → buyer's ASP → buyer (5-corner DCTCE);\n     the Tax Data Document is reported to the FTA platform by each ASP in parallel. -->\n<Invoice xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"\n         xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n         xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n  <cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID>\n  <cbc:ProfileID>urn:peppol:bis:billing</cbc:ProfileID>\n  <cbc:ID>INV-2026-06-0005</cbc:ID>\n  <cbc:IssueDate>2026-07-13</cbc:IssueDate>\n  <cbc:DueDate>2026-07-28</cbc:DueDate>\n  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n  <cbc:Note>Open Finance scheme fees, billing period 2026-06. Amounts derive from VAT-inclusive scheme rates (tax extracted at 5/105).</cbc:Note>\n  <!-- UAE Invoice Transaction Type flag(s). Bind against the ASP's PINT AE conformance\n       suite before production: the code list is fixed, the carrying element is not\n       something to guess at. -->\n  <cbc:Note>AE-TRANSACTION-TYPE: EXPORTS</cbc:Note>\n  <cbc:DocumentCurrencyCode>AED</cbc:DocumentCurrencyCode>\n  <cbc:TaxCurrencyCode>AED</cbc:TaxCurrencyCode>\n  <cac:InvoicePeriod>\n    <cbc:StartDate>2026-06-01</cbc:StartDate><cbc:EndDate>2026-06-30</cbc:EndDate>\n  </cac:InvoicePeriod>\n  <cac:AccountingSupplierParty>\n    <cac:Party>\n      <cbc:EndpointID schemeID=\"0235\">1002003004</cbc:EndpointID>\n      <cac:PartyLegalEntity><cbc:RegistrationName>Tier 2 Licensed Financial Institution (demo)</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PartyTaxScheme>\n        <cbc:CompanyID>100200300400003</cbc:CompanyID>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:PartyTaxScheme>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>AE</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingSupplierParty>\n  <cac:AccountingCustomerParty>\n    <cac:Party>\n      <!-- non-resident buyer: no UAE TIN; delivered by agreed means, still TDD-reported -->\n      <cac:PartyLegalEntity><cbc:RegistrationName>Nomad Wallet</cbc:RegistrationName></cac:PartyLegalEntity>\n      <cac:PostalAddress><cac:Country><cbc:IdentificationCode>SG</cbc:IdentificationCode></cac:Country></cac:PostalAddress>\n    </cac:Party>\n  </cac:AccountingCustomerParty>\n  <cac:TaxTotal>\n    <cbc:TaxAmount currencyID=\"AED\">0.00</cbc:TaxAmount>\n    <cac:TaxSubtotal>\n      <cbc:TaxableAmount currencyID=\"AED\">81.30</cbc:TaxableAmount>\n      <cbc:TaxAmount currencyID=\"AED\">0.00</cbc:TaxAmount>\n      <cac:TaxCategory>\n        <cbc:ID>Z</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cbc:TaxExemptionReason>Export of services — zero-rated</cbc:TaxExemptionReason>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:TaxCategory>\n    </cac:TaxSubtotal>\n  </cac:TaxTotal>\n  <cac:LegalMonetaryTotal>\n    <cbc:LineExtensionAmount currencyID=\"AED\">81.30</cbc:LineExtensionAmount>\n    <cbc:TaxExclusiveAmount currencyID=\"AED\">81.30</cbc:TaxExclusiveAmount>\n    <cbc:TaxInclusiveAmount currencyID=\"AED\">81.30</cbc:TaxInclusiveAmount>\n    <cbc:PayableAmount currencyID=\"AED\">81.30</cbc:PayableAmount>\n  </cac:LegalMonetaryTotal>\n  <cac:InvoiceLine>\n    <cbc:ID>1</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">230</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">57.50</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance P2P / SME payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>Z</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.25000</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n  <cac:InvoiceLine>\n    <cbc:ID>2</cbc:ID>\n    <cbc:InvoicedQuantity unitCode=\"C62\">119</cbc:InvoicedQuantity>\n    <cbc:LineExtensionAmount currencyID=\"AED\">23.80</cbc:LineExtensionAmount>\n    <cac:Item>\n      <cbc:Name>Open Finance me-to-me payment initiation fees</cbc:Name>\n      <cac:ClassifiedTaxCategory>\n        <cbc:ID>Z</cbc:ID>\n        <cbc:Percent>0.00</cbc:Percent>\n        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>\n      </cac:ClassifiedTaxCategory>\n    </cac:Item>\n    <cac:Price><cbc:PriceAmount currencyID=\"AED\">0.20000</cbc:PriceAmount></cac:Price>\n  </cac:InvoiceLine>\n</Invoice>"
+      }
+    ]
+  },
+  "settlement": {
+    "calendar": {
+      "3rd": "Own metering closed at the Hub extraction boundary; expected memo drafted",
+      "5th": "Collection Memo + Tax Invoice received by email; auto-diff run",
+      "5th–12th": "Three-way reconciliation; breaks worked; billing queries filed inside 30 days",
+      "13th": "Four-eyes invoice run; PINT AE issuance via ASP",
+      "10th–30th": "Direct debit funded (TPP-of-record); collections and dunning",
+      "30th–5th": "Net settlement received and decomposed; GL posted; VAT position closed"
+    },
+    "receivables": [
+      {
+        "invoice": "INV-2026-06-0001",
+        "tpp": "TPP-0002",
+        "tpp_name": "Marid Financial",
+        "gross_mf": 760415000,
+        "channel": "scheme_net_settlement",
+        "rail": "Nebras sponsoring bank"
+      },
+      {
+        "invoice": "INV-2026-06-0002",
+        "tpp": "TPP-0004",
+        "tpp_name": "Sirocco Data",
+        "gross_mf": 620180000,
+        "channel": "direct_collection",
+        "rail": "OF Invoice Collection (pay-by-bank)"
+      },
+      {
+        "invoice": "INV-2026-06-0003",
+        "tpp": "TPP-0001",
+        "tpp_name": "Falcon Pay",
+        "gross_mf": 180417600,
+        "channel": "scheme_net_settlement",
+        "rail": "Nebras sponsoring bank"
+      },
+      {
+        "invoice": "INV-2026-06-0005",
+        "tpp": "TPP-0003",
+        "tpp_name": "Nomad Wallet",
+        "gross_mf": 8130000,
+        "channel": "direct_collection",
+        "rail": "Cross-border transfer"
+      }
+    ],
+    "decomposition": [
+      {
+        "label": "Scheme-collected receivables (F2)",
+        "sign": "+",
+        "amount_mf": 940832600,
+        "refs": [
+          "INV-2026-06-0001",
+          "INV-2026-06-0003"
+        ],
+        "explained": true
+      },
+      {
+        "label": "API Hub fees payable, TPP-of-record role (F1)",
+        "sign": "−",
+        "amount_mf": 3912000,
+        "refs": [
+          "hub.standard",
+          "hub.paired"
+        ],
+        "explained": true,
+        "note": "Netted per LFI–TPP Agreement (IG v5.0 §10.16)"
+      },
+      {
+        "label": "Withheld — memo under-collection under query",
+        "sign": "−",
+        "amount_mf": 8760000,
+        "refs": [
+          "BRK-2026-06-001"
+        ],
+        "explained": true,
+        "note": "Carried to next cycle or credit-noted on resolution"
+      },
+      {
+        "label": "Unexplained residue",
+        "sign": "−",
+        "amount_mf": 21400,
+        "refs": [],
+        "explained": false,
+        "note": "Above tolerance → break raised automatically"
+      }
+    ],
+    "residueBreak": {
+      "id": "BRK-2026-06-SET1",
+      "type": "settlement_residue",
+      "amount_mf": 21400,
+      "detail": "Remittance does not fully decompose to invoice + netting lines. Raised inside the 30-day billing-query window.",
+      "action": "Nebras billing query — request line-level settlement breakdown"
+    },
+    "collections": [
+      {
+        "invoice": "INV-2026-06-0002",
+        "tpp": "TPP-0004",
+        "tpp_name": "Sirocco Data",
+        "gross_mf": 620180000,
+        "channel": "direct_collection",
+        "rail": "OF Invoice Collection (pay-by-bank)",
+        "status": "OVERDUE",
+        "paid_at": null,
+        "due": "2026-07-28",
+        "days_overdue": 9,
+        "dunning": "overdue",
+        "next_action": "Reminder 2 sent; escalation at +14d per the scheme late-payment ladder"
+      },
+      {
+        "invoice": "INV-2026-06-0005",
+        "tpp": "TPP-0003",
+        "tpp_name": "Nomad Wallet",
+        "gross_mf": 8130000,
+        "channel": "direct_collection",
+        "rail": "Cross-border transfer",
+        "status": "PAID",
+        "paid_at": "2026-07-24",
+        "due": "2026-07-28",
+        "days_overdue": 0,
+        "dunning": "current",
+        "next_action": "—"
+      }
+    ],
+    "blocked": [
+      {
+        "invoice": "INV-2026-06-0004",
+        "tpp": "TPP-0005",
+        "tpp_name": "Qasr Collections",
+        "gross_mf": 109440260,
+        "reason": "No financial-system (P9) counterparty registration — cannot invoice",
+        "action": "Onboarding task raised to Finance Ops; ITSM ticket + Finance View signal"
+      }
+    ],
+    "expected_net_mf": 936920600,
+    "received_mf": 928139200,
+    "unexplained_mf": 21400,
+    "payable_hub_mf": 3912000,
+    "scheme_receivable_mf": 940832600,
+    "direct_receivable_mf": 628310000,
+    "blocked_mf": 109440260,
+    "dso_days": 16,
+    "reconciles": true
+  },
+  "assurance": {
+    "kpi_pct": 6.825,
+    "target_pct": 1,
+    "benchmark": "2–5% unmanaged (telco revenue-assurance benchmark)",
+    "gross_receivable_mf": 1734637020,
+    "leakage_mf": 118385260,
+    "recoverable_mf": 118385260,
+    "findings": [
+      {
+        "code": "L1",
+        "title": "Memo under-collection",
+        "amount_mf": 8760000,
+        "status": "QUERY RAISED",
+        "owner": "Finance",
+        "detail": "Scheme statement below own rated figures on 2 fee classes; billing queries filed inside the 30-day window.",
+        "recoverable": true
+      },
+      {
+        "code": "L2",
+        "title": "Unbilled traffic — no P9 counterparty",
+        "amount_mf": 109440260,
+        "status": "BLOCKED",
+        "owner": "Finance Ops",
+        "detail": "A TPP is consuming production APIs but is not registered as an invoiceable counterparty; invoice cannot be issued.",
+        "recoverable": true
+      },
+      {
+        "code": "L3",
+        "title": "Silent overage give-away (counterfactual)",
+        "amount_mf": 0,
+        "counterfactual_mf": 1124800000,
+        "status": "PRICED",
+        "owner": "Commercial",
+        "detail": "1,184 retail pages above the free tier. Priced at the published directory rate; an unpublished rate would have surrendered this entirely.",
+        "recoverable": false
+      },
+      {
+        "code": "L4",
+        "title": "Metering blind spot",
+        "amount_mf": 185000,
+        "status": "OPEN",
+        "owner": "Platform",
+        "detail": "74 events hit endpoints the classifier does not recognise. Upper-bound priced at the standard rate.",
+        "recoverable": true
+      },
+      {
+        "code": "L5",
+        "title": "Unsuccessful calls excluded (informational)",
+        "amount_mf": 0,
+        "status": "CORRECT",
+        "owner": "—",
+        "detail": "189 technically unsuccessful calls correctly excluded — the scheme charges for successful calls only.",
+        "recoverable": false
+      }
+    ],
+    "profitability": [
+      {
+        "role": "LFI",
+        "tpp": "TPP-0002",
+        "name": "Marid Financial",
+        "receivable_mf": 760415000,
+        "provision_mf": 9124980,
+        "uncollectable_mf": 0,
+        "withheld_mf": 0,
+        "net_mf": 751290020,
+        "net_pct": 98.8,
+        "invoiceable": true
+      },
+      {
+        "role": "LFI",
+        "tpp": "TPP-0004",
+        "name": "Sirocco Data",
+        "receivable_mf": 628940000,
+        "provision_mf": 7547280,
+        "uncollectable_mf": 0,
+        "withheld_mf": 8760000,
+        "net_mf": 621392720,
+        "net_pct": 98.8,
+        "invoiceable": true
+      },
+      {
+        "role": "LFI",
+        "tpp": "TPP-0001",
+        "name": "Falcon Pay",
+        "receivable_mf": 227711760,
+        "provision_mf": 2732541,
+        "uncollectable_mf": 0,
+        "withheld_mf": 47294160,
+        "net_mf": 224979219,
+        "net_pct": 98.8,
+        "invoiceable": true
+      },
+      {
+        "role": "LFI",
+        "tpp": "TPP-0003",
+        "name": "Nomad Wallet",
+        "receivable_mf": 8130000,
+        "provision_mf": 97560,
+        "uncollectable_mf": 0,
+        "withheld_mf": 0,
+        "net_mf": 8032440,
+        "net_pct": 98.8,
+        "invoiceable": true
+      },
+      {
+        "role": "LFI",
+        "tpp": "TPP-0005",
+        "name": "Qasr Collections",
+        "receivable_mf": 109440260,
+        "provision_mf": 1313283,
+        "uncollectable_mf": 109440260,
+        "withheld_mf": 0,
+        "net_mf": -1313283,
+        "net_pct": -1.2,
+        "invoiceable": false
+      }
+    ],
+    "tppaas": [
+      {
+        "role": "TPP-of-record",
+        "client": "FIN-0001",
+        "name": "Dhow Lending",
+        "hub_mf": 1825500,
+        "lfi_mf": 7675000,
+        "cost_mf": 9500500,
+        "rebill_mf": 11210590,
+        "margin_mf": 1710090,
+        "markup_pct": 18
+      },
+      {
+        "role": "TPP-of-record",
+        "client": "FIN-0002",
+        "name": "Souq Analytics",
+        "hub_mf": 2086500,
+        "lfi_mf": 2550000,
+        "cost_mf": 4636500,
+        "rebill_mf": 5192880,
+        "margin_mf": 556380,
+        "markup_pct": 12
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "Year 1 — 38 bps (in force)",
+        "basis": "Merchant collections",
+        "receivable_mf": 296352020,
+        "delta_mf": 0,
+        "note": "Current card; anchor assumed 1 Oct 2025"
+      },
+      {
+        "name": "Year 2 step — 35 bps",
+        "basis": "Merchant collections",
+        "receivable_mf": 285192650,
+        "delta_mf": -11159370,
+        "note": "Fires automatically if the anchor is a year earlier than assumed"
+      },
+      {
+        "name": "Year 5 — 25 bps",
+        "basis": "Merchant collections",
+        "receivable_mf": 246970250,
+        "delta_mf": -49381770,
+        "note": "Terminal scheduled rate"
+      },
+      {
+        "name": "Retail overage unpublished (rate = 0)",
+        "basis": "Total receivable",
+        "receivable_mf": 609837020,
+        "delta_mf": -1124800000,
+        "note": "The cost of leaving the directory field empty"
+      }
+    ],
+    "coverage_pct": 99.6,
+    "dispute_window": {
+      "raised": 3,
+      "missed": 0,
+      "note": "Zero missed 30-day billing-query windows this period."
+    }
+  }
+};
+</script>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   Rendering. Every value comes from RUN (engine output); this
+   layer only formats and arranges — it never computes money.
+   ───────────────────────────────────────────────────────────── */
+const MF = 100000;
+const aed = (mf, dp = 2) => (mf / MF).toLocaleString('en-AE', {minimumFractionDigits: dp, maximumFractionDigits: dp});
+const AED = (mf, dp = 2) => `<span class="num">${aed(mf, dp)}</span>`;
+const fils = (mf) => { const f = mf / 1000; return (Number.isInteger(f) ? f : f.toFixed(1)) + ' fils'; };
+const n = (x) => (x ?? 0).toLocaleString('en-AE');
+const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; };
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const CLASS = {
+  'payment.merchant_collection':'Merchant collections','payment.p2p_sme':'P2P / SME','payment.me_to_me':'Me-to-me',
+  'payment.sme_bulk':'SME bulk','payment.large_value':'Large value / invoice','payment.corporate':'Corporate payments',
+  'data.corporate_page':'Corporate data (page)','data.retail_page':'Retail data overage (page)',
+  'hub.standard':'Hub call','hub.paired':'Hub call — paired','hub.quote':'Hub quote (tiered)','no_lfi_charge':'No LFI charge'
+};
+const cls = (k) => CLASS[k] || k;
+const tppName = (id) => (RUN.tpps.find(t => t.id === id) || RUN.clients.find(c => c.id === id) || {}).name || id;
+
+/* tooltip */
+const tip = document.getElementById('tip');
+const showTip = (e, html) => { tip.innerHTML = html; tip.style.opacity = 1; moveTip(e); };
+const moveTip = (e) => { const r = tip.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY - 10;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = innerHeight - r.height - 8;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px'; };
+const hideTip = () => tip.style.opacity = 0;
+
+/* ── chart: horizontal bars, one hue (magnitude, single series) ── */
+function barChart(rows, opts = {}) {
+  const w = 640, rowH = 30, pad = {l: 176, r: 96, t: 6, b: 22};
+  const h = pad.t + rows.length * rowH + pad.b;
+  const max = Math.max(...rows.map(r => r.v), 1);
+  const bw = w - pad.l - pad.r;
+  const bars = rows.map((r, i) => {
+    const y = pad.t + i * rowH, len = Math.max(2, (r.v / max) * bw);
+    return `<g class="bar" data-i="${i}">
+      <rect x="${pad.l}" y="${y + 5}" width="${len}" height="16" rx="4" fill="${opts.color || 'var(--series-1)'}"/>
+      <text class="axis-lbl" x="${pad.l - 10}" y="${y + 17}" text-anchor="end">${esc(r.k)}</text>
+      <text class="val-lbl" x="${pad.l + len + 8}" y="${y + 17}">${aed(r.v)}</text>
+      <rect x="0" y="${y}" width="${w}" height="${rowH}" fill="transparent"/>
+    </g>`;
+  }).join('');
+  const svg = el(`<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(opts.aria || 'Bar chart')}">${bars}</svg>`);
+  svg.querySelectorAll('.bar').forEach(g => {
+    const r = rows[+g.dataset.i];
+    g.addEventListener('mousemove', e => showTip(e, `<b>${esc(r.k)}</b><br>AED ${aed(r.v)}${r.sub ? '<br>' + esc(r.sub) : ''}`));
+    g.addEventListener('mouseleave', hideTip);
+  });
+  return svg;
+}
+
+/* ── chart: settlement waterfall (2 hues + neutral totals) ── */
+function waterfall(steps) {
+  const w = 760, h = 260, pad = {l: 8, r: 8, t: 16, b: 62};
+  let cum = 0; const pts = [];
+  for (const s of steps) {
+    if (s.total) pts.push({...s, from: 0, to: s.v});
+    else { pts.push({...s, from: cum, to: cum + s.v}); cum += s.v; }
+  }
+  const max = Math.max(...pts.map(p => Math.max(p.from, p.to)));
+  const plotH = h - pad.t - pad.b, bw = (w - pad.l - pad.r) / steps.length;
+  const y = (v) => pad.t + plotH - (v / max) * plotH;
+  const body = pts.map((p, i) => {
+    const x = pad.l + i * bw + bw * 0.16, bwid = bw * 0.68;
+    const top = y(Math.max(p.from, p.to)), bot = y(Math.min(p.from, p.to));
+    const fill = p.total ? 'var(--neutral)' : p.v >= 0 ? 'var(--series-1)' : 'var(--series-2)';
+    const conn = i < pts.length - 1 && !pts[i + 1].total
+      ? `<line x1="${x + bwid}" y1="${y(p.to)}" x2="${pad.l + (i + 1) * bw + bw * 0.16}" y2="${y(p.to)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/>` : '';
+    return `<g class="wf" data-i="${i}">
+      <rect x="${x}" y="${top}" width="${bwid}" height="${Math.max(2, bot - top)}" rx="4" fill="${fill}"/>
+      ${conn}
+      <text class="val-lbl" x="${x + bwid / 2}" y="${top - 6}" text-anchor="middle">${p.v < 0 ? '−' : ''}${aed(Math.abs(p.v), 0)}</text>
+      <text class="axis-lbl" x="${x + bwid / 2}" y="${h - pad.b + 18}" text-anchor="middle">${esc(p.short)}</text>
+      <rect x="${pad.l + i * bw}" y="0" width="${bw}" height="${h}" fill="transparent"/>
+    </g>`;
+  }).join('');
+  const svg = el(`<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Settlement decomposition waterfall">
+    <line class="gridline" x1="${pad.l}" y1="${y(0)}" x2="${w - pad.r}" y2="${y(0)}"/>${body}</svg>`);
+  svg.querySelectorAll('.wf').forEach(g => {
+    const p = pts[+g.dataset.i];
+    g.addEventListener('mousemove', e => showTip(e, `<b>${esc(p.label)}</b><br>${p.v < 0 ? '−' : '+'} AED ${aed(Math.abs(p.v))}${p.note ? '<br>' + esc(p.note) : ''}`));
+    g.addEventListener('mouseleave', hideTip);
+  });
+  return svg;
+}
+
+function tableView(id, headers, rows) {
+  return `<table id="${id}" style="display:none;margin-top:12px"><thead><tr>${headers.map(h => `<th${h.num ? ' class="num"' : ''}>${h.t || h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+</script>
+<script>/* Panel construction. Order mirrors the monthly cycle, which is how the work is
+   actually done: meter → rate → compare → invoice → collect → assure. */
+
+document.getElementById('hdr-period').textContent = RUN.generated_for;
+document.getElementById('hdr-card').textContent = RUN.rate_card.version;
+
+const R = RUN, M = R.metering, RA = R.rating, RC = R.reconciliation, IV = R.invoicing, ST = R.settlement, AS = R.assurance;
+const issuedInv = IV.invoices.filter(i => i.status === 'ISSUED');
+const grossErr = RC.breaks.reduce((a, b) => a + (b.gross_error_mf || Math.abs(b.variance_mf)), 0);
+
+const TABS = [
+  ['cycle', 'Cycle', 'the month'],
+  ['ratecard', 'Rate card', 'BILL-01'],
+  ['metering', 'Metering', 'BILL-02'],
+  ['recon', 'Reconciliation', 'BILL-03'],
+  ['invoice', 'Invoicing', 'BILL-04'],
+  ['collect', 'Collections', 'BILL-05'],
+  ['assure', 'Revenue assurance', 'BILL-08'],
+  ['profit', 'Profitability', 'BILL-09'],
+];
+const tabsEl = document.getElementById('tabs'), panelsEl = document.getElementById('panels');
+TABS.forEach(([id, label, sub], i) => {
+  const b = el(`<button class="tab${i === 0 ? ' on' : ''}" data-t="${id}">${label}<small>${sub}</small></button>`);
+  b.onclick = () => go(id);
+  tabsEl.appendChild(b);
+  panelsEl.appendChild(el(`<section class="panel${i === 0 ? ' on' : ''}" id="p-${id}"></section>`));
+});
+function go(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.t === id));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-' + id));
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+const P = (id) => document.getElementById('p-' + id);
+const kpi = (lbl, val, note, flag) => `<div class="kpi${flag ? ' flag' : ''}"><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="note">${note}</div></div>`;
+
+/* ═══════════════ 1 · CYCLE ═══════════════ */
+{
+  const steps = [
+    ['3rd', 'Meter & rate', 'Own metering closed at the Hub extraction boundary; expected memo drafted per TPP.', 'metering', 'ok', 'done'],
+    ['5th', 'Memo received', 'Collection Memo + Tax Invoice arrive by email. Auto-diffed against the expectation.', 'recon', 'ok', 'done'],
+    ['5th–12th', 'Reconcile', `${RC.breaks.length} breaks raised and queried inside the 30-day window.`, 'recon', 'warn', RC.breaks.length + ' breaks'],
+    ['13th', 'Invoice', `${issuedInv.length} PINT AE invoices issued, four-eyes approved.`, 'invoice', 'ok', 'issued'],
+    ['10th–30th', 'Collect', `Direct debit funded; ${ST.collections.filter(c => c.status !== 'PAID').length} counterparty in dunning.`, 'collect', 'warn', 'in progress'],
+    ['30th–5th', 'Settle & assure', 'Net settlement decomposed; leakage KPI published.', 'assure', 'bad', AS.kpi_pct + '% leakage'],
+  ];
+  const mix = {};
+  RA.statements.forEach(s => s.receivable.forEach(l => mix[l.fee_class] = (mix[l.fee_class] || 0) + l.amount_mf));
+  const mixRows = Object.entries(mix).sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => ({k: cls(k), v, sub: `${(v / RA.receivable_total_mf * 100).toFixed(1)}% of the receivable`}));
+
+  P('cycle').innerHTML = `
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Rated receivable', `<span class="cur">AED</span>${aed(RA.receivable_total_mf)}`, `${n(M.stats.chargeable)} chargeable events · ${RA.statements.length} consuming TPPs`)}
+      ${kpi('Invoiced', `<span class="cur">AED</span>${aed(IV.total_gross_mf)}`, `VAT AED ${aed(IV.total_vat_mf)} · AED ${aed(IV.total_withheld_mf)} withheld under query`)}
+      ${kpi('Scheme variance', `<span class="cur">AED</span>${aed(grossErr)}`, `${RC.breaks.length} breaks · net only AED ${aed(Math.abs(RC.net_variance_mf))} — opposing errors cancel`, true)}
+      ${kpi('Leakage KPI', `${AS.kpi_pct}<span class="cur" style="margin-left:3px">%</span>`, `target &lt;${AS.target_pct}% · AED ${aed(AS.recoverable_mf)} recoverable`, AS.kpi_pct > AS.target_pct)}
+    </div>
+    <div class="card"><h3>The monthly cycle<span class="right">Interaction Guide v5.0 §10 — click a step</span></h3>
+      <div class="body"><div class="cyc">${steps.map(([d, t, x, tab, st, lb]) =>
+        `<button class="step" data-go="${tab}"><div class="d">${d}</div><div class="t">${t}</div><div class="x">${x}</div>
+         <div class="st"><span class="tag ${st}"><i class="dot"></i>${lb}</span></div></button>`).join('')}</div></div></div>
+    <div class="grid g2">
+      <div class="card"><h3>What this cycle found</h3><div class="body" style="padding-top:14px">
+        <div class="note-box"><b>Retail data overage is the biggest line on the receivable</b> — AED ${aed(mix['data.retail_page'] || 0)}, ${((mix['data.retail_page'] || 0) / RA.receivable_total_mf * 100).toFixed(0)}% of everything earned. It is priced by a single directory field (<code>ApiMetadata.OverLimitFees</code>) that most LFIs leave empty.</div>
+        <div class="note-box warn"><b>${n(RA.no_mid_count)} merchant payments arrived without a Merchant ID</b> and therefore forfeit the AED 200/day free allowance — the condition the scheme added on 2 Jun 2026. The meter classifies each one; the memo did not.</div>
+        <div class="note-box warn"><b>One statement line nets two opposing errors.</b> A cap that was not applied (+AED ${aed(RC.breaks.find(b => b.cause_code.includes('V1'))?.contributions?.[0]?.delta_mf || 0)}) and an exemption wrongly granted (−AED ${aed(Math.abs(RC.breaks.find(b => b.cause_code.includes('V3'))?.contributions?.[1]?.delta_mf || 0))}) partly cancel. Netting is how a variance stays small enough to wave through.</div>
+        <div class="note-box bad"><b>${((AS.findings[1].amount_mf / AS.leakage_mf) * 100).toFixed(0)}% of the leakage is one missing form.</b> ${tppName('TPP-0005')} is consuming production APIs with no financial-system counterparty, so AED ${aed(AS.findings[1].amount_mf)} cannot be invoiced at all.</div>
+      </div></div>
+      <div class="card"><h3>Receivable by fee class<span class="right"><button class="toggle" data-tv="tv-mix">Table view</button></span></h3>
+        <div class="body" id="mixhost">
+          ${tableView('tv-mix', ['Fee class', {t: 'AED', num: 1}, {t: 'Share', num: 1}],
+            Object.entries(mix).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+              `<tr><td>${cls(k)}</td><td class="num">${aed(v)}</td><td class="num">${(v / RA.receivable_total_mf * 100).toFixed(1)}%</td></tr>`).join('')
+            + `<tr class="tot"><td>Total</td><td class="num">${aed(RA.receivable_total_mf)}</td><td class="num">100.0%</td></tr>`)}
+        </div>
+      </div>
+    </div>`;
+  P('cycle').querySelector('#mixhost').prepend(barChart(mixRows, {aria: 'Receivable by fee class'}));
+  P('cycle').querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+}
+
+/* ═══════════════ 2 · RATE CARD (BILL-01) ═══════════════ */
+{
+  const rc = R.rate_card;
+  const rateOf = (k, s) => {
+    if (s.basis === 'bps_of_value') return `${s.schedule_bps[R.year_step - 1]} bps <span style="color:var(--ink-3)">(Y${R.year_step} of ${s.schedule_bps.join('→')})</span>`;
+    if (s.basis === 'flat') return fils(s.flat);
+    if (s.basis === 'flat_stepped') return `${fils(s.schedule[R.year_step - 1])} <span style="color:var(--ink-3)">(Y${R.year_step})</span>`;
+    if (s.basis === 'per_page') return `${fils(s.flat)} / page`;
+    if (s.basis === 'per_page_over_free_tier') return `${fils(s.overage)} / page over tier`;
+    if (s.basis === 'tiered_by_providers') return s.tiers.map(([m, f]) => `${m === null || m === 'Infinity' || m > 900 ? '>25' : '≤' + m}: ${fils(f)}`).join(' · ');
+    return '—';
+  };
+  const cond = (k, s) => {
+    const bits = [];
+    if (s.cap) bits.push(`cap AED ${aed(s.cap, 0)} / tx`);
+    if (s.batch_cap) bits.push(`batch cap ${fils(s.batch_cap)}`);
+    if (s.threshold) bits.push(`> AED ${aed(s.threshold, 0)} only`);
+    if (s.free_allowance) bits.push(`AED ${aed(s.free_allowance.value, 0)}/${s.free_allowance.per.replace(/_/g, ' ')} free <b>— only with Merchant ID</b> (${s.free_allowance.since})`);
+    if (s.free_tier) bits.push(`free ${s.free_tier.attended} attended / ${s.free_tier.unattended} unattended pages per PSU per day`);
+    if (s.overage_source) bits.push(`rate from ${s.overage_source}`);
+    return bits.join('<br>') || '—';
+  };
+  const row = (k, s) => `<tr><td><b>${cls(k)}</b><div class="mono" style="color:var(--ink-4)">${k}</div></td>
+    <td>${rateOf(k, s)}</td><td style="font-size:12.5px;color:var(--ink-2)">${cond(k, s)}</td>
+    <td style="font-size:12px;color:var(--ink-3)">${s.cite}</td></tr>`;
+
+  P('ratecard').innerHTML = `
+    <div class="note-box warn"><b>The upstream document mutates without a version bump.</b> The scheme page is still labelled “Version 1.0 (4 Oct 2024)” but was substantively edited four times between Nov 2025 and Jun 2026. The card below therefore carries its own version — <b>${rc.version}</b>, effective ${rc.effective_from} — and a watcher diffs the source.</div>
+    <div class="grid g3" style="margin-bottom:16px">
+      ${kpi('Card version', rc.version, `effective ${rc.effective_from}`)}
+      ${kpi('Year step in force', 'Year ' + R.year_step, `anchor ${rc.year_anchor.date} — <b style="color:#8a6100">${rc.year_anchor.status}</b>`, true)}
+      ${kpi('Upstream changes', `${rc.effective_from ? R.change_watch.observed.length : 0} <span class="cur">absorbed</span>`, `${R.change_watch.pending.length} pending review`)}
+    </div>
+    <div class="card"><h3>Receivable — TPP → LFI <span class="badge">${Object.keys(rc.receivable).length}</span><span class="right">the institution's income</span></h3>
+      <table><thead><tr><th>Fee class</th><th>Rate in force</th><th>Conditions</th><th>Source</th></tr></thead>
+      <tbody>${Object.entries(rc.receivable).map(([k, s]) => row(k, s)).join('')}</tbody></table></div>
+    <div class="card"><h3>Payable — LFI → API Hub <span class="badge">${Object.keys(rc.payable_hub).length}</span><span class="right">TPP-of-record role only</span></h3>
+      <table><thead><tr><th>Fee class</th><th>Rate in force</th><th>Conditions</th><th>Source</th></tr></thead>
+      <tbody>${Object.entries(rc.payable_hub).map(([k, s]) => row(k, s)).join('')}</tbody></table></div>
+    <div class="card"><h3>Year-step anchor — an open risk</h3><div class="body">
+      <p style="margin:0 0 10px;font-size:13.5px;color:var(--ink-2)">Every stepped fee (merchant collections 38→25 bps, me-to-me 20→17 fils) counts from “Year 1 of Nebras's operations”, which the scheme has never published. The card treats the anchor as tenant configuration and states the assumption rather than burying it: <b>${rc.year_anchor.date}</b>, status <b>${rc.year_anchor.status}</b>.</p>
+      <p style="margin:0;font-size:13.5px;color:var(--ink-2)">If the true anchor is a year earlier, merchant collections should already be at 35 bps — worth <b>AED ${aed(Math.abs(AS.scenarios[1].delta_mf))}</b> a month on this volume, invoiced wrongly in every cycle until corrected. Modelled under Profitability.</p>
+    </div></div>
+    <div class="card"><h3>Change watch <span class="badge">${R.change_watch.pending.length} open</span></h3>
+      <table><thead><tr><th>Detected</th><th>Change</th><th>State</th></tr></thead><tbody>
+      ${R.change_watch.pending.map(c => `<tr><td class="mono">${c.date}</td><td><b>${c.change}</b><div style="font-size:12.5px;color:var(--ink-3);margin-top:3px">${c.action}</div></td><td><span class="tag warn"><i class="dot"></i>review task</span></td></tr>`).join('')}
+      ${R.change_watch.observed.slice().reverse().map(c => `<tr><td class="mono">${c.date}</td><td>${c.change}</td><td><span class="tag ok"><i class="dot"></i>absorbed</span></td></tr>`).join('')}
+      </tbody></table></div>
+    <div class="card"><h3>Watched sources</h3><div class="body"><ul style="margin:0;padding-left:18px;font-size:13.5px;color:var(--ink-2);line-height:1.9">
+      ${R.change_watch.watched.map(w => `<li>${w}</li>`).join('')}</ul></div></div>`;
+}
+
+/* ═══════════════ 3 · METERING (BILL-02) ═══════════════ */
+{
+  const s = M.stats;
+  const ev = M.evidence;
+  const evTable = (rows, cols) => `<table><thead><tr>${cols.map(c => `<th${c[1] ? ' class="num"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  P('metering').innerHTML = `
+    <div class="note-box"><b>The institution counts for itself.</b> Nebras shares only aggregated supporting data and there is no billing API, so this is the only line-level evidence that exists in a dispute. Every metered line carries the <code>x-fapi-interaction-id</code> of the call it came from.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Events observed', n(s.events_total), `${n(s.inbound)} inbound · ${n(s.outbound)} outbound (TPP-of-record)`)}
+      ${kpi('Classification coverage', s.coverage_pct + '%', `${n(s.unknown_endpoint)} events on an unrecognised endpoint`, s.coverage_pct < 100)}
+      ${kpi('Chargeable', n(s.chargeable), `${n(s.free)} free endpoints · ${n(s.free_to_lfi)} hub-side, no LFI charge`)}
+      ${kpi('Excluded — unsuccessful', n(s.excluded_unsuccessful), 'the scheme charges for technically successful calls only')}
+    </div>
+    <div class="card"><h3>Meters <span class="badge">${M.by_class.length}</span></h3>
+      <table><thead><tr><th>Fee class</th><th>Side</th><th class="num">Events</th><th class="num">Units</th><th>What a unit is</th></tr></thead><tbody>
+      ${M.by_class.map(c => `<tr><td><b>${cls(c.fee_class)}</b></td>
+        <td><span class="tag ${c.side === 'receivable' ? 'info' : c.side === 'free_to_lfi' ? 'mute' : 'warn'}">${c.side.replace(/_/g, ' ')}</span></td>
+        <td class="num">${n(c.events)}</td><td class="num">${n(c.units)}</td>
+        <td style="font-size:12.5px;color:var(--ink-3)">${c.fee_class.startsWith('data') ? 'one page = 100 lines, partial rounds up' : c.fee_class.startsWith('payment') ? 'one payment instruction' : 'one API call'}</td></tr>`).join('')}
+      </tbody></table></div>
+    <div class="card"><h3>Metering evidence<span class="right">the four rules that are easy to get wrong</span></h3><div class="body" style="padding-top:4px">
+      <details open><summary>2-hour pairing window — one balance <i>and</i> one CoP per payment</summary><div class="in">
+        <p style="margin:0 0 10px;font-size:13px;color:var(--ink-3)">Each payment discounts at most one balance call and one CoP call to 0.5 fils, and a call already consumed cannot discount a second payment. Shown for the institution's own outbound traffic, where the discount lands on its Hub invoice.</p>
+        ${evTable(ev.pairing.map(p => `<tr><td class="mono">${p.payment}</td><td class="mono">${p.paired_call}</td><td>${p.endpoint}</td><td class="num">${p.gap_h} h</td><td>${p.effect}</td></tr>`).join(''),
+          [['Payment'], ['Paired call'], ['Endpoint'], ['Gap', 1], ['Effect']])}
+      </div></details>
+      <details><summary>Retail free tier — per PSU, per day, per mode</summary><div class="in">
+        ${evTable(ev.free_tier.map(f => `<tr><td class="mono">${f.psu}</td><td>${f.day}</td><td>${f.mode}</td><td class="num">${f.pages}</td><td class="num">${f.free_pages} / ${f.tier}</td><td class="num"><b>${f.billable_pages}</b></td></tr>`).join(''),
+          [['PSU'], ['Day'], ['Mode'], ['Pages', 1], ['Free used', 1], ['Billable', 1]])}
+      </div></details>
+      <details><summary>Merchant daily allowance — AED 200 per merchant per day, Merchant ID required</summary><div class="in">
+        <p style="margin:0 0 10px;font-size:13px;color:var(--ink-3)">Since 2 Jun 2026 the allowance applies only when the request carries a Merchant ID. <b>${n(RA.no_mid_count)}</b> payments this month did not, and were charged on their full value.</p>
+        ${evTable(ev.merchant_allowance.map(m => `<tr><td class="mono">${m.merchant}</td><td>${m.day}</td><td class="num">${aed(m.free_mf)}</td><td class="num">${aed(m.charged_mf)}</td></tr>`).join(''),
+          [['Merchant'], ['Day'], ['Free value', 1], ['Charged value', 1]])}
+      </div></details>
+      <details><summary>Blind spot — endpoints the classifier does not recognise <span class="tag bad" style="margin-left:6px"><i class="dot"></i>${n(s.unknown_endpoint)}</span></summary><div class="in">
+        <p style="margin:0 0 10px;font-size:13px;color:var(--ink-3)">Never silently dropped. An unrecognised endpoint is counted, surfaced here and in the assurance report, and priced at the standard rate as an upper bound — this is exactly how a newly-chargeable endpoint (as <code>GET /tpp-reports</code> became on 13 May 2026) goes unbilled for months.</p>
+        ${evTable(ev.blind_spot.map(b => `<tr><td class="mono">${b.endpoint}</td><td class="mono">${b.event}</td><td>${b.ts.replace('T', ' ').replace('Z', '')}</td><td>${tppName(b.tpp)}</td></tr>`).join(''),
+          [['Endpoint'], ['Event'], ['First seen'], ['Caller']])}
+      </div></details>
+    </div></div>
+    <div class="card"><h3>Billable-event sample<span class="right">every line traceable to a FAPI interaction</span></h3>
+      <table><thead><tr><th>Event</th><th>Timestamp</th><th>Party</th><th>Endpoint</th><th>Fee class</th><th class="num">Units</th><th>Trace</th></tr></thead><tbody>
+      ${M.sample.slice(0, 12).map(l => `<tr><td class="mono">${l.event_id}</td><td class="mono">${l.ts.replace('T', ' ').replace(':00Z', '')}</td>
+        <td>${l.direction === 'outbound' ? tppName(l.client) + ' <span class="tag mute">out</span>' : tppName(l.tpp)}</td>
+        <td class="mono">${l.endpoint}</td><td>${cls(l.fee_class)}${l.flag ? ' <span class="tag bad">no merchant id</span>' : ''}${l.paired ? ' <span class="tag ok">paired</span>' : ''}</td>
+        <td class="num">${l.units ?? 1}</td><td class="mono" style="color:var(--ink-4)">${l.trace_id}</td></tr>`).join('')}
+      </tbody></table></div>`;
+}
+
+/* ═══════════════ 4 · RECONCILIATION (BILL-03) ═══════════════ */
+{
+  const rows = RC.rows.slice().sort((a, b) => Math.abs(b.variance_mf) - Math.abs(a.variance_mf));
+  P('recon').innerHTML = `
+    <div class="note-box"><b>Compare against expected, not verify what arrived.</b> The rated statement is ready on the 3rd; the scheme's Collection Memo lands on the 5th and is diffed against it automatically. A billing query must be raised within <b>30 days of occurrence</b>, so reconciliation latency is a compliance parameter, not a convenience.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Statement lines', n(RC.rows.length), `${RC.matched} matched · ${RC.unmatched} breaks`)}
+      ${kpi('Match rate', RC.match_rate_pct + '%', `break threshold ${fils(RC.threshold_mf)} variance`)}
+      ${kpi('Net variance', `<span class="cur">AED</span>${aed(Math.abs(RC.net_variance_mf))}`, `memo ${RC.net_variance_mf > 0 ? 'higher' : 'lower'} than our records`)}
+      ${kpi('Gross error', `<span class="cur">AED</span>${aed(grossErr)}`, `${(grossErr / Math.max(1, Math.abs(RC.net_variance_mf))).toFixed(1)}× the net — errors cancel`, true)}
+    </div>
+    <div class="card"><h3>Three-way diff <span class="right">own metering · scheme memo · financial system — click a row</span></h3>
+      <table><thead><tr><th>Counterparty</th><th>Fee class</th><th class="num">Units</th><th class="num">Own (rated)</th><th class="num">Scheme memo</th><th class="num">P9 posting</th><th class="num">Variance</th><th>Status</th></tr></thead><tbody id="recon-rows">
+      ${rows.map((r, i) => `<tr class="${r.break_id ? 'click' : ''}" data-b="${r.break_id || ''}">
+        <td>${tppName(r.tpp)}</td><td>${cls(r.fee_class)} ${r.side === 'payable_hub' ? '<span class="tag warn">payable</span>' : ''}</td>
+        <td class="num">${n(r.units)}</td><td class="num">${aed(r.own_mf)}</td><td class="num">${aed(r.memo_mf)}</td><td class="num">${aed(r.p9_mf)}</td>
+        <td class="num" style="${r.variance_mf ? 'font-weight:700;color:' + (r.variance_mf > 0 ? 'var(--series-2)' : 'var(--critical)') : ''}">${r.variance_mf ? (r.variance_mf > 0 ? '+' : '−') + aed(Math.abs(r.variance_mf)) : '—'}</td>
+        <td>${r.break_id ? `<span class="tag bad"><i class="dot"></i>${r.break_id.replace('BRK-2026-06-', 'BRK-')}</span>` : '<span class="tag ok"><i class="dot"></i>matched</span>'}</td></tr>`).join('')}
+      </tbody></table></div>
+    <div id="break-detail"></div>
+    <div class="card"><h3>Variance playbook<span class="right">what the diff is built to catch</span></h3>
+      <table><thead><tr><th>Code</th><th>Variance</th><th>Direction</th><th>Why it matters</th></tr></thead><tbody>
+      ${R.memo.playbook.map(v => `<tr><td class="mono"><b>${v.code}</b></td><td>${v.title}</td>
+        <td><span class="tag ${v.direction === 'memo_high' ? 'warn' : 'bad'}">${v.direction === 'memo_high' ? 'memo higher' : 'memo lower'}</span></td>
+        <td style="font-size:12.5px;color:var(--ink-2)">${v.detail}</td></tr>`).join('')}
+      </tbody></table></div>`;
+
+  const detailHost = P('recon').querySelector('#break-detail');
+  const openBreak = (id) => {
+    const b = RC.breaks.find(x => x.id === id);
+    if (!b) return;
+    P('recon').querySelectorAll('#recon-rows tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.b === id));
+    detailHost.innerHTML = `<div class="detail">
+      <h4>${b.id} · ${cls(b.fee_class)} · ${tppName(b.tpp)}<span class="right">${b.action}</span></h4>
+      <div class="in">
+        <div class="grid g3" style="margin-bottom:14px">
+          <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Source A — own metering</div><div style="font-size:20px;font-weight:700;margin-top:5px">AED ${aed(b.own_mf)}</div><div style="font-size:12.5px;color:var(--ink-3)">${n(b.units)} units, rated on card ${RA.card_version}</div></div>
+          <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Source B — scheme memo</div><div style="font-size:20px;font-weight:700;margin-top:5px;color:${b.variance_mf > 0 ? 'var(--series-2)' : 'var(--critical)'}">AED ${aed(b.memo_mf)}</div><div style="font-size:12.5px;color:var(--ink-3)">${R.memo.ref}, received ${R.memo.issued}</div></div>
+          <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Source C — financial system</div><div style="font-size:20px;font-weight:700;margin-top:5px">AED ${aed(b.p9_mf)}</div><div style="font-size:12.5px;color:var(--ink-3)">posted from our own rated figures</div></div>
+        </div>
+        <table style="margin-bottom:12px"><thead><tr><th>Contributing cause</th><th class="num">Signed contribution</th><th class="num">Events</th></tr></thead><tbody>
+          ${(b.contributions || []).map(c => `<tr><td><b class="mono">${c.code}</b> · ${c.title}</td>
+            <td class="num" style="color:${c.delta_mf > 0 ? 'var(--series-2)' : 'var(--critical)'};font-weight:700">${c.delta_mf > 0 ? '+' : '−'}${aed(Math.abs(c.delta_mf))}</td>
+            <td class="num">${n(c.events)}</td></tr>`).join('')}
+          <tr class="tot"><td>Net variance on this line</td><td class="num">${b.variance_mf > 0 ? '+' : '−'}${aed(Math.abs(b.variance_mf))}</td><td class="num">gross ${aed(b.gross_error_mf)}</td></tr>
+        </tbody></table>
+        ${(b.contributions || []).length > 1 ? `<div class="note-box warn" style="margin:0 0 12px"><b>Two errors in one line, pulling opposite ways.</b> A threshold set on the net variance would have seen AED ${aed(Math.abs(b.variance_mf))} where AED ${aed(b.gross_error_mf)} of pricing error is actually present.</div>` : ''}
+        <dl class="kv">
+          <dt>Detail</dt><dd>${b.detail || '—'}</dd>
+          <dt>Evidence events</dt><dd class="mono">${(b.evidence_events || []).join(', ') || '—'}</dd>
+          <dt>Scheme clock</dt><dd>Billing query due by <b>${b.query_deadline}</b> — ${b.sla_days_remaining} days remaining of the 30-day window</dd>
+          <dt>Invoice effect</dt><dd>${b.side === 'receivable' ? `AED ${aed(Math.min(Math.abs(b.variance_mf), b.own_mf))} withheld from the TPP invoice; the undisputed remainder is billed now` : 'Payable side — queried against the institution\'s own Hub invoice'}</dd>
+        </dl>
+      </div></div>`;
+    detailHost.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  };
+  P('recon').querySelectorAll('#recon-rows tr.click').forEach(tr => tr.onclick = () => openBreak(tr.dataset.b));
+  openBreak(RC.breaks.find(b => (b.contributions || []).length > 1)?.id || RC.breaks[0]?.id);
+}
+
+/* ═══════════════ 5 · INVOICING (BILL-04) ═══════════════ */
+{
+  const blocked = IV.invoices.filter(i => i.status !== 'ISSUED');
+  P('invoice').innerHTML = `
+    <div class="note-box"><b>Reconcile before invoice.</b> Only reconciled-clean amounts reach a TPP's invoice — a disputed delta is withheld and carried, while the undisputed remainder is billed now. The run is four-eyes gated and returns <code>409</code> over unreconciled lines.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Issued', `${issuedInv.length}<span class="cur" style="margin-left:6px">invoices</span>`, `AED ${aed(IV.total_gross_mf)} gross · PINT AE via ASP`)}
+      ${kpi('VAT extracted', `<span class="cur">AED</span>${aed(IV.total_vat_mf)}`, '5/105 of VAT-inclusive scheme fees')}
+      ${kpi('Withheld under query', `<span class="cur">AED</span>${aed(IV.total_withheld_mf)}`, 'carried or credit-noted on resolution', IV.total_withheld_mf > 0)}
+      ${kpi('Blocked', `${blocked.length}<span class="cur" style="margin-left:6px">TPP</span>`, blocked.length ? `AED ${aed(blocked.reduce((a, b) => a + b.gross_mf, 0))} unbillable — no P9 counterparty` : 'none', blocked.length > 0)}
+    </div>
+    <div class="card"><h3>Invoice run ${R.generated_for} <span class="badge">${IV.invoices.length}</span>
+      <span class="right">four-eyes: ${IV.four_eyes.initiator} → ${IV.four_eyes.approver}, ${IV.four_eyes.approved_at.replace('T', ' ').replace('Z', '')} · click a row</span></h3>
+      <table><thead><tr><th>Invoice</th><th>Counterparty</th><th>Tax</th><th class="num">Net</th><th class="num">VAT</th><th class="num">Gross</th><th class="num">Withheld</th><th>Collection rail</th><th>Status</th></tr></thead><tbody id="inv-rows">
+      ${IV.invoices.map(i => `<tr class="click" data-i="${i.id}">
+        <td class="mono">${i.id}</td><td><b>${i.tpp_name}</b>${i.buyer.resident ? '' : ` <span class="tag mute">${i.buyer.residence}</span>`}</td>
+        <td><span class="tag ${i.tax_category === 'Z' ? 'info' : 'mute'}">${i.tax_category === 'Z' ? 'Z · export' : 'S · 5%'}</span></td>
+        <td class="num">${aed(i.net_mf)}</td><td class="num">${aed(i.vat_mf)}</td><td class="num"><b>${aed(i.gross_mf)}</b></td>
+        <td class="num">${i.withheld_lines.length ? aed(i.withheld_lines.reduce((a, w) => a + w.gross_mf, 0)) : '—'}</td>
+        <td style="font-size:12.5px">${i.collection.rail}<div style="color:var(--ink-4)">${i.collection.fee}</div></td>
+        <td>${i.status === 'ISSUED' ? '<span class="tag ok"><i class="dot"></i>issued</span>' : '<span class="tag bad"><i class="dot"></i>blocked</span>'}</td></tr>`).join('')}
+      </tbody></table></div>
+    <div id="inv-detail"></div>
+    <div class="card"><h3>E-invoicing readiness<span class="right">UAE Phase 1 — statutory</span></h3><div class="body">
+      <div class="grid g3">
+        <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Format</div>
+          <p style="margin:6px 0 0;font-size:13.5px;color:var(--ink-2)">PINT AE v1.0.3 Billing (UBL 2.1). Doc type <b>380</b> invoice / <b>381</b> credit note, buyer identified by TIN on Peppol endpoint scheme <b>0235</b>, all tax amounts in AED.</p></div>
+        <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Exchange</div>
+          <p style="margin:6px 0 0;font-size:13.5px;color:var(--ink-2)">5-corner DCTCE: supplier → its ASP → buyer's ASP → buyer, with a Tax Data Document reported to the FTA in parallel. The ASP is a port — simulated here, swapped at adoption.</p></div>
+        <div><div class="lbl" style="font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)">Clock</div>
+          <p style="margin:6px 0 0;font-size:13.5px;color:var(--ink-2)">ASP appointed by <b>30 Oct 2026</b>; issuance mandatory from <b>1 Jan 2027</b> at revenue ≥ AED 50m. Until then these same documents run in the penalty-free voluntary window — which makes this the cheapest possible pilot corpus.</p></div>
+      </div></div></div>`;
+
+  const host = P('invoice').querySelector('#inv-detail');
+  const openInv = (id) => {
+    const i = IV.invoices.find(x => x.id === id);
+    const xml = (IV.pint.find(p => p.id === id) || {}).xml;
+    P('invoice').querySelectorAll('#inv-rows tr').forEach(tr => tr.classList.toggle('sel', tr.dataset.i === id));
+    // One tokenising pass — a chained replace would re-match the class attributes it
+    // just injected and highlight its own markup.
+    const hl = xml ? esc(xml).replace(
+      /(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?)([\w:]+)|([\w:-]+)(=)("[^"]*")/g,
+      (m, comment, open, tag, attr, eq, val) =>
+        comment ? `<span class="c">${comment}</span>`
+        : tag ? `${open}<span class="t">${tag}</span>`
+        : `<span class="a">${attr}</span>${eq}${val}`) : '';
+    host.innerHTML = `<div class="detail">
+      <h4>${i.id} · ${i.tpp_name}<span class="right">${i.status === 'ISSUED' ? 'issued ' + i.issue_date + ' · due ' + i.due_date : i.status.replace(/_/g, ' ').toLowerCase()}</span></h4>
+      <div class="in">
+        ${i.status !== 'ISSUED' ? `<div class="note-box bad" style="margin-top:0"><b>Not issued.</b> ${tppName(i.tpp)} is consuming production APIs but has no counterparty registration in the financial system (port P9). AED ${aed(i.gross_mf)} of earned revenue cannot be billed until an onboarding task completes — the unbilled-traffic control, seen from the money side.</div>` : ''}
+        <table style="margin-bottom:12px"><thead><tr><th>#</th><th>Line</th><th class="num">Units</th><th class="num">Gross (VAT-incl.)</th></tr></thead><tbody>
+          ${i.lines.map(l => `<tr><td class="num">${l.no}</td><td>${cls(l.fee_class)}${l.partially_withheld ? ' <span class="tag warn">remainder — disputed part withheld</span>' : ''}</td><td class="num">${n(l.units)}</td><td class="num">${aed(l.gross_mf)}</td></tr>`).join('')}
+          <tr class="tot"><td></td><td>Total gross</td><td></td><td class="num">${aed(i.gross_mf)}</td></tr>
+          <tr><td></td><td style="color:var(--ink-3)">Taxable amount (net)</td><td></td><td class="num">${aed(i.net_mf)}</td></tr>
+          <tr><td></td><td style="color:var(--ink-3)">VAT @ ${i.vat_rate}%${i.tax_category === 'Z' ? ' — zero-rated export of services' : ' (extracted 5/105)'}</td><td></td><td class="num">${aed(i.vat_mf)}</td></tr>
+        </tbody></table>
+        ${i.withheld_lines.length ? `<table style="margin-bottom:12px"><thead><tr><th>Withheld from this invoice</th><th class="num">Amount</th><th>Break</th><th>Treatment</th></tr></thead><tbody>
+          ${i.withheld_lines.map(w => `<tr><td>${cls(w.fee_class)} <span style="color:var(--ink-3)">of AED ${aed(w.of_class_total_mf)}</span></td><td class="num"><b>${aed(w.gross_mf)}</b></td>
+            <td><span class="tag bad"><i class="dot"></i>${w.break_id.replace('BRK-2026-06-', 'BRK-')}</span></td><td style="font-size:12.5px;color:var(--ink-2)">${w.carry}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+        ${xml ? `<details${i.tax_category === 'Z' ? ' open' : ''}><summary>PINT AE document — ${i.pint_ae.customization}</summary><div class="in"><pre>${hl}</pre></div></details>` : ''}
+      </div></div>`;
+    host.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  };
+  P('invoice').querySelectorAll('#inv-rows tr').forEach(tr => tr.onclick = () => openInv(tr.dataset.i));
+  openInv(IV.invoices.find(i => i.tax_category === 'Z')?.id || IV.invoices[0].id);
+}
+
+/* ═══════════════ 6 · COLLECTIONS & SETTLEMENT (BILL-05) ═══════════════ */
+{
+  const d = ST.decomposition;
+  // Deliberately NOT a waterfall: receivables (AED 15.6k) and the residue (AED 0.21) are
+  // four orders of magnitude apart, so a single linear scale renders three of the five
+  // steps as flat lines. The bridge lives in the table below, where it ties exactly; the
+  // chart shows only the deductions, which ARE comparable to each other.
+  const SHORT = {1: 'Hub fees payable', 2: 'Withheld under query', 3: 'Unexplained residue'};
+  const dedRows = d.slice(1).map((x, i) => ({k: SHORT[i + 1], v: x.amount_mf, sub: x.note || ''}));
+  P('collect').innerHTML = `
+    <div class="note-box"><b>One figure arrives; it has to come apart.</b> Interaction Guide v5.0 §10.16 has Nebras collecting from TPPs and remitting to the LFI under the LFI–TPP Agreement, netting across the institution's LFI and TPP-of-record roles. Everything here exists to decompose that number — an unexplained residue is a break, not a rounding curiosity.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Expected net', `<span class="cur">AED</span>${aed(ST.expected_net_mf)}`, `receivables AED ${aed(ST.scheme_receivable_mf)} less hub fees AED ${aed(ST.payable_hub_mf)}`)}
+      ${kpi('Received', `<span class="cur">AED</span>${aed(ST.received_mf)}`, `decomposition ties: ${ST.reconciles ? '<b style="color:#0a6b0a">yes, to the fil</b>' : '<b style="color:#a02222">no</b>'}`)}
+      ${kpi('Unexplained residue', `<span class="cur">AED</span>${aed(ST.unexplained_mf)}`, ST.residueBreak ? ST.residueBreak.id + ' raised automatically' : 'none', !!ST.residueBreak)}
+      ${kpi('Days sales outstanding', ST.dso_days + `<span class="cur" style="margin-left:5px">days</span>`, `${ST.collections.filter(c => c.status !== 'PAID').length} counterparty in dunning`)}
+    </div>
+    <div class="card"><h3>What was deducted from the remittance<span class="right">AED ${aed(ST.scheme_receivable_mf)} collected → AED ${aed(ST.received_mf)} received</span></h3>
+      <div class="body" id="wf-host"></div></div>
+    <div class="card"><h3>Decomposition detail</h3>
+      <table><thead><tr><th>Component</th><th class="num">Amount</th><th>References</th><th>Explained</th></tr></thead><tbody>
+      ${d.map(x => `<tr><td><b>${x.label}</b>${x.note ? `<div style="font-size:12.5px;color:var(--ink-3);margin-top:3px">${x.note}</div>` : ''}</td>
+        <td class="num" style="font-weight:600">${x.sign} ${aed(x.amount_mf)}</td>
+        <td class="mono" style="font-size:11.5px;color:var(--ink-3)">${x.refs.length ? x.refs.join(', ') : '—'}</td>
+        <td>${x.explained ? '<span class="tag ok"><i class="dot"></i>explained</span>' : '<span class="tag bad"><i class="dot"></i>break raised</span>'}</td></tr>`).join('')}
+      <tr class="tot"><td>Cash received</td><td class="num">${aed(ST.received_mf)}</td><td colspan="2" style="font-weight:500;color:var(--ink-3)">ties to the decomposition exactly</td></tr>
+      </tbody></table></div>
+    <div class="grid g2">
+      <div class="card"><h3>Direct collection &amp; dunning</h3>
+        <table><thead><tr><th>Counterparty</th><th class="num">Amount</th><th>Rail</th><th>State</th></tr></thead><tbody>
+        ${ST.collections.map(c => `<tr><td><b>${c.tpp_name}</b></td><td class="num">${aed(c.gross_mf)}</td>
+          <td style="font-size:12.5px">${c.rail}</td>
+          <td><span class="tag ${c.status === 'PAID' ? 'ok' : 'warn'}"><i class="dot"></i>${c.status === 'PAID' ? 'paid ' + c.paid_at : c.dunning + ' +' + c.days_overdue + 'd'}</span>
+          ${c.status !== 'PAID' ? `<div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.next_action}</div>` : ''}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="card"><h3>Blocked — no invoiceable counterparty <span class="badge">${ST.blocked.length}</span></h3><div class="body">
+        ${ST.blocked.map(b => `<div class="note-box bad" style="margin-bottom:10px"><b>${b.tpp_name} — AED ${aed(b.gross_mf)}</b><br>${b.reason}<div style="margin-top:6px;color:var(--ink-3)">${b.action}</div></div>`).join('')}
+        <p style="margin:0;font-size:13px;color:var(--ink-3)">Scheme registration is automatic on the API Hub; registration in the institution's own financial system is not. That gap is where earned revenue sits unbilled.</p>
+      </div></div>
+    </div>
+    <div class="card"><h3>Collection rails available to the institution</h3>
+      <table><thead><tr><th>Rail</th><th>When</th><th>Cost</th></tr></thead><tbody>
+        <tr><td><b>Open Finance Invoice Collection</b> (pay-by-bank)</td><td>Invoices above AED 5,000 — an embedded payment link on the e-invoice</td><td>AED 4 capped per transaction</td></tr>
+        <tr><td><b>Aani Request to Pay</b></td><td>Below the AED 50,000 rail limit</td><td>Instant, 24/7</td></tr>
+        <tr><td><b>UAEDDS mandate</b></td><td>Recurring pull, the reliable fallback</td><td>Batch, business-day</td></tr>
+        <tr><td><b>Scheme net settlement</b></td><td>Where the LFI–TPP Agreement provides for it</td><td>Netted via the sponsoring bank, 30th–5th</td></tr>
+      </tbody></table>
+      <div class="body" style="border-top:1px solid var(--line-soft)"><p style="margin:0;font-size:13.5px;color:var(--ink-2)">The institution can collect its own Open Finance receivables <b>over Open Finance</b> — the scheme's own Invoice Collection category, at a capped AED 4, is an order of magnitude below merchant-collection bps pricing.</p></div></div>`;
+  P('collect').querySelector('#wf-host').appendChild(barChart(dedRows, {color: 'var(--series-2)', aria: 'Deductions from the scheme remittance'}));
+}
+
+/* ═══════════════ 7 · REVENUE ASSURANCE (BILL-08) ═══════════════ */
+{
+  const pct = Math.min(100, (AS.kpi_pct / 8) * 100), tgt = (AS.target_pct / 8) * 100;
+  P('assure').innerHTML = `
+    <div class="note-box"><b>Rate your own records, then reconcile — the interconnect discipline.</b> Interconnect billing that nobody assures leaks <b>${AS.benchmark}</b>. The number below is only useful because every component of it is named, priced in AED, and owned.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('Leakage KPI', `${AS.kpi_pct}<span class="cur" style="margin-left:3px">%</span>`, `of AED ${aed(AS.gross_receivable_mf)} gross receivable`, AS.kpi_pct > AS.target_pct)}
+      ${kpi('Recoverable', `<span class="cur">AED</span>${aed(AS.recoverable_mf)}`, `${((AS.recoverable_mf / AS.leakage_mf) * 100).toFixed(0)}% of leakage is recoverable this cycle`)}
+      ${kpi('Metering coverage', AS.coverage_pct + '%', 'share of observed traffic the meter can classify')}
+      ${kpi('Dispute windows', `${AS.dispute_window.raised}<span class="cur" style="margin-left:6px">raised</span>`, `<b style="color:#0a6b0a">${AS.dispute_window.missed} missed</b> — every query inside 30 days`)}
+    </div>
+    <div class="card"><h3>Leakage against target</h3><div class="body">
+      <svg class="chart" viewBox="0 0 700 74" role="img" aria-label="Leakage KPI against target and benchmark">
+        <rect x="0" y="22" width="700" height="18" rx="9" fill="#f1f2f4"/>
+        <rect x="0" y="22" width="${pct * 7}" height="18" rx="9" fill="var(--critical)"/>
+        <line x1="${tgt * 7}" y1="14" x2="${tgt * 7}" y2="48" stroke="var(--ink)" stroke-width="2"/>
+        <text class="val-lbl" x="${tgt * 7 + 7}" y="12">target ${AS.target_pct}%</text>
+        <rect x="${(2 / 8) * 700}" y="22" width="${(3 / 8) * 700}" height="18" fill="none" stroke="var(--ink-4)" stroke-dasharray="3 3"/>
+        <text class="axis-lbl" x="${(2 / 8) * 700 + 6}" y="60">2–5% — unmanaged benchmark</text>
+        <text class="val-lbl" x="${Math.min(660, pct * 7 + 8)}" y="36" font-weight="700">${AS.kpi_pct}%</text>
+      </svg></div></div>
+    <div class="card"><h3>Findings <span class="badge">${AS.findings.filter(f => f.amount_mf > 0).length} live</span></h3>
+      <table><thead><tr><th>Code</th><th>Finding</th><th class="num">AED</th><th>Owner</th><th>State</th></tr></thead><tbody>
+      ${AS.findings.map(f => `<tr><td class="mono"><b>${f.code}</b></td>
+        <td><b>${f.title}</b><div style="font-size:12.5px;color:var(--ink-3);margin-top:3px">${f.detail}</div></td>
+        <td class="num" style="font-weight:${f.amount_mf ? 700 : 400}">${f.amount_mf ? aed(f.amount_mf) : f.counterfactual_mf ? `<span style="color:var(--ink-3)">(${aed(f.counterfactual_mf)})</span>` : '—'}</td>
+        <td>${f.owner}</td>
+        <td><span class="tag ${f.status === 'CORRECT' ? 'ok' : f.status === 'BLOCKED' ? 'bad' : f.status === 'PRICED' ? 'info' : 'warn'}"><i class="dot"></i>${f.status.toLowerCase()}</span></td></tr>`).join('')}
+      <tr class="tot"><td></td><td>Total leakage</td><td class="num">${aed(AS.leakage_mf)}</td><td colspan="2" style="font-weight:500;color:var(--ink-3)">${AS.kpi_pct}% of gross receivable</td></tr>
+      </tbody></table>
+      <div class="body" style="border-top:1px solid var(--line-soft)">
+        <p style="margin:0;font-size:13.5px;color:var(--ink-2)"><b>The single biggest number here is an onboarding form.</b> ${((AS.findings[1].amount_mf / AS.leakage_mf) * 100).toFixed(0)}% of this month's leakage is one TPP that trades in production but is not an invoiceable counterparty. The second biggest is a scheme statement that under-states what its own event data supports — which is only visible because the institution counted independently.</p>
+        <p style="margin:10px 0 0;font-size:13.5px;color:var(--ink-2)">L3 is shown in brackets because it did <i>not</i> leak: the institution publishes an overage rate in the directory, so AED ${aed(AS.findings[2].counterfactual_mf)} of retail pages above the free tier were billed rather than surrendered. Most LFIs leave that field empty.</p>
+      </div></div>`;
+}
+
+/* ═══════════════ 8 · PROFITABILITY (BILL-09) ═══════════════ */
+{
+  P('profit').innerHTML = `
+    <div class="note-box"><b>Both roles, one P&amp;L.</b> The institution earns from consuming TPPs as an LFI and pays the Hub and other LFIs as a TPP-of-record, re-billing its own fintech clients with margin. A billing system that models only one side cannot answer what a counterparty is worth.</div>
+    <div class="grid g4" style="margin-bottom:16px">
+      ${kpi('LFI-role receivable', `<span class="cur">AED</span>${aed(RA.receivable_total_mf)}`, `${RA.statements.length} consuming TPPs`)}
+      ${kpi('TPP-of-record cost', `<span class="cur">AED</span>${aed(RA.payable_hub_total_mf + RA.payable_lfi_total_mf)}`, `hub AED ${aed(RA.payable_hub_total_mf)} · counterparty LFIs AED ${aed(RA.payable_lfi_total_mf)}`)}
+      ${kpi('Re-billed with margin', `<span class="cur">AED</span>${aed(RA.tppaas_rebill_mf)}`, `margin AED ${aed(RA.tppaas_margin_mf)} across ${RA.tppaas.length} clients`)}
+      ${kpi('Hub fees as share', `${((RA.payable_hub_total_mf / RA.receivable_total_mf) * 100).toFixed(2)}<span class="cur" style="margin-left:3px">%</span>`, 'of the receivable — the Hub is not where the money is')}
+    </div>
+    <div class="card"><h3>LFI role — per consuming TPP</h3>
+      <table><thead><tr><th>TPP</th><th class="num">Receivable</th><th class="num">Liability provision</th><th class="num">Withheld</th><th class="num">Uncollectable</th><th class="num">Net</th><th class="num">Net %</th></tr></thead><tbody>
+      ${AS.profitability.map(p => `<tr><td><b>${p.name}</b>${p.invoiceable ? '' : ' <span class="tag bad">not invoiceable</span>'}</td>
+        <td class="num">${aed(p.receivable_mf)}</td><td class="num">${aed(p.provision_mf)}</td>
+        <td class="num">${p.withheld_mf ? aed(p.withheld_mf) : '—'}</td>
+        <td class="num">${p.uncollectable_mf ? '<b style="color:var(--critical)">' + aed(p.uncollectable_mf) + '</b>' : '—'}</td>
+        <td class="num"><b>${aed(p.net_mf)}</b></td><td class="num">${p.net_pct}%</td></tr>`).join('')}
+      </tbody></table>
+      <div class="body" style="border-top:1px solid var(--line-soft)"><p style="margin:0;font-size:13px;color:var(--ink-3)">Liability provision = the scheme-compensation exposure attributable to a TPP's traffic, expressed as money rather than as a monitor.</p></div></div>
+    <div class="card"><h3>TPP-of-record role — per TPP-as-a-Service client</h3>
+      <table><thead><tr><th>Client</th><th class="num">Hub fees</th><th class="num">Counterparty LFI fees</th><th class="num">Cost</th><th class="num">Markup</th><th class="num">Re-billed</th><th class="num">Margin</th></tr></thead><tbody>
+      ${AS.tppaas.map(c => `<tr><td><b>${c.name}</b></td><td class="num">${aed(c.hub_mf)}</td><td class="num">${aed(c.lfi_mf)}</td>
+        <td class="num">${aed(c.cost_mf)}</td><td class="num">${c.markup_pct}%</td><td class="num">${aed(c.rebill_mf)}</td><td class="num"><b>${aed(c.margin_mf)}</b></td></tr>`).join('')}
+      <tr class="tot"><td>Total</td><td class="num">${aed(RA.payable_hub_total_mf)}</td><td class="num">${aed(RA.payable_lfi_total_mf)}</td>
+        <td class="num">${aed(RA.payable_hub_total_mf + RA.payable_lfi_total_mf)}</td><td></td><td class="num">${aed(RA.tppaas_rebill_mf)}</td><td class="num">${aed(RA.tppaas_margin_mf)}</td></tr>
+      </tbody></table></div>
+    <div class="card"><h3>Fee simulation<span class="right">re-rated line by line — the cap applies per transaction</span></h3>
+      <table><thead><tr><th>Scenario</th><th>Measured on</th><th class="num">Receivable</th><th class="num">Δ vs today</th><th>Note</th></tr></thead><tbody>
+      ${AS.scenarios.map(s => `<tr><td><b>${s.name}</b></td><td style="font-size:12.5px;color:var(--ink-3)">${s.basis}</td><td class="num">${aed(s.receivable_mf)}</td>
+        <td class="num" style="font-weight:${s.delta_mf ? 700 : 400};color:${s.delta_mf < 0 ? 'var(--critical)' : 'var(--ink-3)'}">${s.delta_mf ? '−' + aed(Math.abs(s.delta_mf)) : '—'}</td>
+        <td style="font-size:12.5px;color:var(--ink-2)">${s.note}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="body" style="border-top:1px solid var(--line-soft)">
+      <p style="margin:0;font-size:13.5px;color:var(--ink-2)">The last row is the decision most institutions make by not making it: leaving <code>ApiMetadata.OverLimitFees</code> empty in the directory surrenders <b>AED ${aed(Math.abs(AS.scenarios[3].delta_mf))}</b> in this month alone. Two LFIs in the market publish a rate.</p></div></div>`;
+}
+
+/* table-view toggles + footer */
+document.querySelectorAll('[data-tv]').forEach(b => b.onclick = () => {
+  const t = document.getElementById(b.dataset.tv);
+  const on = t.style.display === 'none';
+  t.style.display = on ? 'table' : 'none';
+  b.textContent = on ? 'Hide table' : 'Table view';
+});
+document.getElementById('foot').innerHTML =
+  `<b>Prototype.</b> Every figure on every screen is computed by the engine in <code>prototypes/billing/engine/</code> from a deterministic synthetic month — nothing is hand-typed, and <code>node run.mjs</code> reproduces this page exactly.
+   Seed <code>${R.seed}</code> · rate card <code>${R.rate_card.version}</code> · ${n(M.stats.events_total)} synthetic events · ${IV.pint.length} PINT AE documents generated · <code>node verify.mjs</code> — 15/15 independent arithmetic checks pass.<br>
+   Scope: the receivables side of the scheme (BILL-01..05, 08, 09). Not modelled here: insurance commissions and clawbacks (BILL-06, needs INS-01), GL posting (BILL-07), multi-tenant overlays (BILL-10). Synthetic PSUs and invented counterparties only — zero real data, by construction.`;
+</script>
+</body>
+</html>

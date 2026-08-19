@@ -12,6 +12,7 @@ import type {
 } from '@ofbo/db'
 import { createHash } from 'node:crypto'
 import type { ApmPort, ItsmPort, NebrasEgressPort, OtelSpan } from '@ofbo/ports'
+import type { AccountingClosePack } from '@ofbo/billing'
 import { redactPii, redactText } from '@ofbo/redaction'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
@@ -61,6 +62,11 @@ export interface ReconciliationBreakStore {
 /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (create + lineage). */
 export interface MonthlyReportStore {
   create(input: ComplianceReportCreateInput, traceId: string): Promise<StoredComplianceReport>
+}
+
+/** BILL-07 — immutable, balanced banking accounting evidence for the signed month close. */
+export interface MonthlyAccountingClosePackReader {
+  accountingClosePack(period: string): Promise<AccountingClosePack | null>
 }
 
 export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
@@ -185,6 +191,8 @@ export interface ReconciliationDeps {
   apm?: Pick<ApmPort, 'exportSpans'>
   /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (omit to disable). */
   reports?: MonthlyReportStore
+  /** BILL-07 — banking journal/VAT/settlement close evidence (insurance is out of scope). */
+  accountingClose?: MonthlyAccountingClosePackReader
   now?: () => Date
 }
 
@@ -218,6 +226,7 @@ export class ReconciliationService {
   private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   private readonly apm?: Pick<ApmPort, 'exportSpans'>
   private readonly reports?: MonthlyReportStore
+  private readonly accountingClose?: MonthlyAccountingClosePackReader
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -232,6 +241,7 @@ export class ReconciliationService {
     this.egress = deps.egress
     this.apm = deps.apm
     this.reports = deps.reports
+    this.accountingClose = deps.accountingClose
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -299,6 +309,59 @@ export class ReconciliationService {
     if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart, margin.total_margin)
 
     return { run, created, result, breaks, margin }
+  }
+
+  /**
+   * Record a deterministic result prepared by another independently-rated source.
+   * BILL-03 uses this seam for Collection Memo diffs so those fee variances enter
+   * the same E1 run log, thresholding, break queue, ITSM routing, audit and OTel
+   * workflow as the daily three-way engine without re-pricing the billing facts.
+   */
+  async recordPreparedResult(
+    traceId: string,
+    input: { runId: string; runType: string; window: ReconWindow; result: ReconResult }
+  ): Promise<ReconRunResult> {
+    const spanStart = this.now().getTime()
+    const margin = emptyMargin()
+    const { run, created } = await this.store.create(
+      {
+        run_id: input.runId,
+        run_type: input.runType,
+        status: 'completed',
+        window_start: input.window.start,
+        window_end: input.window.end,
+        line_count_total: input.result.line_count_total,
+        line_count_matched: input.result.line_count_matched,
+        line_count_unmatched: input.result.line_count_unmatched,
+        line_count_disputed: input.result.line_count_disputed
+      },
+      traceId
+    )
+
+    if (created) {
+      await this.audit.emit({
+        event_type: 'reconciliation_run_completed',
+        acting_principal: RUN_PRINCIPAL,
+        acting_persona: 'system',
+        scope_used: 'reconciliation:run',
+        request_trace_id: traceId,
+        request_body: {
+          run_id: input.runId,
+          run_type: input.runType,
+          window: input.window,
+          line_count_total: input.result.line_count_total,
+          line_count_matched: input.result.line_count_matched,
+          line_count_unmatched: input.result.line_count_unmatched,
+          line_count_disputed: input.result.line_count_disputed,
+          prepared_result: true
+        },
+        response_status: 200
+      })
+    }
+
+    const breaks = created ? await this.detectAndRecordBreaks(input.runId, input.result, traceId) : []
+    if (created) this.emitRunSpans(input.runId, input.runType, input.result, traceId, spanStart, 0)
+    return { run, created, result: input.result, breaks, margin }
   }
 
   /**
@@ -789,7 +852,17 @@ export class ReconciliationService {
   async executeMonthlySignoff(period: string, attestedBy: string, attestedByPersona: string, traceId: string): Promise<StoredComplianceReport> {
     if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
     const prefix = `recon-${period}-`
-    const [runs, byStatus] = await Promise.all([this.store.listForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
+    const [runs, byStatus, accountingClose] = await Promise.all([
+      this.store.listForPrefix(prefix),
+      this.breakStore.summarizeByStatus(prefix),
+      this.accountingClose?.accountingClosePack(period) ?? Promise.resolve(null)
+    ])
+    if (this.accountingClose && !accountingClose) {
+      throw new BreakWorkflowError('BACKOFFICE.ACCOUNTING_CLOSE_NOT_READY', `No accounting close pack is available for ${period}.`, 409)
+    }
+    if (accountingClose && (accountingClose.period !== period || !accountingClose.balanced || accountingClose.debitFils !== accountingClose.creditFils)) {
+      throw new BreakWorkflowError('BACKOFFICE.ACCOUNTING_CLOSE_INVALID', `The accounting close pack for ${period} is not balanced and signable.`, 409)
+    }
     const sum = (keys: string[]) => keys.reduce((n, k) => n + (byStatus[k] ?? 0), 0)
     // BACKOFFICE-07 — TPP-aaS margin for the month: re-derive each run's sources
     // (deterministic) and accumulate the per-fintech / per-product-family margin.
@@ -809,7 +882,8 @@ export class ReconciliationService {
         by_status: byStatus
       },
       open_nebras_disputes: byStatus['escalated_nebras_dispute'] ?? 0,
-      tpp_aas_margin: margin
+      tpp_aas_margin: margin,
+      accounting_close: accountingClose
     }
     const start = `${period}-01T00:00:00.000Z`
     const end = this.now().toISOString()
@@ -838,7 +912,7 @@ export class ReconciliationService {
       acting_persona: attestedByPersona,
       scope_used: RECON_WRITE_SCOPE,
       request_trace_id: traceId,
-      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, integrity_hash, four_eyes_approved: true },
+      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, accounting_batch_id: accountingClose?.batchId ?? null, integrity_hash, four_eyes_approved: true },
       response_status: 200
     })
     return report

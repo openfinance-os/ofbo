@@ -1,0 +1,524 @@
+# HARNESS-16 — the two OFBO reviewers, run independently in CI as ADVISORY PR checks,
+# against a SWAPPABLE review engine.
+#
+# WHY THIS EXISTS: `.claude/skills/next-story/SKILL.md` already dispatches these same two
+# reviewers before a PR is opened, and HG-0001 counts their verdicts toward the merge
+# criteria. But that run happens INSIDE the build agent's own session: the agent runs its
+# own reviewers, reports its own verdicts, and writes them into its own build log. Nothing
+# in GitHub verifies the review ran or that the verdict was honest. That is self-attestation,
+# and it is the one place the harness lacked the control independence that HG-0002 and
+# CODEOWNERS establish everywhere else. This workflow moves the step onto a surface the
+# agent cannot fake.
+#
+# WHAT IT IS NOT: a model reviewing another model's output is NOT separation of duties. It
+# runs in a fresh session with no shared context, which removes "grades its own homework in
+# the same conversation" and makes the verdict externally observable — nothing more.
+# HG-0001's human-merge requirement is untouched, and HG-0001 already names this exact
+# posture: "AI reviewers remain as advisory PR checks", "AI review is an aid, not a control
+# of record". See docs/adrs/0029-ai-review-as-advisory-ci-check.md.
+#
+# THE ENGINE IS A PORT (PRD §3 doctrine applied to CI). The contract is fixed and
+# engine-agnostic: read a CODEOWNERS-protected reviewer definition, diff the PR against its
+# base, write a review whose last line is a `VERDICT:` line. Each engine is an adapter that
+# satisfies it. The verdict parse below is the contract test that binds every adapter
+# equally — an engine that cannot produce a parseable verdict fails as DID NOT COMPLETE
+# rather than being quietly accepted, exactly as a port-swap acceptance gate should behave.
+#
+# WHICH engine runs is CONFIG: the `active` key in .github/ai-review.config.json. Swapping the
+# reviewing model is that one string. EXACTLY ONE engine reviews, by construction rather than
+# by convention — `active` is a single key, so no combination of flags can quietly double the
+# spend. Adding an engine is a registry entry plus one guarded adapter step between the
+# ADAPTERS START/END markers below. Everything after ADAPTERS END is engine-blind and must stay
+# that way — scripts/test/ai-review-matrix.test.mjs asserts it.
+#
+# ADAPTERS ARE NOT TRUSTED FOR STATUS. Observed while probing the CLIs: gemini exits 0 both
+# when its trust gate blocks it and on a critical API error, having written nothing. An
+# adapter's exit code therefore proves nothing; the review FILE and its VERDICT line are the
+# only evidence the core accepts.
+#
+# ADVISORY MEANS ADVISORY: these jobs go red on FAIL/DRIFT so a finding is visible, but they
+# are deliberately NOT registered as required status checks. A human can merge over them.
+#
+# DELIBERATELY NOT NAMED Q*: the Q namespace in ci.yml means "deterministic merge gate".
+# A model call is neither deterministic nor a gate, so it stays out of that namespace and
+# out of that file.
+name: ai-review
+
+on:
+  # Default types (opened, synchronize, reopened). Draft PRs are NOT excluded: the build
+  # agent opens its PRs as drafts, so skipping drafts would skip precisely the output this
+  # check exists to review.
+  #
+  # No workflow_dispatch. Both reviewers diff a PR against its base and post to that PR, so
+  # a manual dispatch would have neither — the same "no merge base" problem q1b reports at
+  # ci.yml:67. Re-run a review from the PR's Checks tab instead; that preserves PR context.
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'discovery/**'
+      - '**/*.md'
+
+# paths-ignore skips a run only when EVERY changed file matches, so a mixed docs+code PR
+# still gets reviewed. specs/**.yaml is deliberately absent from the list — contract
+# conformance must see spec changes.
+
+concurrency:
+  group: ai-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ===================================================================================
+  # Resolve the engine registry into a job matrix, and refuse to build one that would
+  # silently not review. Runs before any credential is touched or any token is spent, so
+  # a malformed registry costs nothing. Its red check is the signal that the registry —
+  # not the diff — is what needs fixing.
+  # ===================================================================================
+  config:
+    name: AI review — engine registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Dependency-free pure Node, like the discovery gates — no install step needed.
+      - id: build
+        run: node scripts/ai-review-matrix.mjs >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: config
+    # One check run per reviewer PER ENGINE. The engine is named because a verdict is only
+    # meaningful if you know which model produced it.
+    name: AI review — ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }} (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # The sticky-comment step posts through the issue-comments API (a PR is an issue).
+      # Both scopes are granted because that endpoint is documented inconsistently across
+      # the two; this token is ephemeral and repo-scoped, and the job writes nothing else.
+      pull-requests: write
+      issues: write
+      # Required for claude-code-action's default GitHub App authentication.
+      id-token: write
+    strategy:
+      # LOAD-BEARING (HARNESS-07). A failing hard-stop review must never cancel the
+      # contract-conformance leg, and one engine must never cancel another — an absent
+      # result is indistinguishable, on the checks tab, from a passing one. Same doctrine
+      # as ci.yml:125-129 and ci.yml:298-301.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.config.outputs.matrix) }}
+    env:
+      # Per reviewer AND per engine: two engines reviewing the same diff must not overwrite
+      # each other's review file or each other's PR comment.
+      REVIEW_FILE: ${{ matrix.reviewer.key }}-${{ matrix.engine.key }}-review.md
+      # The prompt is defined ONCE, here, and every adapter is handed the same text. That is
+      # what makes a verdict comparable across engines — and it points at the agent
+      # definition rather than restating its checklist, because those files are
+      # CODEOWNERS-protected (/.claude/ -> control-plane-owners) and a copy inlined here
+      # would be a second, unprotected copy of the canon, free to drift. Q2b exists to catch
+      # exactly that.
+      REVIEW_PROMPT: |
+        Read `${{ matrix.reviewer.agent }}` and act as exactly that reviewer for this
+        pull request. Its instructions are the specification for this task: follow its
+        checklist, its scope limits, and its output format precisely, including the
+        final `VERDICT:` line.
+
+        The diff under review is this PR's head against its base branch. Where the agent
+        definition says to diff against `main`, use:
+
+            git diff origin/${{ github.event.pull_request.base.ref }}...HEAD
+
+        Report EVERY candidate finding, each with file:line. Do not filter for severity
+        or for your own confidence — the agent definition's scope already narrows what
+        counts as a finding, and a second filter on top of it silently drops real ones.
+        If you are unsure about a finding, report it and say why you are unsure.
+
+        Write the complete review to `${{ matrix.reviewer.key }}-${{ matrix.engine.key }}-review.md`
+        in the repository root. Write that file even when you find nothing. Its final line
+        must be the `VERDICT:` line, exactly as the agent definition specifies it.
+    steps:
+      # Checkout FIRST: it carries no secrets, and preflight needs the tree to compare this
+      # workflow against the default branch (third guard below).
+      - uses: actions/checkout@v7
+        with:
+          # Full history. Both agent definitions diff against the base branch, so the merge
+          # base must resolve. The shipped claude-code-action review example uses
+          # fetch-depth: 1, which silently yields an empty or wrong diff here.
+          fetch-depth: 0
+
+      - name: Fetch the base and default branches
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          if [ "$DEFAULT_REF" != "$BASE_REF" ]; then
+            git fetch --no-tags origin "+refs/heads/${DEFAULT_REF}:refs/remotes/origin/${DEFAULT_REF}"
+          fi
+          echo "Merge base: $(git merge-base "origin/${BASE_REF}" HEAD)"
+
+      # ---------------------------------------------------------------------------------
+      # Preflight. THREE conditions make the review structurally impossible rather than
+      # merely failing — a fork PR, an absent credential, and (for engines whose tooling
+      # requires it) a PR that edits this very workflow. All three report loudly and say
+      # explicitly that they are NOT a pass, both in the step summary and as a comment on
+      # the PR, mirroring the q1b "NOT RUN" handling at ci.yml:67-78. None of them reds the
+      # job: each is a property of the *situation* rather than of the diff, and a fork PR
+      # would otherwise be permanently red through no fault of its author. Red stays
+      # reserved for "the review ran and had something to say".
+      # ---------------------------------------------------------------------------------
+      - name: Preflight — fork, credential, and workflow-parity guards
+        id: preflight
+        env:
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          # Indexed by the registry's secret name — the core never names a provider's secret.
+          HAS_TOKEN: ${{ secrets[matrix.engine.secret] != '' }}
+          SECRET_NAME: ${{ matrix.engine.secret }}
+          DEFAULT_REF: ${{ github.event.repository.default_branch }}
+          LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
+        run: |
+          set -euo pipefail
+          # THE REVIEW CONTROL PLANE. Anything here can decide what the reviewer executes or
+          # which credential it is handed, so all of it is in the parity boundary:
+          #   the workflow    — arbitrary `run:` steps, with the secret in scope
+          #   the registry    — names the secret; `secrets[matrix.engine.secret]` is indexed
+          #                     by it, so editing it redirects which secret is exposed
+          #   the matrix builder — produces that registry value, so it can do the same
+          control_plane=(
+            '.github/workflows/ai-review.yml'
+            '.github/ai-review.config.json'
+            'scripts/ai-review-matrix.mjs'
+          )
+          if [ "$IS_FORK" = "true" ]; then
+            reason="fork PR — GitHub withholds secrets from fork-triggered runs"
+          elif [ "$HAS_TOKEN" != "true" ]; then
+            reason="credential absent — the ${SECRET_NAME} secret is not set"
+            # The one non-run that is NOT a fact of life. See "Enforce preflight" below.
+            fatal=true
+          else
+            # ENFORCED HERE FOR EVERY ENGINE, BY THIS HARNESS — never delegated to the
+            # engine's own tooling. claude-code-action happens to enforce an equivalent rule
+            # itself, but the CLI adapters authenticate with a plain repository secret and
+            # have no such rule, so relying on the vendor would leave the guard present on
+            # one engine and absent on the next. `on: pull_request` hands secrets to
+            # same-repo PRs while running the workflow FROM THE PR HEAD, so without this a
+            # PR could rewrite the reviewer and collect its credential in the same run.
+            #
+            # Deliberate consequence: no engine reviews the PR that changes how reviews run.
+            # This harness cannot review its own control-plane changes — that is the correct
+            # behaviour, and it self-resolves the moment such a PR merges.
+            # paste -sd',' then space out: a multi-char -d is a CYCLING delimiter list, so
+            # `-d', '` would join three files as "a,b c".
+            changed="$(git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
+          fi
+          if [ -z "${reason:-}" ] && [ -n "${changed:-}" ]; then
+            reason="this PR modifies the review control plane (${changed}), which differs from origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
+          fi
+          if [ -z "${reason:-}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "run=false" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason}" >> "$GITHUB_OUTPUT"
+          echo "fatal=${fatal:-false}" >> "$GITHUB_OUTPUT"
+          if [ "${fatal:-false}" = "true" ]; then
+            echo "::error title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          else
+            echo "::notice title=AI review (${LABEL}) NOT RUN::${reason}. This is not a pass."
+          fi
+          {
+            echo "### AI review — ${LABEL}: NOT RUN"
+            echo ""
+            echo "**Reason:** ${reason}."
+            echo ""
+            echo "**This is not a pass.** No review was performed, so this check says"
+            echo "nothing about the diff. The reviewer still runs pre-PR in the build"
+            echo "agent's session, but that run is self-attested — which is the gap this"
+            echo "check exists to close."
+            if [ "${fatal:-false}" = "true" ]; then
+              echo ""
+              echo "This one is a **repository misconfiguration**, not a property of the PR:"
+              echo "set the \`${SECRET_NAME}\` Actions secret, or point \`active\` in"
+              echo ".github/ai-review.config.json at an engine whose credential exists."
+              echo "Until then EVERY PR goes unreviewed, which is why this fails the job"
+              echo "rather than passing quietly."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # =================================================================================
+      # ADAPTERS START
+      #
+      # Each adapter is guarded by `matrix.engine.key == '<key>'`. That exact string is the
+      # marker scripts/ai-review-matrix.mjs looks for: enabling an engine in the registry
+      # without adding an adapter here fails the `config` job before a single token is
+      # spent, rather than producing a matrix leg that quietly reviews nothing.
+      #
+      # The adapter contract, in full:
+      #   in  — $REVIEW_PROMPT, $REVIEW_FILE, matrix.engine.model ('' = engine default),
+      #         secrets[matrix.engine.secret]
+      #   out — a review written to $REVIEW_FILE whose last line is the VERDICT: line
+      #   an adapter MUST NOT be trusted to set the job's status; the core does that.
+      # =================================================================================
+      - name: Review — Claude engine
+        if: ${{ steps.preflight.outputs.run == 'true' && matrix.engine.key == 'claude' }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets[matrix.engine.secret] }}
+          prompt: ${{ env.REVIEW_PROMPT }}
+          claude_args: |
+            --model ${{ matrix.engine.model }}
+            --max-turns 30
+            --allowedTools "Read,Grep,Glob,Bash,Write"
+
+      # RUN IN CI, AND IT DOES NOT WORK AS WRITTEN. Do not point `active` at codex expecting
+      # a review. Written against the `@openai/codex` CLI surface probed at v0.147.0
+      # (`codex exec` with --model / --sandbox / --color / --skip-git-repo-check).
+      #
+      # Auth is NOT the problem: it authenticated, selected gpt-5.6-sol and spent 14,443
+      # tokens. The blocker is that codex's own sandbox is bubblewrap, which cannot create a
+      # network namespace inside the Actions runner —
+      #     bwrap: loopback: Failed RTM_NEWADDR
+      # That fails at sandbox SETUP, so it takes out every mode equally, `read-only`
+      # included: reads, writes and a plain `pwd` all failed, and no review file was written.
+      #
+      # The only mode that runs is `--sandbox danger-full-access`, which is a SECURITY
+      # DECISION FOR A HUMAN and is deliberately NOT applied here. It removes real
+      # containment against prompt injection carried in a reviewed diff — and this adapter
+      # reads the diff for a living. See docs/adrs/0029 for the full reasoning.
+      #
+      # It fails loudly rather than silently, which is how the above was found: a wrong
+      # invocation writes no review file, and the core reports DID NOT COMPLETE in red.
+      - name: Review — Codex engine
+        if: ${{ steps.preflight.outputs.run == 'true' && matrix.engine.key == 'codex' }}
+        env:
+          CODEX_API_KEY: ${{ secrets[matrix.engine.secret] }}
+          ENGINE_MODEL: ${{ matrix.engine.model }}
+        run: |
+          set -euo pipefail
+          npm install -g @openai/codex
+          args=(exec --sandbox workspace-write --color never --skip-git-repo-check)
+          # An empty model means "engine default" — omit the flag rather than pass a blank.
+          if [ -n "$ENGINE_MODEL" ]; then
+            args+=(--model "$ENGINE_MODEL")
+          fi
+          codex "${args[@]}" "$REVIEW_PROMPT"
+
+      # NOT YET EXERCISED. Written against @google/gemini-cli v0.55.1, probed rather than
+      # assumed. Two findings baked in here:
+      #   --skip-trust is REQUIRED. Without it the CLI reports "not running in a trusted
+      #   directory", silently downgrades --approval-mode yolo back to "default", and then
+      #   does nothing.
+      #   It EXITS 0 anyway — on that refusal AND on a critical API error. This adapter is
+      #   therefore the concrete case for why the core never trusts an adapter's exit status:
+      #   `set -e` would sail straight past both, and only the missing review file catches it.
+      - name: Review — Gemini engine
+        if: ${{ steps.preflight.outputs.run == 'true' && matrix.engine.key == 'gemini' }}
+        env:
+          GEMINI_API_KEY: ${{ secrets[matrix.engine.secret] }}
+          ENGINE_MODEL: ${{ matrix.engine.model }}
+        run: |
+          set -euo pipefail
+          npm install -g @google/gemini-cli
+          args=(--approval-mode yolo --skip-trust)
+          if [ -n "$ENGINE_MODEL" ]; then
+            args+=(--model "$ENGINE_MODEL")
+          fi
+          gemini "${args[@]}" -p "$REVIEW_PROMPT"
+      # ADAPTERS END
+      # =================================================================================
+      # Everything below is ENGINE-BLIND. It reads only $REVIEW_FILE and matrix metadata,
+      # and must never name a provider — scripts/test/ai-review-matrix.test.mjs asserts it,
+      # because the moment the core knows which engine ran, "swap the engine" stops being
+      # true. Provider-specific text (including the comment attribution) lives in the
+      # registry.
+      # =================================================================================
+
+      # ---------------------------------------------------------------------------------
+      # Verdict -> status. Parsed from the review file rather than from any adapter's
+      # output, so this depends on no engine's internals — which is what lets one parse
+      # bind every adapter identically.
+      #
+      # THE THIRD BRANCH IS THE POINT: a review that never produced a verdict must never be
+      # indistinguishable from a passing one. Same rule the q1b / Q2 / Q4 comments in ci.yml
+      # were written to enforce.
+      # ---------------------------------------------------------------------------------
+      - name: Parse verdict
+        id: verdict
+        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$REVIEW_FILE" ]; then
+            echo "status=incomplete" >> "$GITHUB_OUTPUT"
+            echo "detail=the reviewer produced no review file ($REVIEW_FILE)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Last VERDICT: line wins — the agent definitions put it at the end, and this also
+          # tolerates the word appearing earlier in prose.
+          verdict="$(grep -E '^VERDICT:' "$REVIEW_FILE" | tail -n 1 || true)"
+          echo "verdict_line=${verdict}" >> "$GITHUB_OUTPUT"
+          if printf '%s' "$verdict" | grep -qE '^VERDICT:[[:space:]]*(PASS|CONFORMANT)[[:space:]]*$'; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$verdict" | grep -qE '^VERDICT:[[:space:]]*(FAIL|DRIFT)\b'; then
+            echo "status=findings" >> "$GITHUB_OUTPUT"
+          else
+            # Includes a missing, empty, or malformed verdict line. Conservative by design.
+            echo "status=incomplete" >> "$GITHUB_OUTPUT"
+            echo "detail=no parseable VERDICT: line in $REVIEW_FILE" >> "$GITHUB_OUTPUT"
+          fi
+
+      # One comment per reviewer per engine per PR, updated in place on every push. A story
+      # takes many pushes; without the marker lookup this would be a wall of stale reviews.
+      - name: Post or update the review comment
+        # Runs for the NOT-RUN cases too. A structural non-run that left no trace on the PR
+        # would be a green check with nothing to explain it — "the absent control looks like
+        # a passing one", which is the whole class this workflow exists to close.
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@v8
+        env:
+          MARKER_KEY: ${{ matrix.reviewer.key }}:${{ matrix.engine.key }}
+          NOT_RUN_REASON: ${{ steps.preflight.outputs.reason }}
+          LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
+          ATTRIBUTION: ${{ matrix.engine.attribution }}
+          STATUS: ${{ steps.verdict.outputs.status }}
+          DETAIL: ${{ steps.verdict.outputs.detail }}
+        with:
+          script: |
+            const fs = require('fs');
+            const {
+              REVIEW_FILE, MARKER_KEY, LABEL, STATUS, DETAIL, NOT_RUN_REASON, ATTRIBUTION,
+            } = process.env;
+            const marker = `<!-- ofbo-ai-review:${MARKER_KEY} -->`;
+
+            const preamble = [
+              'Advisory check (HG-0001) — it does not gate merge, and it is not separation',
+              'of duties. See `docs/adrs/0029-ai-review-as-advisory-ci-check.md`.',
+            ];
+
+            let heading;
+            let detailBlock;
+
+            if (NOT_RUN_REASON) {
+              // Structural non-run: the review was impossible for a reason outside this
+              // diff. Say so on the PR rather than leaving a bare green check behind.
+              heading = `⏭️ **AI review — ${LABEL}: NOT RUN.** **This is not a pass.**`;
+              detailBlock = [
+                `**Reason:** ${NOT_RUN_REASON}.`,
+                '',
+                'No review was performed, so this check says nothing about the diff.',
+              ];
+            } else {
+              let review = '';
+              try {
+                review = fs.readFileSync(REVIEW_FILE, 'utf8').trim();
+              } catch {
+                review = '_The reviewer produced no review file._';
+              }
+
+              // GitHub rejects comment bodies over 65536 chars.
+              const LIMIT = 60000;
+              if (review.length > LIMIT) {
+                review = review.slice(0, LIMIT) +
+                  '\n\n_…truncated. See the workflow run log for the full review._';
+              }
+
+              heading = {
+                clean:      `✅ **AI review — ${LABEL}:** no findings.`,
+                findings:   `❌ **AI review — ${LABEL}:** findings below.`,
+                incomplete: `⚠️ **AI review — ${LABEL}: DID NOT COMPLETE** — ${DETAIL || 'no verdict produced'}. **This is not a pass.**`,
+              }[STATUS] || `**AI review — ${LABEL}**`;
+
+              detailBlock = ['<details><summary>Full review</summary>', '', review, '', '</details>'];
+            }
+
+            const body = [
+              marker,
+              heading,
+              '',
+              ...preamble,
+              '',
+              ...detailBlock,
+              '',
+              '---',
+              ATTRIBUTION,
+            ].join('\n');
+
+            const issue_number = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      # NOT ALL NON-RUNS ARE EQUAL, and the check colour should say which kind this is.
+      #
+      # A STRUCTURAL non-run stays green: a fork PR cannot have secrets, and a control-plane
+      # PR must not be reviewed by the reviewer it edits. Neither is the author's fault and
+      # neither is fixable in the PR, so reddening them would put a permanent red on work
+      # that is behaving correctly — and a check that is always red is a check everyone
+      # learns to scroll past. The PR comment still says NOT RUN, in full, either way.
+      #
+      # A MISSING CREDENTIAL is not that. It is a repository misconfiguration that silently
+      # disables review on EVERY PR until somebody notices, and green is precisely how
+      # nobody notices. This one fails the job.
+      #
+      # Runs after the comment step on purpose: the PR gets the explanation before the job dies.
+      - name: Enforce preflight — a missing credential is a misconfiguration, not a fact of life
+        if: ${{ !cancelled() && steps.preflight.outputs.fatal == 'true' }}
+        env:
+          LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
+          REASON: ${{ steps.preflight.outputs.reason }}
+        run: |
+          set -euo pipefail
+          echo "::error title=AI review (${LABEL}) NOT RUN::${REASON}. This is a repository misconfiguration — every PR goes unreviewed until it is fixed."
+          exit 1
+
+      - name: Enforce verdict
+        if: ${{ !cancelled() && steps.preflight.outputs.run == 'true' }}
+        env:
+          LABEL: ${{ matrix.reviewer.label }} · ${{ matrix.engine.label }}
+          STATUS: ${{ steps.verdict.outputs.status }}
+          DETAIL: ${{ steps.verdict.outputs.detail }}
+          VERDICT_LINE: ${{ steps.verdict.outputs.verdict_line }}
+        run: |
+          set -euo pipefail
+          case "$STATUS" in
+            clean)
+              echo "::notice title=AI review (${LABEL})::${VERDICT_LINE}"
+              echo "### AI review — ${LABEL}: ${VERDICT_LINE}" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            findings)
+              echo "::error title=AI review (${LABEL})::${VERDICT_LINE} — see the PR comment for detail."
+              {
+                echo "### AI review — ${LABEL}: ${VERDICT_LINE}"
+                echo ""
+                echo "Findings are in the PR comment. This check is **advisory** — it does"
+                echo "not block merge, but it will not show green next to a finding."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+            *)
+              echo "::error title=AI review (${LABEL}) DID NOT COMPLETE::${DETAIL:-no verdict produced}. This is not a pass."
+              {
+                echo "### AI review — ${LABEL}: DID NOT COMPLETE"
+                echo ""
+                echo "${DETAIL:-No verdict was produced.}"
+                echo ""
+                echo "**This is not a pass.** A review that did not run must never be"
+                echo "indistinguishable from one that found nothing."
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac

@@ -3047,6 +3047,353 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/billing/console": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tenant-scoped LFI billing operations read model (BILL-01..10)
+         * @description Composes the resolved rate card, collections, accounting close pack, revenue assurance and profitability outputs for the internal billing console. This is a read surface only; metering, reconciliation, rating, dunning progression and journal posting remain headless scheduled jobs. Insurance commissions remain absent until an approved insurance commercial model exists (BILL-06).
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Calendar month; defaults to the current UTC month. */
+                    period?: string;
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["AnalyticsView"];
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/profitability:simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run a non-persisted billing profitability scenario (BILL-09)
+         * @description Pure what-if calculation over persisted tenant evidence; it writes no billing facts.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BillingProfitabilityScenarioRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["AnalyticsView"];
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/exports:cbuae-fee-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate an integrity-hashed CBUAE annual fee-review export (BILL-09) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        period: string;
+                        scenarios: components["schemas"]["BillingProfitabilityScenario"][];
+                    };
+                };
+            };
+            responses: {
+                /** @description Deterministic annual fee-review artifact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export all portable billing records for the authenticated tenant (BILL-10)
+         * @description Outsourcing exit/portability export. The tenant is derived only from the verified identity-provider claim; callers cannot select another bank by header or query.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Integrity-hashed tenant billing export */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/tpp-cost-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest a provider cost document — Nebras invoice primary (verified manual upload, BILL-14)
+         * @description The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted, second-person verification recorded.
+         *
+         *     Read `verified_by` for exactly what it is. The UPLOADER is taken from the caller's verified identity-provider claim and is never accepted from the request body. The VERIFIER is operator-attested: `verified_by` is a request field naming the second person, checked against the uploader's own subject and refused when equal. That establishes DISTINCTNESS between the two names — it does not establish that the verifier authenticated, and an uploader can name a colleague who never saw the document.
+         *
+         *     This paragraph previously asserted that neither name came from the request body, which contradicted this operation's own `verified_by` form field twenty-four lines below and described a control the service does not implement. Ratified as operator attestation rather than silently corrected: a real second-person authenticated step belongs on the existing four-eyes primitive (`202` + `approval_request`, initiator ≠ approver, 2-hour expiry), not on a second mechanism invented here. Raise a story if the bank wants that stronger posture.
+         *
+         *     Provider payloads are redacted at parse time, before the first INSERT: the cost tables are INSERT-only with no deletion path, so any customer detail a provider line carries would be unremovable. Lines whose provider category has no fee-class mapping are stored flagged `mapped: false` rather than dropped.
+         *
+         *     Replay of the same `Idempotency-Key` returns the stored result. The same issuer and document reference carrying different content is a conflict, not a second document.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        /** @description The taxonomy is declared in full, but a type is only ingestible once a transport is wired behind the parser adapter. Today that is `nebras_tax_invoice` only — the Nebras invoice is primary (IG §10.2). The other five are accepted vocabulary for the ledger and are refused at ingest with `BACKOFFICE.UNSUPPORTED_DOCUMENT_TYPE` until their transport lands. */
+                        document_type: components["schemas"]["TppCostDocumentType"];
+                        billing_period: string;
+                        /** @description The second person who verified this upload. Checked against the caller's own verified subject claim and refused when equal — it selects the verifier, it does not assert one. */
+                        verified_by: string;
+                        /** @description e.g. email received date / sender */
+                        source_note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The document was already ingested, so nothing new was written. Reached when the same issuer and document reference arrive again with identical content — including under a new `Idempotency-Key`. A replay of the SAME key returns the original cached response, status included, so a repeated first-ingest replays its `201`. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostDocument"];
+                        };
+                    };
+                };
+                /** @description Document ingested with its parsed lines; reconciliation NOT yet run (BILL-15) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostDocument"];
+                        };
+                    };
+                };
+                /** @description Rejected for one of three reasons: the same issuer and document reference already exists carrying different content (a provider restatement, not a replay); the nominated verifier is the uploader; or the supplied `Idempotency-Key` was already used for a DIFFERENT document, in which case answering with either one would be wrong. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/back-office/billing/tpp-cost-documents/{document_id}:reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Three-way reconcile a provider cost document against own metering (BILL-15)
+         * @description The payable twin of `/back-office/billing-records/{record_set_id}:reconcile`, and it carries the same scope for the same reason: judging a counterparty's figures against our own is one capability regardless of which direction the money flows.
+         *
+         *     Matches own metering against the expected statement and the provider document at the invoice category grain, under a configurable tolerance — expected values are milli-fils and documents state fils, so exact equality is never the test. Every difference becomes exactly one break: an expectation and a document line disagreeing on the counterparty produce a single `wrong_recipient` rather than a missing plus an unexpected charge, and a charge appearing on both the Nebras invoice and an LFI self-invoice is a `duplicate_charge` rather than a second cost. IG §10.17 late-payment penalties are accepted only against a recorded late payment for the same period.
+         *
+         *     Runs synchronously and returns the result, unlike the billing-records twin: this compares stored evidence rather than fetching from the Hub, so there is nothing to wait on. The response carries the IG §10.13 query deadline and the Nebras response clocks, because a break found outside the window is not actionable and the caller must see that with the finding.
+         *
+         *     Reconciling is not approving. Unresolved breaks withhold the period from payable approval (BILL-16); this endpoint records what was found and never settles it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                    /** @description 24h dedup window (Kong plugin); required on all mutating endpoints */
+                    "Idempotency-Key": components["parameters"]["idempotencyKey"];
+                    /** @description BACKOFFICE-80 guardrail (d): REQUIRED (min 20 chars) when the caller holds platform:superadmin and the operation is mutating; recorded on the High-class audit record. Ignored for all other personas. Absence under the marker scope yields 400 BACKOFFICE.JUSTIFICATION_REQUIRED. */
+                    "x-superadmin-justification"?: components["parameters"]["superAdminJustification"];
+                };
+                path: {
+                    document_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reconciliation complete. Returned for both a first run and a replay of the same reconciliation run, which writes nothing further — the ledger is INSERT-only with no deletion path, so a retried scheduled job must not double it. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostReconciliation"];
+                        };
+                    };
+                };
+                /** @description No such cost document for this tenant */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No expected cost statement exists for the document's billing period, so there is nothing to reconcile against. Refused rather than reported as an all-unexpected-charges result, which would look like a provider fault when it is a missing projection on our side. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/tpp-counterparties": {
         parameters: {
             query?: never;
@@ -4368,6 +4715,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BillingProfitabilityScenario: {
+            scenario_id: string;
+            /** Format: date */
+            effective_date: string;
+            receivable_multiplier_basis_points: number;
+            retail_overage: {
+                overage_units: number;
+                current_rate_milli_fils: number;
+                proposed_rate_milli_fils: number;
+            };
+        };
+        BillingProfitabilityScenarioRequest: {
+            period: string;
+            scenario: components["schemas"]["BillingProfitabilityScenario"];
+        };
         Envelope: {
             meta?: {
                 request_id?: string;
@@ -5075,6 +5437,126 @@ export interface components {
             open_break_count?: number;
             /** @description Nebras case references for disputed lines (30-day window) */
             nebras_billing_query_refs?: string[];
+        };
+        /**
+         * @description Provider cost-document taxonomy (ADR 0007 D9, IG v5.0 §10). Nebras tax invoice is primary.
+         * @enum {string}
+         */
+        TppCostDocumentType: "nebras_tax_invoice" | "nebras_settlement_statement" | "lfi_self_invoice" | "credit_note" | "debit_note" | "manual_adjustment";
+        /** @description One provider line. `source_category` is the provider's own category, kept verbatim as evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false. */
+        TppCostDocumentLine: {
+            line_ref: string;
+            source_category: string;
+            fee_class?: string | null;
+            /** @description False when the provider category resolves to no known fee class. Such a line is flagged, never dropped. */
+            mapped: boolean;
+            /** @enum {string} */
+            cost_recipient_type: "nebras" | "underlying_lfi";
+            cost_recipient_id: string;
+            units: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified) */
+            unit_price_milli_fils: number;
+            actual_net_milli_fils: number;
+            vat_milli_fils: number;
+            actual_gross_milli_fils: number;
+        };
+        TppCostDocument: {
+            /** Format: uuid */
+            document_id: string;
+            document_type: components["schemas"]["TppCostDocumentType"];
+            issuer_id: string;
+            recipient_id: string;
+            document_reference: string;
+            /** @description YYYY-MM */
+            billing_period: string;
+            currency: string;
+            net_milli_fils: number;
+            vat_milli_fils: number;
+            gross_milli_fils: number;
+            document_sha256: string;
+            /** Format: date-time */
+            issued_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /** @description The second person who verified the upload; never equal to the uploader */
+            verified_by: string;
+            /** Format: date-time */
+            verified_at: string;
+            /** @description Lines stored with mapped=false, awaiting a category mapping. Non-zero is a signal, not a failure. */
+            unmapped_line_count: number;
+            /** @description How many provider fields were redacted at parse time. Key paths are audited; the removed values are never stored or logged. */
+            redacted_field_count: number;
+            lines: components["schemas"]["TppCostDocumentLine"][];
+        };
+        /**
+         * @description Payable break taxonomy (BILL-13 migration 0039). Narrower than the reconciliation `LineType`, which classifies WHICH STREAM a break belongs to rather than what went wrong; every value here maps onto a LineType via the cost recipient — Hub fees to nebras_fees, underlying-LFI API access to lfi_access_log.
+         * @enum {string}
+         */
+        PayableBreakType: "quantity_variance" | "rate_variance" | "unexpected_charge" | "missing_charge" | "wrong_recipient" | "duplicate_charge" | "vat_variance" | "period_variance" | "unmatched_document_line" | "unmatched_expected_line";
+        TppCostDiffLine: {
+            line_ref: string;
+            break_type: components["schemas"]["PayableBreakType"];
+            /** @description The contract class this break is shown as on GET /back-office/reconciliation/breaks. */
+            line_type: components["schemas"]["LineType"];
+            /** @enum {string} */
+            presence: "both" | "expected_only" | "document_only";
+            /** @enum {string} */
+            cost_recipient_type: "nebras" | "underlying_lfi";
+            cost_recipient_id: string;
+            fee_class?: string | null;
+            /** @description The provider's own wording, retained because a billing query cites it back to them. */
+            source_category?: string | null;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
+            expected_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
+            actual_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency. */
+            variance_milli_fils: number;
+            variance_basis_points: number;
+            /** @description Exceeds the tolerance. A wrong recipient is material at zero variance. */
+            material: boolean;
+            reason_code: string;
+            /**
+             * Format: uuid
+             * @description The E1 break this was escalated as; null until it is escalated.
+             */
+            reconciliation_break_id?: string | null;
+        };
+        /** @description Every amount below is an integer in milli-fils — thousandths of a fil — under `currency`. That unit DEVIATES from the binding money convention (integer minor units + ISO 4217) and is unratified; BILL-17 owns resolving it, either by converting to `Money` at this boundary or by ratifying milli-fils. The currency is carried explicitly so the amounts are never bare integers, which is the shape that would make that conversion expensive. */
+        TppCostReconciliation: {
+            /** @description YYYY-MM */
+            period: string;
+            /** @description ISO 4217 for every milli-fils amount in this object and its breaks. */
+            currency: string;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Expected values are milli-fils and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute. Configurable; defaults to one fil. */
+            tolerance_milli_fils: number;
+            /** @description IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21). */
+            query_window_days: number;
+            /** Format: date-time */
+            query_deadline: string;
+            /** @enum {string} */
+            query_window_status: "open" | "expired";
+            /** @description Negative once the window closed. Measured at ingest, not at read time, so it is reproducible. */
+            days_remaining_at_ingest: number;
+            /** @description IG v5.0 §10.13 obligations Nebras owes on an open query. */
+            response_clocks: {
+                first_response_minutes: number;
+                final_response_days: number;
+                escalation_review_days: number;
+            };
+            matched_line_count: number;
+            break_count: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). */
+            expected_total_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). What the provider claims for THIS period. Off-period documents are excluded — they carry their own period_variance break — so this is not the sum of the documents' own totals whenever one is present. */
+            actual_total_net_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Signed, so opposing errors net. The headline exposure. */
+            net_variance_milli_fils: number;
+            /** @description Integer milli-fils (see BILL-17 — the unit is unratified). Absolute, so opposing errors do NOT net away. The amount actually in dispute. */
+            gross_variance_milli_fils: number;
+            /** @description IG §10.17 penalties matched to a recorded late payment for this period. */
+            penalty_lines_accepted: number;
+            breaks: components["schemas"]["TppCostDiffLine"][];
         };
         InvoiceRun: {
             /** Format: uuid */

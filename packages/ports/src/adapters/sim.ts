@@ -3,6 +3,7 @@ import type {
   CareSurfacePort,
   CoreBankingPort,
   FinancialSystemPort,
+  EInvoicingAspPort,
   IdentityProviderPort,
   ItsmPort,
   LineagePort,
@@ -34,6 +35,12 @@ const PERSONAS = [
   ['platform-admin', 'OF Platform Administrator'],
   ['platform-super-admin', 'Platform Super Administrator']
 ] as const
+
+const DEMO_TENANT_BANK_IDS: Readonly<Record<string, string>> = Object.freeze({
+  'alpha-bank': '11111111-1111-4111-8111-111111111111',
+  'beta-bank': '22222222-2222-4222-8222-222222222222',
+  'gamma-takaful': '33333333-3333-4333-8333-333333333333'
+})
 
 const simCareSurface: CareSurfacePort = {
   async mintCareToken({ agent_id, psu_id }) {
@@ -76,6 +83,7 @@ interface AgentSessionClaims {
   scopes: string[]
   allow_mutations: boolean
   spend_budget: number
+  bank_id?: string
   /** Absolute expiry (epoch ms). Short TTL; registry revoke denylists earlier (BACKOFFICE-60). */
   exp: number
 }
@@ -125,16 +133,21 @@ const simIdentityProvider: IdentityProviderPort = {
     }))
   },
   async verifyToken(token) {
-    const persona = token.replace(/^demo-token:/, '')
+    const match = /^demo-token:([^@]+)(?:@([a-z0-9-]+))?$/.exec(token)
+    if (!match) throw new Error('unknown demo token')
+    const persona = match[1]!
+    const tenantSlug = match[2]
     if (!PERSONAS.some(([p]) => p === persona)) throw new Error('unknown demo token')
-    return { subject: `demo:${persona}`, persona, mfa: true }
+    const bank_id = tenantSlug ? DEMO_TENANT_BANK_IDS[tenantSlug] : undefined
+    if (tenantSlug && !bank_id) throw new Error('unknown demo tenant claim')
+    return { subject: `demo:${persona}${tenantSlug ? `@${tenantSlug}` : ''}`, persona, mfa: true, ...(bank_id ? { bank_id } : {}) }
   },
   // Token minting is non-deterministic by nature (fresh session_id + expiry per mint) — like
   // mintCareToken above. The signature makes the token unforgeable; the claims are verifiable.
-  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget }) {
+  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget, bank_id }) {
     const session_id = crypto.randomUUID()
     const exp = Date.now() + AGENT_SESSION_TTL_MS
-    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, exp })
+    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, ...(bank_id ? { bank_id } : {}), exp })
     return { token, session_id, expires_at: new Date(exp).toISOString() }
   },
   async verifyAgentSession(token) {
@@ -147,6 +160,7 @@ const simIdentityProvider: IdentityProviderPort = {
       scopes: claims.scopes,
       allow_mutations: claims.allow_mutations,
       spend_budget: claims.spend_budget,
+      ...(claims.bank_id ? { bank_id: claims.bank_id } : {}),
       expires_at: new Date(claims.exp).toISOString()
     }
   }
@@ -328,6 +342,15 @@ const simFinancialSystem: FinancialSystemPort = {
   },
   async getSettlementStatus() {
     return { invoice_status: 'instructed' }
+  },
+  async postJournalInstructions(batch) {
+    const balanced = batch.journals.every((journal) => {
+      const debit = journal.lines.filter((line) => line.side === 'debit').reduce((sum, line) => sum + line.amount_fils, 0)
+      const credit = journal.lines.filter((line) => line.side === 'credit').reduce((sum, line) => sum + line.amount_fils, 0)
+      return debit === credit
+    })
+    if (!balanced) throw new Error(`financial-system simulator rejected unbalanced batch ${batch.batch_id}`)
+    return { accepted: true, journal_batch_ref: `fms-${batch.batch_id}` }
   }
 }
 
@@ -336,6 +359,20 @@ const simFinancialSystem: FinancialSystemPort = {
 const simStrWorkflow: StrWorkflowPort = {
   async handoffStrDraft({ str_draft_id }) {
     return { workflow_ref: `str-wf-${str_draft_id}`, accepted_at: new Date().toISOString() }
+  }
+}
+
+const simEInvoicingAsp: EInvoicingAspPort = {
+  async submitDocument(document) {
+    const valid = document.xml.includes(`<cbc:CustomizationID>${document.customization_id}</cbc:CustomizationID>`)
+      && document.xml.includes(document.document_type === '380' ? '<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>' : '<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>')
+      && new TextDecoder().decode(document.pdf.slice(0, 8)).startsWith('%PDF-1.')
+    return {
+      accepted: valid,
+      submission_ref: `asp-sim-${document.document_id}`,
+      document_status: valid ? 'accepted' : 'rejected',
+      tdd_status: valid ? 'reported' : 'rejected'
+    }
   }
 }
 
@@ -349,5 +386,6 @@ export const SIM_ADAPTERS: PortMap = {
   'p7-lineage': simLineage,
   'p8-onboarding-handover': simOnboardingHandover,
   'p9-financial-system': simFinancialSystem,
-  'p10-str-workflow': simStrWorkflow
+  'p10-str-workflow': simStrWorkflow,
+  'p11-einvoicing-asp': simEInvoicingAsp
 }

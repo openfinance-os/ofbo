@@ -2,13 +2,12 @@ import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  // `.claude/worktrees/**` are full repo checkouts nested inside this one (the worktree-isolation
-  // workflow, CLAUDE.md rule 0). They are gitignored, but ESLint's flat config does NOT read
-  // .gitignore — so without this entry a root `pnpm lint` scans every parallel branch and reports
-  // its findings against paths in THIS tree. Worst case it surfaces the DEPLOY_PROFILE
-  // no-restricted-syntax rule, which reads as a §3.1 hard-stop violation that does not exist here.
-  // Each worktree lints itself; CI never sees one (fresh checkout), so this was invisible in CI.
-  { ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**', '.claude/worktrees/**'] },
+  {
+    // Worktrees are full nested checkouts and lint themselves. The billing prototype is a
+    // self-contained browser/Node reference artefact with its own executable verifier;
+    // production linting starts at the packages/services implementation.
+    ignores: ['**/dist/**', '**/.next/**', '**/.open-next/**', '**/next-env.d.ts', '**/*.generated.ts', '**/node_modules/**', '.remember/**', '.claude/worktrees/**', 'docs/prototypes/billing/**']
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

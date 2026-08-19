@@ -7,6 +7,8 @@ import { assertScope } from '../rbac.js'
 import { scopeDenied } from '../errors.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
+import type { CollectionsFinanceSummary } from '../billing/collections.js'
+import type { ProfitabilityReport, RevenueAssuranceReport } from '@ofbo/billing'
 
 /**
  * BACKOFFICE-31 — Finance View. A read-only analytics view (reconciliation:read,
@@ -35,12 +37,24 @@ export interface FinanceDisputeReader {
 export interface FinanceUnbilledReader {
   unbilledTrafficCount(): Promise<number>
 }
+export interface FinanceCollectionsReader {
+  collectionSummary(period: string, asOf: string): Promise<CollectionsFinanceSummary>
+}
+export interface FinanceRevenueAssuranceReader {
+  latestReport(period: string): Promise<RevenueAssuranceReport | null>
+}
+export interface FinanceProfitabilityReader {
+  latestReport(period: string): Promise<ProfitabilityReport | null>
+}
 
 export interface FinanceViewDeps {
   feeAccrual: FinanceFeeAccrualReader
   margin: FinanceMarginReader
   disputes: FinanceDisputeReader
   unbilled: FinanceUnbilledReader
+  collections?: FinanceCollectionsReader
+  assurance?: FinanceRevenueAssuranceReader
+  profitability?: FinanceProfitabilityReader
   now?: () => Date
 }
 
@@ -64,18 +78,32 @@ export class FinanceViewService {
     const p = period ?? (this.deps.now ?? (() => new Date()))().toISOString().slice(0, 7)
     if (!MONTH.test(p)) throw new FinanceViewError('BACKOFFICE.INVALID_PERIOD', 'period must be a calendar month YYYY-MM.', 400)
 
-    const [accrual, margin, openDisputes, unbilled, sourceTotals] = await Promise.all([
+    const now = (this.deps.now ?? (() => new Date()))()
+    const [accrual, margin, openDisputes, unbilled, sourceTotals, collections, assurance, profitability] = await Promise.all([
       this.deps.feeAccrual.feeAccrualForPeriod(p),
       this.deps.margin.marginForPeriod(principal, p),
       this.deps.disputes.openNebrasDisputeCount(principal, p),
       this.deps.unbilled.unbilledTrafficCount(),
-      this.deps.margin.threeWaySourceTotalsForPeriod(p)
+      this.deps.margin.threeWaySourceTotalsForPeriod(p),
+      this.deps.collections?.collectionSummary(p, now.toISOString().slice(0, 10)) ?? Promise.resolve({
+        openInvoiceCount: 0,
+        openMilliFils: 0,
+        settlementBreakCount: 0,
+        settlementExpectedNetMilliFils: 0,
+        settlementReceivedMilliFils: 0,
+        settlementResidueMilliFils: 0,
+        dunningByState: {},
+        dsoByTpp: []
+      }),
+      this.deps.assurance?.latestReport(p) ?? Promise.resolve(null),
+      this.deps.profitability?.latestReport(p) ?? Promise.resolve(null)
     ])
 
     // UIF (ADR 0016 D1) — typed sections the portal renders as bespoke panels (same shared
     // renderer as Analytics/Risk/Operations); money shown in major units, no PSU PII.
     const cur = accrual?.currency ?? margin.currency ?? 'AED'
     const fmtMoney = (minor: number) => `${cur} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    const fmtMilliFils = (milliFils: number) => fmtMoney(Math.round(milliFils / 1_000))
     const marginByFamily: Record<string, number> = {}
     for (const fm of Object.values(margin.by_fintech)) {
       for (const [family, acc] of Object.entries(fm.by_family)) marginByFamily[family] = (marginByFamily[family] ?? 0) + acc.margin
@@ -110,6 +138,45 @@ export class FinanceViewService {
         { label: 'C · Fintech re-bill', value: fmtMoney(sourceTotals.fintech) }
       ]
     })
+    sections.push({
+      kind: 'kpi-strip',
+      title: 'Collections & Net Settlement',
+      stats: [
+        { label: 'Open direct invoices', value: String(collections.openInvoiceCount) },
+        { label: 'Open direct AR', value: fmtMilliFils(collections.openMilliFils) },
+        { label: 'Settlement breaks', value: String(collections.settlementBreakCount) },
+        { label: 'Net settlement received', value: fmtMilliFils(collections.settlementReceivedMilliFils) }
+      ]
+    })
+    const dunningSegments = Object.entries(collections.dunningByState).map(([label, value]) => ({ label, value }))
+    if (dunningSegments.length > 0) sections.push({ kind: 'contribution-bars', title: 'Dunning by State', segments: dunningSegments })
+    if (collections.dsoByTpp.length > 0) sections.push({
+      kind: 'contribution-bars',
+      title: 'DSO by TPP',
+      segments: collections.dsoByTpp.map((summary) => ({ label: summary.tppId, value: summary.dsoDays }))
+    })
+    if (assurance) sections.push({
+      kind: 'kpi-strip',
+      title: 'Revenue Assurance',
+      stats: [
+        { label: 'Metering coverage', value: `${assurance.meteringCoveragePercent.toFixed(2)}%` },
+        { label: 'Revenue leakage', value: fmtMilliFils(assurance.leakageMilliFils) },
+        { label: 'Recovered revenue', value: fmtMilliFils(assurance.recoveredRevenueMilliFils) },
+        { label: 'Missed dispute windows', value: String(assurance.disputeWindow.missed) }
+      ]
+    })
+    if (profitability) sections.push({
+      kind: 'kpi-strip',
+      title: 'TPP Profitability',
+      stats: [
+        { label: 'Receivables', value: fmtMilliFils(profitability.totals.receivableMilliFils) },
+        { label: 'Hub costs', value: fmtMilliFils(profitability.totals.hubCostMilliFils) },
+        // BILL-12: the underlying-LFI cost stands beside the Hub cost rather than being folded into it.
+        { label: 'Underlying-LFI costs', value: fmtMilliFils(profitability.totals.lfiCostMilliFils) },
+        { label: 'Liability provisions', value: fmtMilliFils(profitability.totals.liabilityProvisionMilliFils) },
+        { label: 'Net contribution', value: fmtMilliFils(profitability.totals.profitMilliFils) }
+      ]
+    })
 
     const data = {
       sections,
@@ -124,13 +191,48 @@ export class FinanceViewService {
       tpp_aas_margin: margin,
       open_nebras_dispute_count: openDisputes,
       unbilled_traffic_alert_count: unbilled,
+      collections: {
+        open_invoice_count: collections.openInvoiceCount,
+        open_milli_fils: collections.openMilliFils,
+        settlement_break_count: collections.settlementBreakCount,
+        settlement_expected_net_milli_fils: collections.settlementExpectedNetMilliFils,
+        settlement_received_milli_fils: collections.settlementReceivedMilliFils,
+        settlement_residue_milli_fils: collections.settlementResidueMilliFils,
+        dunning_by_state: collections.dunningByState,
+        dso_by_tpp: collections.dsoByTpp
+      },
+      revenue_assurance: assurance ? {
+        metering_coverage_percent: assurance.meteringCoveragePercent,
+        leakage_milli_fils: assurance.leakageMilliFils,
+        leakage_percent: assurance.leakagePercent,
+        target_percent: assurance.target.thresholdPercent,
+        target_met: assurance.target.met,
+        recovered_revenue_milli_fils: assurance.recoveredRevenueMilliFils,
+        outstanding_recoverable_milli_fils: assurance.outstandingRecoverableMilliFils,
+        counterfactual_opportunity_milli_fils: assurance.counterfactualOpportunityMilliFils,
+        missed_dispute_windows: assurance.disputeWindow.missed,
+        findings: assurance.findings.map((finding) => ({
+          code: finding.code, amount_milli_fils: finding.amountMilliFils,
+          counterfactual_milli_fils: finding.counterfactualMilliFils, status: finding.status, owner: finding.owner
+        }))
+      } : null,
+      tpp_profitability: profitability ? {
+        totals: profitability.totals,
+        by_tpp: profitability.byTpp,
+        by_product_family: profitability.byProductFamily,
+        reconciliation: profitability.reconciliation
+      } : null,
+      roi_narrative: {
+        fee_variance_recovered_milli_fils: assurance?.roiContribution.feeVarianceRecoveredMilliFils ?? 0,
+        fee_variance_recovered_aed: assurance?.roiContribution.feeVarianceRecoveredAed ?? 0
+      },
       reconciliation_console_deeplink: RECON_CONSOLE_DEEPLINK
     }
     // BACKOFFICE-40 — standard freshness: a failed ingestion (accrual.stale) wins,
     // else amber when the source roll-up is older than 2× the monthly publish cadence.
     const freshness = computeFreshness({
       sourcePublishedAt: accrual?.source_published_at ?? null,
-      now: (this.deps.now ?? (() => new Date()))(),
+      now,
       sourceCadenceMs: FRESHNESS_CADENCE.MONTHLY_MS,
       missingCause: 'no_ingested_aggregates_for_period',
       extraStale: accrual?.stale ? { stale: true, cause: 'last_ingestion_failed' } : null

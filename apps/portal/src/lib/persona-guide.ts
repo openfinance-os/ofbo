@@ -15,9 +15,9 @@ export const PERSONA_GUIDE: Record<string, PersonaGuide> = {
   'operations-analyst': { tagline: 'Platform health, incidents & SLOs', modules: ['Operations', 'Dashboard'], icon: 'monitoring' },
   'customer-care-agent': { tagline: 'PSU consent lookups, revocations & disputes', modules: ['Customer Care'], icon: 'support_agent' },
   'compliance-officer': { tagline: 'Audit trail & regulatory oversight', modules: ['Compliance', 'Audit'], icon: 'verified_user' },
-  'finance-analyst': { tagline: 'Reconciliation, TPP-aaS margin & monthly sign-off', modules: ['Reconciliation', 'Analytics'], icon: 'account_balance' },
+  'finance-analyst': { tagline: 'Reconciliation, billing assurance & monthly sign-off', modules: ['Reconciliation', 'Billing Control', 'Analytics'], icon: 'account_balance' },
   'risk-analyst': { tagline: 'Anomaly detection & fraud response', modules: ['Risk'], icon: 'gpp_maybe' },
-  'commercial-desk-head': { tagline: 'TPP billing, registry & commercial margin', modules: ['TPP Billing', 'Analytics'], icon: 'paid' },
+  'commercial-desk-head': { tagline: 'TPP billing, registry & commercial margin', modules: ['Billing Control', 'TPP Billing', 'Analytics'], icon: 'paid' },
   'programme-manager': { tagline: 'Cross-programme executive view', modules: ['Dashboard', 'Analytics'], icon: 'insights' },
   'platform-super-admin': { tagline: 'Full platform access — every module', modules: ['All modules'], icon: 'admin_panel_settings' }
 }
@@ -44,7 +44,7 @@ export const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'finance:reconciliation:write': 'Claim & resolve breaks and request the monthly sign-off',
   'finance:disputes:write': 'Escalate reconciliation breaks to Nebras as disputes',
   'platform:analytics:read': 'View the executive analytics dashboard',
-  'billing:read': 'View the TPP billing & registry',
+  'billing:read': 'View the LFI billing control plane and TPP billing registry',
   'billing:write': 'Manage TPP billing & registry entries',
   'platform:operations:read': 'View platform operations, SLOs and incidents',
   'platform:operations:write': 'Action platform operations & incidents',

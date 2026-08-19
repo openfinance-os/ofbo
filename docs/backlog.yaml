@@ -243,6 +243,479 @@ milestones:
           Unblock only if the bank adopts Kong; then raise the metering-feed requirement
           (extends BACKOFFICE-73) and/or the P6 adapter, tests-first against port-contracts.spec.ts.
 
+  # Standards conformance — realises docs/reviews/standards-conformance-2026-08.md (18 Aug 2026),
+  # a diff of the repo against UAE OF Standards v2.1-final + errata3, API Hub v8 (2026.19.0/2026.22.0),
+  # Nebras Interaction Guide v5.0 (Jun 2026) and the Ozone Connect availability/response-time policies.
+  # The architecture is conformant; the drift is operational. Items are laid out in EXECUTION order,
+  # not id order, because next-story picks the first eligible pending item in FILE order: STD-09..15
+  # first — dependency-free defects found while verifying, wrong today rather than merely stale; then
+  # STD-01, the standards-baseline registry, unblocked by ADR 0030's acceptance (2026-08-18) but
+  # dependent on STD-15, since a regulatory baseline must not ride on a watcher whose failure is
+  # silent; then STD-02..04, the IG v5.0 re-baseline the PRD promised at BD-16 and never filed; then
+  # STD-05..08, the fidelity chain.
+  - name: STD
+    items:
+      - id: STD-09
+        title: Liability and revoke-SLA completeness — fail loud, one source, cover the fraud path
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          Three defects on one theme, all found while verifying. services/bff/src/risk/liability.ts:47
+          returns 0 for any issue absent from the matrix, and the threshold derives from the SAME
+          lookup at :109-111 — so both sides are 0, "accrued >= threshold" is 0 >= 0 which is TRUE,
+          and the class crosses trivially. It does not go quiet: it emits a nebras_liability_approach
+          signal plus two P3 ITSM tickets at :119-122 reporting the exposure as AED 0 at low
+          severity. The signal is not suppressed, it is silently worthless — harder to spot than
+          silence, because the queue looks like it is working. The matrix is genuinely incomplete, missing the scheme's
+          international-payment new-beneficiary breach (AED 15,000 cap for 48 hours after beneficiary
+          creation, per customer per TPP per bank; redress AED 1,000 plus direct losses), and the
+          15,000 figure appears nowhere in the repo. Separately, NEBRAS_SLA_MS 5000 is declared twice
+          (consents/revoke.ts:21 and consents/bulk-revoke.ts:26) and the same NFR-18 threshold is
+          restated a third time in a different unit at analytics/slo.ts:56. And consents/fraud-revoke.ts:89,97
+          records the propagation time but never compares it, so the highest-risk revoke path is the
+          only one with no sla_met verdict in its audit record. Also retire the CoP bundling-window
+          hedge remaining at reconciliation/fee-schedule.ts:12-13 (the PRD half was retired by the
+          review PR) — the scheme is unambiguous at two
+          hours, one balance AND one CoP per payment, and rate-card.ts:295 already encodes it.
+        acceptance:
+          - The new-beneficiary liability row is added with its scheme citation, and an issue absent
+            from the matrix raises rather than returning zero, so an unmodelled class can never again
+            emit an AED 0 low-severity signal that looks like the monitor working.
+          - NEBRAS_SLA_MS has exactly one definition, imported by every consumer, and the SLO row
+            derives from it rather than restating the threshold as an independent literal.
+          - The fraud-revoke path computes and records an sla_met verdict like the other two revoke
+            paths, and a test asserts a breach on that path is visible in the audit record.
+          - The CoP bundling-window hedge is removed from both the code comment and the PRD, replaced
+            by the confirmed two-hour rule cross-referencing the rate card.
+      - id: STD-10
+        title: Encode the Ozone Connect availability and response-time policies
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/analytics/operations-console.ts:26-28 holds SLA_TARGETS with a 500ms
+          end-to-end and 250ms LFI-internal figure, module-private with no config seam. The headline
+          is right but the operative policy since 22 Apr 2026 is finer — 500ms at p95 PER Ozone
+          Connect ENDPOINT measured as TTLB from the Hub issuing the request to the Hub receiving the
+          final byte, with degradation severities (P1 payment-execution p95 above 1000ms for 15
+          minutes or any family above 1500ms; P2 endpoint p95 above 750ms for 30 minutes) and an
+          availability regime of 99.5 percent per CALENDAR MONTH, about 3h39m, with planned
+          maintenance and partial outages both counting, P1 acknowledged in 15 minutes with 30-minute
+          updates, P2 in 1 hour with 2-hour updates, and a PIR within 5 business days. None of that
+          exists in the repo. Scope note — docs/reviews/improvement-plan-2026-08.md:102 already owns
+          per-endpoint latency MEASUREMENT and deliberately needs no per-endpoint SLA config, so this
+          story encodes the POLICY as cited constants and leaves measurement to that story.
+        acceptance:
+          - The policy is a cited constant set naming its source and effective date, covering the p95
+            TTLB target, both degradation severities, the calendar-month availability budget, the
+            acknowledgement and update cadences, and the PIR clock.
+          - 'The two unreconciled uptime numbers in one response are reconciled — ops/ozone-health.ts:30
+            reports 99.8 percent while analytics/slo.ts:58 targets 99.5 percent and nothing compares
+            them.'
+          - The latency objective stops living only in a description string, so a target that cannot
+            currently be evaluated or alerted on becomes machine-readable.
+          - services/bff/test/operations-console.spec.ts:46 currently pins the SLA object with an
+            exact-equality assertion; it is updated in-story to the richer policy object.
+      - id: STD-11
+        title: Enterprise profile must fail closed on every demo-only data source
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          CLAUDE.md requires an unconfigured enterprise adapter to throw a config error rather than
+          silently fall back to a fake. That rule is broken in eight places, none of them
+          profile-selected, because all eight Demo* classes live in services/bff/src rather than
+          packages/ports. Most visible: OperationsConsoleService is constructed at
+          services/bff/src/app.ts:609-615 without its optional slo, certChain and ozone deps in ANY
+          profile, so the console always serves DemoSloReader / DemoCertChainSource /
+          DemoOzoneHealthSource (analytics/operations-console.ts:83,90,92) — a hardcoded 99.8 percent
+          uptime (ops/ozone-health.ts:30) presented as operational truth, while the docstrings claim
+          an enterprise adapter polls the real health via P6. The scheduled worker adds six more
+          unconditionally — DemoLiabilityEventSource (worker.ts:389), DemoTppActivitySource (:398),
+          DemoConsentDriftSource (:402), DemoCertChainSource (:405), DemoCaapEventSource (:408),
+          DemoLiabilityTelemetrySource (:416) — plus one in the request path (app.ts:637). Two are
+          materially worse than a green panel. The CAAP recorder (worker.ts:408 into
+          risk/caap-audit.ts:57-65) writes FABRICATED registration events into audit_high_sensitivity,
+          an INSERT-only table with no deletion path and 5-year immutable retention, and its synthetic
+          spike then drives the >10-per-device-per-hour rule at risk/consent-anomaly.ts:134-136 into
+          raising a real security signal from fake data. The cert monitor (worker.ts:405 into
+          ops/cert-expiry.ts:124-133) always reports the intermediate at +25d and the end-entity at
+          +5d, so an enterprise bank carries a permanent fabricated CRITICAL certificate alarm while
+          the real scheme-certificate expiry is never observed.
+        acceptance:
+          - Under the enterprise profile an unconfigured source — SLO, certificate chain, Ozone
+            health, liability events, TPP activity, consent drift, CAAP events or liability telemetry
+            — throws a config error rather than serving demo values.
+          - 'No Demo* source is constructed outside a profile-selected factory, and a test asserts
+            that services/bff/src contains no unconditional demo-source construction in a scheduled
+            or request path.'
+          - The CAAP recorder does not write to audit_high_sensitivity under the enterprise profile
+            without a configured event source, and the cert monitor does not raise a critical alarm
+            from a synthetic chain.
+          - The demo profile is unchanged and the demo walkthrough still renders every affected view.
+          - The docstrings claiming an enterprise adapter exists are corrected to match reality, or
+            the adapter seam is made real — either way the code and its documentation agree.
+      - id: STD-12
+        title: Attribution and fixture-provenance hygiene
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The P10/STR workflow was attributed to ADR 0022 in eight places at c5ba31b; the review PR
+          corrected CLAUDE.md:19, leaving SEVEN for this story (
+          packages/ports/src/interfaces.ts:178, packages/ports/test/str-workflow.spec.ts:5,
+          services/bff/src/str/service.ts:9, services/bff/src/str/routes.ts:11,
+          services/bff/test/str-drafts.spec.ts:10, apps/portal/src/components/str-draft-queue.tsx:6,
+          apps/portal/test/str-draft-queue.spec.tsx:14) and to ADR 0024 in a ninth
+          (packages/ports/src/adapters/enterprise/str-workflow.ts:5). ADR 0022 is the public
+          /public/* readiness-wizard carve-out and mentions neither STR nor AML; the real record is
+          ADR 0010, which before the review PR was cited nowhere in the codebase. This story corrects
+          the seven remaining source and test sites plus the ADR 0024 one. Second half — institution
+          fixture provenance. packages/db/src/seed-demo.ts:404-412 carries real UAE company names
+          under a deliberate and sound policy comment at :397-399 (real names for healthy states,
+          fictional for adverse ones), but all six fixtures also carry real-format CN registration
+          numbers that the policy comment does not cover, and there is no never-real convention for
+          institution identifiers to match the 999-prefix and 000-bank-code convention documented for
+          person identifiers at packages/synthetic-data/src/index.ts:108-110.
+        acceptance:
+          - Every STR/P10 citation names ADR 0010; no site attributes the feature to ADR 0022 or 0024.
+          - Institution registration numbers in fixtures use a documented never-real format with the
+            same explicitness as the person-identifier convention, and the policy is bound by a test
+            rather than by prose comments in two packages.
+          - packages/db/test/seed-demo.int.spec.ts pins the new format; the real-name-for-healthy-state
+            policy itself is preserved, since it is deliberate and correct.
+      - id: STD-13
+        title: Reconcile the two collection-rail vocabularies before they are wired together
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          Two rail vocabularies sit side by side. TenantCollectionRail has four values including
+          scheme_net_settlement, which is the shipped DEFAULT preferred rail in both code
+          (packages/db/src/tenant-configuration.ts:46) and DDL
+          (packages/db/migrations/0038_tenant_billing_service.sql:15); DirectCollectionRail
+          (packages/billing/src/collections.ts:130) has the three values the
+          billing_collection_invoice.selected_rail CHECK admits
+          (packages/db/migrations/0035_billing_collections.sql:71). So the shipped default preferred
+          rail is not a persistable selected_rail value. Do NOT "fix" this by widening the CHECK —
+          nothing routes a collection on the tenant preferred rail today (eligibleCollectionRails at
+          collections.ts:133-143 can never return it, and services/bff/src/billing/collections.ts:171
+          throws before any DB write), the tenant value is read back only for display, and the CHECK
+          is plausibly correct by design because scheme net settlement is not a DIRECT-collection
+          rail. What is missing is an explicit, tested relationship between the two types, before
+          someone wires them together. BILLING-domain and overlaps BILL-13..16, which are in flight —
+          reassign to the BILLING track if that is the cleaner owner.
+        acceptance:
+          - The relationship between TenantCollectionRail and DirectCollectionRail is explicit in the
+            type system — a documented mapping or narrowing, not two independent string unions that
+            happen to overlap.
+          - It is impossible to configure a tenant preferred rail that cannot be honoured without the
+            mismatch being caught at configuration time rather than at a future write, and a test
+            covers the scheme_net_settlement case specifically.
+          - The CHECK constraint is left as-is unless a decision record says otherwise; any change to
+            it states why scheme net settlement should become a direct-collection rail.
+          - The fix is coordinated with the in-flight BILL payable work rather than conflicting with it.
+      - id: STD-14
+        title: Make the PRD and README ground-truth claims machine-checked, and revive the dead backlog-count gate
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The PRD's "57 paths, 9 tags" rotted to a real 93/12 and its per-tag table drifted to seven
+          of nine numbers wrong, undetected, because scripts/doc-link-check.mjs checks that claim in
+          README.md only — and CLAUDE.md names the PRD spec canon, so the one canonical surface CI
+          cannot check is the one that rotted. The review PR repaired the PRD by hand; this story
+          makes it stick. Worse, the gate's other numeric check is silently DEAD: doc-link-check.mjs:126
+          matches /(\d+) of the (\d+) backlog items are done/ while README.md:5 reads "159 backlog
+          items are done", so claimedBacklog is null and the check never runs — the real figures are
+          161 done of 193 at the time of writing. A gate that is absent looks exactly like a gate that passed, which is this
+          review's own thesis turned on the repo's tooling. Also sweeps the stale claims the review
+          names but no other story owns — README.md:68 and :127 say "BD-01..16" where PRD section 10
+          now runs to BD-22, and docs/diagrams/architecture.svg:119 still says 57 paths.
+        acceptance:
+          - 'The paths-and-tags assertion applied to README.md:69 is extended to the PRD, and a
+            deliberately wrong count in either file makes pnpm docs:check exit 1 — proven by a test
+            that introduces one.'
+          - The backlog-progress regex matches the README's actual phrasing so the check is live
+            again, and a deliberately wrong done-count fails the gate.
+          - 'The stale claims are corrected against the counts current at the time the story lands —
+            README.md:5 (done-of-total), README.md:68 and :127 (BD-01..22) and
+            docs/diagrams/architecture.svg:119 (93 paths).'
+          - No count anywhere in the repo is asserted by hand without a gate covering it, or the
+            assertion is removed and the doc points at the checked source instead.
+      - id: STD-15
+        title: The rate-card watcher must fail loudly — its result is currently discarded
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        adr: docs/adrs/0030-standards-baseline-registry.md
+        note: >-
+          Found while grounding the ADR 0030 egress ruling. The BILL-01 watcher counts failed sources
+          and returns them (services/bff/src/billing/rate-card-watch.ts:399 returns checkedSources,
+          changedSources, failedSources, notificationFailures), but services/bff/src/worker.ts:336
+          calls runBillingRateCardWatch inside Promise.allSettled and DISCARDS the resolved value —
+          failedSources is never read anywhere. On a fetch failure the watcher emits one
+          billing_rate_card_watch_failed audit row with response_status 502 (rate-card-watch.ts:385-395)
+          and raises nothing else: no ITSM ticket, no risk signal. So if a bank's forward proxy blocks
+          the three watched URLs, or a page moves, or DNS breaks, the watch is DEAD and looks ALIVE —
+          weekly audit rows nobody reads. That is the exact failure class this whole review is about,
+          and ADR 0030 would inherit it, which is why the ADR makes fail-loud a binding amendment and
+          STD-01 depends on this story. Small fix, high leverage — the sinks already exist.
+        acceptance:
+          - A source that cannot be fetched raises an operator-visible signal through the existing
+            ITSM or risk-signal sink, not only an audit row, and the run result is consumed rather
+            than discarded at the worker call site.
+          - 'Repeated failure is distinguishable from steady success — a watch that has not
+            successfully fetched a source for N consecutive runs is visibly stale, so silence can
+            never be read as "nothing changed".'
+          - The notification path itself is covered — notificationFailures is surfaced too, since a
+            review that fires but never reaches Compliance is the same failure wearing a hat.
+          - Tested by injecting a fetcher that throws and asserting the signal is raised; no change
+            to the autoApply-false posture, and the demo profile stays deterministic.
+      - id: STD-01
+        title: Standards-baseline registry and errata watch
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        adr: docs/adrs/0030-standards-baseline-registry.md
+        depends_on: [STD-15]
+        note: >-
+          ADR 0030 ACCEPTED 2026-08-18 with two amendments, both binding here. (i) The egress question
+          is ruled (a) — unauthenticated GETs of PUBLIC SCHEME DOCUMENTATION carrying no credentials
+          and no PSU or bank data, used only for change detection, are outside P6, which governs the
+          authenticated API data plane. The carve-out is conditional: pin redirect handling (the
+          fetcher currently sets redirect follow on an unauthenticated GET, which is SSRF-adjacent)
+          or allowlist permitted final hosts, and keep the fetcher injectable so a bank points it at
+          its own forward proxy without a code change. Comment the ruling at the call site naming
+          ADR 0030. (ii) The watch must fail loudly first — hence depends_on STD-15.
+          No file states the baseline as v2.1-final + errata3; the only standards-version string in
+          the repo is free text in one OpenAPI description (specs/backoffice-openapi.yaml:3164) and
+          the word errata appears three times, all on one line of a research doc. Pin the four scheme
+          documents (Standards + errata level, API Hub release, Interaction Guide, Liability Model)
+          as a deep-frozen constant with version, effectiveFrom, source and verifiedOn per entry, in
+          @ofbo/contracts beside the generated types, copying packages/billing/src/rate-card.ts. Then
+          add errata sources to the EXISTING weekly watcher
+          (services/bff/src/billing/rate-card-watch.ts already fetches three pricing URLs) so a move
+          opens the same High-classification, autoApply-false review task. SOURCE AUTHORITY MATTERS
+          HERE — the Release Notes and Errata register at nebras-open-finance.com is filed in this
+          repo's own research at docs/research/lfi-billing-system-tier2.md:387 under "Scheme
+          (community, unofficial)"; the official records are the CBUAE/OF Confluence pages at :385.
+          Pin the official page as primary and treat the mirror as a secondary early-warning source,
+          per ADR 0030. Scope also covers CBUAE_RELEASE_CALENDAR
+          (services/bff/src/analytics/programme.ts:20-24), three hardcoded scheme deadlines feeding a
+          board-facing view with no source, no version and no watch. The mechanism that would have
+          caught the IG v5.0 drift already exists and is pointed at the wrong pages.
+        acceptance:
+          - The baseline is one deep-frozen exported constant naming every scheme document the code
+            depends on, each carrying its version, effective date, source URL and verified-on date;
+            errata level is recorded per-file because the scheme resolves errata per file.
+          - 'A change to any watched source opens a High-classification review task with autoApply
+            false and requiresApproval true, notifying Compliance and Operations — the watcher never
+            edits the baseline and never gates a merge on a scheme document''s contents.'
+          - A baseline fact the scheme has not settled carries an explicit ASSUMED marker, matching
+            the yearAnchor precedent in the rate card rather than shipping a confident wrong value.
+          - 'The ADR 0030 egress ruling is implemented and commented at the call site naming the ADR —
+            redirect behaviour is pinned or the final host allowlisted, and the fetcher is injectable
+            and bank-configurable — so the next reader does not re-derive whether it was deliberate.'
+          - A watched source that cannot be fetched raises rather than passing quietly (STD-15), so a
+            proxy-blocked or moved page can never read as "nothing changed".
+          - Unit-tested as a pure function against a synthetic before/after pair; no new table, no
+            migration, and no change to RLS, retention, classification or lineage surfaces.
+      - id: STD-02
+        title: Interaction Guide v5.0 dispute clocks — re-attribute, and add the missing stage clocks
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          The follow-up story PRD BD-16 (docs/PRD_Open_Finance_Back_Office.md:373) and
+          docs/build-log.md:2446-2449 both promised and neither filed. Two distinct problems. First,
+          the shipped respondent clocks (3/15/3/3 business days, services/bff/src/respondent-disputes/service.ts:31-34)
+          are CORRECT under v5.0 inter-participant timelines, and the only v4 attribution is in the
+          contract at specs/backoffice-openapi.yaml:685-686 ("Interaction Guide v4 defaults, BD-16");
+          the module header at :14-18 cites "BD-16 defaults" and needs a v5.0 citation ADDED rather
+          than replaced — fix the attribution, never the values. Second, the v5.0 section 8 stage clocks (30 calendar
+          days to submit, 5 LFI/TPP review, 10 Nebras review, 15 respondent review) are not modelled
+          at all, and there is no calendar-day helper anywhere in services/bff/src — business-hours.ts
+          exports only the three business-day functions, so one must be added beside them. Also fix
+          AMBER_WINDOW_MS (:37), a calendar 24h applied to business-day due dates, so a Monday
+          deadline no longer turns amber on Sunday inside the weekend the module treats as paused.
+        acceptance:
+          - Spec-only PR lands first — the v4 attribution at specs/backoffice-openapi.yaml:685-688 is
+            replaced with a v5.0 citation and the RespondentDispute schema gains the four stage-clock
+            fields; contract tests are written failing before any implementation.
+          - 'Calendar-day and business-day arithmetic are distinct, named and separately tested —
+            a 15-business-day clock is about 21 calendar days and the two must never be conflated.'
+          - The four existing business-day values are UNCHANGED and services/bff/test/respondent-disputes.spec.ts:95-97
+            still passes on its current numbers; only attribution and the new stage clocks change.
+          - Additive migration only, on a table that already carries day-one RLS; the stored row
+            records which clock policy produced its due dates so a future re-baselining can be
+            applied to, and evidenced against, already-open cases.
+          - Clocks are a versioned, override-shaped constant object carrying an explicit IG v5.0 §8
+            citation — as a STANDARDS_BASELINE key if STD-01 has landed, inline otherwise, since ADR
+            0030 is explicit that STD-02 is NOT blocked on the registry and this story must not stand
+            that primitive up by the back door — following the AMBER_WINDOW_MS
+            configurable-at-enterprise-adoption precedent; per-tenant wiring stays M6-gated.
+      - id: STD-03
+        title: Service-desk respond and resolve SLA pairs (IG v5.0 §9.4) — and pause the clock at weekends
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/service-desk/service.ts:30 models one clock per priority (P1 4h, P2 24h,
+          P3 3d, P4 5d). IG v5.0 section 9.4 publishes a respond AND a resolve target per priority —
+          P1 2h/4h, P2 3h/6h, P3 10h/3 business days, P4 3 business days/11 business days — so the
+          SHAPE is wrong, not only the numbers, and the units are mixed (calendar hours and business
+          days in one table). Carries a defect found while verifying, in the same file — line 98
+          computes the due date as raw elapsed milliseconds, so the service-desk clock does NOT pause
+          at weekends. PRD §10 makes weekend pausing a binding adopting-bank default, business-hours.ts:2
+          records it, and every other SLA module in the BFF honours it; service-desk is the only one
+          that never imports business-hours. A P2 opened Friday 16:00 currently breaches Saturday 16:00.
+        acceptance:
+          - Spec-only PR first — ServiceDeskCase gains the respond clock and its overdue flag, and the
+            existing sla_due_at description is re-scoped as the resolve clock citing IG v5.0 §9.4.
+          - Respond and resolve are tracked independently per priority, with the mixed calendar-hour
+            and business-day units modelled explicitly rather than normalised into one unit.
+          - 'The weekend-pause defect is fixed and directly tested — a case opened Friday afternoon
+            is not overdue on Saturday — using the existing business-hours helpers, not new arithmetic.'
+          - Additive migration on the existing RLS-enabled table; the persisted row records the policy
+            version that produced its clocks.
+          - services/bff/test/service-desk.spec.ts assertions are STRENGTHENED to the new contract
+            rather than relaxed, and the Q1b test-integrity gate passes without an exemption.
+      - id: STD-04
+        title: Scheme notice periods per Interaction Guide v5.0 §11
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          services/bff/src/scheme-notifications/service.ts:29-30 holds BREAKING_CHANGE_NOTICE_DAYS 30
+          and STANDARD_NOTICE_DAYS 10, and :33-35 applies the single 10-day figure to BOTH planned
+          maintenance and version release. IG v5.0 section 11 publishes three distinct notices — 48
+          hours for scheduled downtime, 15 days for release-schedule and patch-management updates, 30
+          days for a new version release. The 48-hour figure forces hours granularity, which the
+          current day-only model cannot express. The contract text at specs/backoffice-openapi.yaml:1516-1517
+          repeats the 10d/30d figures with no version attribution and no calendar/business unit —
+          unlike the respondent block at :685, it does not even say which guide it came from.
+        acceptance:
+          - Spec-only PR first — the SchemeNotification description carries the v5.0 §11 figures with
+            an explicit version attribution and an explicit calendar-day unit.
+          - Notice requirements are expressed with hours granularity so the 48-hour downtime notice is
+            representable, and each notification type maps to its own v5.0 class.
+          - Additive migration; existing notifications keep the notice figures they were created under.
+          - services/bff/test/scheme-notifications.spec.ts pinned values (currently 10 and 30 at lines
+            50-80) are updated in-story to the new contract, strengthened not weakened.
+      - id: STD-05
+        title: UAE Open Finance consent vocabulary, consent types and validity
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        note: >-
+          packages/synthetic-data/src/index.ts:179-184 models consent purposes as AISP_DATA_SHARING /
+          SIP_PAYMENT / COP_CONFIRMATION with OAuth-style scopes (accounts:read, payments:initiate),
+          under a comment calling them OF v2.1 data-scope sets. AISP is UK/EU vocabulary; the UAE roles
+          are BDSP/BSIP/ISP and the data vocabulary is the permission-code set (ReadAccountsBasic,
+          ReadBalances, ReadTransactionsDetail and the rest, plus errata2's ReadStatements and
+          ReadProductFinanceRates, as a FLAT string array — errata2 flattened it from array-of-arrays).
+          The contract constrains none of it (purpose is free text at specs/backoffice-openapi.yaml:3241).
+          Consent types (single-use, long-lived, combined) are absent entirely, and the only expiry
+          logic is fixture behaviour giving Expired and Revoked consents a future expires_at. Also
+          carries a display defect on the bulk-revoke path — apps/portal/src/components/care-console.tsx:44
+          counts with REVOCABLE (including AwaitingAuthorization) while services/bff/src/consents/bulk-revoke.ts:34
+          sweeps ACTIVE_STATUSES, so the INITIATOR-facing count can exceed what is actually revoked.
+          Scope it accurately: the approval record is NOT inflated, because the four-eyes wire
+          projection emits only a descriptor for consents.bulk_revoke (approvals/operation-summary.ts:62-67)
+          and the second approver is never shown a count at all.
+        acceptance:
+          - Spec-only PR first — ConsentAdminView gains a consent_type enum and the purpose and scope
+            fields are constrained to UAE permission codes rather than carrying a PSD2 example.
+          - Fixtures emit UAE permission codes as a flat string array including the two added by
+            errata2; no AISP-derived or OAuth-style scope string remains anywhere in the repo.
+          - 'Consent types are modelled with their validity rule — long-lived consents are capped at
+            one year — and a terminal-state consent no longer carries a future expiry date.'
+          - 'The portal and BFF agree on what is revocable — AwaitingAuthorization is not granting
+            access and is not swept — so the count shown to the initiator equals the number of
+            consents the approved sweep will actually revoke, and a test asserts that equality.'
+      - id: STD-06
+        title: Nebras simulator — consent state machine, FAPI header echo, fault queue, one error envelope
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-05]
+        note: >-
+          services/nebras-sim/src/app.ts is a 199-line fixture server, not a Hub model, and four gaps
+          matter. It never echoes x-fapi-interaction-id (the only response header it ever sets is
+          retry-after at :80) even though the demo P6 adapter sends it on every call and the standard
+          makes it mandatory on responses — so the end-to-end propagation guarantee terminates at the
+          Hub boundary. It has no consent state machine, returning a fabricated Authorized for ANY
+          unknown id via the ?? fallback at :105 and always 200 on revoke, where API Hub release
+          2026.22.0 now returns 400 for revoke in a non-revocable state. Its two report surfaces are
+          seeded incoherently with the Consent Manager (measured overlap zero for every 2026 period),
+          so a cross-surface reconciliation silently reads every dataset consent as Authorized. And
+          activeFault at :71-72 finds over an append-only array, so only the first fault of each kind
+          is ever reachable and an exhausted rate-limit fault permanently shadows re-injection.
+        acceptance:
+          - x-fapi-interaction-id is echoed on every simulator response, and a test asserts the value
+            round-trips from the P6 adapter through the simulator unchanged.
+          - 'Unknown consent id returns 404, and revoke in a non-revocable state returns 400 per API
+            Hub 2026.22.0; the Consent Manager and the dataset surface are seeded coherently so ids
+            from one resolve in the other.'
+          - Faults are queued per kind rather than first-match-only, an exhausted fault is removed
+            rather than left shadowing re-injection, and the admin listing reports true state.
+          - One error envelope across all routes; the five admin validation paths stop returning a
+            bare string where hub routes return a structured code and message.
+          - The dispute case-id seed no longer collapses distinct disputes onto one case when the
+            optional originating_payment_id is absent.
+          - 'services/nebras-sim/test/sim.spec.ts is updated in-story — it currently locks in the
+            any-id-is-revocable behaviour at lines 16-25, so the assertions must be strengthened to
+            track the new contract and the Q1b gate must pass without an exemption.'
+          - Existing fault-injection semantics keep working end to end so docs/demo-script.md and the
+            run-ofbo flows are unaffected.
+      - id: STD-07
+        title: Close the P6 port-swap gate — simulator routes for syncDirectory and refund
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-06]
+        note: >-
+          NebrasEgressPort declares seven methods (packages/ports/src/interfaces.ts:85-106) and the
+          simulator serves HTTP routes for five. syncDirectory and dispatchRefund have no route at
+          all — the demo adapter answers them from in-process constants, a hardcoded three-row
+          DIRECTORY at packages/ports/src/adapters/sim.ts:193-197 and a fixed ipp_status ACSP at
+          :276-279 — while the enterprise adapter really calls GET /directory and POST
+          /payment-consents/{id}/refund. CLAUDE.md makes the shared port-contract suite the M6
+          port-swap acceptance gate, so for these two operations the gate is structurally unable to
+          detect a defect in the enterprise call. The fixed ACSP also makes the negative IPP paths
+          unreachable, so a rejected refund cannot be demonstrated. Separately the refund transport
+          disagrees with the scheme — specs/backoffice-openapi.yaml:657-660 and the scheme's own
+          chargeable-endpoint table both describe a GET, the enterprise adapter at
+          packages/ports/src/adapters/enterprise/nebras-egress.ts:90-97 issues a POST.
+        acceptance:
+          - Spec-only PR first for the refund-transport correction — specs/backoffice-openapi.yaml:657-660
+            describes a GET while the enterprise adapter POSTs, so the contract text moves before any
+            adapter does, with contract tests written failing beforehand.
+          - The simulator serves both operations over HTTP, and both adapters are bound by the shared
+            port-contract suite so the M6 gate covers all seven NebrasEgressPort methods.
+          - The refund transport is reconciled to one scheme-faithful shape across the contract text,
+            both adapters and the simulator, with the discrepancy resolved rather than documented.
+          - A refund can return a rejected IPP status in the demo profile, so the negative path is
+            demonstrable instead of hardcoded to ACSP.
+          - LINE_TYPES in packages/synthetic-data/src/index.ts:96 gains dao_api_call, which the
+            contract at :3147 and migration 0021_dao_line_type.sql already carry.
+          - No port-contract test is skipped to make the suite pass; a genuinely inapplicable case is
+            asserted as such with its reason.
+      - id: STD-08
+        title: Payment-rail vocabulary — UAEFTS, rail-dependent terminals, and an enum on ipp_status
+        status: pending
+        research: docs/reviews/standards-conformance-2026-08.md
+        depends_on: [STD-05]
+        note: >-
+          UAEFTS appears nowhere in the repo. The UAE domestic execution model is LFI-selected —
+          intra-bank for same-LFI, AANI as the primary inter-bank rail with automatic UAEFTS fallback
+          — and the terminal status differs by rail, ACWP on AANI against ACCC on UAEFTS and
+          intra-bank. The repo models five IPP codes (packages/synthetic-data/src/index.ts:190) and
+          neither ACWP nor ACWC exists anywhere, and no rail field exists on any payment object (the
+          rail hits in migrations are BILLING collection rails, a different concept). The contract
+          does not constrain it either — ipp_status at specs/backoffice-openapi.yaml:3278 is a bare
+          string with a prose description and no enum, so a sixth code from a real hub would validate
+          silently, unlike LineType at :3147 which is enumerated. Dated driver, already recorded in
+          this repo at docs/research/lfi-billing-system-tier2.md:80 — Standards V2.2 makes paymentRail
+          mandatory on terminal payment-log entries, Tier 2 release 28 Feb 2027 and go-live 31 May 2027.
+        acceptance:
+          - Spec-only PR first — ipp_status becomes an enum and the payment admin view gains a rail
+            field distinguishing the domestic execution rails.
+          - Rail-dependent terminal statuses are modelled, so an AANI-settled payment and a UAEFTS
+            fallback do not report the same terminal code, and the mapping is directly tested.
+          - The five hardcoded copies of the IPP code list collapse to the contract enum as the single
+            source, so the codes cannot drift between fixtures, tests and adapters.
+          - The V2.2 paymentRail obligation and its Tier 2 dates are recorded against this item so the
+            forward requirement has a delivery hook rather than living only in a research doc.
+
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +
   # insurers in parallel, Tier 1 M6 deploy as the later upmarket motion. Build order: VAL first
@@ -345,6 +818,38 @@ milestones:
         acceptance:
           - A Proposed ADR covering custody options, rotation/revocation lifecycle, residency,
             liability allocation, and the audit trail for certificate use; no code changes.
+      - id: HOST-04
+        title: "Fail-closed internal_view_select when app.tenant_group is unpinned"
+        status: pending
+        depends_on: [HOST-02]
+        note: >-
+          ADR 0028 Consequences records this verbatim as a "marked follow-up" and HOST-02 (its
+          prerequisite) is done, but nothing owned it until now - surfaced by BILL-13's hard-stop
+          review, which read the pattern as fail-open. It is. Every internal_view_select policy
+          reads
+          `NULLIF(current_setting('app.tenant_group', true), '') IS NULL OR bank_id IN (...)`,
+          so a session holding bank_internal_view with no tenant_group pinned reads EVERY tenant's
+          rows. That is deliberate single-tenant backward compatibility (ADR 0028), not an
+          oversight, and it is reachable only via runGovernedAggregate behind a registered and
+          approved query purpose with a High-class-logged bypass - so it is a hardening item, not
+          a live breach. MEASURED surface, since it has grown and future stories keep widening it -
+          the idiom now appears in NINE migrations: 0030 (defines it) and 0031, 0032, 0033, 0034,
+          0035, 0036, 0037, 0039. BILL-13 (0039) added SIX tables, not eight - its loop excludes
+          billing_tpp_cost_document and billing_tpp_cost_ap_dispatch, which is why the two
+          provider-fed payload tables that could carry PSU detail are already outside the
+          cross-tenant read. Fixing this must be ONE pass over the shared idiom, not per-migration
+          patches, or the policies drift apart; and it needs a decision on what unpinned should
+          mean (deny all rows, or resolve a default single-tenant group explicitly) since the demo
+          profile relies on the current behaviour.
+        acceptance:
+          - Unpinned app.tenant_group denies rows rather than returning all tenants, across every
+            table carrying internal_view_select, applied as one change to the shared idiom.
+          - The demo single-tenant profile still works, by an explicit group rather than by the
+            absent-setting fallback; seed and all existing tests stay green.
+          - An integration test proves the fail-closed behaviour directly - role held,
+            app.tenant_group unset, zero rows returned - on at least one table per migration
+            family, and proves it FAILS if the fallback clause is restored.
+          - runGovernedAggregate's registered-purpose path is unaffected and still audited.
       - id: INS-01
         title: Insurance module — line types, quote-fee reconciliation, insurance consent purposes
         status: blocked
@@ -388,6 +893,723 @@ milestones:
             asserted in tests; WCAG 2.1 AA on the new screens.
           - Token-only, OpenAPI-bound, DEMO-bannered, zero PII.
 
+  # Billing & monetization — LFI-side scheme billing as a product (the E6 extension).
+  # Derived from docs/research/lfi-billing-system-tier2.md (research baseline 4 Aug 2026;
+  # realizes its proposed BACKOFFICE-81..90 as BILL-01..10 pending a PRD uplift — new
+  # BACKOFFICE ids are reserved for PRD §7). Key inputs: Nebras Interaction Guide v5.0 §10
+  # (monthly cycle 3rd/5th/10th/30th/30th-5th; §10.16 LFI net settlement — resolves BD-15:
+  # both collection models co-exist; direct input to ADR 0007 and execution-plan item C5)
+  # and UAE e-invoicing Phase 1 (ASP appointed by 30 Oct 2026, PINT AE from 1 Jan 2027),
+  # which makes BILL-04 calendar-bound. New adopting-bank decisions BD-17..19 (ASP
+  # selection, collection rails, VAT posture) are defined in the research doc §10; the
+  # Starter/Growth/Scale packaging in §9 feeds execution-plan item C4 (pricing one-pager).
+  - name: BILLING
+    items:
+      - id: BILL-01
+        title: Scheme rate-card-as-code with upstream change watch
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        note: >-
+          The complete Commercial & Pricing Model v1.0 rate card as versioned,
+          effective-dated configuration (fee class x segment x schedule x conditions):
+          bps-with-cap (AED 50), the AED 200/day merchant exemption conditional on
+          Merchant ID (page edit 2 Jun 2026), batch caps, year-stepped schedules with a
+          configurable anchor (the scheme has never defined "Year 1" publicly), per-LFI
+          directory-published retail overage. A scheduled watcher diffs the upstream
+          C&P Confluence page and the Nebras pricing pages — the page mutated four times
+          Nov 2025 - Jun 2026 without a version bump — and raises a review task on change.
+        acceptance:
+          - A named, tested rate-card constant set replaces in-code fee references; the
+            BACKOFFICE-01 reconciliation schedule reads from it (no behaviour change).
+          - Rate-card changes are effective-dated, diff-audited High-class, and notify
+            Finance + Compliance; the year-step anchor is per-tenant configuration.
+          - The watcher demonstrably raises a review task on an injected upstream change.
+      - id: BILL-02
+        title: Independent billable-event metering feed (CloudEvents, exactly-once)
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0024-pre-stage-enterprise-adapters-kong-metering-boundary.md
+        note: >-
+          Gateway/Ozone Connect logs derived into idempotent CloudEvents billable events
+          on the platform metering boundary: chargeability per the 50-chargeable/26-free
+          endpoint classification, technically-successful-only, page aggregation (100
+          lines), attended/unattended, per-customer/day free-tier counters, the
+          payment-balance/CoP 2-hour discount pairing (one of each per payment),
+          Merchant-ID presence, quote-tier fan-out. Every metered line carries
+          x-fapi-interaction-id so an invoice line traces to a FAPI transaction.
+        acceptance:
+          - Re-metering from replayed logs is deterministic (same events in, same meters
+            out); ingestion is exactly-once under duplicate delivery.
+          - Simulator-injected traffic produces the expected meter set including pairing
+            and free-tier edge cases (tests-first per meter).
+          - Metering coverage (percent of gateway traffic classified) is exposed as a
+            metric for BILL-08.
+      - id: BILL-03
+        title: Receivables rating engine - the expected Collection Memo
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-01, BILL-02]
+        note: >-
+          Rates own metering per consuming TPP per fee class under BILL-01 and produces a
+          draft rated statement by the 3rd of each month; the emailed Nebras Collection
+          Memo (by the 5th) is auto-diffed against it on ingest, converting billing from
+          verify-what-arrived to compare-against-expected. Re-rating replays facts under
+          a corrected rate-card version - it never mutates metered events.
+        acceptance:
+          - Expected-memo statement generated per TPP by the 3rd against the simulator
+            month; memo ingest produces a line-level diff with variances above threshold
+            flowing into the standard E1 break workflow inside the 30-day query window.
+          - A rate-card correction re-rates a closed period by replay, producing a
+            documented delta - metered facts provably unchanged.
+      - id: BILL-04
+        title: PINT AE e-invoicing via Accredited Service Provider (statutory clock)
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-03]
+        note: >-
+          Invoice runs emit PINT AE Billing invoices (380) and credit notes (381) through
+          the institution's ASP under the UAE 5-corner DCTCE model; TIN/endpoint-0235
+          buyer identification; VAT extracted 5/105 from VAT-inclusive scheme amounts;
+          AED tax totals; foreign-TPP invoices flagged zero-rated export; Tax Data
+          Document reporting confirmed; human-readable PDF alongside. Calendar-bound:
+          ASP appointed by 30 Oct 2026 (BD-17), mandatory from 1 Jan 2027 (revenue >=
+          AED 50m); voluntary-window pilot mode before that. ASP port is a new adapter
+          seam (simulator first, per the ports discipline).
+        acceptance:
+          - An invoice run yields schema-valid PINT AE 380/381 documents (validated
+            against the v1.0.3 artifacts) plus rendered PDFs; disputed lines withheld.
+          - VAT derivation (5/105), AED totals, and zero-rated export flagging are
+            tested per counterparty class; BD-19 VAT posture is a named config input.
+          - TDD reporting acknowledgment is captured as evidence; pilot mode runs the
+            full flow against the ASP simulator with the mandate flag off.
+      - id: BILL-05
+        title: Collections, dunning and net-settlement decomposition
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-04]
+        note: >-
+          Two collection channels, decomposed rather than conflated. Scheme channel:
+          net-settlement remittances (30th-5th via the Nebras sponsoring bank) matched
+          invoice-by-invoice with cross-role netting (LFI receivables vs TPP-of-record
+          payables) explained line-by-line - unexplained residue becomes a break; the
+          IG v5.0 s10.16 model is the direct input to the ADR 0007 decision. Direct
+          channel: invoice-attached payment requests - OF Large Value/Invoice Collection
+          (AED 4 capped, invoices > AED 5,000), Aani request-to-pay below AED 50k,
+          UAEDDS mandate fallback - with a dunning ladder mirroring the scheme's own
+          late-payment regime and DSO tracked per TPP.
+        acceptance:
+          - A simulated settlement file decomposes to invoice level including a netted
+            dual-role period; an injected residue raises a break with both role ledgers
+            referenced.
+          - Dunning states progress on simulated non-payment and surface in the Finance
+            View; every collection action is High-class audited.
+      - id: BILL-06
+        title: Commissions and clawback sub-ledger (insurance now, FX at V2.2)
+        status: blocked
+        reason: >-
+          No approved insurance commercial model exists and INS-01 is not implemented.
+          The billing console reports this dependency explicitly; no commission,
+          clawback, or insurance ledger semantics are inferred from the prototype.
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [INS-01]
+        note: >-
+          The payables mirror of TPP billing: insurance commissions accrued at policy
+          sale, held through the 30-day cool-off, released or clawed back (5 years life /
+          2 years others) as negative accruals; bilateral-rate registry overriding scheme
+          defaults, reconciled against production-onboarding submissions; quote-tolerance
+          gating (premium within 17.5 percent, FX within 50 pips); FX/remittance
+          commissions (0.07/0.1 percent, min 50 fils) behind a V2.2 feature flag.
+          TPP-issued commission invoices are matched against the sub-ledger before
+          approval. Extends INS-01 line types to the money side for the 28 Tier 2
+          insurers arriving Mar 2027.
+        acceptance:
+          - Commission lifecycle (accrue, hold, release, clawback) is tested per line
+            type with cool-off and clawback windows enforced by the calendar, not by
+            operator memory.
+          - A TPP commission invoice that disagrees with the sub-ledger is blocked from
+            approval with a line-level diff; bilateral rates provably override defaults.
+      - id: BILL-07
+        title: GL and VAT posting via the P9 financial-system port
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-04]
+        note: >-
+          Journal instructions per fee class (payment fees, data fees, overage,
+          hub fees payable, Nebras service fees and penalties) with the VAT ledger fed
+          from invoice runs; month-close sign-off (BACKOFFICE-06) extended to cover
+          banking payables, receivables and settlement decomposition as one pack.
+          Insurance commissions and clawbacks are deliberately excluded: there is no
+          approved insurance commercial model, so those entries remain deferred with
+          BILL-06/INS-01 rather than being invented inside the banking GL implementation.
+        acceptance:
+          - A simulator month produces balanced journal instructions per fee class
+            through the P9 port; the VAT position ties to the issued-invoice set.
+          - The month-close pack covers the established banking receivable/payable sides
+            plus settlement; Finance sign-off locks it (existing BACKOFFICE-06 semantics).
+      - id: BILL-08
+        title: Revenue-assurance loop and leakage KPI
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-02, BILL-03]
+        note: >-
+          Monthly RA report: metering coverage percent, variance vs Nebras by fee class,
+          unbilled traffic (extends the BACKOFFICE-72 registration-gap alert to metering
+          gaps), silent-overage give-away quantified (retail pages above free tier billed
+          at zero where no directory rate is published), missed-dispute-window incidents
+          (target zero), leakage KPI with a below-1-percent target against the 2-5
+          percent unmanaged telco benchmark, and a recovered-revenue log - the
+          self-funding argument for the assurance tier (ADR 0026).
+        acceptance:
+          - The RA report renders from a seeded month with an injected leak of each
+            class (unmetered endpoint, rate drift, free-tier abuse, unbilled TPP) and
+            quantifies each in AED.
+          - Leakage KPI and recovered-revenue figures surface in the Finance View and
+            the VAL-01 ROI narrative.
+      - id: BILL-09
+        title: TPP profitability analytics and fee simulation
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [BILL-03]
+        note: >-
+          Per-TPP / per-product-family P&L combining receivables, hub costs
+          (TPP-of-record role), liability provisions (BACKOFFICE-36) and TPP-aaS margin
+          (BACKOFFICE-07); scenario engine for year-step transitions, annual CBUAE
+          rate-review outcomes and the directory overage-rate decision (publish a rate
+          or knowingly give overage away - only two LFIs publish one today); exports
+          feed the CBUAE annual-review submission and execution-plan item C4 pricing.
+          The scope-gated portal control plane at apps/portal/src/app/billing renders
+          these tenant-period outputs, runs the pure replay-safe scenario action and
+          downloads the integrity-hashed CBUAE fee-review artifact through a server-only
+          proxy; the httpOnly Bearer never reaches browser storage. Appearance reuses
+          Stitch billing screen 3d6d14a3 and all figures bind to the OpenAPI response.
+        acceptance:
+          - P&L per TPP and product family renders from the seeded month and reconciles
+            to the invoice + payables sets; scenario runs are deterministic and
+            side-effect-free.
+          - An overage-rate scenario quantifies revenue at the tenant's chosen
+            directory rate vs the silent default of zero.
+      - id: BILL-10
+        title: Multi-tenant billing service enablement (Tier 2 BOaaS)
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        depends_on: [HOST-01]
+        note: >-
+          The billing pipeline as a per-tenant service on the HOST substrate: per-tenant
+          (bank_id) rate-card overlays and year-step anchors, invoice branding/templates,
+          ASP routing and collection-rail configuration (BD-18 per tenant), tenant-scoped
+          RA reports; cross-tenant benchmark aggregation only via the
+          query_purpose_registry preventative control; per-tenant exit/export path
+          documented for outsourcing compliance. This is the Starter/Growth/Scale
+          packaging seam from the research doc s9.3.
+          The portal billing console exposes the resolved tenant rate card, invoice/ASP
+          and collection-rail policy and an explicit audited portability download. Tenant
+          identity remains derived from the verified principal; no bank selector is sent
+          by the browser.
+        acceptance:
+          - Two tenants run distinct rate-card overlays and invoice templates through
+            one deployment with full RLS isolation proven across billing tables.
+          - A tenant-scoped RA report and a governance-gated cross-tenant benchmark
+            query coexist without widening any tenant's read surface.
+          - Tenant export produces a complete, portable billing dataset (metered events,
+            rated statements, invoices, settlement decomposition) for exit.
+      - id: BILL-11
+        title: TPP Cost Management — decisions, ADR 0006/0007 acceptance, contract boundary (docs-only)
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        note: >-
+          Decision story for the payable side (product name TPP Cost Management). ADR 0007
+          accepted with the ratified decision set: OFBO/P9 boundary (P9 port extended for AP
+          dispatch); gross ledgers with netting only at settlement; fee-schedule source =
+          scheme C&P model + per-LFI directory OverLimitFees (unit check is a BILL-12
+          blocking pre-task); VAT accrued net with input VAT on acceptance (Hub posture
+          BD-20); Nebras invoice/settlement statement primary for BOTH cost components;
+          query window configurable (BD-21); close composes BACKOFFICE-06; closed-period
+          re-rating; insurance consumption in / commissions deferred; PostgreSQL; CAAP
+          reserved; no PSU identifiers in cost tables. ADR 0006 accepted alongside -
+          role_domain (LFI|TPP|shared) with the billing-family taxonomy decided now,
+          BD-22 + SEG-01 carrying the platform-wide rest. PRD: section-2 scopes aligned to
+          the spec (resolves the 2026-06-11 build-log advisory), role-domain note, the
+          section-7.6 payable-side product definition, BD-20..22. OpenAPI intentionally
+          untouched - the contract lands spec-first per story (BILL-12..17).
+        acceptance:
+          - ADRs 0006 and 0007 read Accepted with the decision content above; no dangling
+            "_Pending_" decision sections remain.
+          - PRD section-2 scopes match the spec's x-required-scope annotations exactly;
+            BD-20..BD-22 exist in section 10.
+          - BILL-12..17 and SEG-01 are seeded with acceptance criteria; docs gates
+            (docs:check, adr-number-check, discovery gate) pass.
+      - id: BILL-12
+        title: Expected TPP cost statement + payable rate-model corrections
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-11]
+        note: >-
+          BLOCKING PRE-TASK: pull a live Trust Framework directory snapshot, confirm the
+          OverLimitFees unit (published per CALL; the house model prices per page/100 lines),
+          record the decision in ADR 0007, and re-verify the pricing schedule against live
+          Nebras sources. Then buildExpectedTppCostStatement(rating, rateEvidence,
+          generatedAt): aggregate payable_hub/payable_lfi lines by recipient type+org,
+          fee class, product family, API family, segment, period, tenant, internal
+          product/cost centre; totals net of VAT with Nebras / LFI-payment / LFI-data kept
+          separate; evidence chain = meter run, event ids, FAPI ids, rate-card version and
+          a rate-snapshot hash chained to the pricing-doc version + directory snapshot.
+          Recipient-dimensioned effective-dated data-overage rates from directory snapshots
+          (BILL-01 watch + P6 syncDirectory); mirror-pricing retained only for
+          scheme-uniform fees. Fix the two confirmed projection defects - outbound
+          corporate data must rate as data.corporate_page (40 fils/page, no free tier;
+          metering.ts:316-325) and profitability must expose underlying-LFI cost as its own
+          external-cost line (profitability.ts:88).
+        outcome: >-
+          Landed 2026-08-17. buildExpectedTppCostStatement + resolveLfiOverageRate (snapshot-level
+          REQUIRED unit, effective-dated, absent/expired/zero = charges nothing, provenance on every
+          resolution); rating prices payable retail overage from the snapshot and FAILS CLOSED
+          without one; both defects fixed (outbound corporate -> data.corporate_page with no free
+          tier; profitability lfiCostMilliFils as its own external cost, subtracted from profit,
+          surfaced on the wire as lfi_cost_milli_fils and as a Finance View stat).
+          Two hazards found by adversarial review and fixed in-branch: (1) meter runs dedupe on
+          (bank_id, period, rate_card_version, input_hash) which cannot see a projection change, so
+          METERING_PROJECTION_VERSION is now bound into the hash - otherwise the corporate fix would
+          have been a silent no-op on every already-metered period; (2) the new fail-closed throw
+          would have bricked three receivable-only projections (revenue assurance, expected memo,
+          closed-period re-rating) that never read payable lines - they now rate via
+          receivableMeteredLines, with a regression test.
+          The free-tier granularity question surfaced during review is now explicit rate-card data
+          (RetailFreeTierGranularity) defaulting to the conservative psu_per_day rather than a silent
+          per-LFI reinterpretation that would have understated the payable.
+          NOT closed: the OverLimitFees unit pre-task - the egress policy denies
+          data.directory.openfinance.ae so no live snapshot could be observed; recorded on ADR 0007.
+          DEFERRED with reasons: no P6 directory producer or demo snapshot (would encode the
+          unconfirmed unit) and no synthetic outbound data events, so the statement is domain-tested
+          but not yet demonstrable end-to-end - BILL-13 persists statements and seeds them once the
+          unit is known. Evidence: 34 new tests; unit suite 1413/1413; monorepo typecheck + ESLint
+          clean; coverage gate exit 0.
+        acceptance:
+          - The OverLimitFees unit decision is recorded in ADR 0007 from a live snapshot
+            before the statement model merges.
+          - Statements are deterministic and reproducible from immutable inputs; every line
+            traces to meter run + events + rate snapshot; the three cost totals stay
+            separate.
+          - Outbound corporate data rates at the corporate page rate (test red before the
+            fix); profitability shows Hub and underlying-LFI cost as separate lines.
+          - An LFI with absent/empty OverLimitFees yields zero overage cost; per-LFI rates
+            are effective-dated and snapshot-evidenced.
+      - id: BILL-13
+        title: Durable payable ledger + closed-period re-rating
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-12]
+        note: >-
+          Eight append-only tenant-RLS tables mirroring the 0032/0033 control block -
+          billing_tpp_cost_statement/_line, _document/_line, _reconciliation, _diff_line,
+          _ap_dispatch, _rerating: FORCE RLS, SELECT+INSERT-only app permissions,
+          TPP-domain classification (ADR 0006), 24-month/5-year retention, BCBS 239
+          lineage, canonical SHA-256 evidence hashes, tenant-export integration, no silent
+          overwrite. No PSU identifiers anywhere - lines reference event_ids (psu_id stays
+          confined to billing_event); no per-customer daily buckets are persisted, so no
+          derived customer key exists. Statement generation rides the existing meter-run
+          trigger path (idempotent, resumable, sleep-tolerant demo) - no new jobs runner.
+          billing_tpp_cost_rerating mirrors billing_period_rerating: closed-period
+          corrections replay into immutable delta statements, never mutation.
+        outcome: >-
+          Landed 2026-08-17. Migration 0039 creates all eight tables with the 0032/0033 control
+          posture (RLS ENABLED+FORCED, SELECT+INSERT only for ofbo_app, group-scoped internal-view
+          reads, 24/60 retention and confidential-restricted floors) and no PSU column anywhere.
+          The schema is self-reconciling: a statement's three streams must sum to its net total,
+          gross must equal net+VAT on statements and lines, every line must carry an event id, a
+          rerating delta must equal corrected minus previous, and AP dispatch is unique per
+          (idempotency key, dispatch state) - which bounds each state to one row per instruction,
+          so an instruction cannot be recorded as dispatched twice, but does NOT by itself make
+          double payment impossible and constrains no transition order. Not double-paying rests on
+          BILL-16 dispatching once under the key plus P9's own idempotency. An earlier draft of this
+          entry claimed uniqueness per idempotency key alone; that overstated the constraint.
+          PgBillingTppCostStore writes the three tables this story owns, idempotent on (meter run,
+          rate card version, rate snapshot hash) so a corrected directory rate becomes a NEW
+          immutable statement rather than an overwrite; it refuses a rerating unless both statements
+          project the same meter run (a different run is a re-meter, not a re-rate). tppCostLineRef
+          derives line identity from cost dimensions, which is what BILL-15 will match documents on.
+          Generation rides the existing monthly billing trigger beside the receivable expected-memo
+          projection - no new scheduler. It SKIPS with an audited reason rather than throwing when a
+          chargeable overage line cannot be priced, so the fail-closed pricing refusal inherited from
+          BILL-12 cannot take the regulated receivable projections down with it. The payable dataset
+          now travels with the tenant portable export.
+          Five tables (documents, document lines, reconciliation, diff lines, AP dispatch) are
+          created but unwritten until BILL-14/15/16; they stay empty, which the Q4.5 gate skips, so
+          nothing may seed them ahead of their story.
+          NOT closed: the OverLimitFees unit criterion below - the egress policy still denies
+          data.directory.openfinance.ae. It is enforced structurally rather than procedurally: rating
+          fails closed, so a statement carrying chargeable overage cannot be produced at all without
+          a snapshot stating its unit, and the criterion carries forward to BILL-14.
+          Evidence: unit 1421/1421; integration 162/162 across 77 files on a pristine PostgreSQL
+          16.13; Q4.5 lineage gate PASSED with the three written tables covered, allowed gaps none;
+          typecheck, ESLint and the coverage gate clean.
+        acceptance:
+          - The OverLimitFees unit is confirmed from a live directory snapshot and recorded in
+            ADR 0007 BEFORE statements are persisted. Carried forward from BILL-12, whose egress
+            policy denied the directory host; persisting a statement priced on an unconfirmed unit
+            is what this criterion exists to prevent.
+          - RLS isolation and INSERT-only proven by denial tests across all eight tables;
+            the derived Q4.5 lineage gate covers them with no KNOWN_LINEAGE_GAPS additions.
+          - Re-rating a closed period yields previous/corrected/delta statements with
+            metered facts provably unchanged (fingerprint equality).
+          - Tenant export includes the payable dataset; no psu column exists in any
+            billing_tpp_cost_* table (schema assertion).
+      - id: BILL-14
+        title: Provider-document ingestion (Nebras-primary taxonomy)
+        status: done
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-13]
+        note: >-
+          POST /back-office/billing/tpp-cost-documents mirrors the billing-records
+          verified-manual-upload pattern (BACKOFFICE-67/-73): multipart, integrity SHA-256,
+          second-person verification, lineage, Idempotency-Key, super-admin justification.
+          Document taxonomy per ADR 0007 D9 (IG v5.0 section 10): monthly Nebras Tax
+          Invoice PRIMARY - it may carry BOTH cost components (Hub fees + LFI charges,
+          IG 10.2), though the 10.9 sample shows Hub sections only, so ingestion accepts
+          both layouts; the summarized supporting data (IG 10.3.4/10.18) is stored as an
+          evidence artifact; underlying-LFI self-invoicing documents secondary;
+          credit/debit notes; Finance-approved manual adjustments. Header validation:
+          invoice number, billing period, TPP+Nebras TRNs, currency (AED), due date.
+          VAT parse is split per ADR 0007 D4: Hub-fee sections are VAT-EXCLUSIVE with
+          Taxable/VAT 5%/Gross columns (IG 10.9 sample); LFI-charge amounts are
+          VAT-inclusive (5/105). Line categories parse against a maintained Nebras
+          category -> fee-class mapping (Service Initiation: Corporate Payment / Payment
+          Initiation / Payment Data; Data Sharing: Bank Data Sharing / Corporate Data /
+          Balance (Discounted) / CoP (Discounted) / Setup and Consent / Insurance Data
+          Sharing / Insurance Quote Sharing). Identical duplicate returns the prior
+          result; same reference with different content conflicts (409). Raw document
+          retained with parsed-vs-raw linkage. Missing-document alarm anchored to the
+          scheme billing calendar (IG 10.12.3: invoice/memo due on/before the 5th, next
+          business day if weekend/holiday) raised via P3 ITSM + ops signal - IG 10.12.2
+          makes reporting non-receipt the participant's OBLIGATION, so the alarm is a
+          compliance control. Parsing sits behind an adapter so a scheme/enterprise
+          transport can be added later. The first real Nebras tax invoice closes BD-20.
+        acceptance:
+          - Idempotent replay and same-ref-different-content conflict both proven; raw
+            document is immutable and hash-linked to parsed lines.
+          - An IG-10.9-shaped tax invoice (Service Initiation + Data Sharing sections,
+            Taxable/VAT/Gross columns) parses with per-line net/VAT/gross reconstructing
+            the section subtotals and invoice total; a document carrying an LFI-charges
+            component parses its VAT-inclusive amounts via 5/105.
+          - Every parsed line resolves through the category->fee-class mapping or is
+            flagged unmapped (never silently dropped).
+          - The absence alarm fires through P3 when no invoice has arrived by the
+            configured calendar anchor (the 5th by default) and not before.
+          - BLOCKING, inherited from BILL-13's migration 0039 — raw_document_ref and
+            parsed_payload are provider-fed free-form columns in an INSERT-only family with
+            NO deletion path, so any PSU detail a Nebras invoice line carries into them is
+            unremovable. Redaction MUST happen at parse/ingest time, before the first
+            INSERT, and MUST be asserted by a test that feeds a document containing
+            payment-level customer detail and greps the persisted row for it. The schema
+            cannot enforce this; BILL-13 deliberately withheld the cross-tenant
+            bank_internal_view SELECT grant on billing_tpp_cost_document until it exists.
+            Granting that read is part of THIS story only once redaction is proven.
+          - verified_by and verified_at (migration 0039) are NOT NULL but bound to nothing —
+            denormalised second-person-verification evidence, the same weakness the AP-dispatch
+            principal columns carry. RATIFIED as operator attestation, revised from the original
+            wording after review found the built behaviour differed from it. The UPLOADER is
+            stamped from the P2 subject claim and never from operator-supplied input, while
+            verified_by NAMES the second person from the request and is refused when it equals
+            the uploader. That proves distinctness between two names, NOT that the verifier
+            authenticated, and the code, the spec and this criterion must all say so in those
+            terms. A genuinely authenticated second person belongs on the existing four-eyes
+            primitive (202 + approval_request) as its own story, never on a second mechanism
+            invented at this endpoint.
+        outcome: >-
+          POST /back-office/billing/tpp-cost-documents added spec-first (94 paths). Parsing lives in
+          packages/billing/src/tpp-cost-document.ts behind TppCostDocumentParser so a PDF/EDI/API
+          transport can be added without touching the ingest service. VAT is split by STREAM per ADR
+          0007 D4 - Hub sections VAT-exclusive (+5% on the stated net), underlying-LFI sections
+          VAT-inclusive (5/105 carved out of the stated gross) - and gross is always computed as
+          net+vat so the three reconcile exactly under half-up rounding. Document totals are DERIVED
+          from the lines and then checked against the provider's own; a disagreement is refused rather
+          than silently resolved in either direction. The category map is versioned DATA, and
+          deliberately PARTIAL - five categories map to fee classes we already price, and four are
+          knowingly unmapped: Balance (Discounted) and CoP (Discounted) because the IG 10.9 sample
+          carries a unit anomaly BD-20 must resolve, Payment Data and Setup and Consent because no
+          current fee class corresponds without inventing scheme semantics. Unmapped lines persist with
+          mapped=false and fee_class NULL, tied together by the schema CHECK. Redaction happens at
+          PARSE time, before anything can be persisted, keyed on field NAMES and on identifier SHAPES
+          (so a real value the redactor has never seen is still caught), with the store re-checking at
+          the boundary that makes a write permanent. Two redaction bugs were found by that
+          double-check rather than in review: the redactor was not idempotent (re-running flagged
+          already-redacted keys, so the boundary check rejected correct writes), and a generic
+          long-digit-run rule plus an unanchored phone pattern were both redacting the 15-digit TRNs
+          that IG 10.9 REQUIRES in the header - business identifiers must survive redaction, and the
+          residual risk of an account number under an unrecognised key is now stated rather than
+          papered over with a heuristic that destroys required evidence. Migration 0040 grants the
+          cross-tenant internal-view read on billing_tpp_cost_document that BILL-13 deliberately
+          withheld, now that redaction is proven against a persisted row; ap_dispatch stays withheld
+          for BILL-16 on the same terms. CORRECTION, and it corrects an earlier version of this very
+          line, which claimed verified_by was bound to the caller's verified P2 claim. It is not.
+          Only the UPLOADER comes from principal.subject. verified_by is read from the multipart body
+          (tpp-cost-document.ts:450), so the 409 when it equals the uploader proves DISTINCTNESS
+          between a subject and a free-text string - never that the verifier authenticated. The
+          acceptance criterion had demanded the P2 claim, and the spec description asserted 'neither
+          is taken from the request body' while its own schema 24 lines below REQUIRED verified_by as
+          a form field, so the contract contradicted itself and three artefacts described a control
+          the service does not implement. RESOLVED by adopting-bank decision, spec-first. The verifier
+          is ratified as an operator ATTESTATION - the spec prose, the acceptance criterion and this
+          outcome now all say so in those words, and the form field's own description already did. A
+          genuinely authenticated second person is a separate story on the EXISTING four-eyes
+          primitive (202 + approval_request, initiator != approver, 2-hour expiry); it is deliberately
+          not a second verification mechanism invented at this endpoint. The
+          absence alarm anchors on the 5th of the following month, moving off a weekend, fires only
+          once the anchor has passed, and treats a credit note as not-an-invoice. Evidence: unit
+          1455/1455, integration 179/179 across 78 files on a pristine PostgreSQL 16.13, Q4.5 PASSED
+          with both document tables covered and allowed gaps none, typecheck 0, ESLint clean,
+          doc-link-check clean (the anti-drift gate caught a stale README path count), Q1b no
+          weakening detected. STILL OPEN and inherited: the directory OverLimitFees unit remains
+          unconfirmed because the egress policy still denies data.directory.openfinance.ae - rating
+          stays fail-closed - and BD-20 still needs the first REAL Nebras invoice, which is also what
+          resolves the four unmapped categories.
+      - id: BILL-15
+        title: Three-way payable reconciliation + dispute-window management
+        status: in_progress
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-14]
+        note: >-
+          Own outbound metering <-> expected statement <-> provider document, matched at
+          the INVOICE CATEGORY grain (Nebras line categories -> fee classes via the
+          BILL-14 mapping, our line-level evidence beneath) under an explicit configurable
+          tolerance defaulting to the fils(1) pattern (expected values are milli-fils,
+          documents arrive in fils/AED - never exact equality). Match keys per category:
+          period, recipient, units, applied rate, amount, VAT, rate effective date. The
+          Nebras invoice reconciles both cost components first; LFI self-invoices
+          reconcile as the secondary path; a charge on both sources is itself a
+          duplicate_charge break. IG 10.17 late-payment penalty fees are a distinct
+          charge class - expected only when a late payment actually occurred, otherwise
+          an unexpected-charge break. Variances become standard E1 reconciliation_break
+          records (quantity, rate, unexpected, missing, wrong recipient, duplicate, VAT,
+          period, unmatched either side) carrying expected/actual, absolute+percent
+          variance, owner, reason code, dispute deadline, resolution evidence, approval
+          history. The dispute window is scheme-published (IG v5.0 10.13): submit within
+          30 CALENDAR days of occurrence (config; BD-21 confirms the anchor), and the
+          workflow also tracks Nebras response clocks - first response 10 min, final
+          response 10 days, respondent review & escalation 15 days. Billing-query
+          evidence bundles carry the IG 10.11.3 required fields (invoice number,
+          interaction ID, timestamp, LFI/TPP names, payment/transaction detail).
+          POST .../tpp-cost-documents/{id}:reconcile requires finance:reconciliation:write,
+          mirroring billing-records:reconcile. Disputed lines are withheld from payable
+          approval (mirror of reconcile-before-invoice); Finance+Ops alerted as unresolved
+          breaks approach window expiry.
+        acceptance:
+          - Overcharge, missing charge, and VAT mismatch each produce the correct break
+            class with line-level evidence; a difference inside the tolerance produces
+            none.
+          - A penalty line without a matching late payment raises an unexpected-charge
+            break; with one, it matches clean.
+          - A disputed line cannot reach an approved payable (blocked path tested end to
+            end).
+          - The expiry alert fires as the configured window closes and the Nebras
+            final-response/escalation clocks are visible on each open query; window
+            length is config, not a constant.
+          - A generated billing-query bundle contains every IG 10.11.3 required field.
+          - BLOCKING, inherited from BILL-13's migration 0039 - billing_tpp_cost_diff_line
+            carries a ten-value break_type CHECK and a reconciliation_break_id that has NO
+            foreign key. This story owns both. It MUST (a) decide how payable break_type maps
+            onto the contract's LineType, because GET /back-office/reconciliation/breaks
+            classifies by line_type (six values) and declares no break_type, so an unmapped
+            payable break is not representable on the endpoint that is supposed to show it;
+            (b) constrain reconciliation_break_id before writing it - a tenant-composite FK
+            needs a new UNIQUE (bank_id, id) on reconciliation_break plus an ON DELETE decision
+            for a regulated record, which is why BILL-13 deferred rather than added it; and
+            (c) reconcile variance shape - ReconciliationBreak.variance_amount is a Money
+            object while billing_tpp_cost_diff_line stores variance_milli_fils bare, so this
+            depends on the milli-fils decision recorded on BILL-17.
+        progress: >-
+          Criteria 1, 2, 4, 5 and 6(a)+(b) built. reconcilePayable (packages/billing/
+          tpp-cost-reconciliation.ts) matches at (costRecipientType, costRecipientId, feeClass)
+          under DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS = fils(1), discriminating quantity ->
+          rate -> VAT in that precedence (units first because a rate argument built on the
+          wrong volume wastes the 10.13 window). wrong_recipient pairs an expectation and a
+          document line into ONE break and REFUSES to guess when two candidates share a fee
+          class. duplicate_charge is detected across documents only (within one document a
+          provider may legitimately split a category over rows) and its amount counts toward
+          actualTotalNetMilliFils - it is money genuinely billed. unmatched_expected_line
+          distinguishes OUR mapping gap (a fee class the Hub could never name) from their
+          omission, so it is never queried with them. 6(b) landed as migration 0041:
+          UNIQUE (bank_id, id) on reconciliation_break + composite FK, ON DELETE deliberately
+          absent (NO ACTION = refuse) because CASCADE would propagate a delete into the
+          payables ledger and SET NULL would sever the audit trail while reporting success;
+          MATCH SIMPLE keeps the reference optional. 6(a) maps break_type -> LineType by cost
+          RECIPIENT (nebras -> nebras_fees, underlying_lfi -> lfi_access_log); break_type is a
+          guard that throws on an unknown value rather than a routing input, and
+          payment_settlement is deliberately unused because it means money movement, not fee
+          liability. buildBillingQueryBundle refuses three ways - missing 10.11.3 field, closed
+          window, identifier-shaped transaction detail (reusing BILL-14's refusal guard rather
+          than adding a second redaction path). Three self-found defects fixed with tests: an
+          off-period document anchored the query deadline a month early; a duplicated charge
+          reported netVariance 0; the wrong_recipient pairing guessed among candidates.
+          STILL OPEN - criterion 3 (a disputed line cannot reach an APPROVED payable) is
+          half-built: openPayableBreaks() is the gate query and is tested tenant-scoped, but
+          the refusal it feeds lives in BILL-16, so the end-to-end blocked path cannot be
+          tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the money-unit
+          decision (BILL-17); diff lines still store variance_milli_fils bare and no
+          Money-shaped variance is written.
+      - id: BILL-16
+        title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
+        status: pending
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-15]
+        note: >-
+          Journal sources nebras_hub_payable, lfi_payment_fee_payable, lfi_data_fee_payable,
+          payable_credit_note, payable_variance join the existing net_settlement. Lifecycle
+          per ADR 0007 D4: accrual net of VAT (Dr OF external cost / Cr accrued payable);
+          acceptance reverses the accrual, books Dr Input VAT receivable per the tax
+          invoice, Dr/Cr cost variance, Cr accounts payable gross; settlement clears AP
+          against scheme clearing/cash. Four-eyes (202 + approval_request, 2-business-hour
+          expiry) before close, material-variance acceptance (existing configurable
+          threshold mechanism - no new materiality config), P9 dispatch, manual adjustment,
+          net-settlement authorisation. Cost-period close is a gated precondition feeding
+          the existing BACKOFFICE-06 monthly sign-off - no parallel close mechanism.
+          Collection is the scheme's DIRECT-DEBIT PULL (IG v5.0 10.14-10.15: TPPs must pay
+          by direct debit; DDA presented to the Nebras sponsoring bank on the 10th,
+          collection window to the 30th, LFI transfers 30th-5th) - the four-eyes AP
+          approval authorises honouring the debit, and P9's execution role is DD mandate
+          management plus matching the pulled debit to the approved payable, not push
+          payment. Dual-role netting is scheme-confirmed (IG 10.16: amounts payable to
+          LFIs are netted against fees owed to Nebras where the LFI also operates as a
+          TPP). P9 port extension: dispatchPayableInstruction + a payable-status method on
+          FinancialSystemPort, sim adapter + fail-closed enterprise financial-system
+          adapter, port contract tests binding BOTH through the HARNESS-10 bench (a new
+          port method cannot skip the gate). Net settlement decomposes gross receivables
+          minus Nebras costs minus underlying-LFI costs plus approved adjustments;
+          unexplained residue posts to suspense AND raises an E1 break (new wiring from
+          accounting.ts:164).
+        acceptance:
+          - Every journal balances (property test including the VAT leg); the accrual
+            reverses exactly on acceptance.
+          - Close is refused (409) while unresolved material breaks exist; approved close
+            feeds the monthly sign-off.
+          - The port contract suite runs the new methods green on BOTH adapters, including
+            a rejection/downstream-failure case; dispatch is idempotent, retry-safe,
+            audited, and cannot mutate billing evidence.
+          - The residue scenario produces the suspense line AND a reconciliation break.
+          - BLOCKING, inherited from BILL-13's migration 0039 — three obligations the
+            schema provably CANNOT carry, each to be enforced in this story's write path
+            and proven by test. (a) The cited approval_request must be in state 'approved'
+            and its expires_at must not have passed when approved (2-hour adopting-bank
+            default, PRD section 10) — the foreign key constrains tenant and existence only,
+            because state and expiry are mutable on the referenced row. (b) initiated_by
+            and approved_by MUST both be stamped from the same normalised P2 subject claim,
+            never from operator-supplied input — the CHECK compares strings
+            case-insensitively and cannot detect one human under two identifier forms. They
+            MUST ALSO equal the cited approval_request's own initiator and approver — they
+            are denormalised evidence copies, and nothing in the schema binds them to the
+            row they cite, so without this check the recorded four-eyes evidence can name
+            two people who had nothing to do with the approval actually referenced.
+            (c) response_payload is a provider-fed free-form column in an INSERT-only family
+            with no deletion path; redact P9 responses before the first INSERT, asserted by
+            test, and only then consider the cross-tenant bank_internal_view SELECT grant
+            that BILL-13 deliberately withheld on billing_tpp_cost_ap_dispatch.
+          - Dispatch state advances by APPENDING a row, never by UPDATE — the table is
+            INSERT-only with UNIQUE (bank_id, idempotency_key, dispatch_state). The schema
+            does not constrain transition ORDER, so this story owns rejecting an illegal
+            sequence (e.g. accepted after rejected) at write time.
+      - id: BILL-17
+        title: TPP Cost Management console + governed exports + demo scenarios + hosted smoke
+        status: pending
+        research: docs/research/lfi-billing-system-tier2.md
+        adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
+        depends_on: [BILL-16]
+        note: >-
+          Stitch-first (binding): generate the TPP Cost Management screens in the Stitch
+          project before implementation, cite screen ids in the PR, token-only styling,
+          DEMO banner, persona scope-gating. ONE IA pass adds the section to the billing
+          console AND renames the /tpp-billing nav entry (e.g. LFI Revenue & TPP Registry)
+          without breaking its API paths. KPIs: expected total/Nebras/LFI cost, documents
+          received, variance, unresolved breaks, dispute-window days remaining, AP and
+          settlement status. Breakdowns: by underlying LFI, internal product, cost centre,
+          API family, Hub vs LFI, payment vs data fees, expected vs actual, month-on-month
+          (cost-per-journey deferred - no journey definition exists). Workflows: statement
+          -> metered evidence -> upload -> parse review -> reconcile -> investigate ->
+          assign -> dispute evidence -> variance approve/reject -> close -> AP approval ->
+          governed export. Server-side auth + download proxies (no tokens or export
+          payloads in browser storage). Deterministic demo scenarios per the ADR 0007
+          evidence list, including: paired discount limited to one Balance AND one CoP per
+          payment, corporate 40 fils/page no free tier, per-LFI effective-dated overage,
+          insurance producing no payable_lfi, chargeable refund GET, exactly-once
+          duplicates, credit note, VAT mismatch, absence alarm, dispute-deadline alert,
+          dual-role settlement with residue break, RLS denial, lineage gate, recomputable
+          export digest. Hosted smoke asserts the TPP cost totals and independently
+          recomputes the exported evidence digest.
+        acceptance:
+          - Stitch screen ids cited in the PR; screens are token-only with the DEMO banner
+            and scope gating; the nav rename ships in the same pass.
+          - The full scenario suite is green, including the paired-discount limit and
+            per-LFI overage effective-dating.
+          - Hosted smoke recomputes the export digest independently; a11y and browser E2E
+            pass.
+          - BLOCKING, a forward obligation from BILL-13's migration 0039 — nine state and
+            reason vocabularies are already hard-committed as CHECK constraints in an
+            INSERT-only, no-deletion-path family with NO counterpart in the OpenAPI
+            (cost_recipient_type, fee_stream, customer_segment, vat_treatment, document_type,
+            query_window_status, break_type, presence, dispatch_state). This story owns the
+            endpoints that first expose them, so its schemas MUST mirror those sets exactly,
+            or the spec-change workflow must land first. The values are expensive to move once
+            rows exist, so a divergence discovered here is a spec-change PR, never a widened
+            CHECK.
+          - BLOCKING - this story cannot emit a spec-conformant Money object per LINE without
+            a decision on the open milli-fils question, and must not invent one. Precise
+            position, measured - the spec's Money schema (specs/backoffice-openapi.yaml:3028)
+            states the binding rule verbatim and cites CLAUDE.md - integer minor units, "fils
+            for AED" - so the spec and CLAUDE.md AGREE; the outliers are two bare
+            *_milli_fils integer fields at spec:2926-2927 plus roughly thirty milli-fils
+            columns added by migration 0039. Separately, only billing_tpp_cost_statement and
+            _document carry a currency column at all (0039:69,156), so the line-level tables
+            (_statement_line, _diff_line, _ap_dispatch, _rerating) hold amounts with no
+            currency and a conformant per-line Money requires joining the parent - and on
+            _rerating "the parent" is not singular, because it carries TWO statement foreign
+            keys (previous_statement_id and corrected_statement_id, 0039:371-372), so that
+            story must decide which one denominates a delta rather than assume one exists. Two viable
+            resolutions, both needing a human - convert milli-fils to Money at the wire
+            boundary and keep the finer precision in storage only (nothing requires storage
+            precision to equal wire precision, and this leaves Money as declared), or ratify
+            milli-fils - which means amending BOTH CLAUDE.md and the Money schema description,
+            not just adding an ADR.
+
+  # Dual-role Chinese wall enforcement (ADR 0006, accepted 2026-08-17) — E4-class substrate.
+  - name: SEGREGATION
+    items:
+      - id: SEG-01
+        title: Role-domain wall enforcement (scope guard + RLS predicate + cross_domain_access audit)
+        status: blocked
+        reason: >-
+          Awaiting BD-22 - the platform-wide role-domain taxonomy (personas + non-billing
+          data classes) is a bank decision. The billing-family taxonomy is already decided
+          in ADR 0006 and rides BILL-13..16 as classification tags; this item is the
+          enforcement build and must not start before the taxonomy is signed off.
+        adr: docs/adrs/0006-lfi-tpp-data-segregation.md
+        note: >-
+          ADR 0006 Option 1: role_domain (LFI | TPP | shared) threaded through the persona
+          scope matrix (role-domain guard beside the BACKOFFICE-43 scope check, both
+          layers), RLS predicates on role-owned tables, BACKOFFICE-54 classification, and a
+          High-class cross_domain_access audit event on any permitted cross-domain read.
+          Raises the full BACKOFFICE requirement + PRD section-2 amendment when it
+          unblocks. Tests-first; shared classes (scheme reference data, rate cards,
+          settlement/sign-off aggregates) must remain readable by both domains -
+          over-walling is a failure mode, not a safety margin.
+          Known call site to revisit, surfaced by the BILL-13 hard-stop review: the tenant portable
+          export (packages/db/src/tenant-billing-service-store.ts) now returns the TPP-domain payable
+          ledger alongside the LFI-domain receivable ledger in ONE artifact behind a single
+          billing:read check. Acceptable today - PRD section 2 puts TPP cost management in the Finance
+          Analyst's remit and the export is RLS-scoped to the caller's own bank_id - but it is the
+          first place one read crosses the wall, so it needs the cross_domain_access seam.
+        acceptance:
+          - A TPP-domain principal cannot invoke LFI-domain reads/writes and vice versa,
+            enforced at middleware AND service layer, proven by denial tests.
+          - Role-owned tables carry the RLS role-domain predicate; shared tables provably
+            remain dual-readable.
+          - Any permitted cross-domain access emits cross_domain_access with full
+            attribution; the event appears in the audit trail.
+
   # Build-harness improvements — the machinery that governs the autonomous build loop itself
   # (not a product feature). Researched against 2025-26 agentic-coding practice; ADR 0019 (01-04), ADR 0020 (05).
   - name: HARNESS
@@ -403,9 +1625,11 @@ milestones:
       - { id: HARNESS-13, title: "Ratchet the mutation floor to the measured baseline + on-demand full-matrix CI run", status: done, note: "Two controls that could decay unnoticed (improvement-plan audit §2.5 and §2.7). (a) RATCHET: stryker break was 65 against a 70.3% baseline - five points of slack, so the mutation gate could lose a lot of ground before failing. Re-measured 2026-08-06 over 493 mutants: 71.20% (351 killed / 116 survived) on vitest 2 and 70.99% (350/117) on vitest 3 after the HARNESS-12 bump - a ONE-mutant delta, so ~0.2pp is the observed noise floor. break raised 65 -> 70, about one point (~5 mutants) of headroom: absorbs noise, fails on real decay. Confirmed the gate still exits 0 at break=70 by a full local run. (b) DISPATCH: ci.yml had no workflow_dispatch, so the full-matrix re-verification the audit asked for (eleven stories carry 'Merged on local gates' from the July Actions billing outage) could not be launched on demand. Added. Q1b is the one gate that CANNOT run on a dispatch - it diffs against a PR merge base - so instead of being filtered out of the run it now RUNS and reports NOT RUN, with a job-summary note stating it is not a pass. A full-matrix run that silently omits a gate is exactly the HARNESS-07 bug. Guard: scripts/test/mutation-ratchet-check.test.mjs (in the discovery-gates harness glob) asserts break stays within 1.5pp of the measured baseline and never above it, that workflow_dispatch survives, and that Q1b still both runs on PRs and announces itself on dispatch. Verified the guard bites: lowering break to 60 fails it with the baseline named." }
       - { id: CODE-01, title: "Shared cursor/keyset pagination for packages/db (retire 16 hand-rolled copies)", status: done, note: "improvement-plan audit §4. The copies were NOT identical — auditing all 16 turned up three real divergences, and the third is why this was worth doing carefully rather than mechanically. (1) DIRECTION: 9 stores page ascending (>), 7 descending (< with ORDER BY DESC). (2) TIE-BREAK COLUMN: tpp_counterparty keys on organisation_id (TEXT) and must NOT take the ::uuid cast every other store uses — a hardcoded helper would have broken it at runtime. (3) PARAMETER INDEXING: 15 stores push binds FIRST then reference $${params.length - 1}/$${params.length}; consent-events builds the clause BEFORE pushing and uses $${params.length + 1}/$${params.length + 2} because its prefix is variable-length. Both correct in place, neither survives being pasted into the other, and the failure mode is SILENT — SQL that still parses and runs but binds the wrong parameters in a regulated read path. So packages/db/src/keyset.ts exposes no convention at all: keysetClause(params, after, opts) appends its own binds and derives the placeholders from the push it just made, so callers cannot do the arithmetic wrong because callers no longer do it. Also keysetOrderBy (kept beside the predicate so a store cannot page one way and sort the other) and paginate (limit+1 probe -> trimmed rows + next cursor). Net -141 LOC across 16 files; zero hand-rolled keyset arithmetic remains. COVERAGE was the real risk: only 2 integration specs mentioned a cursor and none walked a multi-page sequence. Added packages/db/test/keyset.spec.ts (15 unit tests incl. both param conventions, the text-key no-cast path, and the DESC-on-both-key-parts rule) and packages/db/test/keyset-pagination.int.spec.ts (4 live tests walking consent-events ASC over a variable-length prefix and tpp_counterparty over a TEXT key, asserting every row is served exactly once and paging terminates). Anti-vacuous-pass verified: injecting an off-by-one into the shared param index — the exact bug a naive dedup would have introduced — turns BOTH paging tests red, then green on revert. Verified: integration 140/140 on a pristine DB (69 files), unit 1224/1224 (coverage 95.5%), lint + typecheck clean, Q4.5 lineage gate PASSED." }
       - { id: CODE-02, title: "Move the 27 InMemory* stores out of production source (services/bff/memory/)", status: done, note: "improvement-plan audit 4: 27 in-memory store classes sat interleaved with the production service logic they back - reconciliation/service.ts alone carried three of them in its last 150 lines on top of a 900-line service - and they counted against the Q1 coverage denominator, which HARNESS-09 scopes to services/bff/src/**. MEASURED FIRST, because the obvious assumption was wrong: the stores are the WORST branch-covered code in the BFF (286/358 = 79.9%, below both the 80 floor and the 81.71 file-wide average), so removing them from the denominator RAISES branches rather than lowering it. That mattered - branches had only 1.71pp of headroom (2502/3062), and arithmetic on the gate showed at most ~262 fully-covered branches could be removed before it went red. Actual after the move: branches 81.71 -> 82.00 (+0.29pp, headroom 1.71 -> 2.00pp), statements 95.61 -> 95.65, functions 97.48 -> 97.90; gate exits 0. NOT named testing/ or fixtures/: these ARE production for the demo profile (app.ts falls back to them whenever a durable store is not injected, i.e. whenever DATABASE_URL is absent), and a test-implying name would misdescribe code serving real demo traffic - services/bff/memory/ with a README stating exactly that. Each store is RE-EXPORTED from the module declaring its interface, so the public surface is unchanged and the ~55 test files that pull a service and its store from one import are untouched - Q1b reports no test files changed. Imports from memory/ back into src/ are strictly type-only, so there is no runtime cycle; the four store-only VALUES the classes needed (encodeAgentCursor, decodeAgentCursor, str encodeCursor, newSlug, QueryPurposeRegistrarError) were each verified to have no other user across src/test/apps/packages/scripts and moved with their store. Net: 24 production files, -893/+146 lines; reconciliation/service.ts 1068 -> 929. Verified: unit 1241/1241, integration 144/144 on a PRISTINE db, lint + typecheck + build clean. Aside found while verifying: pnpm db:seed is NOT idempotent - re-seeding an already-seeded database inflates row counts and reds 5 assertions in packages/db/test/seed-demo.int.spec.ts; CI never sees it because every run starts fresh. Not fixed here." }
+      - { id: CODE-03, title: "Repo-wide pass: audit scope_used labels that name no declared scope", status: pending, note: "Surfaced by consecutive BILL contract/hard-stop reviews and finally ticketed, because a repo-wide decision with no owner is how drift survives. MEASURED inventory (verified against specs/backoffice-openapi.yaml, not estimated) - SIX undeclared tokens across FOURTEEN scope_used emissions: billing:rate x4 (billing/memo-reconciliation.ts:151,232 pre-existing on main; billing/tpp-cost.ts:119,133 added by BILL-13), billing:post x3 (billing/accounting.ts:95,108,118 via BILLING_POST_SCOPE), reconciliation:run x3 (reconciliation/service.ts:288,346,504), billing:assure x2 (billing/revenue-assurance.ts:79,94 via BILLING_ASSURANCE_SCOPE), billing:reconcile x1 (billing/memo-reconciliation.ts:195), billing:collect x1 (billing/collections.ts:121). The spec declares billing:read (10), billing:write (4) and platform:operations:read (8); all six above return ZERO occurrences. IMPORTANT SCOPING FACT, checked so the next agent does not have to: none of the six is ever passed to assertScope or any middleware - BILLING_POST_SCOPE and BILLING_ASSURANCE_SCOPE are exported constants but are referenced ONLY as scope_used audit values. So NO privilege is granted anywhere and this is not an authorisation defect; it is an audit-trail resolvability defect, where audit_high_sensitivity names a scope an auditor cannot resolve against the contract. AuditEvent.scope_used is an unconstrained string in the spec, so nothing is literally contradicted either - the drift is against the declared scope inventory. Decide ONE of: (a) declare the scheduled-job scope vocabulary in the spec, (b) stamp the persona/system scope that actually authorised the run, or (c) add a distinct non-scope field for system actors and stop overloading scope_used. Then apply it to all fourteen sites in one pass and add a check that a scope_used value resolves against the declared inventory, so the next one cannot land silently. BILL-13 declined to half-fix its two sites because fixing 2 of 14 makes the trail less consistent, not more. SECOND FIELD, same class, fold into the same pass - response_status is an HTTP-shaped audit field filled by actors that issue no HTTP response. services/bff/src/billing/tpp-cost.ts:122,135 stamp 200 from a scheduled monthly job, and :122 stamps 200 on a path that reports a SKIP rather than a success, which is wrong on its own terms. Not isolated - 20 response_status occurrences exist across services/bff/src/billing with mixed values (200, 201). AuditEvent.response_status is an unconstrained integer in the spec with no description, so the contract does not say what a non-HTTP actor should record, which is precisely why it wants one decision applied everywhere rather than per-story guesses. Decide the convention for headless emitters (omit the field, a sentinel, or an explicit outcome field) alongside the scope_used decision above." }
       - { id: HARNESS-12, title: "Dependency currency: Renovate + clear the advisory backlog (incl. the vitest critical)", status: done, note: "Nothing watched dependencies: main went red 22-26 Jul on advisories published while no commit changed, and Q4 broke again 2026-08-04 the same way (improvement-plan audit §2.6). Two halves. (a) CLEARED the backlog 41 -> 11 advisories, 1 critical + 17 high -> ZERO: vitest 2.1.9 -> 3.2.7 fixes GHSA-5xrq-8626-4rwp (critical, UI server arbitrary file read/exec; stryker's vitest-runner peer is >=2.0.0 so it rides along), jsdom ^25 -> ^30 in BOTH root and apps/portal (the portal kept its own pin, which is why the ws advisory survived the first pass), and dev-tree override floors for brace-expansion (RANGED per major — minimatch 3/9/10 put three incompatible lines in one tree), js-yaml, undici, vite, ws. overridesNote now separates PRODUCTION floors (what Q4's --prod audit gates) from DEV-TREE floors (not gated, but these tools run in CI holding a token). Also aligned the @hono/node-server skew (nebras-sim ^1.13.7 -> ^2.0.4, matching bff). vitest 3.2 deprecates workspace files (removed in 4), so projects moved from vitest.workspace.ts into vitest.config.ts's test.projects — retiring the split that forced coverage config to live apart from the projects it gates. (b) renovate.json so this stops being manual: weekly window, security PRs immediate and exempt from the major-approval gate, majors + toolchain (pnpm/node/typescript/stryker) behind dependencyDashboardApproval, pnpm.overrides explicitly NOT managed (they are justified floors to remove by hand). NO AUTOMERGE anywhere — HG-0001 makes non-self-merge a governance control and a bot merging its own PR reopens exactly that hole. Verified: unit 1209/1209 (coverage 95.6%), integration 136/136 on a fresh DB, lint + typecheck + pnpm build clean, prod audit exit 0. vitest 3 -> 4 left as a future chore." }
       - { id: HARNESS-14, title: "Deploy smoke gate: assert the security property, not the redirect transport", status: done, note: "The deploy pipeline's Smoke job had been RED since 2026-07-26 - twelve days, eight merges, nobody acting on it - on a portal that was behaving correctly. tests/smoke/portal.smoke.spec.ts asserted status >= 300 for an unauthenticated /dashboard, but Next expresses redirect() two ways: a 3xx + Location when nothing has been sent, or a 200 carrying <meta id=\"__next-page-redirect\" http-equiv=\"refresh\" content=\"1;url=/\"> once the <head> has flushed - which is what /dashboard does, being dynamic = force-dynamic. Reproduced on plain `next start` locally (NOT an OpenNext/Cloudflare difference): status 200, and the body contains ZERO shell - no app-shell, no sidebar, no audit panel - only the meta-refresh. requireSession() -> redirect('/') is working; the assertion was wrong about the transport. THE REAL DEFECT is what that cost: the gate asserted nothing about the response body, so a genuine leak (200 WITH the shell) produced the same red X as twelve days of correct behaviour - a control with no signal left in it, which is the HARNESS-07 class again (this time the check was visibly red rather than silently absent, and got ignored just as effectively). Fixed by asserting the SECURITY PROPERTY first and directly - the response must not contain data-testid=app-shell/sidebar/persona-badge/audit-panel - then accepting EITHER redirect form as the bounce. Strictly stronger: the old test made no body assertion at all. Anti-vacuous-pass proved on a stub server serving the three shapes (no production auth code touched): benign 200+meta-refresh PASSES, a leaked shell FAILS on app-shell, a 307 to the wrong target FAILS on the bounce check. Verified green against a real locally-built portal on next start." }
       - { id: HARNESS-15, title: "Release evidence: derive the Q4.5 verdict from the lineage proof, and re-verify the seal", status: done, note: "Found by dry-running the release-evidence pipeline, which had never executed (improvement-plan audit 2.4 asked for the first bundle; this is what the rehearsal turned up). TWO defects, one story, two commits. (a) THE Q4.5 GATE COULD NOT REPORT ITS OWN FAILURE: collect-gates.mjs wrote a hardcoded status 'pass' for Q4.5, and wrote it BEFORE the proof existed - the CLI collects live coverage from DATABASE_URL afterwards (cli.ts:55) - while buildEvidenceBundle copied lineage_proof through verbatim and validated only that all six gates were PRESENT, never that Q4.5 agreed with the evidence beneath it. Reproduced end to end: injecting gaps [audit_high_sensitivity, str_draft, fraud_incident] produced a SEALED bundle asserting 'Q4.5 | BCBS 239 lineage validation | pass' while the lineage section thirty lines below listed those three tables as gaps. Real gap count today is 0, so the first bundle would have been truthful - but the guard was inert, so it would have stayed silent exactly when a future migration added an uncovered regulated table, which is the one thing Q4.5 exists to catch. HARNESS-11 made the GATE self-maintaining; the evidence bundle still hardcoded its verdict. Fixed by deriving: gaps -> fail, covered-with-no-gaps -> pass, empty-with-no-gaps -> skipped (cli.ts records an empty proof when DATABASE_URL is unset, and 'no proof collected' must not read as 'the gate passed'). Every other gate is carried through untouched - CI step outcomes are the only witness those have. collect-gates.mjs keeps a Q4.5 entry for the completeness check but its placeholder is now 'skipped', so bypassing the derivation would understate the gate rather than assert one that never ran. (b) THE SEAL HAD NO READER: verifyEvidenceBundle was exported and unit-tested and called by nothing, so tampering was detectable but not detected. scripts/verify-bundle.ts is the caller, wired into release-evidence.yml BETWEEN assembling and committing, so a bundle whose digest does not recompute never reaches git; it takes paths, so the same command re-verifies bundles already under releases/. No-args is an error, not a vacuous pass. Tests: 10 new (5 derivation incl. an anti-vacuous-pass probe where an input explicitly claiming pass against a gapped proof must still come out fail; 5 driving the verifier script through its real exit codes) + 3 workflow guards in scripts/test/release-evidence-verify-check.test.mjs asserting the step exists AND precedes the commit. Verified the guards bite: moving the verify step after the commit reds the ordering assertion; the 4 derivation tests were red before the fix. Re-ran the full pipeline against a live DB after the fix: Q4.5 now reads 'pass | 23 regulated tables covered, no gaps' (was a hardcoded pass with a vague summary), the same gap injection now reads 'fail | lineage gaps (3): ...', and the verifier confirms the seal. Verified: unit 1251/1251, node --test scripts/test 19/19, lint + typecheck clean. NOT DONE HERE: cutting v0.1.0 itself - that publishes a release and commits releases/ to main, and is a human call." }
+      - { id: HARNESS-16, title: "Run the two OFBO reviewers in CI as advisory PR checks (close the self-attestation gap)", status: in-progress, adr: docs/adrs/0029-ai-review-as-advisory-ci-check.md, note: "AI review already ran on every story - but only PRE-PR, inside the build agent's own session: next-story/SKILL.md:35 dispatches hard-stop-reviewer (must return VERDICT: PASS) and contract-conformance-reviewer (must return VERDICT: CONFORMANT), HG-0001 counts those verdicts toward the merge criteria, and build-log.md records them per story. THE GAP IS SELF-ATTESTATION, NOT ABSENCE: the agent runs its own reviewers, reports its own verdicts, and writes them into its own build log, with nothing in GitHub verifying the review ran or that the reported verdict matched what the reviewer said. Every other control here is enforced outside the agent's write scope (CODEOWNERS, the Q gates, branch protection); this one was not. Before this change CI contained no model-based review at all - Q4 is named 'security review' but is pnpm audit + semgrep p/secrets, and PRs #313/#311 carried zero reviews and zero comments. New .github/workflows/ai-review.yml: two independent check runs (fail-fast: false matrix - a failing hard-stop leg must never cancel contract-conformance, HARNESS-07 doctrine), own workflow file not a job in ci.yml (mutation.yml precedent: non-universal, cost-bearing, and the deterministic Q-gate file stays free of model calls), and deliberately NOT named Q* since that namespace means 'deterministic merge gate'. THE PROMPT POINTS AT .claude/agents/*.md RATHER THAN RESTATING THEM - inlining the checklists would create a second, unprotected copy of the canon free to drift from the one the pre-PR reviewers read, which is exactly what Q2b exists to catch. Red on FAIL/DRIFT but NOT a required status check, honouring HG-0001's 'AI reviewers remain as advisory PR checks' while refusing to show green next to a finding. THE LOAD-BEARING CASE IS THE THIRD ONE: a missing review file, a missing VERDICT: line, or a malformed one all report DID NOT COMPLETE and go red - a review that never ran must never be indistinguishable from a passing one. Verified the parse against 12 cases before wiring it: a review with no verdict, 'VERDICT: MAYBE', and 'VERDICT: PASS' appearing mid-prose all land on red; two verdict lines take the last. Fork PRs (GitHub withholds secrets) and an absent credential report NOT RUN + 'This is not a pass' via ::notice and step summary, mirroring q1b at ci.yml:67-78, without redding the job. Cost ~$1-2.50/PR for both reviewers on Opus 5, subscription-billed; paths-ignore keeps docs-only PRs free. NOT A CLAIM OF SEPARATION OF DUTIES - same model family reviewing the same agent's output, in a fresh session with no shared context; HG-0001 line 58 says 'AI reviewing AI is not four-eyes' and the human-merge requirement is untouched. Residency: HG-0011 Option 3 (provider proxy), permitted only while the environment is synthetic-only and non-prod (HG-0011:48) - must move at the M6 enterprise swap, and the OAuth token pins the job to the first-party API, so that swap is two changes not one (ADR 0029 records both). FOLLOW-UP (same story, on request): the ENGINE IS NOW A PORT rather than a hardcoded vendor - PRD 3 doctrine applied to CI. Contract is fixed and engine-agnostic (read the agent definition, diff against base, write a review whose last line is the VERDICT line) and THE VERDICT PARSE IS THE PORT CONTRACT TEST, binding every adapter identically - the same acceptance rule ADR 0024 sets for enterprise adapters. Engines are config (.github/ai-review.config.json): the single `active` key names the one engine that reviews, so EXACTLY ONE reviews by construction and no combination of entries can double the spend. Cross-checking two engines was considered and dropped (doubles cost for an advisory check); re-adding it is a matrix-builder change, not a flag. The failure mode engineered against is a HALF-ADDED engine - a registry entry with no adapter step would run, execute nothing, write no review, and surface as the generic DID NOT COMPLETE, a real non-review disguised as a transient failure; scripts/ai-review-matrix.mjs refuses to build such a matrix so the new config job fails loudly before a token is spent (proved end to end on a scratch tree: with-adapter exit 0, without-adapter exit 1 + ::error, two engines produce the cross product). Comment attribution moved OUT of the core into the registry, because attributing a Codex review to Claude Code would misstate which model produced the verdict. CORRECTION TO AN EARLIER REVISION OF THIS NOTE: parity was briefly modelled as a per-engine flag (requires_workflow_parity), true only for claude because claude-code-action enforces its own equivalent rule, and this note previously described the Codex adapter being able to review workflow-editing PRs as a capability. THAT WAS THE HOLE, WRITTEN UP AS A FEATURE. on: pull_request hands secrets to same-repo PRs while running the workflow file FROM THE PR HEAD, so pointing active at a CLI engine silently removed a security control. The flag is deleted; preflight now enforces parity for EVERY engine over the whole review control plane (the workflow, the registry, and scripts/ai-review-matrix.mjs - each can decide what the reviewer runs or which secret it is handed). Deliberate consequence: no engine reviews a PR that changes how reviews run, this harness included. NO repo-variable override by design: HG-0006 makes the model serving the review model configuration and HG-0002 puts that under control-plane-owners, so changing the reviewing model is a control-plane PR. 16 guard tests (36/36 in scripts/test) incl. assertions that the engine-agnostic core names no provider, that no per-engine parity flag survives, and that only a missing credential is a fatal non-run. Three engines registered, active is claude. CODEX HAS NOW RUN, AND DOES NOT WORK AS WRITTEN: it authenticated (model gpt-5.6-sol, 14,443 tokens) but its own sandbox is bubblewrap, which cannot create a network namespace in the Actions runner (bwrap: loopback: Failed RTM_NEWADDR) - that fails at sandbox SETUP so every mode including read-only dies with it, and no review file was written. The only mode that runs removes real containment against prompt injection carried in a reviewed diff, which is a SECURITY DECISION FOR A HUMAN and is NOT applied. Gemini is registered and never run. VERIFIED 2026-08-17 (PR #318): both reviewers ran end to end against a real diff - hard-stop VERDICT: PASS, contract-conformance VERDICT: CONFORMANT - closing the reviewing path as unproven. Still owed: the injected-violation self-test; a comment-only diff cannot show a reviewer CATCHES a violation, only that the path runs. FIELD EVIDENCE from BILL-13 (PR #319, 2026-08-17), which ran 13 review rounds and is the largest sample so far - the reviewers DO catch real defects a self-attesting agent had missed, including four on its own work (a resumability bug that would have failed the whole billing projection, a sha256-prefixed string that was not a digest, and THREE assertions that could not fail for the reason they claimed: a tenant-composite FK test tripping three FKs under one indiscriminate regex, a portable-export claim asserted nowhere, and a PSU-absence guard matching /psu/i against a fixture named psu-<uuid>). Notably all four surfaced in the reviewers' OBSERVATIONS or non-finding notes rather than in their verdicts, so a consumer reading only PASS/FAIL would have missed every one - worth weighing when this story decides how verdicts are surfaced. BUT the reliability hole is real and observed TWICE in one day: contract-conformance on c578dbe (~12:23Z) and hard-stop on 82956de (~13:12Z) both completed with 'the reviewer produced no review file', banner 'DID NOT COMPLETE - This is not a pass'. Because the check is advisory and non-gating, a reviewer that silently produces nothing looks identical to one that ran, which reopens exactly the self-attestation gap this story exists to close. The injected-violation self-test should therefore also assert the review FILE EXISTS, not only that the job exited." }
       - { id: HARNESS-07, title: "Un-shadow independent CI checks (a skipped security scan must not look like a passing one)", status: done, note: "Steps sharing a runner are sequential, so a failure skips every later step: Q4's audit failing skipped the semgrep SECRETS scan (it therefore did not run on main 22-26 Jul while the audit was red, with no red check to show for it), and Q2's lint failing skipped typecheck + the semgrep SAST. Independent checks now carry `if: ${{ !cancelled() && steps.install.outcome == 'success' }}` — gated on SETUP, not a bare !cancelled(), so a failed install does not spawn noise runs with no node_modules. Applied to Q4 secrets, Q2 typecheck + SAST, and the Discovery job's run-validation + waist gate (dependency-free, so plain !cancelled()). Kept as in-job guards rather than splitting into new jobs, which would strand any branch-protection rule pinned to the existing check-run names." }
       - { id: HARNESS-08, title: "ESLint ignores nested worktree checkouts", status: done, depends_on: [HARNESS-07], note: "CLAUDE.md rule 0 mandates building in an isolated worktree under .claude/worktrees/. That path is gitignored, but ESLint flat config does NOT read .gitignore, so a root `pnpm lint` scanned every parallel branch and reported ITS findings against paths in the current tree. Worst case it surfaced the DEPLOY_PROFILE no-restricted-syntax rule — which reads as a PRD 3.1 hard-stop violation that does not exist in the tree being linted. Invisible in CI (fresh checkout has no worktrees dir), so Q2 stayed green throughout while local lint was noisy. Adds '.claude/worktrees/**' to the ignores list, alongside the existing .remember/** scratch-dir precedent. Each worktree still lints itself; verified real code is still linted (no-explicit-any negative control)." }
       - { id: HARNESS-09, title: "CI-enforce the coverage gate (Q1 runs pnpm test:coverage)", status: done, note: "The 80% thresholds in vitest.config.ts (scoped to services/bff/src) were enforced by NO CI job — Q1 ran bare `pnpm test`, so the CLAUDE.md 'coverage >=80%' rule was a local convention, invisible to merge (found by the 2026-08 improvement-plan audit, docs/reviews/improvement-plan-2026-08.md §2.1). Q1 now runs `pnpm test:coverage`; measured baseline at flip time: 95.5% stmts / 81.7% branch / 97.5% fn / 95.5% lines over 1209 unit tests, so the gate went live with no ratchet needed. Guard test scripts/test/coverage-gate-check.test.mjs (runs in the discovery-gates job's harness glob) asserts BOTH facts — Q1 invokes test:coverage AND the four thresholds stay >=80 — so silently reverting the workflow or lowering the config re-reds CI: the absent-control-looks-like-a-passing-one class (HARNESS-07) closed for coverage." }

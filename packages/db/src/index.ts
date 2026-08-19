@@ -5,6 +5,46 @@ export { seedDemoTenants } from './seed-tenants.js'
 export { PgApprovalStore, type StoredApprovalRecord, type StoredApprovalState } from './approvals-store.js'
 export { PgReadinessProfileStore } from './readiness-profile-store.js'
 export {
+  PgBillingRateCardStore,
+  type BillingRateCardVersionInput,
+  type StoredBillingRateCardVersion,
+  type BillingSourceSnapshotInput,
+  type StoredBillingSourceSnapshot,
+  type BillingReviewAudience,
+  type BillingRateCardReviewInput,
+  type StoredBillingRateCardReview
+} from './billing-rate-card-store.js'
+export {
+  PgBillingMeteringStore,
+  type BillingEventInput,
+  type BillingEventIngestResult,
+  type BillingMeterLineInput,
+  type BillingMeterRunInput,
+  type StoredBillingMeterRun
+} from './billing-metering-store.js'
+export {
+  PgBillingMemoStore,
+  type StoredBillingMemoMeterRun,
+  type BillingExpectedMemoInput,
+  type StoredBillingExpectedMemo,
+  type BillingMemoReconciliationInput,
+  type BillingReratingInput
+} from './billing-memo-store.js'
+export * from './billing-tpp-cost-store.js'
+export {
+  PgBillingEInvoicingStore,
+  type BillingEInvoiceArtifactInput,
+  type StoredBillingEInvoiceArtifact,
+  type BillingAspSubmissionInput
+} from './billing-einvoicing-store.js'
+export {
+  PgBillingCollectionsStore,
+  type StoredDirectCollectionInvoice,
+  type StoredBillingCollectionAction
+} from './billing-collections-store.js'
+export { PgBillingAccountingStore, type BillingAccountingDispatchInput } from './billing-accounting-store.js'
+export { PgBillingRevenueAssuranceStore } from './billing-revenue-assurance-store.js'
+export {
   PgAuditEmitter,
   PgAuditReader,
   type HighClassAuditEvent,
@@ -181,6 +221,22 @@ export {
   type ReportLibrary
 } from './compliance-view-store.js'
 export { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
+export {
+  DEFAULT_TENANT_CONFIGURATION,
+  normalizeTenantConfiguration,
+  type TenantCollectionRail,
+  type TenantCollectionRailPolicy,
+  type TenantConfiguration,
+  type TenantConfigurationInput
+} from './tenant-configuration.js'
+export {
+  PgTenantBillingServiceStore,
+  type TenantProvisioningInput,
+  type TenantPortableBillingExport,
+  type BillingBenchmarkSnapshotInput,
+  type CrossTenantBillingBenchmark
+} from './tenant-billing-service-store.js'
+export { PgBillingProfitabilityStore } from './billing-profitability-store.js'
 export {
   GovernedQueryError,
   isPurposeApproved,

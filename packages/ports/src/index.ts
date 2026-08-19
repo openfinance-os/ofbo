@@ -65,3 +65,9 @@ export {
   StrWorkflowError,
   type StrWorkflowConfig
 } from './adapters/enterprise/str-workflow.js'
+export {
+  createEInvoicingAspAdapter,
+  eInvoicingAspFromEnv,
+  EInvoicingAspError,
+  type EInvoicingAspConfig
+} from './adapters/enterprise/einvoicing-asp.js'

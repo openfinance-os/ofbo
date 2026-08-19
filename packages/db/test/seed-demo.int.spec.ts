@@ -92,6 +92,21 @@ describe('demo scenario seed', () => {
     expect(breaking.rows[0].dual_running_required).toBe(true)
   })
 
+  it('provisions the default billing tenant with current-period profitability evidence', async () => {
+    const period = new Date().toISOString().slice(0, 7)
+    const config = await admin.query(`SELECT bank_id FROM tenant_configuration WHERE bank_id = $1`, ['11111111-1111-4111-8111-111111111111'])
+    expect(config.rows).toHaveLength(1)
+    const memo = await admin.query(
+      `SELECT m.total_milli_fils, count(l.id)::int AS line_count
+         FROM billing_expected_memo m
+         JOIN billing_expected_memo_line l ON l.bank_id=m.bank_id AND l.expected_memo_id=m.id
+        WHERE m.bank_id=$1 AND m.period=$2 AND m.meter_input_hash=$3
+        GROUP BY m.total_milli_fils`,
+      ['11111111-1111-4111-8111-111111111111', period, `sha256:demo-billing-console:${period}`]
+    )
+    expect(memo.rows).toEqual([{ total_milli_fils: '20000000', line_count: 2 }])
+  })
+
   it('seeds the four previously-empty consoles (reports, trust-framework, respondent, agents)', async () => {
     const rpt = await admin.query(`SELECT count(*)::int AS n FROM compliance_report WHERE requested_by = 'demo:compliance-officer'`)
     expect(rpt.rows[0].n).toBeGreaterThanOrEqual(5)
