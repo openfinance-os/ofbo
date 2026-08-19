@@ -232,8 +232,47 @@ jobs:
       - run: pnpm gen
       - run: pnpm db:apply
       - run: pnpm db:seed
+      # HARNESS-17. The single `playwright install --with-deps chromium` step below was split in
+      # two and given a cache, because on 2026-08-19 it timed out THREE times in a row and took
+      # the whole 20-minute job with it — the E2E suite never started, and the job reported
+      # `cancelled`, which reads as neither pass nor fail.
+      #
+      # Split by measurement rather than by guess. On a healthy run (job 95996474055) the combined
+      # step cost 103s:
+      #   - apt, via `--with-deps`  07:50:15 -> 07:51:47  ~92s  (89%)
+      #   - browser downloads       07:51:47 -> 07:51:58  ~11s  (11%)
+      #     (Chromium 175.4 MiB 5.4s + headless shell 113.2 MiB 3.2s + ffmpeg 2.3 MiB 1s)
+      #
+      # So caching the browsers alone would have saved ~11s and fixed nothing: apt is the cost and
+      # the hang risk. Worth knowing for whoever picks this up next — every package apt installed
+      # was a FONT (fonts-freefont-ttf, fonts-unifont, fonts-wqy-zenhei, xfonts-*, fonts-ipafont-
+      # gothic). Chromium's own libraries were already on the ubuntu-latest image; nothing else was
+      # unpacked. Dropping `--with-deps` is therefore the larger lever, but it is a behaviour change
+      # on a shared runner image and is deliberately NOT taken here without a human deciding it.
+      #
+      # What this does take: a per-step timeout, so a slow apt mirror fails FAST and names itself
+      # instead of silently consuming the job budget. The step cap is a diagnosis aid, not a
+      # control — it must never be raised to make a genuinely failing step pass.
+      - name: resolve Playwright version
+        id: pw
+        run: echo "version=$(pnpm --filter @ofbo/portal exec playwright --version | tr -dc '0-9.')" >> "$GITHUB_OUTPUT"
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          # Keyed on the RESOLVED version, not the lockfile hash: the browser build is pinned by
+          # the Playwright version, so an unrelated dependency bump must not evict 290 MiB.
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: install Playwright system deps
+        timeout-minutes: 6
+        run: pnpm --filter @ofbo/portal exec playwright install-deps chromium
       - name: install Playwright Chromium
-        run: pnpm --filter @ofbo/portal exec playwright install --with-deps chromium
+        # Run unconditionally rather than behind `cache-hit != 'true'`. `playwright install` skips
+        # a browser that is already present, so a warm cache costs ~1s — and an incomplete or
+        # corrupt cache entry self-heals instead of being silently trusted, which is what gating on
+        # cache-hit would do.
+        timeout-minutes: 6
+        run: pnpm --filter @ofbo/portal exec playwright install chromium
       # The E2E drives the full demo stack: Nebras sim + BFF + a production portal build.
       - name: start Nebras sim + BFF
         run: |
