@@ -151,9 +151,14 @@ export class PgApprovalStore {
   async update(r: StoredApprovalRecord): Promise<void> {
     await this.asApp((c) =>
       c.query(
+        // approved_at is WRITE-ONCE: COALESCE keeps whatever is already there and only fills a
+        // NULL. It is four-eyes timing evidence — the field payable dispatch treats as its last
+        // gate before money moves, and refuses to proceed without — so a second update that
+        // happened not to carry it would otherwise erase it silently. Structural rather than a
+        // convention every future caller has to remember.
         `UPDATE approval_request
             SET state = $2, approver = $3, reject_reason = $4, execution_result = $5::jsonb,
-                approved_at = $6::timestamptz
+                approved_at = COALESCE(approval_request.approved_at, $6::timestamptz)
           WHERE approval_request_id = $1`,
         [
           r.approval_request_id,

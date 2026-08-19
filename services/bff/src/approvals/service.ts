@@ -166,14 +166,18 @@ export class ApprovalsService {
   async getFor(principal: Principal, id: string, traceId: string): Promise<ApprovalRecord> {
     const r = await this.store.get(id)
     if (!r) throw new ApprovalError(404, 'BACKOFFICE.APPROVAL_NOT_FOUND', `approval ${id} does not exist`)
-    // Normalised for the same reason as approve(), and it is the last raw comparison of these two
-    // values in the class. It fails in the safe direction — a re-spelled initiator loses the party
-    // grant rather than gaining one, so the worst case is a 403 to the legitimate initiator, not an
-    // escalation — but a legitimate initiator locked out of their own request is still a defect, and
-    // leaving one raw comparison behind is exactly the partial application that created the approve()
-    // gap in the first place.
-    const isParty = normalisePrincipal(r.initiator) === normalisePrincipal(principal.subject)
-      || hasScope(principal.scopes, r.approver_required_scope)
+    // EXACT match, deliberately, and not the normalised comparison approve() uses.
+    //
+    // The same edit has opposite effects in the two places. In approve(), normalising NARROWS: more
+    // principals are caught by "you are the initiator, you may not approve this". Here it WIDENS:
+    // a principal whose subject differs from the initiator's only in case or padding would gain
+    // read access to an approval it is not party to. A previous version of this line normalised,
+    // with a comment claiming it "fails in the safe direction" — that reasoning was inverted, and
+    // an authorisation predicate is the wrong place to be wrong in that direction.
+    //
+    // If two subjects can really differ only in spelling, the fix is canonicalising the subject
+    // where it is minted, not loosening the check that reads it.
+    const isParty = r.initiator === principal.subject || hasScope(principal.scopes, r.approver_required_scope)
     if (!isParty) throw new ApprovalError(403, 'BACKOFFICE.SCOPE_DENIED', 'reading an approval requires being its initiator or holding its approver scope')
     return this.settleExpiry(r, principal, traceId)
   }
