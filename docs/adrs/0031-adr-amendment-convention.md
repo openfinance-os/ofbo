@@ -1,4 +1,4 @@
-# ADR 0030 — Amending an accepted ADR: in-place for facts, supersession for decisions
+# ADR 0031 — Amending an accepted ADR: in-place for facts, supersession for decisions
 
 - Status: **Accepted** — chosen by the user (2026-08-18), Option C of three put to them.
   A control-plane governance rule under HG-0002, so it needed a human control-plane owner

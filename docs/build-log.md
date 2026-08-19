@@ -3738,7 +3738,7 @@ Still docs-only — no source, no spec, no tests changed.
 
 ---
 
-## 2026-08-18 — ADR 0030: amending an accepted ADR (in-place for facts, supersession for decisions)
+## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
 
 User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
 question rather than assuming an answer after the hard-stop AI reviewer raised it twice on
@@ -3757,7 +3757,7 @@ Also established while checking: there is no written ADR process anywhere (no RE
 docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
 (ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
 for the case at hand. 29 ADRs before this PR: 23 Accepted, 5 Proposed, 1 Superseded (30 / 24 / 5 / 1
-with ADR 0030 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
+with ADR 0031 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
 — a count that did not even sum to 29, and it is worth recording WHY it was wrong: it was measured
 with the FIRST draft of the classifier, whose status regex silently missed the `- **Status:**` bold
 form. The gate's own bug undercounted the population the gate applies to. Re-measured with the
@@ -3785,7 +3785,7 @@ DELIBERATE COST, recorded in the ADR: a typo fix in an accepted ADR also costs a
 cannot separate substantive from cosmetic without making a judgement call in CI, and a gate that
 guesses is worse than one that is slightly heavy. If it proves noisy the proportionate relaxation
 is to require a row only when the diff REMOVES lines, and that change must itself be an amendment
-to ADR 0030 recorded in its own table.
+to ADR 0031 recorded in its own table.
 
 ADR 0007 BACKFILLED in the same change — the one known case where document and history disagree
 with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
@@ -3822,7 +3822,7 @@ pattern is that EVERY fix opened its own hole.
 whole rows had closed a false-RED (a same-day second amendment) and opened its exact mirror: an
 edited row is absent from the base set, so it reads as "new". Appending ONE PERIOD to an old row
 licensed an arbitrary rewrite - and the reviewer's reproduction changed the DECISION SCOPE, the
-one case ADR 0030 routes to supersession rather than to a row. The gate green-lit the case the
+one case ADR 0031 routes to supersession rather than to a row. The gate green-lit the case the
 convention most exists to catch. Neither end of that trade is safe alone; membership is now judged
 in BOTH directions - a new row must appear AND every base row must survive unmodified.
 
@@ -3841,14 +3841,14 @@ modification. The reviewer rated this exotic and was unsure it was worth closing
 class rather than the instance is what made it worth doing once.
 
 (4) NOT a code defect, and the most important of the four. The deletion carve-out was justified in
-ADR 0030 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
+ADR 0031 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
 by a current-state doc". That is FALSE, and I verified it independently rather than taking the
 finding on trust: doc-link-check resolves FILE-PATH references, and there are ZERO
 docs/adrs/NNNN-*.md path references anywhere in the set it scans. ADRs are cited by NUMBER. Every
 real path reference lives in docs/backlog.yaml, docs/research/, docs/reviews/, mcp-gateway, and
 ai-review.yml - all outside the scanned set. So deleting an accepted ADR is green on both gates
 and silent, which is precisely the outcome the ADR claimed was prevented. A decision record
-asserting something its own history does not support is the exact failure mode ADR 0030 exists to
+asserting something its own history does not support is the exact failure mode ADR 0031 exists to
 stop, and it was doing it in the paragraph justifying an exemption. Corrected in place; whether
 deletion should require a record is now an OPEN CONTROL-PLANE QUESTION for the ADR's owner, not
 something this script decides quietly.
@@ -3866,7 +3866,7 @@ quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check 
 
 ---
 
-## 2026-08-18 — ADR 0030 addendum: the review harness caught a bypass in the gate, and a false fix
+## 2026-08-18 — ADR 0031 addendum: the review harness caught a bypass in the gate, and a false fix
 
 Two corrections to the entry above, both found by the AI reviewers on PR #324 and both worth
 recording because of what they say about the harness rather than about the gate.

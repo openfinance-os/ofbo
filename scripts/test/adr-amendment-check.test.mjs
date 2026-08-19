@@ -1,4 +1,4 @@
-// ADR 0030 — guard tests for the accepted-ADR amendment rule.
+// ADR 0031 — guard tests for the accepted-ADR amendment rule.
 //
 // The test that earns its place is the ANTI-VACUOUS-PASS one: a gate that cannot go red is not
 // a gate. ADR 0007 is the reason this check exists — accepted, then substantively corrected the
@@ -40,7 +40,7 @@ const withRow = (date) =>
   `${accepted}\n### Amendments after acceptance\n\n| date | amendment |\n| --- | --- |\n| ${date} | corrected a fact |\n`
 
 test('an ADR is docs/adrs/NNNN-*.md — both halves', () => {
-  assert.ok(isAdrPath('docs/adrs/0030-adr-amendment-convention.md'))
+  assert.ok(isAdrPath('docs/adrs/0031-adr-amendment-convention.md'))
   assert.ok(!isAdrPath('docs/adrs/README.md'), 'wrong basename shape')
   assert.ok(!isAdrPath('docs/build-log.md'))
   // The directory half is load-bearing: it is what makes a move OUT of docs/adrs/ visible as a
@@ -111,7 +111,7 @@ test('an amendment row is a table row whose first cell is an ISO date', () => {
 })
 
 test('FINDING-5: rows only count under the Amendments heading, outside code fences', () => {
-  // The original check matched a dated row ANYWHERE in the added lines. ADR 0030 itself carries
+  // The original check matched a dated row ANYWHERE in the added lines. ADR 0031 itself carries
   // a qualifying row inside a fenced example, so the shape is reachable in ordinary ADR prose.
   const fenced = `${accepted}\n### Amendments after acceptance\n\n\`\`\`\n| 2026-08-18 | example row inside a fence |\n\`\`\`\n`
   assert.equal(amendmentRows(fenced).size, 0, 'a fenced row is not an amendment')
@@ -277,7 +277,7 @@ test('FINDING-3 (round 3): an unrecognised git status touching an ADR is not dro
 test('FINDING-1 (round 3): EDITING an existing amendment row does not satisfy the rule', () => {
   // The mirror of the same-day false-RED this branch fixed earlier. Comparing whole rows made an
   // EDITED row read as "new", so appending one character to an old row licensed an arbitrary
-  // rewrite. The reviewer's reproduction changed the DECISION SCOPE — the one case ADR 0030
+  // rewrite. The reviewer's reproduction changed the DECISION SCOPE — the one case ADR 0031
   // routes to supersession — and the gate returned exit 0.
   const base = withRow('2026-08-17')
   const head = base

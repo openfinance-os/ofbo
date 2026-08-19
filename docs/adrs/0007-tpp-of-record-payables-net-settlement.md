@@ -7,7 +7,7 @@
 ### Amendments after acceptance
 
 The decision below is unchanged since acceptance. These are corrections to statements of *fact*.
-Recorded per ADR 0030; this table is a BACKFILL, added on 2026-08-18 by the change that
+Recorded per ADR 0031; this table is a BACKFILL, added on 2026-08-18 by the change that
 introduced that convention, because this ADR is the case that motivated it — it was corrected in
 place on the day it was accepted with nothing on the document saying so.
 
@@ -15,7 +15,7 @@ place on the day it was accepted with nothing on the document saying so.
 | --- | --- |
 | 2026-08-17 | Verified against the Nebras Interaction Guide v5.0 and corrected: VAT posture on the payable side, the query window, and collection mechanics (commit `0f0a79a`, 65 insertions / 22 deletions). |
 | 2026-08-17 | Payable rate-model corrections landed with BILL-12 (expected TPP cost statement). |
-| 2026-08-18 | This amendments table added retrospectively, per ADR 0030. |
+| 2026-08-18 | This amendments table added retrospectively, per ADR 0031. |
 
 
 ## Context

@@ -1,4 +1,4 @@
-// ADR 0030 — amending an accepted ADR. Enforces the convention that ADR records the decision
+// ADR 0031 — amending an accepted ADR. Enforces the convention that ADR records the decision
 // for: in-place edits are allowed for statements of FACT, supersession is required for changes
 // of DECISION, and either way the change is recorded on the document's face.
 //
@@ -18,17 +18,17 @@
 //
 // DELIBERATELY NOT IN SCOPE, because a gate that guesses is worse than one that is slightly
 // heavy: distinguishing a substantive correction from a typo. Any modification needs a row.
-// ADR 0030's consequences record the proportionate relaxation if that proves noisy.
+// ADR 0031's consequences record the proportionate relaxation if that proves noisy.
 //
 // EXEMPT: ADRs ADDED by this branch (nothing has been relied on yet) and ADRs whose base status
 // is `Proposed` (drafts). The rule attaches at acceptance. Outright DELETION of an accepted ADR
-// is also out of scope by ADR 0030's stated decision; the D+A rewrite below is caught because it
+// is also out of scope by ADR 0031's stated decision; the D+A rewrite below is caught because it
 // is a modification wearing a deletion's clothes, not a genuine removal.
 //
 // CORRECTION (round 3): this header used to justify that carve-out by claiming doc-link-check
 // "already blocks orphaning a referenced ADR". It does not. That check resolves FILE-PATH
 // references, and no ADR is referenced by path in the set it scans — ADRs are cited by NUMBER.
-// Deleting an accepted ADR is green on both gates and silent. ADR 0030 now records this, and
+// Deleting an accepted ADR is green on both gates and silent. ADR 0031 now records this, and
 // whether deletion should require a record is an open question for that ADR's owner.
 //
 // HARDENED after the hard-stop reviewer's FAIL(7) on PR #324 (each finding reproduced):
@@ -53,7 +53,7 @@
 //      entirely. Leftovers are now paired across numbers, deterministically.
 //   3  the status allow-list dropped a git TYPECHANGE (`T`). Closed as a category, not a letter.
 //   4  NOT a code defect — the deletion carve-out's stated justification was factually wrong. The
-//      claim is corrected above and in ADR 0030; the decision it supported is now an open question
+//      claim is corrected above and in ADR 0031; the decision it supported is now an open question
 //      for the ADR's owner rather than something this script should quietly decide.
 //
 // KNOWN LIMITS, recorded rather than coded — raised by the same review as out-of-scope notes:
@@ -153,7 +153,7 @@ export const amendmentRows = (text) => {
  * review round. Comparing whole rows closed a false-RED (a same-day second amendment) but opened
  * the mirror false-GREEN: EDITING an existing row makes it absent from the base set, so it reads
  * as "new". Appending a single period to an old row while rewriting the decision therefore passed
- * — and the reproduction used a DECISION-SCOPE change, which ADR 0030 routes to supersession, so
+ * — and the reproduction used a DECISION-SCOPE change, which ADR 0031 routes to supersession, so
  * the gate green-lit the one case the convention most wants caught.
  *
  * Neither end of that trade is safe on its own. Membership has to be judged in BOTH directions:
@@ -304,7 +304,7 @@ export const parseNameStatus = (raw) => {
   // THE FALSE-RED THIS CAN CAUSE, AND WHY IT IS ACCEPTED. A PR that genuinely deletes one ADR under
   // the carve-out AND separately adds an unrelated new ADR will pair them and demand a record. That
   // is a real cost, and it is bounded three ways: an accepted ADR is only exempt-deletable under a
-  // carve-out whose stated justification turned out not to exist (see ADR 0030's amendment table);
+  // carve-out whose stated justification turned out not to exist (see ADR 0031's amendment table);
   // a deletion paired against a NON-accepted base is dropped downstream by `isAccepted`, so only
   // accepted records can trigger it; and the remedy is cheap and obvious — split the PR, or record
   // the amendment. Silently exempting a rewrite is the worse failure.
@@ -363,7 +363,7 @@ const main = () => {
     process.stderr.write(`  ${p} — ${detail}\n`)
   }
   process.stderr.write(`
-ADR 0030: an ADR that is Accepted on the base branch may be edited in place for statements of
+ADR 0031: an ADR that is Accepted on the base branch may be edited in place for statements of
 FACT, but the edit must be recorded on the document's face. Add a NEW row under:
 
     ### Amendments after acceptance
