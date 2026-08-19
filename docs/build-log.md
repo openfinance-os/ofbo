@@ -3810,3 +3810,15 @@ as `conclusion: success`, because `continue-on-error` rewrites a failed step's c
 timeout is in the log and raised as a run annotation, but a reader scanning the step table sees
 green. The step's cost while the mirror is down is four wasted minutes per run — which sharpens, but
 does not decide, the question left to a human above.
+
+**Warm-cache path proven on the next run** ([32238395327](https://github.com/openfinance-os/ofbo/actions/runs/32238395327)),
+which was the one thing the cold run could not show: `Cache hit for: ms-playwright-Linux-1.60.0` →
+`Cache restored from key: ms-playwright-Linux-1.60.0`, 259 MB in 7s, and `install Playwright
+Chromium` fell from 12s to **1s** because the browser was already present. That also settles the
+`actions/cache@v4` major, which the build session could not verify. On this run the mirror recovered
+— the fonts step completed in 145s and the whole 967-line log carries zero `##[error]` lines, so it
+succeeded rather than failing quietly. 10/10 gates green again, q3-e2e 331s.
+
+So both paths are now exercised: the cold run proved the fix holds when the mirror is down, and the
+warm run proved the cache restores. The measured cache saving is the ~11s predicted — the fix that
+mattered was making the fonts step unable to take the job with it.
