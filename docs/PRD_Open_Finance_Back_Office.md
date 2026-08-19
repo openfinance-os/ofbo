@@ -7,7 +7,7 @@
 | **Date** | June 2026 |
 | **Status** | Build baseline — bank-neutral; adopting bank completes the Bank Profile (§3) before build |
 | **Scope** | UAE Open Finance (CBUAE / Al Tareq / Nebras API Hub), bank operating **both roles**: LFI (inbound TPP traffic) and TPP-of-record (outbound TPP-as-a-Service traffic) |
-| **Companions** | `specs/backoffice-openapi.yaml` (API contract, 57 paths) · `CLAUDE.md` (build conventions) · `README.md` (build sequence) |
+| **Companions** | `specs/backoffice-openapi.yaml` (API contract, 93 paths) · `CLAUDE.md` (build conventions) · `README.md` (build sequence) |
 
 > **What this document is.** A complete, bank-neutral specification of the internal back office any UAE bank needs to *operate* Open Finance as a regulated business — not just pass certification. It was generalized from a production bank engagement: all institution-specific systems are expressed as **ports** (§3) that each adopting bank maps to its own estate. Everything anchored to the CBUAE scheme (Nebras, Al Tareq, RPSCS, liability framework, consent lifecycle) is kept verbatim because it applies identically to every licensed participant.
 
@@ -181,19 +181,22 @@ New Back Office tables are born in a relational store with row-level security (R
 
 ## 6. API Surface
 
-Canonical contract: `specs/backoffice-openapi.yaml` — 57 paths, 9 tags, all on the existing platform REST API with new admin scopes (no parallel internal API).
+Canonical contract: `specs/backoffice-openapi.yaml` — 93 paths, 12 tags, all on the existing platform REST API with new admin scopes (no parallel internal API). Counts verified 2026-08-18 against the spec and asserted in `packages/contracts/test/spec.spec.ts`; `README.md` carries the same figures under the Q2b gate.
 
 | Tag | Paths | Scope | Notes |
 |---|---|---|---|
-| reconciliation | 13 | `reconciliation:read`, `finance:reconciliation:write` | Runs, replay, break lifecycle, monthly sign-off, thresholds, CBUAE export |
-| analytics | 9 | `platform:analytics:read` | Five persona views, onboarding funnel, handover health, liability monitor |
-| reports | 7 | `compliance:reports:generate` | Generate/approve/submit; PSU inquiry bundles (PDF+XLSX) |
-| approvals | 5 | `approvals:*` | Shared four-eyes primitive; gated operations return `202` + approval_request |
+| analytics | 18 | `platform:analytics:read` | Five persona views, onboarding funnel, handover health, liability monitor, SLOs |
+| reconciliation | 12 | `reconciliation:read`, `finance:reconciliation:write` | Runs, replay, break lifecycle, monthly sign-off, thresholds, CBUAE export |
+| tpp-billing | 12 | `billing:read`, `billing:write` | Counterparty registry + directory sync, P9 registration, billing-record ingest, reconcile-before-invoice, four-eyes invoice runs (409 if unreconciled) |
+| reports | 11 | `compliance:reports:generate` | Generate/approve/submit; PSU inquiry bundles (PDF+XLSX) |
+| disputes | 9 | `disputes:admin`, `finance:disputes:write` | Next-business-day SLA; four-eyes on refund; reuses the Ozone Connect refund flow; respondent-side scheme clocks |
+| consents-admin | 6 | `consents:admin`, `consents:admin:fraud-revoke` | PSU search; revoke <5s p99 to Nebras; four-eyes on bulk; care-surface token minting |
+| approvals | 5 | initiator / approver scope of the gated request | Shared four-eyes primitive; gated operations return `202` + approval_request |
 | audit | 5 | `audit:read` | Events, lineage view, consent/PSU trails (24-month) |
-| consents-admin | 5 | `consents:admin`, `:fraud-revoke` | PSU search; revoke <5s p99 to Nebras; four-eyes on bulk |
-| disputes | 5 | `disputes:admin` | Next-business-day SLA; four-eyes on refund; reuses the Ozone Connect refund flow |
-| risk-signals | 2 | `risk:*` | List + status patch |
-| tpp-billing | 8 | `billing:read/write` | Counterparty registry + directory sync, P9 registration, billing-record ingest, reconcile-before-invoice, four-eyes invoice runs (409 if unreconciled) |
+| agents | 5 | `platform:agents:read`, `platform:agents:write` | Automation-agent identity — DCR registration (four-eyes), listing, revoke kill switch, session minting (ADR 0018) |
+| readiness | 5 | public (pre-login) | Integration Readiness Wizard — catalog, assess, profiles, maturity (ADR 0022 carve-out) |
+| risk-signals | 4 | `risk:read`, `risk:investigations:write` | Signal list + status patch; fraud-incident report/list/resolve with operational pause + scheme hold (BACKOFFICE-77) |
+| governance | 1 | `compliance:query-purposes:write` | Cross-fintech query-purpose registration, four-eyes (ADR 0015) |
 
 Conventions (binding, see `CLAUDE.md`): `{data, meta}` envelope; cursor pagination only; kebab-case paths / snake_case JSON; integer minor units + ISO 4217; `Idempotency-Key` header; `x-fapi-interaction-id` end-to-end.
 
@@ -207,7 +210,7 @@ Priorities: **Must** (build scope), **Should** (fast-follow hardening), **Could/
 
 | ID | Requirement | Priority | Acceptance (condensed) |
 |---|---|---|---|
-| BACKOFFICE-01 | Daily automated three-way reconciliation: Nebras billing datasets ↔ platform internal API logs ↔ downstream fintech billing | Must | Run completes <60 min of Nebras daily roll-up; matched/unmatched/disputed line items across all three sources written to `reconciliation_log`. Matches technically-successful calls only; applies the Commercial & Pricing Model v1.0 fee schedule (payment initiation 2.5 fils; balance/CoP-with-payment 0.5 fils incl. its bundling window — verify window duration against current scheme docs; data sharing 2.5 fils per 100 lines) |
+| BACKOFFICE-01 | Daily automated three-way reconciliation: Nebras billing datasets ↔ platform internal API logs ↔ downstream fintech billing | Must | Run completes <60 min of Nebras daily roll-up; matched/unmatched/disputed line items across all three sources written to `reconciliation_log`. Matches technically-successful calls only; applies the Commercial & Pricing Model v1.0 fee schedule (payment initiation 2.5 fils; balance/CoP-with-payment 0.5 fils within the confirmed 2-hour pairing window, which discounts exactly one balance call AND one CoP call per payment; data sharing 2.5 fils per 100 lines) |
 | BACKOFFICE-02 | Break detection with configurable thresholds | Must | Variance above threshold (default >1 fils fee / >0 consent drift) creates `reconciliation_break` with all three source refs; Finance notified for fee breaks, Operations for consent breaks |
 | BACKOFFICE-03 | Break investigation workflow: flag → assign → investigate → resolve/escalate | Must | Claiming transitions to `assigned`, records claimant, starts SLA clock (p50 ≤2 / p90 ≤5 business days), removes from other claimants' queues |
 | BACKOFFICE-04 | Resolution outcomes: resolved-matched, resolved-internal-correction, escalated-to-nebras-dispute, escalated-to-fintech-billing | Must | Terminal-state transition with mandatory note (≥20 chars), timestamp, immutable audit record; reopen requires Compliance scope + justification |
@@ -299,7 +302,7 @@ Nebras feeds via the egress gateway (P6), care-surface connectivity (P1), core b
 
 ### 7.6 Epic E6 — Scheme Interaction & TPP Billing
 
-Derived from the Nebras Interaction Guide for LFIs/TPPs (v4, Mar 2025) and the Trust Framework Directory APIs. The guide pre-dates v2.1-final/API Hub v8 — **specific SLAs, contacts, and process details must be re-verified against current scheme documentation before becoming acceptance criteria** (BD-15/BD-16). The TPP-billing model below reflects current operational reality: the LFI receives monthly billing records from Nebras (by email) and must itself issue invoices to each consuming TPP.
+Derived from the Nebras Interaction Guide for LFIs/TPPs. **The current guide is v5.0 (Jun 2026)**, which supersedes the v4 (Mar 2025) edition this epic was originally built against; v4 pre-dated v2.1-final/API Hub v8. The v5.0 deltas are recorded in BD-16 and are **not yet applied to the shipped clocks** — backlog **STD-02** (dispute stage clocks), **STD-03** (service-desk respond/resolve SLA pairs) and **STD-04** (notice periods) carry the re-baselining, and `docs/reviews/standards-conformance-2026-08.md` §4 states the divergence precisely. Specific SLAs, contacts, and process details must be re-verified against the current guide before becoming acceptance criteria (BD-15/BD-16). The TPP-billing model below reflects current operational reality: the LFI receives monthly billing records from Nebras (by email) and must itself issue invoices to each consuming TPP.
 
 | ID | Requirement | Priority | Acceptance (condensed) |
 |---|---|---|---|
@@ -337,7 +340,7 @@ Each milestone gates the next; one feature at a time within a milestone. This is
 
 | Milestone | Contents | Exit criteria |
 |---|---|---|
-| **M0 — Repo foundation** | Monorepo scaffold, CI with gates Q1–Q3, OpenAPI client generation + failing contract stubs for all 57 paths, relational schema (10 tables, RLS, INSERT-only audit), synthetic test data + seeded demo dataset, port interfaces defined with simulator stubs | CI green on empty implementations; schema applied to the free-tier database; zero real PII anywhere |
+| **M0 — Repo foundation** | Monorepo scaffold, CI with gates Q1–Q3, OpenAPI client generation + failing contract stubs for all paths, relational schema (10 tables, RLS, INSERT-only audit), synthetic test data + seeded demo dataset, port interfaces defined with simulator stubs | CI green on empty implementations; schema applied to the free-tier database; zero real PII anywhere |
 | **M1 — Substrate + demo goes live (E4)** | IdP federation (P2 simulator) + admin-scope minting, scope enforcement middleware (BFF + service layer), audit write path + PII redaction library, four-eyes primitive, `query_purpose_registry`, **Nebras simulator v1** (consent + reports surfaces), ITSM simulator, demo deployment pipeline (auto-deploy on merge) | **Demo URL live:** persona login (MFA) → portal shell → admin-scoped echo; audit record emitted and visible; DEMO banner present |
 | **M2 — Customer Care (E2) — first feature** | PSU-centric search, single/bulk/fraud revocations with reason codes, 24-month audit timeline, unauthorized-payment investigation, dispute + refund flow (Nebras simulator acknowledges revokes <5s and tracks dispute/refund states) | BACKOFFICE-16..23, -25, -62 green; demo walkthrough: search a synthetic PSU → revoke a consent → open a dispute → four-eyes refund → audit trail shows it all |
 | **M3 — Reconciliation (E1)** | Matching core against Nebras-simulator billing datasets (with injectable fee variances), break workflow, three-source diff view, monthly close, CBUAE export | BACKOFFICE-01..08, -11, -13, -14 green; demo walkthrough: inject a fee variance → break appears → claim → resolve/escalate → month-close report |
@@ -370,7 +373,7 @@ Each milestone gates the next; one feature at a time within a milestone. This is
 | BD-13 | Cross-fintech aggregation governance sign-off (data governance + compliance) for `bank_internal_view` | — (blocks BACKOFFICE-33 only; sequence single-fintech views first) |
 | BD-14 | Demo hosting stack (demo profile only — not a bank decision) | Three-service default: Cloudflare (portal/BFF + cron) + Supabase (Postgres/RLS + Auth + storage) + Railway (simulator + jobs); see README |
 | BD-15 | LFI-to-TPP fee collection model confirmation: LFI-issued invoices from emailed Nebras billing records (current operational reality, BACKOFFICE-73) vs Nebras-collected pass-through with net settlement (Interaction Guide v4 §5.11/5.13) — confirm the current scheme arrangement and whether both flows co-exist | Build BACKOFFICE-73 on the LFI-issued-invoice model; keep net-settlement reconciliation in scope |
-| BD-16 | Re-verify Interaction Guide v4 figures against current scheme docs: dispute/respondent clocks, incident P1–P4 SLAs, notification notice periods, service-desk channels. **IG v5.0 received 2026-08-17**: §8 publishes 30/5/10/15 **calendar**-day dispute-stage clocks and §11 gives 15-day maintenance / 30-day version-release notices — reconcile with the BACKOFFICE-75/-78 configured clocks in a follow-up story | Build on v4 figures as defaults; clocks configurable per class (v5.0 deltas pending the follow-up) |
+| BD-16 | Re-verify Interaction Guide v4 figures against current scheme docs: dispute/respondent clocks, incident P1–P4 SLAs, notification notice periods, service-desk channels. **IG v5.0 received 2026-08-17**: §8 publishes 30/5/10/15 **calendar**-day dispute-stage clocks and §11 gives 15-day maintenance / 30-day version-release notices — reconcile with the BACKOFFICE-75/-78 configured clocks in a follow-up story. **Filed 2026-08-18 as STD-02/-03/-04** (the follow-up had never been written into the backlog, so the loop could not pick it up); §9.4 additionally publishes respond+resolve SLA *pairs* per priority, not the single clock currently shipped | Build on v4 figures as defaults until STD-02/-03/-04 land; note the "clocks configurable per class" assumption is **not** yet implemented — every clock is a hardcoded module constant with no config seam |
 | BD-20 | Nebras API Hub fee VAT posture — the IG v5.0 §10.9 sample tax invoice shows **VAT-exclusive + 5%** (Taxable/VAT/Gross columns on net scheme rates); confirm on the first real invoice, which also resolves the sample's CoP-discounted unit anomaly (0.25 vs 0.005) (ADR 0007) | VAT-exclusive + 5% per the IG sample; accrue net of VAT |
 | BD-21 | Billing-query window anchor — the window itself is scheme-published (IG v5.0 §10.13: submit within 30 **calendar** days of occurrence; responses 10 min / 10 days / 15 days); confirm the anchor semantics ("occurrence" = charge date vs invoice receipt) in the LFI–TPP Agreement (ADR 0007) | 30 calendar days from invoice receipt, configurable |
 | BD-22 | Role-domain taxonomy (LFI / TPP / shared) for personas and non-billing data classes (ADR 0006; the billing-family classification is already decided there) | Billing family per ADR 0006; SEG-01 stays blocked until decided |

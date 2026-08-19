@@ -20,9 +20,17 @@ import type { Principal } from '../src/auth.js'
 
 const PERIOD = '2026-06'
 
+// finance-analyst, not an invented persona. PRD §2 puts TPP-of-record cost management and payable
+// disputes in the OF Finance Analyst's remit, and SCOPE_MATRIX gives that persona
+// finance:reconciliation:write — so this principal is one the matrix can actually mint. An earlier
+// version said 'finance-controller', which appears nowhere in SCOPE_MATRIX; the `as Principal` cast
+// let it past the Persona union. Harmless at runtime (mintScopes returns [] for an unknown persona,
+// so createAuthMiddleware denies it) but not harmless as evidence: this principal is what the audit
+// assertions below pin acting_persona and scope_used against, and the matrix is the document those
+// assertions are supposed to be defensible under. The route suite already uses finance-analyst.
 const AGENT: Principal = {
-  subject: 'demo:finance-controller@bank',
-  persona: 'finance-controller',
+  subject: 'demo:finance-analyst@bank',
+  persona: 'finance-analyst',
   scopes: ['finance:reconciliation:write'],
   bankId: '11111111-1111-4111-8111-111111111111'
 } as Principal

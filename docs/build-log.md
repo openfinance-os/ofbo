@@ -3647,3 +3647,163 @@ YAML scalar and broke the file, and it was committed because the validation ran 
 *after* the commit rather than before it. Validation now precedes the commit.
 
 Verified: unit **1568/1568**; typecheck 0; ESLint clean.
+
+---
+
+## 2026-08-18 — STD: UAE Open Finance standards-conformance review (docs-only; 14 stories filed)
+
+A conformance diff of the repo against the current scheme baseline — Standards v2.1-final +
+errata3, API Hub v8 (releases 2026.19.0 and 2026.22.0), Nebras Interaction Guide v5.0 (Jun 2026),
+the Limitation of Liability Model v2.1, and the Ozone Connect availability/response-time/data-quality
+policies. No source changed; the output is `docs/reviews/standards-conformance-2026-08.md`, ADR 0030,
+a new STANDARDS block of STD-01..STD-14 in the backlog (laid out in EXECUTION order, not id order,
+because next-story picks by file position), an as-built note on ADR 0010, the one-word P10 citation
+fix in `CLAUDE.md` (ADR 0022 -> ADR 0010), and PRD repairs — the §6 API-surface table rebuilt with
+verified per-tag counts and real scope strings, §7.6 re-attributed to IG v5.0, BD-16 updated, and the
+BACKOFFICE-01 CoP bundling-window hedge retired.
+
+METHOD. Every claim was produced by one pass and then re-verified by a second, adversarial pass that
+opened the file and read the lines, with instructions to try to refute rather than confirm. 45 claims
+were tested: 33 CONFIRMED, 11 CORRECTED, 1 REFUTED. The finished documents were then put through a
+second, five-way critique against the tree, which returned FIX_FIRST from all five and corrected nine
+further defects — three of them in the review's own §2, where the MECHANISM was wrong rather than the
+citation: the liability lookup does not go silent (it emits an AED 0 signal), the fail-closed breach is
+not confined to the console (eight sites), and the bulk-revoke count never reaches the second approver
+at all. A tenth correction reordered the backlog block, because file position — not the comment
+claiming an order — is what next-story actually obeys. The corrections were material and are the reason
+the passes were run — the ADR-0022 mis-citation is in EIGHT sites, not the four first found; the
+respondent-clock constants are at `respondent-disputes/service.ts:31-34`, not 30-36; the case-id
+collision is conditional on an omitted optional field rather than unconditional; `slo.ts` has no
+default-target constant at all. Line numbers in the review are as at c5ba31b.
+
+THE HEADLINE IS NOT DRIFT. The architecture is conformant and that is the hard part: consent
+source-of-truth stays in the Hub with the local record a mirror, P6 is the only egress for Nebras API
+Hub traffic (the documentation-mirror fetches in the rate-card watcher sit outside it — that is the
+open ruling below), the
+LFI backend is called Ozone Connect and never a resource server, there is no AML GO client anywhere,
+the 7-state consent enum is byte-exact, and the liability matrix and rate card match the published
+schedules. What is missing is a mechanism that NOTICES when the scheme moves.
+
+THE PROOF OF THAT, exactly. Interaction Guide v5.0 arrived 2026-08-17. It was read, and its deltas
+were written into PRD BD-16. Then nothing: the code still runs v4 figures, the runtime adoption
+catalogue still advertises "Interaction Guide v4 figures" to users (`readiness/catalog.ts:195`), and
+the follow-up story the PRD and build-log both PROMISED was never written into `docs/backlog.yaml`.
+That was the refuted claim — we tested the hypothesis that the story existed, under any id or status,
+and it does not. The loop could never have picked it up. Filing STD-02/-03/-04 is the single
+highest-value output here.
+
+The fix for the general case is nearly free and is the substance of ADR 0030: `rate-card-watch.ts`
+already fetches three scheme URLs on a weekly cron and opens a High-classification, `autoApply: false`
+review task when a content hash moves. The scheme's Release Notes and Errata register — cited in this
+repo at `docs/research/lfi-billing-system-tier2.md:387` — is simply not one of them. The mechanism
+that would have caught the v5.0 drift exists and is pointed at the wrong pages.
+
+SEVEN DEFECTS FOUND WHILE VERIFYING, which outrank the drift because they are wrong today:
+- The Operations Console serves fabricated numbers under `DEPLOY_PROFILE=enterprise`. The `slo`,
+  `certChain` and `ozone` deps are never injected in ANY profile (`app.ts:609-615`) and no enterprise
+  implementation exists, so a bank sees a hardcoded 99.8% uptime as operational truth. CLAUDE.md's
+  fail-closed rule is broken in the console and in seven more places besides — six demo sources wired
+  unconditionally in the scheduled worker (`worker.ts:389,398,402,405,408,416`) and one in the request
+  path. Two are worse than a green panel: the CAAP recorder writes FABRICATED registration events into
+  the INSERT-only `audit_high_sensitivity` table, and the cert monitor watches a fake chain that is
+  permanently "critical in 5 days", so a real scheme-certificate expiry would never be seen. (STD-11)
+- The service-desk SLA clock does not pause at weekends (`service-desk/service.ts:98`, raw elapsed ms)
+  though PRD §10 makes that a binding default and every other SLA module honours it. A P2 opened
+  Friday 16:00 breaches Saturday 16:00. (STD-03)
+- `liability.ts:47` returns 0 for any unmodelled issue, and the threshold derives from the same
+  lookup — so both sides are 0, `0 >= 0` is true, and the class crosses trivially: it emits a signal
+  and two P3 tickets reporting AED 0 at `low` severity. Not suppressed, silently worthless — harder to
+  spot than silence. The scheme's AED 15,000 / 48-hour new-beneficiary class has no row at all. (STD-09)
+- Fraud revoke is the only revoke path that records no `sla_met` verdict, so a <5s breach on the
+  highest-risk revocation is invisible. `NEBRAS_SLA_MS` is defined twice and restated a third time in
+  a different unit. (STD-09)
+- The four-eyes bulk-revoke count can exceed what is revoked — the portal counts with `REVOCABLE`
+  (including `AwaitingAuthorization`), the sweep uses `ACTIVE_STATUSES`. Approving "12" and revoking 9
+  is an integrity defect, not a cosmetic one. (STD-05)
+- `scheme_net_settlement` is the shipped DEFAULT collection rail but the `selected_rail` CHECK admits
+  only three other values, so any collection on the default is rejected by Postgres at write time.
+  BILLING-domain, flagged rather than fixed here. (STD-13)
+- An undocumented direct-egress path: the rate-card watcher fetches scheme pages with plain `fetch`,
+  no P6. Probably an intended carve-out (documentation mirrors, not the API Hub) but recorded nowhere
+  — and ADR 0030 would extend that very watcher, so it needs a ruling before STD-01 builds on it.
+
+CONFORMANCE GAPS PROPER, in brief: the simulator never echoes `x-fapi-interaction-id` (mandatory on
+responses per the standard, and the correlation key Nebras support requires on every ticket), has no
+consent state machine (any unknown id returns a fabricated `Authorized`; API Hub 2026.22.0 now returns
+400 for revoke in a non-revocable state), and seeds its dataset and Consent Manager surfaces
+incoherently — measured overlap zero for every 2026 period, so a cross-surface reconciliation reads
+every consent as Authorized. Consent vocabulary is PSD2 (`AISP_DATA_SHARING`, `accounts:read`) rather
+than UAE permission codes; consent types are absent entirely. UAEFTS appears nowhere, ACWP/ACWC
+nowhere, and `ipp_status` has no enum in the contract — while V2.2 already makes `paymentRail`
+mandatory with Tier 2 dates of 28 Feb 2027 / 31 May 2027. Two of the seven `NebrasEgressPort`
+operations have no simulator route, so the M6 port-swap gate structurally cannot detect a defect in
+those enterprise calls.
+
+DELIBERATELY NOT DONE. No source file was touched — every code fix is a story, because comment-only
+edits are still source edits under the worktree rule and because several of them need a spec-only PR
+first. The respondent-dispute clock VALUES were left alone on purpose: 3/15/3/3 business days are
+correct under v5.0, only the attribution is stale, and "fixing" the numbers would introduce a real
+error while correcting a cosmetic one. errata3 was pinned but not scheduled — it touches international
+payment creditors only, OFBO initiates no payments, and re-certification is change-triggered rather
+than errata-triggered.
+
+FOR A HUMAN (five, none decidable by the loop): ADR 0030 accept/reject; the P6 documentation-fetch
+ruling; ADR 0010, still `Proposed` while BACKOFFICE-63 is `done` and diverges from its Option 1 in
+three ways — the missing `acknowledged` state means the bank has no evidence an STR was ever filed;
+ADR 0011, the same Proposed-but-implemented pattern; and STANDARDS block priority, since placing it
+before COMMERCIAL means the loop takes conformance ahead of BILL-13..17, which have four PRs in
+flight. An as-built note was appended to ADR 0010 recording the divergence; its `## Decision` section
+is byte-identical to HEAD (the diff on that file is purely additive), so the human rules on the record
+as it stood.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, no broken references or duplicate
+numbers; `discovery:link` OK (STD- ids are outside the `^BACKOFFICE-\d+$` waist regex, so unaffected);
+backlog YAML parses, 193 items (161 done), STD block field order matches the canonical sequence and
+the simulated next-story pick is STD-09, the first dependency-free defect. Per-tag path
+counts in the repaired PRD table were recomputed from the spec and sum to 93. Docs-only — no source,
+no spec, no tests changed.
+
+---
+
+## 2026-08-18 — STD addendum: ADR 0030 accepted, P6 ruled, and the defect the ruling uncovered
+
+Two of the five parked decisions came back the same day, and grounding one of them turned up a live
+defect that no story owned.
+
+ADR 0030 ACCEPTED (Option 1) with two binding amendments. The P6 question is RULED (a) — public
+scheme-DOCUMENTATION change-detection sits outside P6, which governs the authenticated API data plane.
+Three facts decided it, and none of them is "it seemed fine": `NebrasEgressPort` is seven purpose-built
+typed methods with NO generic fetch, so routing docs through it means a new method on a regulated port
+interface plus both adapters plus the contract bench — real cost, poor fit. CLAUDE.md:57 scopes P6 to
+the scheme certificate chain, i.e. mTLS API traffic, and one of the three watched URLs is CBUAE
+Confluence rather than a Nebras host at all, so a "P6 for Nebras-domain traffic" reading would leave
+direct egress anyway and achieve nothing. And no bank grants a regulated workload unmediated outbound
+HTTPS — at M6 this call traverses the bank's forward proxy whatever any ADR says.
+
+The carve-out is deliberately narrow and CONDITIONAL: unauthenticated GETs of public scheme
+documentation, no credentials, no PSU or bank data, response used only for change detection — and it
+requires pinning the redirect behaviour (`redirect: 'follow'` on an unauthenticated GET is
+SSRF-adjacent even with nothing to steal) and keeping the fetcher injectable so a bank points it at its
+own proxy without a code change. Net effect is LESS unmanaged egress than before the ruling, not more.
+
+THE DEFECT UNDERNEATH IT (new, STD-15). Checking what happens when that egress is blocked exposed a gap
+bigger than the ruling. `rate-card-watch.ts:399` returns `failedSources`; `worker.ts:336` calls
+`runBillingRateCardWatch` inside `Promise.allSettled` and DISCARDS the resolved value. It is never read.
+A failed source writes one `billing_rate_card_watch_failed` audit row and raises nothing — no ITSM
+ticket, no risk signal. So a proxy-blocked or moved page leaves the watch DEAD AND LOOKING ALIVE: weekly
+audit rows nobody reads. That is this review's own thesis turned on the repo's tooling, and ADR 0030
+would have inherited it — pinning a regulatory baseline to a watcher whose silence is indistinguishable
+from "nothing changed" manufactures false assurance, which is worse than no registry. Hence amendment
+(ii): fail loudly first. STD-15 filed, STD-01 depends on it.
+
+Backlog consequences: STD-01 goes blocked -> pending (ADR 0030 accepted) with `depends_on: [STD-15]`,
+and the block re-orders to STD-09..15 -> STD-01 -> STD-02..04 -> STD-05..08. 194 items, 8 blocked (was
+9). Simulated next-story pick is unchanged at STD-09.
+
+ADR 0010 (STR/AML) was PARKED by the owner, not resolved — recorded as such in the review's decision
+queue so it cannot later read as settled. BACKOFFICE-63 stays `done` against a `Proposed` ADR and the
+bank still has no evidence an STR was ever filed. ADR 0011 remains open.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
+ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
+Still docs-only — no source, no spec, no tests changed.

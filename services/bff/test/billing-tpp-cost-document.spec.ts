@@ -94,6 +94,52 @@ describe('BILL-14 provider-document ingest', () => {
     expect(saved).toHaveLength(0)
   })
 
+  it('refuses a verifier that carries a customer-identifier shape, and still accepts a work email', async () => {
+    // verified_by is the only operator-typed field that lands VERBATIM in a column: the payload
+    // screen inspects the parsed document, and source_note is only safe because the audit sink
+    // redacts at emission. The column is INSERT-only with no deletion path and cross-tenant
+    // readable since migration 0040, so an identifier typed here would be permanent.
+    const { service, saved } = harness()
+
+    // Shapes that can never legitimately name a verifier. Synthetic forms per the PII guard:
+    // national-identifier prefix 999 (never the real 784), IBAN bank code 000.
+    for (const verifiedBy of ['AE070001234567890123456', '999-1990-1234567-1', '+971500000000']) {
+      await expect(service.ingest(
+        UPLOADER,
+        { documentType: 'nebras_tax_invoice', billingPeriod: '2026-06', verifiedBy, fileBytes: invoiceBytes() },
+        'idem-shape', 'trace-shape'
+      )).rejects.toThrow(/names the person who verified this document/i)
+    }
+    expect(saved).toHaveLength(0)
+
+    // The carve-out, asserted rather than assumed: an email is how several adopting banks mint P2
+    // subjects, so screening it would reject this field's likeliest legitimate value. If someone
+    // later adds 'email' to the screened shapes, this fails and forces the trade to be re-argued.
+    await service.ingest(
+      UPLOADER,
+      {
+        documentType: 'nebras_tax_invoice',
+        billingPeriod: '2026-06',
+        verifiedBy: 'finance.reviewer@adopting-bank.example',
+        fileBytes: invoiceBytes()
+      },
+      'idem-email', 'trace-email'
+    )
+    expect(saved).toHaveLength(1)
+  })
+
+  it('never echoes the refused verifier — the refusal must not become the leak', async () => {
+    const { service } = harness()
+    const identifier = 'AE070001234567890123456'
+    await expect(service.ingest(
+      UPLOADER,
+      { documentType: 'nebras_tax_invoice', billingPeriod: '2026-06', verifiedBy: identifier, fileBytes: invoiceBytes() },
+      'idem-echo', 'trace-echo'
+    )).rejects.toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining(identifier) })
+    )
+  })
+
   it('requires a verifier at all — an unverified manual upload is not evidence', async () => {
     const { service } = harness()
     await expect(service.ingest(

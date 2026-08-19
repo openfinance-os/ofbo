@@ -16,7 +16,7 @@ Bank-neutral back office for UAE Open Finance (CBUAE / Al Tareq / Nebras), for a
 ## Ports — never hardcode a vendor
 
 Institution-specific systems are ports (PRD §3). Code against the port interface; the bank's mapping lives in configuration:
-P1 customer-care surface · P2 enterprise IdP (OIDC) · P3 ITSM/alerting · P4 core banking adapter · P5 enterprise APM · P6 enterprise egress gateway (ALL Nebras-bound traffic; no direct egress — non-negotiable) · P7 data catalogue (lineage) · P8 onboarding handover · P9 financial management system (TPP counterparty registration + invoicing) · P10 STR workflow (the bank's own suspicious-transaction system of record — the Back Office hands off an approved draft and NEVER submits to CBUAE AML GO directly; ADR 0022).
+P1 customer-care surface · P2 enterprise IdP (OIDC) · P3 ITSM/alerting · P4 core banking adapter · P5 enterprise APM · P6 enterprise egress gateway (ALL Nebras-bound traffic; no direct egress — non-negotiable) · P7 data catalogue (lineage) · P8 onboarding handover · P9 financial management system (TPP counterparty registration + invoicing) · P10 STR workflow (the bank's own suspicious-transaction system of record — the Back Office hands off an approved draft and NEVER submits to CBUAE AML GO directly; ADR 0010 — still Proposed, and the shipped P10 handoff diverges from its Option 1: read its 2026-08-18 as-built note, not its Recommendation).
 
 ## Deployment profiles & adapters (PRD §3.1)
 
