@@ -3801,3 +3801,35 @@ Expected saving ~270 min/day, ~36% of total spend, without weakening a merge gat
 Evidence: `scripts/test` 44/44, discovery harness 40/40, `docs:check` 60 docs / 30 ADRs, `discovery:link`
 OK, backlog YAML parses, both workflows parse and their resolved triggers were inspected. No source,
 spec, or product tests changed — CI configuration, one new guard test, and docs.
+
+### Addendum, 2026-08-21 — the allowance is not "running low", it is EXHAUSTED
+
+Found while watching PR #329's own checks. Every job on it failed 2-3 seconds after creation with
+`runner_id: 0`, no runner name, **zero steps executed** and no log file (the logs endpoint 404s). That
+is GitHub refusing to allocate a runner at dispatch, not a gate finding a defect.
+
+Bisected against the run history:
+
+| | run | created | outcome |
+|---|---|---|---|
+| last success | ci #959 (PR #328) | `2026-08-19T10:02:08Z` | success, 4m |
+| first failure | ci #960 (PR #328) | `2026-08-19T10:08:30Z` | failure, 0m — now on `run_attempt: 8` |
+
+So the cutover is between **10:02 and 10:08 UTC on 19 Aug 2026**, and CI has been down repo-wide for
+~42 hours. It is not branch-specific: the same signature appears on `feature/HARNESS-17-…`,
+`claude/adr-0030-amendment-convention` (retried 7 times) and `claude/github-actions-budget-jryfmy`,
+across `ci`, `mutation` and `ai-review` alike. Nothing merges until the spending limit is raised or
+the monthly allowance resets.
+
+Two consequences worth recording. First, the burn measurements in the entry above were taken over
+18-19 Aug — which is precisely the window that spent the allowance, so they describe the run rate that
+caused this, not a quiet period. Second, HARNESS-18 could not be verified in CI: the gates it touches
+were run locally instead (`scripts/test` 44/44 including the 8 new guards, discovery harness 40/40,
+`doc-link-check` 60 docs / 30 ADRs, `discovery-link-check` OK, both workflows parsed and their resolved
+triggers inspected). The change touches no source — CI configuration, one dependency-free guard test,
+and docs — so the locally-runnable gates are the ones that cover it. It still needs a green CI run
+before merge, once runners are available again.
+
+The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
+eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
+and they obscure the real signal.
