@@ -45,14 +45,30 @@
 name: ai-review
 
 on:
-  # Default types (opened, synchronize, reopened). Draft PRs are NOT excluded: the build
-  # agent opens its PRs as drafts, so skipping drafts would skip precisely the output this
-  # check exists to review.
+  # Draft PRs are NOT excluded: the build agent opens its PRs as drafts, so skipping drafts
+  # would skip precisely the output this check exists to review. `opened` fires for drafts.
   #
-  # No workflow_dispatch. Both reviewers diff a PR against its base and post to that PR, so
-  # a manual dispatch would have neither — the same "no merge base" problem q1b reports at
-  # ci.yml:67. Re-run a review from the PR's Checks tab instead; that preserves PR context.
+  # HARNESS-18 — `synchronize` is DELIBERATELY ABSENT. The default types are
+  # (opened, synchronize, reopened), so dropping one means listing the others explicitly.
+  #
+  # WHY: each run is three jobs and ~12 runner-minutes, because both reviewer legs spend ~5
+  # minutes in a model call re-reading the ENTIRE PR diff. On `synchronize` that was paid
+  # again on every intermediate commit of a long agent-driven branch — 24 runs on 19 Aug 2026
+  # alone, ~290 runner-minutes in one day, plus the model tokens behind them. This check is
+  # advisory by construction (see the header, and ADR 0029): it is not a required status check
+  # and never gates merge, so re-paying full price per push bought nothing that a review at
+  # open and at ready-for-review does not.
+  #
+  # WHAT IS PRESERVED: every PR is still reviewed when OPENED, and again when it is marked
+  # READY FOR REVIEW — the state a human is actually asked to merge.
+  #
+  # ESCAPE HATCH: `labeled`, narrowed to the `ai-review` label on the config job below. There
+  # is still no workflow_dispatch — both reviewers diff a PR against its base and post to that
+  # PR, so a dispatch would have neither (the same "no merge base" problem q1b reports at
+  # ci.yml:67). Note that re-running from the Checks tab replays the ORIGINAL head SHA, so it
+  # cannot review work pushed since; adding the label is what re-reviews the CURRENT head.
   pull_request:
+    types: [opened, ready_for_review, reopened, labeled]
     paths-ignore:
       - 'docs/**'
       - 'discovery/**'
@@ -75,6 +91,15 @@ jobs:
   # ===================================================================================
   config:
     name: AI review — engine registry
+    # HARNESS-18. `labeled` fires for EVERY label, so narrow it to the one label that means
+    # "review this again". Any other label skips this job, and `review` needs it, so the whole
+    # workflow skips and no engine is invoked — a label like `blocked` must not cost two model
+    # calls. Non-`labeled` events are unaffected by this guard.
+    #
+    # A skipped check here is NOT an omitted gate being passed off as a passing one (the thing
+    # ci.yml's q1b handling exists to prevent): this workflow is advisory, is not a required
+    # status check, and says so in its header, in every PR comment it writes, and in ADR 0029.
+    if: ${{ github.event.action != 'labeled' || github.event.label.name == 'ai-review' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

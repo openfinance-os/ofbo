@@ -3735,3 +3735,69 @@ bank still has no evidence an STR was ever filed. ADR 0011 remains open.
 Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
 ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
 Still docs-only — no source, no spec, no tests changed.
+
+## 2026-08-21 — HARNESS-18: stop mutation + ai-review re-running on every push (Actions budget)
+
+The GitHub Actions allowance was being exhausted in roughly four days of each month. Measured over
+18–19 Aug 2026 from per-job timings — GitHub bills the **sum of every job**, each rounded up to the
+whole minute, so a `ci` run that reads as 6 minutes on the Actions tab bills 22:
+
+| workflow | jobs/run | billable min/run | runs / 2 days | ~billable min |
+|---|---|---|---|---|
+| `ci` | 10 | 22 | 60 | ~870 |
+| `mutation` | 1 | 25 (10–14 cancelled) | 30 | ~380 |
+| `ai-review` | 3 | 12 | 30 | ~220 |
+| `deploy` | 5 | 9 | ~4 | ~36 |
+
+~1,500 billable minutes in two days — ~750/day, ~16,000/month against a 3,000-minute allowance.
+
+The recent spike was not drift. A `paths:` filter on `pull_request` is evaluated against the **whole
+PR diff**, not the commits just pushed, so the moment a branch touched `services/bff/src/auth.ts`
+once, every later push re-ran the 25-minute mutation job — doc-only pushes included. Both live
+branches touch `auth.ts` and `approvals/service.ts`, which is why 30 of the 51 mutation runs this
+workflow has ever had (created 24 Jun) landed in those two days. Fifteen of the thirty were cancelled
+by the concurrency group after burning 10–14 minutes each: 215 runner-minutes that produced no
+mutation score at all. Six of thirty completed. `ai-review` compounded it independently — created
+15 Aug, 24 runs on 19 Aug alone at ~12 min each, because both reviewer legs spend ~5 minutes in a
+model call re-reading the entire diff, re-paid per intermediate commit plus the tokens behind them.
+
+Both now use `types: [opened, ready_for_review, reopened]`. This is a **cost** change, not a coverage
+change: mutation still sees every security-core PR and ai-review still reviews every PR, at open
+(drafts included — `opened` fires for them, preserving ai-review's deliberate no-skip-drafts rule)
+and again at ready-for-review, the state a human is actually asked to merge. What is dropped is the
+~20 intermediate re-runs per PR that re-proved the same thing. Safe because **neither is a required
+status check** — the pinned contexts in `docs/governance/runbooks/main-branch-protection-activation.md`
+are Q1, Q1b, Q2, Q2b, Q3 ×2, Q4, Q4.5 and Discovery only.
+
+Escape hatches differ because the two workflows differ. `mutation` already has `workflow_dispatch`,
+which accepts any ref, so it needs no label. `ai-review` deliberately has none (no merge base, nowhere
+to post) and a Checks-tab re-run replays the *original* head SHA — so it gets `labeled`, narrowed on
+the `config` job to the `ai-review` label. That is the only way to re-review the current head, and the
+narrowing stops an unrelated label costing two model calls.
+
+Guard: `scripts/test/ci-cost-guard.test.mjs`, 8 assertions in the dependency-free discovery-gates
+glob. Verified non-hollow by putting `synchronize` back and watching exactly one assertion go red. It
+asserts the coverage half too — `opened`, `ready_for_review` and `cancel-in-progress` must survive —
+so a later edit cannot quietly turn the cost fix into a coverage cut.
+
+**Deliberately not taken, both needing a human decision.** (1) Folding `q45-lineage` into
+`q3-integration-contract`: q45 re-runs `pnpm test:integration` byte-identically to q3 and then a
+one-second `lineage:gate` — ~2 billable minutes and a redundant Postgres container per `ci` run — but
+`Q4.5 — BCBS 239 lineage validation` is a **pinned required-check context**, so merging it renames the
+check and blocks every merge until an admin updates branch protection. (2) Path-filtering `ci.yml` so
+docs-only PRs skip Q1/Q3/Q3-E2E/Q4.5 (~50 min/day): `ci.yml` has no paths filter at all, so an ADR-only
+PR runs Playwright E2E and three Postgres containers — but conditionally skipping gates contradicts
+this repo's own HARNESS-07 / q1b doctrine that an omitted gate must never be indistinguishable from a
+passing one.
+
+Also noted, not fixed: the mutation job has grown from the ~8 minutes its header claimed to ~25,
+now flush against its own `timeout-minutes: 25` ceiling. A job pinned to its timeout is the job most
+likely to start failing spuriously, and the 3× growth is unexplained. The stale header claim was
+corrected rather than left to drift (Q2b). Playwright's 2m57s uncached browser install is not in scope
+— HARNESS-17 / PR #328 already removes the 92-second `--with-deps` apt step and caches the browsers.
+
+Expected saving ~270 min/day, ~36% of total spend, without weakening a merge gate.
+
+Evidence: `scripts/test` 44/44, discovery harness 40/40, `docs:check` 60 docs / 30 ADRs, `discovery:link`
+OK, backlog YAML parses, both workflows parse and their resolved triggers were inspected. No source,
+spec, or product tests changed — CI configuration, one new guard test, and docs.
