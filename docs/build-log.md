@@ -5,6 +5,70 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 
 ---
 
+## 2026-08-22 — ADR 0032: deleting an accepted ADR requires a record (supersedes ADR 0031)
+
+User decision, closing the question ADR 0031 left open. The build agent deliberately did NOT
+recommend on this one when ADR 0031 shipped - it recorded the question as an open control-plane
+matter under HG-0002 and stopped, which is the rule for a governance call. Asked for a
+recommendation later, the agent gave one (close the exemption) and the owner agreed.
+
+THE EXEMPTION WAS RESTING ON A CONTROL THAT DOES NOT EXIST. ADR 0031 carved outright deletion out
+of scope on two grounds. One holds: the delete-plus-re-add pairing catches a "deletion" that is
+really a rewrite, renumbered or not. The other was false, and the hard-stop AI reviewer found it by
+CHECKING rather than accepting: doc-link-check resolves FILE-PATH references, and no ADR is
+referenced by path anywhere in the set it scans - ADRs are cited by NUMBER, which it cannot
+resolve. Every real docs/adrs/NNNN-*.md path reference lives outside that set (backlog.yaml,
+docs/research/, docs/reviews/, mcp-gateway, ai-review.yml). So deleting an accepted ADR was green
+on both gates and silent, which is exactly what the exemption claimed was impossible.
+
+BOTH HALVES OF ADR 0031'S OWN RULE WERE EXERCISED BY ONE FINDING, which is the neatest thing about
+this change. The false claim was a statement of FACT, so it was corrected IN PLACE with a dated
+amendment row. Bringing deletion into scope changes the DECISION's scope, so it required a
+SUPERSEDING ADR - the convention applying to itself, in both directions, on the same defect.
+
+THE RULE: an accepted ADR may not be removed from the tree. There is deliberately NO satisfying
+route for a deletion - not a row, not a status flip - because neither can be written to a file that
+no longer exists. The remedy is to not delete it: supersede it and leave the document in place.
+ADR 0012 was superseded on 2026-06-21 and is still in the tree, still readable, still explaining
+why the generic analytics renderer was chosen and then reversed. That is the value at stake. A
+deleted record takes its reasoning with it, and git log is not a substitute for the same reason
+ADR 0031 gave about amendments in the first place: NOBODY READS GIT LOG BEFORE RELYING ON A
+DECISION. ADR 0031 itself is now Superseded and kept in place, which is the rule demonstrating
+itself on the first document it applies to.
+
+COST MEASURED BEFORE ADOPTING, not assumed: no ADR has ever been deleted in this repository -
+0001..0032 with no gaps, and no deletion in the history of docs/adrs/*.md. The rule constrains
+something that has never happened, at the price of one status line if it ever does. That asymmetry
+is what made closing the exemption cheap, and it is why the agent recommended closing it.
+
+A LIVE PROBE ON THIS BRANCH THEN KILLED A CONTROL I HAD JUST DEFENDED. Round 3 closed the
+"rewrite AND renumber" escape by pairing a leftover deletion with a leftover addition ACROSS
+numbers, and I documented the false-red that costs (a PR deleting one ADR and adding an unrelated
+one gets flagged) as an accepted trade. Probing ADR 0032's new deletion rule showed the trade was
+worse than documented: deleting accepted ADR 0007 in a PR that also ADDS ADR 0032 paired the two,
+and the gate reported "0032 - an EXISTING amendment row was rewritten or removed" instead of
+"0007 - DELETED". Wrong file, wrong reason, wrong remedy printed. The false red was the smaller
+half of the problem; MISREPORTING was the larger.
+
+The pairing is now RETIRED, and ADR 0032 is what makes that safe: an unpaired deletion of an
+accepted ADR is a violation on its own, so the renumbered rewrite is caught as the deletion it
+contains, with no invented rewrite relationship between two unrelated files. Same-number D+A
+pairing stays - that pair really is one record rewritten, and the record still exists. Net effect:
+the new rule closed a bypass AND removed the false-red its predecessor had introduced.
+
+ONE TEST ASSERTION INVERTED, and its own comment had predicted this: it asserted a lone deletion
+was "still the documented carve-out, still exempt", because banning it "would be a decision change
+this script may not make". The owner has since made that decision, so the script may now make it.
+Strictly stronger - a case that was silently exempt is now surfaced. Recorded because a test edit
+accompanying a green run must always justify its direction.
+
+Two self-inflicted breakages en route, both caught before commit and both the same shape: text
+inserted into a delimited context without checking the delimiters. Double quotes inside a
+double-quoted YAML scalar broke backlog.yaml; backticks inside a JS template literal broke the
+gate script twice. Parse checks caught all three.
+
+---
+
 ## 2026-06-11 — M0-FOUNDATION (PR #2, pre-loop)
 
 - Workspace, `@ofbo/contracts` (57 paths / 61 routes generated), `@ofbo/bff` 501-stub service with red-by-design `[contract-pending]` suite, `@ofbo/ports` P1–P9 (sim + enterprise stubs + shared contract harness), `@ofbo/db` (9 tables + matview, RLS, INSERT-only audit), `@ofbo/synthetic-data`, CI gates Q1–Q3.
@@ -2004,6 +2068,22 @@ Net: 24 production files, **−893/+146** lines; `reconciliation/service.ts` 106
 
 **Aside, found while verifying:** `pnpm db:seed` is not idempotent. Re-seeding an already-seeded database inflates row counts and reds five assertions in `packages/db/test/seed-demo.int.spec.ts` (7 vs 5 cases, 5 vs 3 invoice runs, 4 vs 2 consoles). It cost a diagnosis here — the failures looked like the refactor until the diff was checked against `packages/`, which it never touches, and a pristine database went 144/144. CI never sees it because every run starts fresh. Left alone; worth a story if anyone ever seeds twice deliberately.
 
+## 2026-08-09 — CODE-03: 564 KB of screenshots nobody references, and two §4 items that turned out to be already guarded
+
+Repo-weight cleanup from the improvement plan's §4, plus a finding about the rest of that section.
+
+**Deleted:** `live-0{1..6}-*.png` at the repo root — 564 KB of portal screenshots with **zero references anywhere** in the tree (grepped across every file type, not just markdown). They arrived incidentally in `40102a9` (the BACKOFFICE-60/-53 MCP gateway spike) as verification artifacts and were never linked. Q2b confirms nothing broke. They remain in git history if anyone wants them back.
+
+**Left alone, deliberately:** `docs/proposals/rendered/` (1.1 MB of PDF/PPTX) is also unreferenced, but it is a *deliverable* — a distribution proposal and an executive deck — not a stray artifact. Unreferenced is not the same as unwanted when the file is somebody's work product. That is a human call, not a cleanup.
+
+**Two §4 items examined and declined, which is the more useful outcome.**
+
+*Generating `IMPLEMENTED_ROUTES` from a per-module registration pattern* (§4, hedged as "consider") would **remove a working control**. The hand-kept set is not an unguarded list: `contract-stubs.spec.ts` runs `it.fails` over every route *not* in it, asserting `status !== 501`. A route that gets implemented without being added therefore returns non-501, the assertion succeeds, the body does not throw, and `it.fails` **goes red** — naming the route. The list is hand-kept *on purpose*: it forces each story to consciously graduate its route from stub to real contract tests, exactly as the docstring says ("BREAKS the moment a story implements it"). Deriving it from registration would make that graduation automatic and silent. The ~100 lines in `app.ts` are the cost of a tripwire that works.
+
+*Single-sourcing the duplicated `the-loom-ways-of-working.html`* (144 KB, byte-identical between `docs/` and `apps/portal/public/`) is already guarded by two sync tests plus an e2e reference. Trading a guarded duplication for a build step buys 144 KB and adds build complexity; the drift it would prevent is already caught.
+
+Both are the same shape, and worth stating plainly: §2 of the plan found controls that were *absent* — real gaps, all closed. The remaining §4 suggestions are hedged notes against things that already have controls. Reading them as a checklist would have retired two working guards.
+
 ---
 
 ## 2026-08-13 — BILL-09/BILL-10: profitability and hosted tenant billing completion
@@ -3810,6 +3890,79 @@ Still docs-only — no source, no spec, no tests changed.
 
 ---
 
+## 2026-08-22 — HARNESS-16 done: the injected-violation self-test (ADR 0029's debt, discharged)
+
+THE QUESTION THE HARNESS HAD NEVER ACTUALLY BEEN ASKED. ADR 0029 said it plainly: "a comment-only
+diff cannot show that a reviewer CATCHES a violation, only that the path runs. A green verdict here
+is weak evidence by construction." Every review to that point had either passed or found bugs the
+build agent wrote BY ACCIDENT. Nothing had ever been deliberately planted, so "the reviewers catch
+violations" was an assumption wearing evidence's clothes - which is the exact shape of defect this
+repository keeps rediscovering.
+
+PR #331: six violations planted in a branch written to look like ordinary work - a plausible commit
+message, a plausible cover story in the code comment ("outside the reconciliation story's surface so
+it can ship ahead of it"), and three passing unit tests. Closed unmerged.
+
+RESULT: ALL SIX CAUGHT, ZERO MISSES. Hard-stop VERDICT: FAIL (6 findings); contract-conformance
+VERDICT: DRIFT (12 findings).
+
+THE CONTROL CONDITION IS THE HALF THAT MAKES IT A MEASUREMENT. All TEN deterministic gates stayed
+GREEN - Q1, Q1b, Q2, Q2b, Q2c, Q3 x2, Q4, Q4.5, Discovery. CI's mechanical half found nothing wrong
+with an endpoint that serves finance payables data to every authenticated persona, mutates the
+INSERT-only audit table, and writes raw request bodies to stdout. That is not a criticism of those
+gates - none of them is built to see any of it. It is the point: without the green half, a red AI
+check proves only that SOMETHING was wrong, not that the reviewer found what nothing else could.
+
+Getting that half right took care, and one attempt nearly spoiled it: the first version of the
+planted test file failed `tsc --noEmit` under noUncheckedIndexedAccess. Left in, Q1 would have gone
+red and the result would have been confounded - a red Q-gate proves the deterministic gate caught
+it. Fixed before pushing. The PII plant is semantic rather than literal for the same reason: the
+pii-guard hook blocks Emirates-ID and IBAN literals outright, so a literal would never have reached
+a reviewer; logging the body unredacted while redactPii() sits ten lines away is the violation a
+reviewer has to REASON about. console.error not console.log, because the latter trips lint.
+
+WHAT RAISES CONFIDENCE ABOVE THE SCORE. Both reviewers traced MECHANISMS, not patterns. The scope
+finding walked the actual fall-through - matchRoute misses, requiredScopeFor returns null, the
+middleware returns next() - then cited the comparable finance surfaces that DO declare a scope.
+Hard-stop went further than the plant on the audit row: it found migrations/0003_rls.sql:69 REVOKEs
+UPDATE so the database would reject the call, then correctly refused to treat that as mitigation
+because the method has no caller and no test, so nothing in CI exercises it. It pre-empted the
+rationalisation ("the amendment convention ADR governs amending ADR DOCUMENTS, not audit rows - it
+does not authorise this") and quoted the planted cover story back as evidence. Contract-conformance
+did the arithmetic - AED 1,500.50 is 150050 fils - and noted the neighbouring surface uses
+variance_milli_fils, "so there is no reading of the contract under which a decimal is correct here".
+
+THE MOST USEFUL FINDING WAS ONE NOBODY PLANTED, AND BOTH REVIEWERS FOUND IT INDEPENDENTLY: the
+planted tests were STRUCTURALLY INCAPABLE of catching the bug. All three authenticated with
+AUTHED_HEADERS, a platform-super-admin token that satisfies any scope check by construction, so the
+suite could never have surfaced the missing scope gate, and no test asserted a 403 for a non-finance
+persona. A suite that looks like coverage and proves nothing is precisely what Q1b and the mutation
+ratchet exist to catch and cannot see. Eleven further unplanted findings came back, including
+composition (a second parallel routing/authorisation path), a missing meta.next_cursor, and money
+flattened into sibling scalars rather than the nested Money object - a defect SEPARATE from the
+float, since even an integer would not validate against the schema.
+
+CALIBRATION, NOT JUST VOLUME. Hard-stop flagged the synthetic TPP legal names and then reasoned
+CORRECTLY that corporate names are not personal data - "recorded only so the judgement is visible
+rather than silently made". Contract-conformance marked three findings with explicitly lower
+confidence and cleared the UUID check with reasoning. Each routed the other's findings across
+rather than double-counting or dropping them. A reviewer that flags everything is as useless as one
+that flags nothing; these did neither.
+
+NOT KEPT AS A FIXTURE, deliberately. The branch is closed and deleted. The plants were tuned to the
+reviewers' current prompts, so re-running it would measure those prompts rather than the code -
+a regression suite built from it would decay into exactly the vacuous pass it was built to disprove.
+
+TAKEN TOGETHER WITH PR #324, where these same reviewers went FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS
+against a gate the build agent wrote and reproduced every bypass live, HARNESS-16's central claim is
+now evidenced from both directions: they catch planted violations, and they catch real ones.
+
+HARNESS-19 filed for the runner-starvation classifier (drafted as 17, then 18 - both taken by
+concurrent loops while this was in flight, which is itself an argument for a reservation gate on
+backlog ids like the one Q2c gives ADR numbers).
+
+---
+
 ## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
 
 User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
@@ -4301,3 +4454,179 @@ before merge, once runners are available again.
 The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
 eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
 and they obscure the real signal.
+
+## 2026-08-22 — HARNESS-17 + HARNESS-18 merged; billing restored; HG-0001 waiver recorded
+
+The Actions allowance was topped up at ~06:50Z, ending a ~3-day repo-wide CI outage (19 Aug
+10:0xZ → 22 Aug 06:5xZ) during which every job was rejected at dispatch with `runner_id: 0`, no
+runner, no logs. Confirmed restored by re-running the rejected runs rather than by pushing empty
+commits: both got real runners immediately and executed normally.
+
+Both PRs verified green on their actual merge heads — all nine pinned required contexts plus
+Discovery — and merged:
+
+| PR | Story | Merge commit |
+|---|---|---|
+| #328 | HARNESS-17 — portal E2E Playwright install | `026f8f0` |
+| #329 | HARNESS-18 — mutation + ai-review trigger breadth | `53d439e` |
+
+`#329` needed a real merge of `main` first: both branches append to this append-only journal, so
+`docs/build-log.md` conflicted. Resolved by keeping **both** blocks in date order (HARNESS-17
+08-19, then HARNESS-18 08-21) per the journal's chronology rule — nothing dropped or rewritten.
+`docs/backlog.yaml` auto-merged; both entries verified present. Re-verified on the merged tree:
+`scripts/test` 49/49 (the two guard suites now cross-check each other's workflow edits),
+discovery 40/40, docs and waist gates clean.
+
+**The saving is already observable.** The `synchronize` push of the merge commit ran `ci` only —
+`mutation` and `ai-review` did not fire, which before HARNESS-18 would have cost ~25 and ~12
+runner-minutes respectively for no new information.
+
+Also fixed en route: the main checkout and the worktree were both sitting on the same branch (a
+`checkout -B` collision from this session), which made the main checkout's tree read as "uncommitted
+changes" that were in fact the exact inverse of the branch's own commits. Committing that would have
+reverted the work. Main checkout is now on `main`; the worktree owns the feature branch.
+
+**HG-0001 deviation.** These merges were performed by the agent, on the harness owner's explicit
+in-session authorisation, with branch protection not yet enabled. HG-0001 forbids agent self-merge
+and is unchanged. The deviation is recorded at
+`docs/governance/waivers/2026-08-22-01-HG-0001-agent-performed-merge.md` and linked from HG-0001,
+because the release evidence bundle seals commit provenance as Art. 12/17 attribution — an
+unexplained agent merge in that bundle is a finding, a recorded one is a decision. The waiver is
+scoped to these two merges and argues for prioritising the branch-protection runbook, which would
+have refused them outright.
+
+## 2026-08-22 — HARNESS-20: close the mutation-gate coverage hole HARNESS-18 opened
+
+The advisory hard-stop reviewer found a real defect in HARNESS-18 — four minutes after PR #329
+had already been merged. Worth recording both halves of that: the control this harness exists to
+run did its job, and merging before it finished is what let the defect land.
+
+**The hole.** HARNESS-18 narrowed `mutation.yml` to `opened`/`ready_for_review`/`reopened` and
+claimed "a cost change, not a coverage change". False, and ADR 0029 had already named the trade
+before the change was made:
+
+1. PR opened **non-draft**, diff touches no security-core path → `opened` fires, `paths:` does
+   not match, no run. Correct.
+2. A later push adds `approvals/service.ts` or `high-class-audit.ts` → `synchronize` was gone,
+   so **nothing fired**.
+3. `ready_for_review` cannot fire — the PR was never a draft.
+4. The PR merges with its four-eyes / high-class-audit changes mutation-tested **zero times**,
+   caught only by the weekly schedule, on the Monday after it is already on `main`.
+
+The whole-diff `paths:` semantics that caused HARNESS-18's cost problem were also what made that
+case safe. Removing `synchronize` removed the cost and the safety together.
+
+**The fix separates two questions `paths:` conflates.** `paths:` answers "is this *branch*
+relevant?" — GitHub evaluates it against the cumulative PR diff, so a branch that never touches
+the security core still starts nothing and costs zero. A new ~1-minute `changes` classifier job
+answers "did *this push* touch it?" against the pushed range `before..after`, which `paths:`
+cannot express. The ~25-minute job is gated on it.
+
+So a docs-only push to a branch that touched `auth.ts` last week costs ~1 minute; a push that
+edits `auth.ts` runs the gate; and case 2 above now runs the gate. Against the 18–19 Aug window
+that motivated HARNESS-18: ~30 × 25 min becomes ~30 × 1 min plus the few that genuinely qualify.
+**The saving is kept, not reversed.**
+
+**The classifier fails open by construction.** Force-pushed base, missing payload range,
+un-computable diff — all run the gate rather than guess. A cost control that skips a security
+gate on uncertainty is not a cost control. It is a pure decision function in
+`scripts/mutation-scope-check.mjs` rather than inline workflow shell, precisely so all three
+fail-open branches are reachable from tests instead of only from a live CI event.
+
+**Also from the same review.** `ai-review` comments now name the SHA they reviewed and say the
+verdict is stale if the PR has moved on. Dropping `synchronize` there remains right — a
+classifier cannot make a whole-diff model call cheaper — but the accepted cost was a verdict that
+lags the head, and a sticky ✅ from head-at-open otherwise reads as current over every later push.
+Costs no extra job and no extra runner minute. ADR 0029 was amended in place using its own
+existing dated-table convention: its Cost bullet described `synchronize` as current and offered
+the narrowing as a hypothetical, and now states what ships and that the predicted cost was
+**accepted, not avoided**. The `labeled` trigger is recorded there too, including that it lets a
+triage-permission actor re-fire a credentialed run where every prior trigger required write. The
+"the build agent opens its PRs as drafts" premise is corrected rather than repeated —
+`next-story/SKILL.md` never says it, PRs here are opened both ways, and the conclusion (do not
+exclude drafts) never needed it.
+
+**Guards, proven non-hollow.** `scripts/test/mutation-scope-check.test.mjs` (8 tests) covers every
+decision branch, each fail-open path individually, and asserts `SECURITY_CORE` cannot drift from
+the workflow's `paths:` list. `ci-cost-guard.test.mjs` is restructured — its old assertion that
+*both* workflows exclude `synchronize` is now exactly backwards for `mutation.yml`, so the two are
+asserted separately, because they control cost by different means. Seven mutations checked, each
+caught by exactly its own assertion, tree restored clean: reintroduce the narrow trigger, ungate
+the job, drift the file list, drop `REVIEWED_SHA`, add `synchronize` to ai-review, make the
+classifier fail **closed**, and make it skip on a failed diff.
+
+A process note worth keeping, because it cost real rework: the first mutation-check run used
+`git checkout --` to restore files whose HARNESS-20 edits were still **uncommitted**, which
+reverted them to `HEAD` and destroyed the work rather than undoing the mutation. Commit first,
+then mutate. The second run was clean.
+
+Evidence: `scripts/test` 58/58, discovery harness 40/40, `doc-link-check` 61 docs / 30 ADRs,
+`discovery-link-check` OK, both workflows parse and their resolved triggers were inspected, and
+the classifier was exercised end-to-end against real commit ranges in this repository.
+
+---
+
+## 2026-08-22 — HARNESS-21: the AI-review parity guard judges the PR diff, not the distance from main
+
+Found by being on the receiving end of it. #323 was marked ready for review, and both reviewer
+legs skipped with:
+
+    this PR modifies the review control plane (.github/workflows/ai-review.yml)
+
+#323 modifies no control-plane file. HARNESS-20 had merged twenty minutes earlier and edited
+`ai-review.yml` on main; #323 was simply behind. The guard could not tell those apart.
+
+THE COMPARISON ASKED THE WRONG QUESTION. The preflight ran
+
+    git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}"
+
+a TWO-DOT diff, which compares main's TIP against the PR head and answers *do these files differ?*
+The question the guard needs answered is *did this PR change them?* — the three-dot merge-base
+form. Checked both ways on #323 before changing anything: two-dot names `ai-review.yml`, three-dot
+is empty.
+
+Two harms beyond the wrong skip, and the second is the one that would have kept it hidden:
+
+- The skip is NON-FATAL by design (a fork PR must not be permanently red through no fault of its
+  author), so an over-broad skip renders the check **green** while its comment says *this is not a
+  pass*. That is the HARNESS-07 class again, in its worst form: the reader has to open a comment to
+  discover the green is hollow.
+- The message's own remedy is backwards for staleness. *This resolves once the PR merges* is true
+  of a genuine modification; a stale PR resolves by merging main **in**, the opposite direction. An
+  author following the instruction would wait for the wrong event.
+
+It also decays silently and gets worse as main's commit rate rises — every control-plane edit
+re-blocks every open PR behind it.
+
+THE SECURITY INTENT IS UNCHANGED, and was the first thing re-checked rather than the last.
+`on: pull_request` runs the workflow FROM THE PR HEAD with the credential in scope, so a PR must
+not be able to rewrite the reviewer and collect its token in the same run. Three-dot still refuses
+exactly that PR. Only the diff form changed: the `control_plane` list, the fork guard, the
+credential guard and the fatal/non-fatal split are untouched.
+
+The reason string was corrected too — it now says the files changed *relative to its merge base
+with* main, which is what is now measured.
+
+Guard: `scripts/test/ai-review-parity-scope.test.mjs`, 3 tests. Two of them LIFT THE COMMAND
+VERBATIM out of the workflow and execute it against synthetic repositories where main advances on
+the control-plane file after the branch forks — so they bind the guard's BEHAVIOUR, not its
+spelling, and would still catch a rewrite that changed the wording while keeping the wrong
+semantics. The third is the anti-vacuous-pass half: a PR that genuinely edits the file must still
+be flagged. **That third test passed before the fix**, which is what shows this narrows nothing
+that matters — the change removes false positives only.
+
+Mutation-proved in both directions, because a guard that only ever reports *nothing changed* would
+satisfy the first two tests trivially:
+
+| mutation | caught by |
+| --- | --- |
+| revert to the two-dot form | both staleness tests |
+| scope the diff to no control-plane path | anti-vacuous-pass |
+| compare `HEAD...HEAD` — always empty | anti-vacuous-pass |
+
+Evidence: harness suite 121/121, `ai-review.yml` parses, and the three mutations above each red
+their own assertion with the workflow restored byte-for-byte after each.
+
+Parked, not fixed here: HARNESS-20's note asks for a backlog-ID reservation gate — Q2c does this
+for ADR numbers, nothing does it for backlog IDs, and 17/18/20 all collided across concurrent
+branches. 21 was free on main at branch time; if another branch also took it, this one yields.

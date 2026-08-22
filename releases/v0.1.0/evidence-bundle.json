@@ -1,0 +1,1660 @@
+{
+  "schema_version": "1.0.0",
+  "release": {
+    "tag": "v0.1.0",
+    "commit": "0c6cb2011bace1b6e8087d6a6bc42097a994287c",
+    "ref": "refs/tags/v0.1.0",
+    "committed_at": "2026-08-22T08:34:41.455Z"
+  },
+  "control_mappings": [
+    {
+      "control": "Mandatory MFA sign-in via the enterprise IdP (no skip path)",
+      "requirement": "BACKOFFICE-47",
+      "gates": [
+        "Q1",
+        "Q3"
+      ],
+      "evidence": "unit: services/bff/test/auth.spec; portal sign-in path"
+    },
+    {
+      "control": "Persona scope-matrix enforcement (BFF + service layer), audited 403",
+      "requirement": "BACKOFFICE-43",
+      "gates": [
+        "Q1",
+        "Q3"
+      ],
+      "evidence": "unit: services/bff/test/rbac.spec; contract-stubs scope checks"
+    },
+    {
+      "control": "High-class audit write path is INSERT-only with PII redaction at emission",
+      "requirement": "BACKOFFICE-45/-50/-51",
+      "gates": [
+        "Q3"
+      ],
+      "evidence": "integration: packages/db/test/audit.int.spec, retention.int.spec"
+    },
+    {
+      "control": "Four-eyes approval primitive (202 + approval_request, no inline execute)",
+      "requirement": "BACKOFFICE-44",
+      "gates": [
+        "Q1",
+        "Q3"
+      ],
+      "evidence": "unit: services/bff/test/approvals.spec; contract conformance"
+    },
+    {
+      "control": "Platform super-admin guardrails (auto-signal, justification, no service accounts)",
+      "requirement": "BACKOFFICE-80",
+      "gates": [
+        "Q1",
+        "Q3"
+      ],
+      "evidence": "unit: services/bff/test/superadmin.spec; integration superadmin.int.spec"
+    },
+    {
+      "control": "OTel emission with x-fapi-interaction-id propagated end to end",
+      "requirement": "BACKOFFICE-48",
+      "gates": [
+        "Q1"
+      ],
+      "evidence": "unit: services/bff/test/telemetry.spec"
+    },
+    {
+      "control": "BCBS 239 column-level lineage emitted at write time for every table",
+      "requirement": "BACKOFFICE-49",
+      "gates": [
+        "Q4.5"
+      ],
+      "evidence": "lineage_proof section: validateLineageCoverage (covered/gaps)"
+    },
+    {
+      "control": "Data-classification metadata on every regulated record",
+      "requirement": "BACKOFFICE-54",
+      "gates": [
+        "Q3"
+      ],
+      "evidence": "integration: packages/db/test/classification.int.spec"
+    },
+    {
+      "control": "UAE data residency — region is an IaC parameter, enforced",
+      "requirement": "BACKOFFICE-55",
+      "gates": [
+        "Q1"
+      ],
+      "evidence": "unit: infra/terraform/test/skeleton.spec"
+    },
+    {
+      "control": "OpenAPI contract is ground truth (no drift; generated artifacts current)",
+      "requirement": "API conventions (CLAUDE.md)",
+      "gates": [
+        "Q1",
+        "Q3"
+      ],
+      "evidence": "Q1 generated-artifact drift check; contract tests"
+    },
+    {
+      "control": "Static analysis + SAST clean",
+      "requirement": "CI/CD quality gates (CLAUDE.md)",
+      "gates": [
+        "Q2"
+      ],
+      "evidence": "scan_outputs: eslint, tsc, semgrep"
+    },
+    {
+      "control": "Dependency vulnerability scan",
+      "requirement": "BACKOFFICE-56 (Q4)",
+      "gates": [
+        "Q4"
+      ],
+      "evidence": "scan_outputs: dependency audit"
+    },
+    {
+      "control": "Manual production approval (segregation of duties)",
+      "requirement": "CI/CD Q5 (CLAUDE.md)",
+      "gates": [
+        "Q5"
+      ],
+      "evidence": "release approval record (GitHub environment / release sign-off)"
+    },
+    {
+      "control": "Agent build provenance — model/session/story attributed per change (EU AI Act Art. 12/17)",
+      "requirement": "HARNESS-03 (HG-0003 traceability)",
+      "gates": [
+        "Q5"
+      ],
+      "evidence": "provenance section: parseProvenance over the release commit range (git-trailer attribution)"
+    }
+  ],
+  "quality_gates": [
+    {
+      "gate": "Q1",
+      "name": "build + unit",
+      "status": "pass"
+    },
+    {
+      "gate": "Q2",
+      "name": "static analysis + SAST",
+      "status": "pass"
+    },
+    {
+      "gate": "Q3",
+      "name": "integration + contract tests",
+      "status": "pass"
+    },
+    {
+      "gate": "Q4",
+      "name": "security review + dependency scan",
+      "status": "pass"
+    },
+    {
+      "gate": "Q4.5",
+      "name": "BCBS 239 lineage validation (P7)",
+      "status": "pass",
+      "summary": "55 regulated tables covered, no gaps"
+    },
+    {
+      "gate": "Q5",
+      "name": "manual approval to production",
+      "status": "manual",
+      "summary": "release published through the protected flow"
+    }
+  ],
+  "test_results": [
+    {
+      "suite": "unit",
+      "total": 1528,
+      "passed": 1528,
+      "failed": 0
+    }
+  ],
+  "scan_outputs": [
+    {
+      "tool": "eslint + tsc + semgrep",
+      "status": "pass",
+      "findings": 0,
+      "summary": "Q2 outcome: pass"
+    },
+    {
+      "tool": "pnpm audit",
+      "status": "pass",
+      "findings": 0,
+      "summary": "Q4 outcome: pass"
+    }
+  ],
+  "lineage_proof": {
+    "covered": [
+      "agent_registry",
+      "approval_request",
+      "audit_high_sensitivity",
+      "billing_accounting_batch",
+      "billing_benchmark_snapshot",
+      "billing_collection_action",
+      "billing_collection_invoice",
+      "billing_collection_memo_reconciliation",
+      "billing_event",
+      "billing_expected_memo",
+      "billing_expected_memo_line",
+      "billing_journal_dispatch",
+      "billing_journal_instruction",
+      "billing_journal_line",
+      "billing_memo_diff_line",
+      "billing_meter_run",
+      "billing_metered_line",
+      "billing_period_rerating",
+      "billing_rate_card_review",
+      "billing_rate_card_version",
+      "billing_record_set",
+      "billing_revenue_assurance_finding",
+      "billing_revenue_assurance_report",
+      "billing_revenue_recovery",
+      "billing_settlement_break",
+      "billing_settlement_line",
+      "billing_settlement_run",
+      "billing_source_snapshot",
+      "billing_tpp_cost_diff_line",
+      "billing_tpp_cost_document",
+      "billing_tpp_cost_document_line",
+      "billing_tpp_cost_reconciliation",
+      "billing_tpp_cost_rerating",
+      "billing_tpp_cost_statement",
+      "billing_tpp_cost_statement_line",
+      "compliance_report",
+      "dispute_case",
+      "fraud_incident",
+      "invoice_run",
+      "nebras_ingest_snapshot",
+      "nebras_report_aggregate",
+      "platform_certification",
+      "platform_outage",
+      "query_purpose_registry",
+      "reconciliation_break",
+      "reconciliation_log",
+      "reconciliation_threshold",
+      "respondent_dispute",
+      "risk_signal",
+      "scheme_notification",
+      "service_desk_case",
+      "str_draft",
+      "tenant_configuration",
+      "tpp_counterparty",
+      "trust_framework_participant"
+    ],
+    "gaps": []
+  },
+  "provenance": {
+    "commits": [
+      {
+        "commit": "0c6cb2011bace1b6e8087d6a6bc42097a994287c",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "fd45519cc7f4aedbc81542e0c11dea99d990f15d",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "99dbaef0bdfa39e9165f393a5df5adb44eb63553",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "f9b5856e091022f53d8f8bd7feb524306891a796",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "5519e8890a4c0ecf31221f92eece0fe8730741e9",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "53d439eac3eec35659800e2ddcfd5ecfbb8d5fe6",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "f1e9bb8089485580888ca4b25990be7a1d3cd007",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_019237AYg54RnaYVKwziM5Yv",
+        "story": null
+      },
+      {
+        "commit": "026f8f0ab7928729788c37bddd127ea1da79ff10",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "466e745f5f0a2289321bfd4f5fb0551a4b3e1145",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_019237AYg54RnaYVKwziM5Yv",
+        "story": null
+      },
+      {
+        "commit": "2c1ff41eceebf3989e5eb6eeb8f13c54ae2b228c",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_019237AYg54RnaYVKwziM5Yv",
+        "story": null
+      },
+      {
+        "commit": "e33d7dae9c3349b65e42ec4c468f29bf0fe5bd23",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "276f87c3db61448805f3fe1d5e6b3bdd5da050e4",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "9958abb0898f9b766b74ac222ead1153dad821db",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "26a6cdf297c320c1e7f4acd5dcbb1a861d1d27a3",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "8d139393e8a04e7d5bfd61f9b5773549b9fa51a8",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "cfed1146ab3b877635b88a147173c688d62b0493",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "91fecc7b676b64aa77507d0141d01f87848e552d",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "7cec82b1a55c98fe42f489f97018d57cc96db953",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "d8ec576d44143037427a94d3548f26aa05c54bbf",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "a003b673b606cdd938a6930e6bdc81707b50c446",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "ba858bfd1c5e31be3da861045bf63d63f97e84f4",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "6f296d1893ce4db3c2f7e7dd99a3d800de127ddb",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "2abe46bf5b10cf68d62b06ed34b06b0122db1649",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "f08701758e15dea1e30f3d280032271a03b8df41",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "6341d1bf85cbf3f43ef7908d592c5637264721ba",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "d433090e97e8e43fdf7a2d60de960966fd40afe3",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "235c397b7f8ca2cb5332ed47e4aa9e55bae9fc71",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "b0ad0d9e90bd7c69ffe81aa73cf8452cbd896311",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "f1e18d1a7b6382ce139effeb39e6466cd02d3e04",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "7df6144b214db167ad0b0725d088116467bfd2c3",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "0a2bd8f3dbe2a6cdf7d5181c2c64f966d4e5c550",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "13eb9265499ec7e9abdf4b4f8807076f3f8abe3c",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "57fd55a5a11258acca102507066627a6c22b4347",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01SNU2pXr3C888pLpGEG4oUa",
+        "story": null
+      },
+      {
+        "commit": "9815ea415456b25bbfa17a7b521191e5da2d4f64",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "7bca79d117162dce48d10d5146048bc95e48d074",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "3f7f89ab683a23bcab5e427959417adfb415c6b2",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "020aa6fdabc24ae7af62fb7feff79c40323b33c6",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "decaf81be921eec8710f98efc5e544272e71742b",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "c3e73edef99d1222b863933d370363c87ce1ceeb",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "f5b32eb3c07d8564e6d403c983372ca123eb4cb6",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "89581ba3f70538cdf8581c5844d0a699e1d17f9c",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "4bb7868533199aefe995871fbe0b658dd992b9e4",
+        "author": "Claude",
+        "model": "Claude",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "efb74aaac0e70438b5db4b4fecbab93466509130",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "f076df4353a8463386f361e4414347c83ede9bfd",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "8f5d9e07c2478787105bd475c63a65f371b076a2",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01SNU2pXr3C888pLpGEG4oUa",
+        "story": null
+      },
+      {
+        "commit": "e1014357bfe29174336da3e4d7ddb7828567b65d",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "c3a914fe62c3749da00686c6399a4aee8a1fbaa1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "47fff36796b308ba8920729c5cf0569b5104c4d1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "7e35dd2ec4229cf8fcb6b005ff728c44e4b8c7a3",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "4419d868880c721a8ed2faea3b20b69052a37e06",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "bd329ddc87b04e56a0bf93b86a0749fb3b67e7de",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "86693435e5b76b3bd4c385b68beaa34723fb17e0",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "b27d46b30202939752d29a45cb00525aa3c7b2e4",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "775eaa2b81a87b431d5382c114401856a93440f8",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "6e94b2a8aa61b5340850eb4d429cf423d822f6dd",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "2e1eb401a7c21ca0244cb437cb5b18735da7b06c",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "617e75d84827cc63b753b63f019a56613123c965",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "6bbd40b430a4e455d3b622cc8884b6a8c26eb698",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "36bd2fad4546b191467ee675614a5b787776bac0",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "e6aecda32057bba9d27998feb0fcf066cbe28ed7",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "406bb36c7b935f5d483838cf9df4d1eedc54dba1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "1acf7660303ecfd4906cc6525041cfa872542834",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "6b4111edff7457f22ea496629999658803515a83",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "1899785296b3111f94f55ad1cb5285d300c31d56",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "19eb2e14f541dd0ecd20a46ea8f8a21046014f00",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "8a15dddf14f6f282c965b8f378c3dcd4874b1f80",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "ab192a1799ee191c2f3f2a2a8796a661c8ae4305",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "7f70892bab11906cfcb73ab4c0b01f0824b5315e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "fc6528bc5b4367955dd55616ef316076a1331ae1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "8df9cc00263b129d031905891f980379ab71f1f5",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "af4693960303d56f22967ac748c0e32a48c8b20e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "9fb2db1dc02c21993d15e021f3c3dda5564806a0",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "bad2946c6889a3d06fb1be9fb30bcd69290d9723",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "82956ded648d6a6761e2665732494a7a4d59470a",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "e582b7a71f551d0b03167bae0cc6c182495535e9",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "f37f323568d018224d400ea3d0b2c7292dcf7f99",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "c578dbe7a102de69556aae991f2edc685b90e249",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "1b7ca20e27cdbfb49f1c3dca7b7f167c4b7867f7",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "6f87bc6ed6094bfa8e533d602b30c70ae4b9dc0f",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "46468c903a4383225236463e8082f8eaf5018d62",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "eaf5059da30632e7e2447687090db20886db5c9f",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "994652c80dabf20bea868eb2cfc39d1f87f861d1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "1367e2556eadb57a8f83713bd1950eeb431df4c2",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "c5ba31b714a997a5163935389bf2b3748872e083",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "a5301b759ef7cef51e9d24362a8090740f396104",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "804cfa2e45c7f7654bdb8bd897a53bf3d2b5a4f4",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "ed4ebb14969e7a2a47821a117b5b183a7e1e68ed",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "87a1c8a6c26b18cf48ee6adeb5d23f0aef04fd5a",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "5e21269b309a9eb10fde6e9c6bd96c0c6348b722",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "a8c7e9146b48f78f1b1045af7142cdaf9ba9077c",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "1ec10a24c51bc135140bd6623759c8e974896cac",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "e47e7f9fc0f23cbd7e1c489f0396842012be2ba9",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "334ccc51f86d28c32d9b05fb62217e3b8f1ad593",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "1e9ebe953adaa2ffadd786707ea15b2854c3a0e1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "d37c7916ce1e65ea3beebb447238ec18251f3c1b",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "2f1321266b172ed4cbb4f56a321fc09a3d9af9df",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "0345cdbcc59e2f101622ff7d7c0ab011a17763fc",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "a2c18b05f88762220d72989d0ef55ce98d8cd486",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0f0a79a9fdcc6a3361682ebc7e7e7fe306c120ee",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "e1993e4235326fc737dc843fc9258983cbd7dd5c",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01GMQvtBjkGCQBZfYCyuNV9Z",
+        "story": null
+      },
+      {
+        "commit": "75110fdfd4b34aaa72a92d56ee2a3d9bc17b1c96",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "e0cc5e7119d97840e2c991679941a9b49235d6ad",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "22ebea5d63a19d0a73a92eb302955bf2751dbf9e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "f11c48dd7cfd56af4d5f9dee259c80f51f0ba427",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "bcd49993f8b511de01da1626bb974d8470e9b13e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "b77a6995164ad698b50bd26c2d6bfbdb6b0f3651",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "293a2a7b5125da65ce6b1e0f8339a4885498a3c0",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "dad6245746a18df107244a36db62820233ae8cfe",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "dd06b0552b85d30a51bbdd47ec5e21db1d4804c6",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0119f6f6f0b0ef972e1d01a83054b17aaada2bcf",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-billing-deploy-smoke-20260816",
+        "story": null
+      },
+      {
+        "commit": "491f9a6e45d5b6dfce96796e3c9707249feac2fb",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0b35047b9d6601b7a3a0ed55419c44613a5d4c01",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "56c45af2038d4f5150e8184b4522633153f68f2e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01YYVzNSoS9uGJZBQ5aZHa4o",
+        "story": null
+      },
+      {
+        "commit": "2f74d1d79405c365a8e73fa523582d2cecbe5439",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-billing-review-20260814",
+        "story": null
+      },
+      {
+        "commit": "37a21cfc11b1827e636e9fbbff2f212a9339135b",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "552055677483dacc9bd2dd70ee3858d6b8cb5cbd",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-billing-production-surface-20260813",
+        "story": null
+      },
+      {
+        "commit": "d3667a448081fb30c87b0d48dfbf301dbc607a90",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-billing-production-surface-20260813",
+        "story": null
+      },
+      {
+        "commit": "302c6dfac68c58b2f322074bf022fe9bdc55e9db",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-billing-production-surface-20260813",
+        "story": null
+      },
+      {
+        "commit": "f2814e147f49c95f71caa4612cde41cd84bc291b",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "b723b94aed72b7c9a4d1dd9a126fc7fdebcba950",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "9192c85daa4598705137903508d4bbc5214abf87",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0da25b6b178cd12eab809f460db37badad38d232",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-bill-09-10-20260813",
+        "story": null
+      },
+      {
+        "commit": "7059e6e55300dfea96af322dcda26de2367300a4",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": "codex-bill-09-10-20260813",
+        "story": null
+      },
+      {
+        "commit": "122f2b39a6ac13899e39a830e550101855df7766",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "be9e2dadadb6a3bc64749827783e22a91b9dfe52",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01Dj34sLp53AqX6xMA1b6513",
+        "story": null
+      },
+      {
+        "commit": "1336b414b255c11db9bb834eef5966814b90c01f",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_01Dj34sLp53AqX6xMA1b6513",
+        "story": null
+      },
+      {
+        "commit": "e7b00c25e2da6ec03a11caa08b89fa2f05044981",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "fd94ae925d9682d41768b98370f38ba998bbeea5",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "b01241ac6f6257a07252b09abd8342a561579c93",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "d32c27d3f67ae9b7411414d6575d39d1103398d4",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "9507af49e8d9bdb4f60f2c0f83ebb6136ae1811a",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "d6e968272804692120da0791cd700d6731feb637",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "0d34e3dbf0aecd2b131a6b714f3ae85e4c8257d1",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "6b541b91b029844dee958472e4a3f19881b863e6",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "77584d27ec3e536a3ca7a72abe5ad80b95cef1af",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "0ff8719d55171f62db16d9d49e9a1d8111652885",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_01V5iqJRJXY1JQN6DdZhpaaa",
+        "story": null
+      },
+      {
+        "commit": "afc84ce380c21d74445411f5eaa70c86854d45cd",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0208ec6b06be65c1486e06b76b483d23a8245cd4",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "ca79f7e742c7920bd962393dec88be94a78b42f3",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "6eebe759026a9b341c98072d649b3b46f9c22e23",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "b4e0a9020eb0f3382a9ef60f29797b17e7850363",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "57f0df5dc095339d5c0276b6bdd6a4c177f25465",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "a019d8681315a6d7e2d5b0a3128ad2c7e31a6887",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0589bd5814a1a1437ebd253895a86383f1d7f26f",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "79b07fa21657d81e4f446f17a98985aedc0a1758",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "34d4d30fb8bd3c89c5277052949f650721b24ec1",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "6a096875aff4f0066cf3f9634b64394195a833f8",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "51fcea97b354071b40d34c33359ec118f156a0ac",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "25cc83be26aac58b78c5bdec1c0d3be7211fb81c",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "fc02755bf6759eb2c5e6d07ed914c5c7fa99bdc1",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "66d9473fe07f3aaf8f54cf561a440a3443202591",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "1626d62b95a5d94d5c2d0487cdbb88fb7965f0f6",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "dda17d68175157f67e6180b8912fc31efdf68e80",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "e578031e2ad7b41cd4728cc4a0e1c6894bbd83f9",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "b26a6622f1ba38b6319de9678907db53dfb7c621",
+        "author": "Claude",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "3958e6f9785a6061437a40ae2e4e65e905ae0767",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "c03179cdb5ff5b79b9e8ade3c100b868142cdfa3",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "3d1b6d699ce02fc5aa5c65ff3e65fe989fa71644",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "dbad11963fea860b38dd866f0efea0ff642713ca",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "c660c26211c49cd929df2fa7b9d5c8efc68b2a54",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "22697fea0e62d6498b9dd1b83328d811618807b0",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "a0162908f692dbcb9c11fbbf3ca510f93d6fe829",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "2c4d6491fac75792b467d741f7f2ec8c62434d9c",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "7e9109e064af77f84b0b046b2cf66d598bf13218",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "d658f768f54d021902e839b80777b70b5b10b33b",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "9e2281d27ed762c41f46353b2608cfca44e33ec4",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "88958efbbea9e1dc020cedc1287b4949e9719852",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": "M6"
+      },
+      {
+        "commit": "0017d525a44c81bd2b77187a557160504d5ff83d",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "70746968fbd5d2b243b41b24b981f94422f44a63",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "30ffa76c30d239a2797c524c89533bf423f58be1",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "87326afcf0422dfb8ca8bb853f689317ac5bfb19",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "dffeb6951035fa6d6022b11383cf7429074cc368",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "5cda5e6c62eefb0add5ec2a615e2f047481bf932",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_017mJ3Lppo74FAztQdQ4Fcjx",
+        "story": null
+      },
+      {
+        "commit": "36454c89629142cb3383916eedc60f8cda9cf999",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "641999581c5c4d7e32fc8df4b686543a5ee90049",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "0dc3a07e35a2920a41f175f800850d7547454ac3",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "dc7c3233b828bbea8019191a842bd43a75c0bc96",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "8d3e404079cf075e4f2808fb5a28516b4e3a38a4",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "29322ba0e66b43de91894404dc2be8358a217f93",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "fd6b33c4799772c13829c800198f29787d87ca12",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "1d3be253e19b6d01d13f17cd6a3a41414b6b935e",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "9555f001b8fa437dec3bd58390e5b96bac101748",
+        "author": "Claude",
+        "model": "Claude Opus 5",
+        "session": "https://claude.ai/code/session_012StXpBZoxGpm7K9hi511pP",
+        "story": null
+      },
+      {
+        "commit": "e27609142ddc403c66ce1a947085e43520175118",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "e269f37f4c3fd10b4c46008b38b9f2a2559292e7",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "418059aebba9c6d4d197041d18f4780a1c86b1a7",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "89104f8a05a40938eb9c124c65c5bb73e7244bf4",
+        "author": "Claude",
+        "model": "Claude Opus 4.8",
+        "session": "https://claude.ai/code/session_01HUA8vC914vctTEW9cfumJE",
+        "story": null
+      },
+      {
+        "commit": "aaf3dffb80a11303568cfe7a6e649161df0de9bd",
+        "author": "Claude",
+        "model": "Claude Opus 4.8",
+        "session": "https://claude.ai/code/session_01PoaV7FtU2sjG3XuKAjUjoB",
+        "story": null
+      },
+      {
+        "commit": "a3437f1f5b72bfb146a83e1ccadddcbf81ed6741",
+        "author": "Claude",
+        "model": "Claude Opus 4.8",
+        "session": "https://claude.ai/code/session_01HUA8vC914vctTEW9cfumJE",
+        "story": null
+      },
+      {
+        "commit": "2e06084654d7dca0d073bd1c0003c2aa048a674e",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "73311b699dc3f4f64be8d7fc83cea268a1abe349",
+        "author": "Claude",
+        "model": "Claude Opus 4.8",
+        "session": "https://claude.ai/code/session_01HUA8vC914vctTEW9cfumJE",
+        "story": null
+      },
+      {
+        "commit": "907e78b8a6775e4c0001afcbd8ce682419229cff",
+        "author": "Claude",
+        "model": "Claude Fable 5",
+        "session": "https://claude.ai/code/session_016VDGead4LxroVzdyLgdSFj",
+        "story": null
+      },
+      {
+        "commit": "99ab0dd322dc0796fb034d35a4d42f9f66c134e7",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "45fbba4ec64961ad665f6fab53658b7b60569975",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Opus 4.8 (1M context)",
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "7e8ec5d04cb262887319af5f34e5a713b666c6a8",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "7dd485a31a864935b1cb8f7c8810f2b8c0086085",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Opus 4.8 (1M context)",
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "aeb1d7ab2fb600ead055ff95d8f7cc87174744ba",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "8591281c883346a04d57f7dcb06deead723ddd74",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Opus 4.8 (1M context)",
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "47752a65fec7d80a7fbd85210875c92dc3d55dcd",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "2c44ef1c35a2524f3fd6e2df86156e81d0f15624",
+        "author": "Michael Ryberg Hartmann",
+        "model": "Claude Opus 4.8 (1M context)",
+        "session": null,
+        "story": null
+      },
+      {
+        "commit": "e82d6a6c89ca80d405a1afcd4e78f2ec40ebdc2d",
+        "author": "Michael Ryberg Hartmann",
+        "model": null,
+        "session": null,
+        "story": null
+      }
+    ],
+    "build_agents": [
+      "Claude",
+      "Claude Fable 5",
+      "Claude Opus 4.8",
+      "Claude Opus 4.8 (1M context)",
+      "Claude Opus 5"
+    ],
+    "unattributed_commits": 69
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "a6c36167d339e549448e832119b9067ed9ad3bfa4ec151beb194705adc3aee83"
+  }
+}

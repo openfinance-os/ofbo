@@ -45,8 +45,15 @@
 name: ai-review
 
 on:
-  # Draft PRs are NOT excluded: the build agent opens its PRs as drafts, so skipping drafts
-  # would skip precisely the output this check exists to review. `opened` fires for drafts.
+  # Draft PRs are NOT excluded — `opened` fires for them, and a draft is still work this
+  # check exists to review.
+  #
+  # HARNESS-20 corrects the reasoning that used to sit here. It read "the build agent opens
+  # its PRs as drafts", stated as fact; `.claude/skills/next-story/SKILL.md` says only "open
+  # the PR" and never mentions drafts, and PRs in this repository are opened both ways. The
+  # conclusion is unchanged and does not need the premise: including drafts costs nothing and
+  # excluding them could skip real work, so include them either way. The premise mattered
+  # because HARNESS-18 had promoted it into the load-bearing half of a coverage argument.
   #
   # HARNESS-18 — `synchronize` is DELIBERATELY ABSENT. The default types are
   # (opened, synchronize, reopened), so dropping one means listing the others explicitly.
@@ -239,12 +246,24 @@ jobs:
             # Deliberate consequence: no engine reviews the PR that changes how reviews run.
             # This harness cannot review its own control-plane changes — that is the correct
             # behaviour, and it self-resolves the moment such a PR merges.
+            # HARNESS-21 — THREE dots. `A...B` diffs against the MERGE BASE, so this reports only
+            # what THIS PR changed. The two-dot `"origin/${DEFAULT_REF}" HEAD` form asked a
+            # different question — "do these files differ?" — and so could not tell a PR that
+            # rewrites the reviewer from one that has merely fallen behind main on the same file.
+            # Observed on PR #323: HARNESS-20 edited this file on main, and twenty minutes later a
+            # PR touching no control-plane file at all had both reviewer legs skipped, each stating
+            # it "modifies the review control plane". Stale is not modified, and the skip is
+            # non-fatal, so that PR rendered GREEN while its comments said "this is not a pass".
+            # The anti-exfiltration intent is unchanged: a PR that really does touch these files
+            # still gets no review. Guarded by scripts/test/ai-review-parity-scope.test.mjs, which
+            # runs THIS command against synthetic repos rather than matching its text.
+            #
             # paste -sd',' then space out: a multi-char -d is a CYCLING delimiter list, so
             # `-d', '` would join three files as "a,b c".
-            changed="$(git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
+            changed="$(git diff --name-only "origin/${DEFAULT_REF}...HEAD" -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
           fi
           if [ -z "${reason:-}" ] && [ -n "${changed:-}" ]; then
-            reason="this PR modifies the review control plane (${changed}), which differs from origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
+            reason="this PR modifies the review control plane (${changed}) relative to its merge base with origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
           fi
           if [ -z "${reason:-}" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
@@ -413,6 +432,10 @@ jobs:
           ATTRIBUTION: ${{ matrix.engine.attribution }}
           STATUS: ${{ steps.verdict.outputs.status }}
           DETAIL: ${{ steps.verdict.outputs.detail }}
+          # HARNESS-20. The PR HEAD that was actually reviewed — NOT github.sha, which for a
+          # pull_request event is the ephemeral merge commit and appears nowhere a reader can
+          # compare it against.
+          REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
             const fs = require('fs');
@@ -421,9 +444,33 @@ jobs:
             } = process.env;
             const marker = `<!-- ofbo-ai-review:${MARKER_KEY} -->`;
 
+            // HARNESS-20 — THE COMMENT STATES WHICH COMMIT IT REVIEWED.
+            //
+            // Since HARNESS-18 this check does not run on `synchronize`, so a verdict is
+            // written against the head at open (or at ready-for-review) and then STAYS on the
+            // PR unchanged while the branch moves on. Without the SHA, a ✅ "no findings"
+            // comment reads as current no matter how many commits have landed since — an
+            // absent control that looks like a passing one, which is the exact class this
+            // workflow's own DID-NOT-COMPLETE branch and HARNESS-07 exist to prevent. ADR 0029
+            // named this cost ("the check no longer reflecting current HEAD") before the
+            // trigger was ever narrowed; this makes the cost visible instead of denying it.
+            //
+            // Naming the reviewed SHA costs nothing — no extra job, no extra runner minute —
+            // and makes the artifact self-dating: a reader comparing it to the PR's current
+            // head can see for themselves whether the verdict still applies. The re-review
+            // path is the `ai-review` label; a Checks-tab re-run replays the ORIGINAL SHA and
+            // cannot review newer work.
+            const reviewedSha = (process.env.REVIEWED_SHA || '').slice(0, 7);
             const preamble = [
               'Advisory check (HG-0001) — it does not gate merge, and it is not separation',
               'of duties. See `docs/adrs/0029-ai-review-as-advisory-ci-check.md`.',
+              '',
+              reviewedSha
+                ? `Reviewed \`${reviewedSha}\`. This check does not re-run on every push — if the ` +
+                  'PR has moved on since that commit, **this verdict is stale**; add the ' +
+                  '`ai-review` label to re-review the current head.'
+                : 'This check does not re-run on every push; add the `ai-review` label to ' +
+                  're-review the current head.',
             ];
 
             let heading;

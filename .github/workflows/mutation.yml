@@ -27,29 +27,41 @@ on:
   schedule:
     # Weekly, Monday 03:17 UTC (off-peak, off-minute so the fleet doesn't stampede the runner pool).
     - cron: '17 3 * * 1'
-  # HARNESS-18 — `synchronize` is DELIBERATELY ABSENT. The default types are
-  # (opened, synchronize, reopened), so dropping one means listing the others explicitly.
+  # HARNESS-20 — `synchronize` is BACK, and cost is controlled by the `changes` job below
+  # instead of by trigger breadth. This CORRECTS HARNESS-18, which removed `synchronize` and in
+  # doing so opened a real coverage hole. The hole, found by the hard-stop reviewer on PR #329:
   #
-  # WHY: a `paths:` filter on `pull_request` is evaluated against the WHOLE PR DIFF, not
-  # against the commits just pushed. So the moment a branch touched auth.ts once, every later
-  # push re-ran this 25-minute job — including pushes that touched only docs. Measured 18-19
-  # Aug 2026: 30 mutation runs in two days, 59% of every run this workflow has had since it
-  # was created on 24 Jun, because both live branches touch auth.ts + approvals/service.ts.
-  # 15 of those 30 were CANCELLED by the concurrency group below after burning 10-14 minutes
-  # each — 215 runner-minutes in two days that produced no mutation score at all. Only 6 of
-  # the 30 ran to completion.
+  #   1. PR opened NON-DRAFT, diff touches no security-core path → `opened` fires, `paths:`
+  #      does not match, no run. Correct.
+  #   2. A later push adds `approvals/service.ts` or `high-class-audit.ts` → under HARNESS-18
+  #      `synchronize` was gone, so NOTHING fired.
+  #   3. `ready_for_review` cannot fire — the PR was never a draft.
+  #   4. The PR merged with its four-eyes / high-class-audit changes mutation-tested ZERO times,
+  #      caught only by the weekly schedule, on the Monday AFTER it was already on main.
   #
-  # WHAT IS PRESERVED: a security-core PR is still mutation-tested when it is OPENED (drafts
-  # included — the build agent opens drafts, and `opened` fires for them) and again when it is
-  # marked READY FOR REVIEW, i.e. against the state a human is actually asked to merge. What
-  # is dropped is the ~20 intermediate re-runs per PR that re-proved the same thing at 25
-  # minutes a time. This is a cost change, not a coverage change: the gate still sees every
-  # security-core PR, and `break` (stryker.config.json) is untouched.
+  # The whole-diff `paths:` semantics that caused HARNESS-18's cost problem were also what made
+  # that case safe. Removing `synchronize` removed the cost and the safety together, and the
+  # header then claimed "a cost change, not a coverage change", which was false.
   #
-  # ESCAPE HATCH: `workflow_dispatch` above accepts any ref, so this can be re-run against a
-  # feature branch on demand. Deliberately NOT a label trigger — dispatch already covers it.
+  # THE FIX SEPARATES TWO QUESTIONS, because they are different questions:
+  #   `paths:` (below)  — "is this BRANCH relevant to the security core at all?" Evaluated by
+  #                       GitHub against the cumulative PR diff. A branch that never touches the
+  #                       security core starts nothing and costs literally zero.
+  #   `changes` (job)   — "did THIS PUSH touch it?" Evaluated against the pushed range
+  #                       (`before`..`after`), which is what `paths:` cannot express.
+  #
+  # So a docs-only push to a branch that touched auth.ts last week starts a ~1-minute classifier
+  # and stops. A push that actually edits auth.ts runs the full ~25-minute gate. Against the
+  # 18-19 Aug window that motivated HARNESS-18: 30 runs × ~25 min becomes ~30 × ~1 min plus the
+  # handful that genuinely touched the security core — and case 2 above now runs the gate.
+  #
+  # THE CLASSIFIER FAILS OPEN, deliberately: if it cannot resolve the pushed range (force-push,
+  # shallow history, a missing `before`), it RUNS the gate rather than guessing. A cost control
+  # that skips a security gate on uncertainty is not a cost control, it is a hole.
+  #
+  # ESCAPE HATCH: `workflow_dispatch` above accepts any ref. Deliberately NOT a label trigger.
   pull_request:
-    types: [opened, ready_for_review, reopened]
+    types: [opened, synchronize, ready_for_review, reopened]
     paths:
       - 'services/bff/src/rbac.ts'
       - 'services/bff/src/auth.ts'
@@ -65,8 +77,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # =====================================================================================
+  # HARNESS-20. Decides whether the ~25-minute gate below needs to run for THIS event.
+  # Always runs, always reports — a gate that does not run must say so and say why, never
+  # be silently absent (HARNESS-07 doctrine, and the q1b "NOT RUN" handling in ci.yml).
+  #
+  # FAILS OPEN. Every path that cannot positively establish "this push did not touch the
+  # security core" sets run=true. Uncertainty runs the gate.
+  # =====================================================================================
+  changes:
+    name: Did this push touch the security core?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: the pushed range's base may be many commits back.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Dependency-free pure Node, like the discovery gates — no install step needed. The
+      # decision lives in scripts/mutation-scope-check.mjs so it is unit-testable in
+      # isolation; scripts/test/mutation-scope-check.test.mjs exercises every branch,
+      # including the three that FAIL OPEN.
+      - id: decide
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_AFTER: ${{ github.event.after }}
+        run: node scripts/mutation-scope-check.mjs
+
   mutation:
     name: Mutation testing — security core (rbac/auth/four-eyes)
+    needs: changes
+    if: ${{ needs.changes.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

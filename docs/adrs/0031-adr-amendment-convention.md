@@ -1,8 +1,11 @@
 # ADR 0031 — Amending an accepted ADR: in-place for facts, supersession for decisions
 
-- Status: **Accepted** — chosen by the user (2026-08-18), Option C of three put to them.
-  A control-plane governance rule under HG-0002, so it needed a human control-plane owner
+- Status: **Superseded by ADR 0032** (2026-08-22) — was "Accepted" (user decision, 2026-08-18,
+  Option C of three put to them). Superseded because its deletion carve-out rested on a control
+  that does not exist; ADR 0032 closes that exemption and carries both of this ADR's routes forward
+  unchanged. A control-plane governance rule under HG-0002 throughout, so it needed a human owner
   rather than the build agent's own say-so.
+  **This document is kept in place, not deleted — which is now the rule ADR 0032 states.**
 - Date: 2026-08-18
 - Prompted by ADR 0029, whose amendment table flagged this question rather than assuming an
   answer, after the hard-stop AI reviewer raised it twice on PR #318 at explicitly stated
@@ -63,6 +66,7 @@ port — never moved.
 | date | amendment |
 | --- | --- |
 | 2026-08-17 | Engine status table corrected — `codex` had been marked "never run end to end" when it had run and failed. |
+| 2026-08-22 | Superseded by ADR 0032. The deletion carve-out below rested on a claim about `doc-link-check.mjs` that the hard-stop reviewer disproved; the claim was corrected in place (row above) and the decision it supported was put to the control-plane owner, who closed the exemption. Both routes are carried forward unchanged by ADR 0032. |
 ```
 
 The row says what became untrue and what replaced it. "Updated for accuracy" is not a row; a
