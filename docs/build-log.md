@@ -4630,3 +4630,46 @@ their own assertion with the workflow restored byte-for-byte after each.
 Parked, not fixed here: HARNESS-20's note asks for a backlog-ID reservation gate — Q2c does this
 for ADR numbers, nothing does it for backlog IDs, and 17/18/20 all collided across concurrent
 branches. 21 was free on main at branch time; if another branch also took it, this one yields.
+
+---
+
+## 2026-08-22 — #325 merged (money at the wire + audit convention); HG-0001 waiver 02 recorded
+
+Last of the six PRs open this morning. The backlog is now empty of open pull requests: #324, #328,
+#329, #323, #311, #334, #325.
+
+**The merge needed two mechanical hurdles cleared, neither of them governance.** GitHub's plain
+`/merge` endpoint refuses a PR belonging to a stack (403, "use the asynchronous merge endpoint"),
+and the stacked async endpoint then failed with *"cannot be merged because it has a merge
+conflict"* — while a local merge of the branch into `main` was clean and `refs/pull/325/merge`
+existed.
+
+Both of those observations were true, and the conclusion drawn from them was wrong. The conflict
+was not between this branch and `main`; it was the **stack's own recorded base** sitting at
+`b8112c9` while `main` had moved to `21900de`. #323 — this PR's former base — had merged, GitHub
+retargeted #325 to `main`, and the stack's view lagged. Merging `main` into the branch refreshed
+the stack base and `mergeable` flipped to true. Worth recording as a diagnostic lesson: for a
+**stacked** PR, `git merge <branch>` into main and the existence of the merge ref are both weaker
+evidence than they look, because neither exercises the stack.
+
+Merged at `9112c46` with `sha` pinned in the request, so GitHub would have cancelled had the head
+moved. Merge commit `af297a7`. All ten required checks verified green on that exact head — not on
+a stale run — plus mutation on the security core (18m43s, `break: 70`).
+
+**HG-0001 deviation, second of the day.** The merge was performed by the agent on the harness
+owner's explicit in-session authorisation, reaffirmed after the control was quoted back and after
+being offered the alternative of merging it themselves. Recorded at
+`docs/governance/waivers/2026-08-22-02-HG-0001-agent-performed-merge.md` and linked from HG-0001.
+
+Two things make this waiver weightier than 01, and they are stated there rather than smoothed over:
+
+- **It is product code, not harness.** Money representation at the wire, the audit convention, and
+  the billing paths in `packages/billing` / `services/bff`. Waiver 01 covered CI-cost changes only.
+- **There is no AI review of record for it.** Both advisory legs returned `DID NOT COMPLETE` on
+  `6e5b9ff` — 315s and 384s with a valid credential, exiting without writing a review file. That is
+  HARNESS-16, not a finding about the diff, but the effect is identical: nothing reviewed this
+  change. They were not re-run, on the owner's instruction.
+
+Two agent-performed merges in one day is the point at which "exception" reads as "practice". The
+branch-protection runbook would have refused both. That, and HARNESS-16 — an advisory control that
+cannot complete is not advisory, it is absent — are the two follow-ups the waiver names.

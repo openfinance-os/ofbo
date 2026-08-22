@@ -87,3 +87,4 @@ is a finding; a recorded one is a decision.
 | Waiver | Date | What |
 |---|---|---|
 | [2026-08-22-01](waivers/2026-08-22-01-HG-0001-agent-performed-merge.md) | 2026-08-22 | Agent performed the merge of PRs #328 / #329 (harness CI-cost changes), authorised in-session by the harness owner |
+| [2026-08-22-02](waivers/2026-08-22-02-HG-0001-agent-performed-merge.md) | 2026-08-22 | Agent performed the merge of PR #325 (money at the wire + audit convention — **product** code, and with no AI review of record: both legs failed with `DID NOT COMPLETE`), authorised in-session by the harness owner on reaffirmation |
