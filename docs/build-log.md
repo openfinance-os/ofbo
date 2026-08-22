@@ -3952,3 +3952,43 @@ before merge, once runners are available again.
 The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
 eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
 and they obscure the real signal.
+
+## 2026-08-22 — HARNESS-17 + HARNESS-18 merged; billing restored; HG-0001 waiver recorded
+
+The Actions allowance was topped up at ~06:50Z, ending a ~3-day repo-wide CI outage (19 Aug
+10:0xZ → 22 Aug 06:5xZ) during which every job was rejected at dispatch with `runner_id: 0`, no
+runner, no logs. Confirmed restored by re-running the rejected runs rather than by pushing empty
+commits: both got real runners immediately and executed normally.
+
+Both PRs verified green on their actual merge heads — all nine pinned required contexts plus
+Discovery — and merged:
+
+| PR | Story | Merge commit |
+|---|---|---|
+| #328 | HARNESS-17 — portal E2E Playwright install | `026f8f0` |
+| #329 | HARNESS-18 — mutation + ai-review trigger breadth | `53d439e` |
+
+`#329` needed a real merge of `main` first: both branches append to this append-only journal, so
+`docs/build-log.md` conflicted. Resolved by keeping **both** blocks in date order (HARNESS-17
+08-19, then HARNESS-18 08-21) per the journal's chronology rule — nothing dropped or rewritten.
+`docs/backlog.yaml` auto-merged; both entries verified present. Re-verified on the merged tree:
+`scripts/test` 49/49 (the two guard suites now cross-check each other's workflow edits),
+discovery 40/40, docs and waist gates clean.
+
+**The saving is already observable.** The `synchronize` push of the merge commit ran `ci` only —
+`mutation` and `ai-review` did not fire, which before HARNESS-18 would have cost ~25 and ~12
+runner-minutes respectively for no new information.
+
+Also fixed en route: the main checkout and the worktree were both sitting on the same branch (a
+`checkout -B` collision from this session), which made the main checkout's tree read as "uncommitted
+changes" that were in fact the exact inverse of the branch's own commits. Committing that would have
+reverted the work. Main checkout is now on `main`; the worktree owns the feature branch.
+
+**HG-0001 deviation.** These merges were performed by the agent, on the harness owner's explicit
+in-session authorisation, with branch protection not yet enabled. HG-0001 forbids agent self-merge
+and is unchanged. The deviation is recorded at
+`docs/governance/waivers/2026-08-22-01-HG-0001-agent-performed-merge.md` and linked from HG-0001,
+because the release evidence bundle seals commit provenance as Art. 12/17 attribution — an
+unexplained agent merge in that bundle is a finding, a recorded one is a decision. The waiver is
+scoped to these two merges and argues for prioritising the branch-protection runbook, which would
+have refused them outright.
