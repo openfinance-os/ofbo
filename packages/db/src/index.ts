@@ -47,6 +47,10 @@ export { PgBillingRevenueAssuranceStore } from './billing-revenue-assurance-stor
 export {
   PgAuditEmitter,
   PgAuditReader,
+  SEED_ACTOR_SCOPE,
+  SYSTEM_ACTOR_RESPONSE_STATUS,
+  SYSTEM_ACTOR_SCOPE,
+  UNSCOPED_AUTH_EVENT_SCOPE,
   type HighClassAuditEvent,
   type AuthSinkEvent,
   type AuditEmitterConfig,

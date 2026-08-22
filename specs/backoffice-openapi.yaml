@@ -3693,14 +3693,51 @@ components:
         event_type: { type: string, example: psu_lookup }
         acting_principal: { type: string }
         acting_persona: { type: string }
-        scope_used: { type: string }
+        scope_used:
+          type: string
+          description: >
+            The declared scope that authorised the action, or one of exactly three declared
+            non-scope literals. Scheduled jobs previously stamped invented tokens (`billing:rate`,
+            `reconciliation:run`, …) that named scopes an auditor could not resolve against this
+            contract — permanently, since the trail is INSERT-only with a five-year retention and no
+            deletion path. Identity is carried by `acting_principal` and `event_type`, so nothing is
+            lost by recording that no scope was involved (CODE-03).
+
+
+            The three, kept distinct because collapsing them is the blurring the trail exists to
+            prevent — an auditor must be able to tell a headless job from a person whose action no
+            scope mediated:
+
+
+            - `system` — a scheduled actor that no principal authorised.
+
+            - `none` — an auth-lifecycle event (signin failure, signout) where a HUMAN acted and no
+            scope was in play. Filing these under `system` would attribute a person's failed signin
+            to a machine.
+
+            - `seed` — demo-profile seed provenance, written by the seed scripts. Never an
+            authorisation; the demo environment is permanently non-prod.
+
+
+            This list is the contract half of a closed loop: the three literals are declared once in
+            `packages/db/src/audit.ts`, the CODE-03 resolvability check builds its allow-list from
+            those same constants, and a test asserts every declared constant appears here. An earlier
+            version of this description named only `system` while the code wrote all three, which
+            reproduced CODE-03's own defect — a value an auditor cannot resolve against the contract —
+            inside the change that was supposed to close it.
         target_psu_identifier: { type: string, nullable: true }
         target_consent_id: { type: string, format: uuid, nullable: true }
         target_dispute_id: { type: string, format: uuid, nullable: true }
         request_trace_id: { type: string, description: x-fapi-interaction-id }
         superadmin_marker: { type: boolean, description: 'BACKOFFICE-80: stamped true on every record produced under platform:superadmin' }
         request_body_redacted: { type: object }
-        response_status: { type: integer }
+        response_status:
+          type: integer
+          description: >
+            The HTTP status returned to the caller, or `0` for an actor that issues no HTTP response
+            at all. Zero is not a status code, which is why it can carry that meaning without
+            colliding with one. Scheduled jobs previously stamped 200/201/202/502 for responses
+            nobody received, including one path that recorded 200 on a SKIP (CODE-03).
         created_at: { type: string, format: date-time }
     Freshness:
       type: object
@@ -3755,7 +3792,7 @@ components:
       type: object
       required:
         [line_ref, source_category, mapped, cost_recipient_type, cost_recipient_id, units,
-         unit_price_milli_fils, actual_net_milli_fils, vat_milli_fils, actual_gross_milli_fils]
+         unit_price_milli_fils, actual_net, vat, actual_gross]
       description: >
         One provider line. `source_category` is the provider's own category, kept verbatim as
         evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false.
@@ -3769,15 +3806,22 @@ components:
         cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
         cost_recipient_id: { type: string }
         units: { type: integer }
-        unit_price_milli_fils: { type: integer, description: Integer milli-fils (see BILL-17 — the unit is unratified) }
-        actual_net_milli_fils: { type: integer }
-        vat_milli_fils: { type: integer }
-        actual_gross_milli_fils: { type: integer }
+        unit_price_milli_fils:
+          type: integer
+          description: >
+            A unit RATE in integer milli-fils (thousandths of a fil), NOT a money amount. The binding
+            money convention governs amounts; a scheme tariff of 2.5 fils per call cannot be expressed
+            in minor units without rounding the price itself away, so rates keep sub-minor resolution.
+        actual_net: { $ref: '#/components/schemas/Money' }
+        vat: { $ref: '#/components/schemas/Money' }
+        actual_gross:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Always equals actual_net + vat; derived from the rounded parts so the triple ties.
     TppCostDocument:
       type: object
       required:
         [document_id, document_type, issuer_id, recipient_id, document_reference, billing_period,
-         currency, net_milli_fils, vat_milli_fils, gross_milli_fils, document_sha256, issued_at,
+         currency, net, vat, gross, document_sha256, issued_at,
          received_at, verified_by, verified_at, unmapped_line_count, redacted_field_count, lines]
       properties:
         document_id: { type: string, format: uuid }
@@ -3787,9 +3831,11 @@ components:
         document_reference: { type: string }
         billing_period: { type: string, description: 'YYYY-MM' }
         currency: { type: string, pattern: '^[A-Z]{3}$' }
-        net_milli_fils: { type: integer }
-        vat_milli_fils: { type: integer }
-        gross_milli_fils: { type: integer }
+        net: { $ref: '#/components/schemas/Money' }
+        vat: { $ref: '#/components/schemas/Money' }
+        gross:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Always equals net + vat; derived from the rounded parts so the triple ties.
         document_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
         issued_at: { type: string, format: date-time }
         received_at: { type: string, format: date-time }
@@ -3821,7 +3867,7 @@ components:
       type: object
       required:
         [line_ref, break_type, line_type, presence, cost_recipient_type, cost_recipient_id,
-         expected_net_milli_fils, actual_net_milli_fils, variance_milli_fils, variance_basis_points,
+         expected_net, actual_net, variance, variance_basis_points,
          material, reason_code]
       properties:
         line_ref: { type: string }
@@ -3837,15 +3883,13 @@ components:
           type: string
           nullable: true
           description: The provider's own wording, retained because a billing query cites it back to them.
-        expected_net_milli_fils:
-          type: integer
-          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
-        actual_net_milli_fils:
-          type: integer
-          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
-        variance_milli_fils:
-          type: integer
-          description: Integer milli-fils (see BILL-17 — the unit is unratified), in the reconciliation's currency.
+        expected_net: { $ref: '#/components/schemas/Money' }
+        actual_net: { $ref: '#/components/schemas/Money' }
+        variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: >
+            Signed — negative where the provider undercharged. Rounded symmetrically, so a credit is
+            not biased against the bank.
         variance_basis_points: { type: integer }
         material:
           type: boolean
@@ -3859,27 +3903,33 @@ components:
     TppCostReconciliation:
       type: object
       description: >
-        Every amount below is an integer in milli-fils — thousandths of a fil — under `currency`. That
-        unit DEVIATES from the binding money convention (integer minor units + ISO 4217) and is
-        unratified; BILL-17 owns resolving it, either by converting to `Money` at this boundary or by
-        ratifying milli-fils. The currency is carried explicitly so the amounts are never bare
-        integers, which is the shape that would make that conversion expensive.
+        Money amounts are `Money` (integer minor units + ISO 4217), per the binding convention.
+        Milli-fils — thousandths of a fil — is a RATING AND STORAGE precision only, needed because
+        ADR 0007 prices scheme tariffs at 2.5 and 0.5 fils; it never reaches the wire as an amount.
+        The two integer fields that remain in milli-fils are a matching threshold and a unit rate,
+        neither of which is an amount.
       required:
         [period, currency, tolerance_milli_fils, query_window_days, query_deadline,
          query_window_status, days_remaining_at_ingest, response_clocks, matched_line_count,
-         break_count, expected_total_net_milli_fils, actual_total_net_milli_fils,
-         net_variance_milli_fils, gross_variance_milli_fils, penalty_lines_accepted, breaks]
+         break_count, expected_total_net, actual_total_net,
+         net_variance, gross_variance, penalty_lines_accepted, breaks]
       properties:
         period: { type: string, description: 'YYYY-MM' }
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
-          description: ISO 4217 for every milli-fils amount in this object and its breaks.
+          description: >
+            ISO 4217 for this reconciliation. Every AMOUNT here is a Money carrying its own
+            currency; this field governs the object and the only bare-integer field left on it,
+            `tolerance_milli_fils`, which is a threshold rather than an amount. The previous
+            wording ("for every milli-fils amount in this object") described the pre-CODE-03
+            shape and survived the sweep that removed those amounts.
         tolerance_milli_fils:
           type: integer
           description: >
-            Integer milli-fils (see BILL-17 — the unit is unratified). Expected values are milli-fils
-            and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute.
+            A matching THRESHOLD in integer milli-fils, not a money amount. Expectations are milli-fils
+            and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute —
+            sub-fil resolution is the entire point of the field, and minor units would round it away.
             Configurable; defaults to one fil.
         query_window_days:
           type: integer
@@ -3899,25 +3949,19 @@ components:
             escalation_review_days: { type: integer }
         matched_line_count: { type: integer }
         break_count: { type: integer }
-        expected_total_net_milli_fils:
-          type: integer
-          description: Integer milli-fils (see BILL-17 — the unit is unratified).
-        actual_total_net_milli_fils:
-          type: integer
+        expected_total_net: { $ref: '#/components/schemas/Money' }
+        actual_total_net:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
           description: >
-            Integer milli-fils (see BILL-17 — the unit is unratified). What the provider claims for
-            THIS period. Off-period documents are excluded — they carry their own period_variance
-            break — so this is not the sum of the documents' own totals whenever one is present.
-        net_variance_milli_fils:
-          type: integer
-          description: >
-            Integer milli-fils (see BILL-17 — the unit is unratified). Signed, so opposing errors net.
-            The headline exposure.
-        gross_variance_milli_fils:
-          type: integer
-          description: >
-            Integer milli-fils (see BILL-17 — the unit is unratified). Absolute, so opposing errors do
-            NOT net away. The amount actually in dispute.
+            What the provider claims for THIS period. Off-period documents are excluded — they carry
+            their own period_variance break — so this is not the sum of the documents' own totals
+            whenever one is present.
+        net_variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Signed, so opposing errors net. The headline exposure.
+        gross_variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Absolute, so opposing errors do NOT net away. The amount actually in dispute.
         penalty_lines_accepted:
           type: integer
           description: IG §10.17 penalties matched to a recorded late payment for this period.

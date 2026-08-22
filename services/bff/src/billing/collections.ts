@@ -14,6 +14,7 @@ import {
   type TppDsoSummary
 } from '@ofbo/billing'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export interface DirectCollectionInvoice extends CollectionInvoice {
   eligibleRails: DirectCollectionRail[]
@@ -115,10 +116,12 @@ export interface BillingCollectionsDeps {
   audit: HighClassAuditSink
 }
 
+/** All four emissions here are one scheduled actor, so the CODE-03 sentinels live in one place. */
 const SYSTEM_ACTOR = {
   acting_principal: 'system:billing-collections',
   acting_persona: 'system',
-  scope_used: 'billing:collect'
+  scope_used: SYSTEM_ACTOR_SCOPE,
+  response_status: SYSTEM_ACTOR_RESPONSE_STATUS
 } as const
 
 export class BillingCollectionsService {
@@ -139,8 +142,7 @@ export class BillingCollectionsService {
         expected_net_milli_fils: result.expectedNetMilliFils,
         residue_milli_fils: result.residueMilliFils,
         line_count: result.lines.length
-      },
-      response_status: 200
+      }
     })
     if (result.break) {
       await this.deps.audit.emit({
@@ -153,8 +155,7 @@ export class BillingCollectionsService {
           residue_milli_fils: result.break.amountMilliFils,
           receivable_ledger_refs: result.break.receivableLedgerRefs,
           payable_ledger_refs: result.break.payableLedgerRefs
-        },
-        response_status: 201
+        }
       })
     }
     return result
@@ -194,8 +195,7 @@ export class BillingCollectionsService {
         eligible_rails: eligibleRails,
         selected_rail: selectedRail,
         policy_ref: policyRef
-      },
-      response_status: 201
+      }
     })
     return record
   }
@@ -228,8 +228,7 @@ export class BillingCollectionsService {
           to_state: evaluation.state,
           days_overdue: evaluation.daysOverdue,
           policy_ref: policy.policyRef
-        },
-        response_status: 200
+        }
       })
     }
     return evaluation

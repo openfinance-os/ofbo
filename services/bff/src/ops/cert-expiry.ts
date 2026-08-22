@@ -1,5 +1,6 @@
 import type { ItsmPort } from '@ofbo/ports'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BACKOFFICE-66 — scheme certificate expiry monitoring. The FAPI 2.0 chain
@@ -102,10 +103,10 @@ export class CertExpiryMonitor {
             event_type: 'cert_expiry_critical',
             acting_principal: RUN_PRINCIPAL,
             acting_persona: 'system',
-            scope_used: 'platform:operations:read',
+            scope_used: SYSTEM_ACTOR_SCOPE,
             request_trace_id: traceId,
             request_body: { name: c.name, role: c.role, subject: c.subject, expires_at: c.expires_at, days_to_expiry: c.days_to_expiry },
-            response_status: 200
+            response_status: SYSTEM_ACTOR_RESPONSE_STATUS
           })
           audited = true
         }

@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
 import { generateDemoDataset, DEMO_TENANTS, DEMO_BANK_ID, tppDisplayName, type DemoTenant } from '@ofbo/synthetic-data'
+import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 import { normalizeTenantConfiguration } from './tenant-configuration.js'
 
@@ -91,9 +92,12 @@ async function seedTenantData(pool: pg.Pool, t: DemoTenant): Promise<void> {
         `INSERT INTO audit_high_sensitivity
            (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
             target_psu_identifier, target_consent_id, request_trace_id, request_body_redacted, response_status)
-         SELECT $1, $2, $3, 'seed', 'system', 'seed', $4, $5, $6, '{}'::jsonb, 200
+         SELECT $1, $2, $3, 'seed', 'system', $7, $4, $5, $6, '{}'::jsonb, $8
           WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $6)`,
-        [bankId, CH, eventType, psu.bank_customer_id, consent.consent_id, traceId]
+        // Status sentinel as well as scope — see the same insert in seed.ts. A raw-SQL seed row
+        // issues no HTTP response, so a literal 200 fabricated one.
+        [bankId, CH, eventType, psu.bank_customer_id, consent.consent_id, traceId,
+          SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS]
       )
     }
   }

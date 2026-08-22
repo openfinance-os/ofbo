@@ -8,6 +8,7 @@ import {
 } from '@ofbo/billing'
 import { createHash } from 'node:crypto'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BILL-13 — generate and persist the expected TPP cost statement for a closed period.
@@ -116,10 +117,10 @@ export class TppCostStatementService {
         event_type: 'billing_tpp_cost_statement_unpriceable',
         acting_principal: 'system:billing-rating-engine',
         acting_persona: 'system',
-        scope_used: 'billing:rate',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: { period, meter_run_id: run.id, reason: message },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
       return { status: 'skipped', reason: message }
     }
@@ -130,9 +131,9 @@ export class TppCostStatementService {
         event_type: 'billing_tpp_cost_statement_generated',
         acting_principal: 'system:billing-rating-engine',
         acting_persona: 'system',
-        scope_used: 'billing:rate',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
-        response_status: 200,
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS,
         request_body: {
           period,
           meter_run_id: run.id,

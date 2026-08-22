@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  toWireMoneyTriple,
   UnparseableDocumentError,
   assertOperatorFieldClean,
   nebrasTaxInvoiceParser,
@@ -17,6 +18,7 @@ import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied } from '../errors.js'
 import { missingIdempotencyKey, replayCached, type IdempotencyStore } from '../idempotency.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 type Handler = (c: Context, params: Record<string, string>) => Promise<Response>
 
@@ -383,9 +385,19 @@ export function tppCostDocumentWire(result: TppCostDocumentIngestResult): Record
     document_reference: document.documentReference,
     billing_period: document.billingPeriod,
     currency: document.currency,
-    net_milli_fils: document.netMilliFils,
-    vat_milli_fils: document.vatMilliFils,
-    gross_milli_fils: document.grossMilliFils,
+    // Money at the boundary. Milli-fils is a rating and storage precision (ADR 0007 prices tariffs at
+    // 2.5 and 0.5 fils); the wire carries the binding convention's integer minor units. `gross` is
+    // derived from the rounded parts by toWireMoneyTriple so net + VAT always ties on the wire.
+    ...(() => {
+      const money = toWireMoneyTriple({
+        netMilliFils: document.netMilliFils,
+        vatMilliFils: document.vatMilliFils,
+        grossMilliFils: document.grossMilliFils
+      }, document.currency)
+      return { net: money.net, vat: money.vat, gross: money.gross }
+    })(),
+    // From the STORED row, not this upload: evidence_hash does not cover issued_at, so a re-upload
+    // differing only here takes the 200 path and must still report what the ledger holds.
     issued_at: result.issuedAt,
     unmapped_line_count: document.unmappedLineCount,
     redacted_field_count: document.redactedFieldCount,
@@ -397,10 +409,17 @@ export function tppCostDocumentWire(result: TppCostDocumentIngestResult): Record
       cost_recipient_type: line.costRecipientType,
       cost_recipient_id: line.costRecipientId,
       units: line.units,
+      // A unit RATE, not an amount, so it stays integer milli-fils: the convention governs money
+      // amounts, and rounding a 2.5-fils scheme tariff to 3 would destroy the price itself.
       unit_price_milli_fils: line.unitPriceMilliFils,
-      actual_net_milli_fils: line.actualNetMilliFils,
-      vat_milli_fils: line.vatMilliFils,
-      actual_gross_milli_fils: line.actualGrossMilliFils
+      ...(() => {
+        const money = toWireMoneyTriple({
+          netMilliFils: line.actualNetMilliFils,
+          vatMilliFils: line.vatMilliFils,
+          grossMilliFils: line.actualGrossMilliFils
+        }, document.currency)
+        return { actual_net: money.net, vat: money.vat, actual_gross: money.gross }
+      })()
     }))
   }
 }
@@ -571,9 +590,9 @@ export class TppCostDocumentAbsenceAlarm {
       event_type: 'billing_tpp_cost_document_missing',
       acting_principal: 'system:billing-document-alarm',
       acting_persona: 'system',
-      scope_used: BILLING_WRITE_SCOPE,
+      scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
-      response_status: 201,
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS,
       request_body: { period, due_at: dueIso, ticket_id: ticket.ticket_id }
     })
 

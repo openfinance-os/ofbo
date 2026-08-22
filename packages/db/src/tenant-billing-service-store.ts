@@ -236,6 +236,17 @@ export class PgTenantBillingServiceStore {
     period: string
     actingPrincipal: string
     actingPersona: string
+    /**
+     * The scope the CALLING principal held. Required, not optional.
+     *
+     * This is the most privileged read in the tree — a purpose-gated cross-tenant aggregate — and it
+     * is human-initiated. The first CODE-03 sweep stamped the system sentinel here, which recorded
+     * "no principal authorised this" about an action a principal did authorise; the value before that
+     * was the purpose code, which is not a scope either. Neither left the authorising scope
+     * recoverable from an INSERT-only row with no deletion path. Making it a required input is what
+     * stops the next caller from having nothing to pass.
+     */
+    scopeUsed: string
     traceId: string
   }): Promise<CrossTenantBillingBenchmark> {
     if (!this.audit) throw new Error('cross-tenant benchmark audit sink is required')
@@ -261,7 +272,7 @@ export class PgTenantBillingServiceStore {
     const row = result.rows[0]
     const tenantCount = Number(row.tenant_count)
     if (tenantCount < 3) throw new Error('cross-tenant billing benchmark requires at least 3 tenants')
-    await this.audit.emit({ event_type: 'cross_tenant_billing_benchmark', acting_principal: input.actingPrincipal, acting_persona: input.actingPersona, scope_used: input.purposeCode, request_trace_id: input.traceId, request_body: { purpose_code: input.purposeCode, period: input.period, tenant_count: tenantCount }, response_status: 200 })
+    await this.audit.emit({ event_type: 'cross_tenant_billing_benchmark', acting_principal: input.actingPrincipal, acting_persona: input.actingPersona, scope_used: input.scopeUsed, request_trace_id: input.traceId, request_body: { purpose_code: input.purposeCode, period: input.period, tenant_count: tenantCount }, response_status: 200 })
     return {
       period: input.period, tenantCount, currency: 'AED',
       averages: {

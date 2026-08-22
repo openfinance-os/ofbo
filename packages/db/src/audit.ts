@@ -5,6 +5,46 @@ import type { LineageSink } from './lineage.js'
 import { keysetClause } from './keyset.js'
 
 /**
+ * CODE-03 — the `scope_used` value for an actor that no scope authorised, and the `response_status`
+ * for one that issues no HTTP response.
+ *
+ * Declared HERE rather than in the BFF because `audit_high_sensitivity` is written from both trees
+ * through this emitter. Keeping the sentinels BFF-side left `packages/db`'s own emitters outside the
+ * convention and outside the check that polices it — which is how `'none'` and a purpose code ended
+ * up in the scope column.
+ *
+ * Zero is not a status code, so it can mean "no HTTP response issued" without colliding with one, and
+ * it satisfies the NOT NULL column without relaxing a constraint on regulated evidence.
+ */
+export const SYSTEM_ACTOR_SCOPE = 'system'
+export const SYSTEM_ACTOR_RESPONSE_STATUS = 0
+
+/**
+ * `scope_used` for an auth-lifecycle event that no scope mediated — a signin failure, a signout.
+ *
+ * Kept DISTINCT from SYSTEM_ACTOR_SCOPE rather than folded into it. That one asserts "a headless
+ * actor ran this, no principal was involved"; this one records "a human acted and no scope was in
+ * play". Collapsing the two would file every failed human signin under the system actor, which is
+ * the blurring the trail exists to prevent — the first sweep did exactly that to
+ * `crossTenantBenchmark`, and this is the same mistake in the opposite direction.
+ *
+ * The literal is unchanged from what this emitter has always written, so no stored row changes
+ * meaning. What changes is that it is now declared, and therefore resolvable by an auditor and by
+ * the CODE-03 check. Being undeclared was the defect, not the choice of word.
+ */
+export const UNSCOPED_AUTH_EVENT_SCOPE = 'none'
+
+/**
+ * `scope_used` for demo-profile seed provenance.
+ *
+ * Seed rows are written by raw SQL rather than through this emitter, which is how this token stayed
+ * outside CODE-03's inventory. It is declared here for the same reason as the others: the value is
+ * fine, being unresolvable was not. It never denotes an authorisation — the demo environment is
+ * permanently non-prod.
+ */
+export const SEED_ACTOR_SCOPE = 'seed'
+
+/**
  * BACKOFFICE-45: the DB-backed High-class audit emitter. INSERT-only by
  * construction — every statement runs as the ofbo_app role inside a transaction
  * with the tenancy context set, so RLS tenancy and the INSERT-only policies bind
@@ -124,7 +164,7 @@ export class PgAuditEmitter {
       event_type: event.event_type,
       acting_principal: event.acting_principal,
       acting_persona: event.acting_persona ?? 'unknown',
-      scope_used: event.attempted_scope ?? 'none',
+      scope_used: event.attempted_scope ?? UNSCOPED_AUTH_EVENT_SCOPE,
       request_trace_id: event.trace_id,
       superadmin_marker: event.superadmin_marker ?? false,
       request_body: {

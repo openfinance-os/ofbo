@@ -3656,6 +3656,78 @@ CI could not run on either #320 or #321: every job completes 3–6 seconds after
 `runner_id: 0`, an empty `runner_name` and no `steps` array. That is a GitHub Actions runner-allocation
 failure, verified by fetching the job records rather than inferred from the failure count.
 
+## 2026-08-18 — Two convention decisions taken by the adopting bank
+
+Both were escalated across BILL-13..BILL-16 as repo-wide questions with no owner, which is how drift
+survives. The bank answered both; this records the answers and what they cost.
+
+### Money at the wire — the milli-fils deviation resolved (Option A)
+
+Milli-fils is a **rating and storage precision only**. The wire carries the binding convention
+(integer minor units + ISO 4217). Nothing about the convention is amended, because nothing needed to
+be — it is now upheld everywhere it applies.
+
+The precision is real: ADR 0007 prices scheme tariffs at 2.5, 0.5 and 0.25 fils, which minor units
+cannot hold without rounding the payable at every line, and per-line rounding then diverges from the
+invoice total being reconciled against. It simply belongs behind the boundary, where the general
+ledger already sat — `accounting.ts` has always posted in fils.
+
+The conversion is deliberately not a per-field map, because of the defect class this track has now
+hit three times. Rounding net, VAT and gross **independently** produces a triple that does not tie:
+net 2500.5 and VAT 125.5 both round up to 2501 + 126 = 2627, while gross 2626.0 rounds to 2626. A
+consumer checking `net + vat === gross` — which the convention invites, and which the document
+table's own CHECK enforces — would see a contract violation on perfectly good data. `toWireMoneyTriple`
+derives gross from the rounded parts, and **refuses** a source whose parts do not already tie in
+milli-fils, so it cannot paper over an upstream defect by presenting a consistent wire figure over
+inconsistent evidence. An 8000-combination sweep pins the tie across every sub-fil remainder.
+
+Two integer fields legitimately stay in milli-fils, and neither is an amount — both now say so in the
+contract rather than reading as leftovers:
+
+- `unit_price_milli_fils` is a unit **rate**. Rounding a 2.5-fils scheme tariff to 3 destroys the
+  price itself.
+- `tolerance_milli_fils` is a matching **threshold** whose entire purpose is sub-fil resolution.
+
+Signed amounts round symmetrically, asserted explicitly: an asymmetric rounding here would be
+invisible and would favour the bank on every credit.
+
+Unblocks BILL-15 criterion 6(c) — diff lines keep `variance_milli_fils` in storage, which is correct
+behind the boundary, and the API emits `Money`, so the two shapes reconcile at the seam.
+
+### CODE-03 — the audit convention (option (c), stop overloading both fields)
+
+`scope_used` gets `SYSTEM_ACTOR_SCOPE` (`system`) and `response_status` gets
+`SYSTEM_ACTOR_RESPONSE_STATUS` (`0`) for every headless emitter.
+
+Six invented tokens across fourteen sites had accumulated — `billing:rate`, `billing:post`,
+`reconciliation:run`, `billing:assure`, `billing:reconcile`, `billing:collect`. None was ever passed
+to `assertScope`, so no privilege was granted anywhere; what they did was name scopes an auditor
+cannot resolve against the contract, permanently, in an INSERT-only table with five-year retention
+and no deletion path. The job's identity is not lost by the sentinel — it is already carried twice,
+in `acting_principal` and `event_type`.
+
+Zero is not a status code, which is exactly why it can mean "no HTTP response was issued" without
+colliding with one, and it satisfies the `NOT NULL` column without relaxing a constraint on regulated
+evidence.
+
+**The discriminator is `acting_principal`, not `acting_persona`** — a distinction that mattered.
+`tpp-billing/invoicing.ts` carries `acting_persona: 'system'` while its `acting_principal` is a
+**human** `initiatedBy` executing a four-eyes-approved invoice run, under the scope that human
+actually held. Persona-based classification would have erased a real human authorisation from the
+trail. It keeps its real scope and HTTP status.
+
+The anti-drift check the ticket asked for is `services/bff/test/audit-scope-resolvability.spec.ts`.
+It resolves every `scope_used` literal in the BFF (following same-file constants) against the
+**generated route table** — the same inventory `rbac.ts` enforces, so the check cannot drift from the
+contract by reading it a second, different way — and guards that the scan finds sites at all, so it
+cannot pass by scanning nothing.
+
+One self-inflicted defect worth recording: the first backlog edit put a colon-space inside a plain
+YAML scalar and broke the file, and it was committed because the validation ran in a shell statement
+*after* the commit rather than before it. Validation now precedes the commit.
+
+Verified: unit **1568/1568**; typecheck 0; ESLint clean.
+
 ---
 
 ## 2026-08-18 — STD: UAE Open Finance standards-conformance review (docs-only; 14 stories filed)

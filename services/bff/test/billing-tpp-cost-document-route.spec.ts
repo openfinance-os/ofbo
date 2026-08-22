@@ -105,6 +105,20 @@ describe('BILL-14 POST /back-office/billing/tpp-cost-documents', () => {
     for (const key of Object.keys(body.data)) expect(key, key).toMatch(/^[a-z0-9_]+$/)
     const lines = body.data.lines as Array<Record<string, unknown>>
     for (const key of Object.keys(lines[0]!)) expect(key, key).toMatch(/^[a-z0-9_]+$/)
+
+    // Money at the boundary: amounts are Money objects, and the triple TIES on the wire. Rounding
+    // net, VAT and gross independently is what would break that — the invoice states 1000 units at
+    // 2.5 fils, so net is 2500 fils and VAT 125.
+    expect(body.data.net).toEqual({ amount: 2500, currency: 'AED' })
+    expect(body.data.vat).toEqual({ amount: 125, currency: 'AED' })
+    expect(body.data.gross).toEqual({ amount: 2625, currency: 'AED' })
+    const net = body.data.net as { amount: number }
+    const vat = body.data.vat as { amount: number }
+    const gross = body.data.gross as { amount: number }
+    expect(net.amount + vat.amount).toBe(gross.amount)
+    // The line's unit price stays a milli-fils RATE: 2.5 fils cannot survive minor units.
+    expect(lines[0]!.unit_price_milli_fils).toBe(2500)
+    expect(lines[0]!.actual_net).toEqual({ amount: 2500, currency: 'AED' })
   })
 
   it('returns 200, not 201, when the same document arrives again under a new key', async () => {

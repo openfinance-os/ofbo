@@ -108,8 +108,15 @@ describe('POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
     const breaks = body.data.breaks as Array<Record<string, unknown>>
     expect(breaks[0]).toMatchObject({
       break_type: 'rate_variance', line_type: 'nebras_fees', presence: 'both',
-      variance_milli_fils: fils(500)
+      // Money on the wire, per the binding convention — the milli-fils precision stays behind the
+      // boundary. fils(500) milli-fils is 500 fils.
+      variance: { amount: 500, currency: 'AED' }
     })
+    // Every money field on the break is a Money object, not a bare integer.
+    for (const field of ['expected_net', 'actual_net', 'variance']) {
+      expect(breaks[0]![field]).toMatchObject({ currency: 'AED' })
+      expect(typeof (breaks[0]![field] as { amount: number }).amount).toBe('number')
+    }
   })
 
   it('refuses a persona without finance:reconciliation:write', async () => {

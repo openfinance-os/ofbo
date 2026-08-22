@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { UNSCOPED_AUTH_EVENT_SCOPE } from './audit.js'
 import type { PgAuditEmitter } from './audit.js'
 
 /**
@@ -30,7 +31,18 @@ export function withDenialLogging(audit: PgAuditEmitter, actor: DenialActor) {
             event_type: 'regulated_record_mutation_denied',
             acting_principal: actor.acting_principal,
             acting_persona: actor.acting_persona,
-            scope_used: 'none',
+            // Was the literal 'none' — a second sentinel for the same idea, undeclared and
+            // unresolvable against the contract. Same meaning, one declared value.
+            // A HUMAN principal, not a scheduled one: DenialActor carries acting_principal and
+            // acting_persona from the caller. The first CODE-03 sweep put the SYSTEM sentinel here,
+            // which recorded "no principal authorised this" about a person's denied attempt to mutate
+            // a regulated record — the exact blurring audit.ts's own comment warns against, in the
+            // opposite direction to the crossTenantBenchmark mistake. The value written is unchanged
+            // from before that sweep ('none'); what changed is that it is now declared.
+            //
+            // The 403 below stays, and the pair is coherent: a human acted, no scope was in play, and
+            // a real HTTP denial was served.
+            scope_used: UNSCOPED_AUTH_EVENT_SCOPE,
             request_trace_id: actor.trace_id,
             request_body: { attempted_table: tableName, error: message.slice(0, 200) },
             response_status: 403

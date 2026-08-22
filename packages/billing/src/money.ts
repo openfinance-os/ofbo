@@ -57,3 +57,37 @@ export function toMinorUnitMoney(milliFils: number, currency: 'AED'): MinorUnitM
   assertSafeInteger(milliFils, 'milliFils')
   return { amount: divideHalfUp(milliFils, MF_PER_FIL), currency }
 }
+
+/**
+ * A net / VAT / gross triple crossing from milli-fils storage to the wire.
+ *
+ * `gross` is DERIVED from the rounded parts rather than rounded independently, and that is the whole
+ * reason this helper exists. Rounding all three separately produces a triple that does not tie: net
+ * 2500.5 and VAT 125.5 both round up to 2501 + 126 = 2627, while gross 2626.0 rounds to 2626. A
+ * consumer checking `net + vat === gross` — which the binding convention invites, and which the
+ * document table's own CHECK enforces — would then see a contract violation on perfectly good data.
+ *
+ * The source parts must already tie in milli-fils. Deriving gross from a source that disagrees would
+ * paper over an upstream defect, presenting a consistent wire figure over inconsistent evidence.
+ */
+export interface WireMoneyTriple {
+  net: MinorUnitMoney
+  vat: MinorUnitMoney
+  gross: MinorUnitMoney
+}
+
+export function toWireMoneyTriple(
+  parts: { netMilliFils: number; vatMilliFils: number; grossMilliFils: number },
+  currency: 'AED'
+): WireMoneyTriple {
+  const { netMilliFils, vatMilliFils, grossMilliFils } = parts
+  if (netMilliFils + vatMilliFils !== grossMilliFils) {
+    throw new RangeError(
+      `money parts do not tie in milli-fils: net ${netMilliFils} + VAT ${vatMilliFils} `
+      + `is not gross ${grossMilliFils}`
+    )
+  }
+  const net = toMinorUnitMoney(netMilliFils, currency)
+  const vat = toMinorUnitMoney(vatMilliFils, currency)
+  return { net, vat, gross: { amount: net.amount + vat.amount, currency } }
+}

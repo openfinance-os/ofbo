@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from './audit.js'
 import { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 
@@ -142,10 +143,17 @@ export async function runGovernedAggregate<T>(
     event_type: 'cross_fintech_query',
     acting_principal: ctx.actingPrincipal,
     acting_persona: ctx.actingPersona ?? 'system',
-    scope_used: ctx.scopeUsed ?? ctx.purposeCode,
+    // Falls back to the sentinel, not to the purpose code: a purpose is not a scope, and the
+    // purpose is already carried in request_body below, so the old fallback duplicated it into a
+    // column an auditor resolves against the declared scope inventory.
+    scope_used: ctx.scopeUsed ?? SYSTEM_ACTOR_SCOPE,
     request_trace_id: ctx.traceId,
     request_body: { purpose_code: ctx.purposeCode, row_count: out.rowCount },
-    response_status: 200
+    // Both halves move together. A caller-supplied scope means an HTTP request really was served, so
+    // 200 is a fact; without one there is no response to report, and a hardcoded 200 would fabricate
+    // one next to a scope column that has just admitted there was no principal. Applying the scope
+    // sentinel and leaving the status literal was the convention half-landed in a single file.
+    response_status: ctx.scopeUsed ? 200 : SYSTEM_ACTOR_RESPONSE_STATUS
   })
 
   return out.result

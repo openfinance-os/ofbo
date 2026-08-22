@@ -24,6 +24,7 @@ import { computeTppAasMargin, emptyMargin, mergeMargin, type MarginSummary } fro
 import { applyFeeScheduleV1, AED } from './fee-schedule.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
 import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BACKOFFICE-01 — reconciliation run orchestration + read surface. Executes the
@@ -285,7 +286,7 @@ export class ReconciliationService {
         event_type: 'reconciliation_run_completed',
         acting_principal: RUN_PRINCIPAL,
         acting_persona: 'system',
-        scope_used: 'reconciliation:run',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           run_id: runId,
@@ -297,7 +298,7 @@ export class ReconciliationService {
           line_count_disputed: result.line_count_disputed,
           tpp_aas_margin: margin.total_margin
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
 
@@ -343,7 +344,7 @@ export class ReconciliationService {
         event_type: 'reconciliation_run_completed',
         acting_principal: RUN_PRINCIPAL,
         acting_persona: 'system',
-        scope_used: 'reconciliation:run',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           run_id: input.runId,
@@ -355,7 +356,7 @@ export class ReconciliationService {
           line_count_disputed: input.result.line_count_disputed,
           prepared_result: true
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
 
@@ -501,7 +502,7 @@ export class ReconciliationService {
       event_type: 'reconciliation_breaks_detected',
       acting_principal: RUN_PRINCIPAL,
       acting_persona: 'system',
-      scope_used: 'reconciliation:run',
+      scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
       request_body: {
         run_id: runId,
@@ -509,7 +510,7 @@ export class ReconciliationService {
         finance_breaks: byTeam.get('finance') ?? 0,
         operations_breaks: byTeam.get('operations') ?? 0
       },
-      response_status: 200
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS
     })
     return stored
   }

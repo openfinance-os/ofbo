@@ -13,8 +13,7 @@ import {
   type RevenueRecovery
 } from '@ofbo/billing'
 import type { HighClassAuditSink } from '../high-class-audit.js'
-
-export const BILLING_ASSURANCE_SCOPE = 'billing:assure'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export interface RevenueAssuranceStore {
   appendRecovery(recovery: RevenueRecovery, traceId: string): Promise<{ id: string; created: boolean }>
@@ -76,9 +75,9 @@ export class RevenueAssuranceService {
     if (saved.created) {
       await this.deps.audit.emit({
         event_type: 'billing_revenue_recovered', acting_principal: 'system:revenue-assurance', acting_persona: 'system',
-        scope_used: BILLING_ASSURANCE_SCOPE, request_trace_id: traceId,
+        scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
         request_body: { recovery_id: recovery.recoveryId, period: recovery.period, finding_code: recovery.findingCode, amount_milli_fils: recovery.amountMilliFils, source_ref: recovery.sourceRef },
-        response_status: 201
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return saved
@@ -91,14 +90,14 @@ export class RevenueAssuranceService {
     if (saved.created) {
       await this.deps.audit.emit({
         event_type: 'billing_revenue_assurance_report_generated', acting_principal: 'system:revenue-assurance', acting_persona: 'system',
-        scope_used: BILLING_ASSURANCE_SCOPE, request_trace_id: traceId,
+        scope_used: SYSTEM_ACTOR_SCOPE, request_trace_id: traceId,
         request_body: {
           report_id: saved.id, period: report.period, metering_coverage_percent: report.meteringCoveragePercent,
           leakage_milli_fils: report.leakageMilliFils, leakage_percent: report.leakagePercent,
           recovered_revenue_milli_fils: report.recoveredRevenueMilliFils, missed_dispute_windows: report.disputeWindow.missed,
           target_met: report.target.met
         },
-        response_status: 201
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return { ...saved, report }

@@ -6,6 +6,7 @@ import {
 } from '@ofbo/billing'
 import type { ItsmPort } from '@ofbo/ports'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export const BILLING_RATE_CARD_WATCH_CRON = '0 2 * * 1'
 export const BILLING_RATE_CARD_WATCH_PRINCIPAL = 'system:billing-rate-card-watcher'
@@ -281,10 +282,10 @@ export class BillingRateCardWatcher {
           event_type: 'billing_rate_card_notification_failed',
           acting_principal: BILLING_RATE_CARD_WATCH_PRINCIPAL,
           acting_persona: 'system',
-          scope_used: 'billing:write',
+          scope_used: SYSTEM_ACTOR_SCOPE,
           request_trace_id: traceId,
           request_body: { review_id: review.id, audience: recipient.audience, error: error instanceof Error ? error.message : String(error) },
-          response_status: 502
+          response_status: SYSTEM_ACTOR_RESPONSE_STATUS
         })
       }
     }
@@ -367,7 +368,7 @@ export class BillingRateCardWatcher {
           event_type: 'billing_rate_card_upstream_change_detected',
           acting_principal: BILLING_RATE_CARD_WATCH_PRINCIPAL,
           acting_persona: 'system',
-          scope_used: 'billing:write',
+          scope_used: SYSTEM_ACTOR_SCOPE,
           request_trace_id: traceId,
           request_body: {
             review_id: review.id,
@@ -379,7 +380,7 @@ export class BillingRateCardWatcher {
             notify: review.notifyAudiences,
             auto_apply: false
           },
-          response_status: 202
+          response_status: SYSTEM_ACTOR_RESPONSE_STATUS
         })
         notificationFailures += await this.notifyReview(review, traceId)
       } catch (error) {
@@ -388,10 +389,10 @@ export class BillingRateCardWatcher {
           event_type: 'billing_rate_card_watch_failed',
           acting_principal: BILLING_RATE_CARD_WATCH_PRINCIPAL,
           acting_persona: 'system',
-          scope_used: 'billing:read',
+          scope_used: SYSTEM_ACTOR_SCOPE,
           request_trace_id: traceId,
           request_body: { source_name: source.name, source_url: source.url, error: error instanceof Error ? error.message : String(error) },
-          response_status: 502
+          response_status: SYSTEM_ACTOR_RESPONSE_STATUS
         })
       }
     }

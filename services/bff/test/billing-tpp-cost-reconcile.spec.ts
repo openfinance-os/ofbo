@@ -265,6 +265,72 @@ describe('BILL-15 wire shape', () => {
     expect(Object.keys(wire).every((key) => !/[A-Z]/.test(key))).toBe(true)
   })
 
+  it('publishes amounts that TIE OUT against each other on the wire', async () => {
+    // A derived amount must be derived from the ROUNDED operands, not rounded from the domain value —
+    // rounding a difference is not the difference of the roundings. An earlier comment on the
+    // serialiser denied any relation existed ("independent totals … no tie-out to preserve"), which
+    // the domain contradicts: netVariance IS actualTotalNet - expectedTotalNet, and each break's
+    // variance IS actual - expected.
+    //
+    // These are the minimal counterexample, at the scale the endpoint actually works at: the default
+    // tolerance is ONE FIL, so sub-fil totals are routine rather than exotic.
+    //
+    //   milli-fils  expected 2500  actual 3000  variance 500
+    //   rounded     expected    3  actual    3  variance   1   ← 3 - 3 = 0, but 500 rounds to 1
+    const { service } = harness()
+    const base = (await service.reconcile(AGENT, 'doc-1', 'key-1', 'trace-1')).reconciliation
+    const oneBreak = { ...base.breaks[0]!, expectedNetMilliFils: 2500, actualNetMilliFils: 3000, varianceMilliFils: 500 }
+
+    const wire = tppCostReconciliationWire({
+      ...base,
+      expectedTotalNetMilliFils: 2500,
+      actualTotalNetMilliFils: 3000,
+      netVarianceMilliFils: 500,
+      grossVarianceMilliFils: 500,
+      breakCount: 1,
+      breaks: [oneBreak]
+    }) as {
+      expected_total_net: { amount: number }
+      actual_total_net: { amount: number }
+      net_variance: { amount: number }
+      gross_variance: { amount: number }
+      breaks: Array<{ expected_net: { amount: number }; actual_net: { amount: number }; variance: { amount: number } }>
+    }
+
+    // Both totals round to the same fil; the variance must not then claim a different one.
+    expect(wire.expected_total_net.amount).toBe(wire.actual_total_net.amount)
+    expect(wire.net_variance.amount)
+      .toBe(wire.actual_total_net.amount - wire.expected_total_net.amount)
+
+    const entry = wire.breaks[0]!
+    expect(entry.variance.amount).toBe(entry.actual_net.amount - entry.expected_net.amount)
+
+    // "The amount actually in dispute" is the sum of what the breaks beside it publish.
+    expect(wire.gross_variance.amount)
+      .toBe(wire.breaks.reduce((sum, b) => sum + Math.abs(b.variance.amount), 0))
+  })
+
+  it('keeps gross_variance tied across MANY sub-fil breaks, where the drift accumulates', async () => {
+    // One break hides the bug at half a fil. Ten do not: summing the milli-fils first and rounding
+    // once reads 5 fils against the 10 the array publishes.
+    const { service } = harness()
+    const base = (await service.reconcile(AGENT, 'doc-1', 'key-1', 'trace-1')).reconciliation
+    const breaks = Array.from({ length: 10 }, (_, i) => ({
+      ...base.breaks[0]!,
+      lineRef: `NEB-1|L-${i}`,
+      expectedNetMilliFils: 0,
+      actualNetMilliFils: 500,
+      varianceMilliFils: 500
+    }))
+
+    const wire = tppCostReconciliationWire({
+      ...base, breakCount: breaks.length, grossVarianceMilliFils: 5000, breaks
+    }) as { gross_variance: { amount: number }; breaks: Array<{ variance: { amount: number } }> }
+
+    expect(wire.breaks.reduce((sum, b) => sum + Math.abs(b.variance.amount), 0)).toBe(10)
+    expect(wire.gross_variance.amount).toBe(10)
+  })
+
   it('builds a billing query from a break, refusing once the window has closed', async () => {
     const { service } = harness({
       reconcilableDocumentsForPeriod: vi.fn(async () => [document(fils(3), fils(3000))])

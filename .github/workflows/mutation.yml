@@ -1,13 +1,25 @@
 # HARNESS-04 — mutation testing of the security-critical BFF core (rbac / auth / four-eyes /
 # high-class audit / Idempotency-Key window).
 # Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a
-# behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run cost
-# ~8 min when this was written and is ~25 min as of Aug 2026 — right against the timeout-minutes
-# ceiling below, so it would badly tax every unrelated PR. (That 3x growth is unexplained and
-# worth its own investigation: a job pinned to its own timeout is also the job most likely to
-# start failing spuriously.) Instead it runs on a schedule, on demand, and on PRs that actually
-# touch the security core. `break` (stryker.config.json) sits below the
-# measured baseline so a real regression fails without flaking on the mutation-score noise floor.
+# behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run is slow
+# enough to tax every unrelated PR. Instead it runs on a schedule, on demand, and on PRs that
+# actually touch the security core. `break` (stryker.config.json) sits below the measured
+# baseline so a real regression fails without flaking on the mutation-score noise floor.
+#
+# Runtime, measured 2026-08-18 rather than estimated: 23m44s and 24m47s on consecutive green runs,
+# then a 25m02s run that hit the old `timeout-minutes: 25` and was reported as CANCELLED — which
+# reads as neither pass nor fail. The header used to claim "~8 min"; that number was stale by a
+# factor of three and the cap sat about one minute above the real runtime, so the job was a flake
+# waiting to happen independently of any change to it. The cap below is now 45 minutes, so the job
+# is no longer pinned against its own ceiling — which is what made it the job most likely to start
+# failing spuriously.
+#
+# That growth — ~8 min at creation to ~25 min by Aug 2026 — is UNEXPLAINED and worth its own
+# investigation. Raising the cap buys headroom; it does not answer why the run got three times
+# slower, and nothing here should be read as having closed that question.
+#
+# The cap is the schedule, NOT the control. `break: 70` in stryker.config.json is the control and
+# is untouched — never raise this timeout as a way to avoid a threshold failure.
 name: mutation
 
 on:
@@ -103,7 +115,7 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.run == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

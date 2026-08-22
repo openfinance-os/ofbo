@@ -14,6 +14,7 @@ import {
 } from '@ofbo/billing'
 import type { ReconLineResult, ReconResult } from '../reconciliation/engine.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 export interface BillingMeterRunIdentity {
   id: string
@@ -148,7 +149,7 @@ export class BillingMemoReconciliationService {
         event_type: 'billing_expected_memo_generated',
         acting_principal: 'system:billing-rating-engine',
         acting_persona: 'system',
-        scope_used: 'billing:rate',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           expected_memo_id: saved.record.id,
@@ -160,7 +161,7 @@ export class BillingMemoReconciliationService {
           line_count: statement.lines.length,
           total_milli_fils: statement.totalMilliFils
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return saved
@@ -192,7 +193,7 @@ export class BillingMemoReconciliationService {
         event_type: 'billing_collection_memo_reconciled',
         acting_principal: 'system:billing-rating-engine',
         acting_persona: 'system',
-        scope_used: 'billing:reconcile',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           memo_diff_id: stored.id,
@@ -203,7 +204,7 @@ export class BillingMemoReconciliationService {
           query_deadline: diff.queryDeadline,
           query_window_status: diff.queryWindowStatus
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return { diff, reconciliation }
@@ -229,7 +230,7 @@ export class BillingMemoReconciliationService {
         event_type: 'billing_closed_period_rerated',
         acting_principal: 'system:billing-rating-engine',
         acting_persona: 'system',
-        scope_used: 'billing:rate',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           rerating_id: saved.id,
@@ -242,7 +243,7 @@ export class BillingMemoReconciliationService {
           total_delta_milli_fils: replay.totalDeltaMilliFils,
           facts_unchanged: replay.factsUnchanged
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return { replay, ...saved }
