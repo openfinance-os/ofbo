@@ -3736,6 +3736,125 @@ Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` 
 ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
 Still docs-only — no source, no spec, no tests changed.
 
+## 2026-08-19 — HARNESS-17: the portal E2E install stops eating the job (PR #328)
+
+The Q3 portal E2E job failed four times on 2026-08-19, every time on
+`playwright install --with-deps chromium` and never on anything in this repo. Three of those runs
+consumed the full 20-minute job cap and reported `cancelled`, which reads as neither pass nor fail —
+the suite never started, so the gate produced no evidence either way.
+
+MEASURED FIRST, AND THE MEASUREMENT KILLED THE OBVIOUS FIX. On the last healthy run (job
+95996474055) the combined step cost 103s, split:
+
+    apt, via --with-deps    07:50:15 -> 07:51:47    ~92s   (89%)
+    browser downloads       07:51:47 -> 07:51:58    ~11s   (11%)
+
+Caching the browsers — what I proposed to the user before looking — would have saved about eleven
+seconds and fixed nothing. apt is both the cost and the hang risk. Recorded because the wrong answer
+was already on the table when the numbers arrived.
+
+WHAT apt WAS ACTUALLY INSTALLING, from that same run's output: fonts-freefont-ttf,
+fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic, xfonts-*. Nothing else
+was unpacked — Chromium's own libraries are already on the ubuntu-latest image, so the browser
+launches with or without the step. The last failure stalled at
+`Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages` and emitted
+nothing for five and a half minutes.
+
+Four changes:
+
+1. Cache `~/.cache/ms-playwright`, keyed on the RESOLVED Playwright version rather than a lockfile
+   hash — an unrelated dependency bump must not evict 290 MiB of browsers.
+2. Split apt from the download into separate, individually capped steps (4m / 6m) so a slow mirror
+   fails fast and names itself instead of silently consuming the job budget.
+3. The apt step is now `continue-on-error: true`. It installs fonts an English-language portal suite
+   does not exercise; blocking every PR on an external Ubuntu mirror to get them is the worse trade.
+   *(SUPERSEDED — see "DECIDED" below. The step was made non-fatal first; once CI proved
+   the suite runs with no packages installed at all, it was removed outright and q3-e2e now
+   carries no `continue-on-error`.)*
+4. The version resolution refuses an empty value. `echo "v=$(cmd)"` exits 0 even when cmd fails, and
+   the pipe through `tr` swallows the status, so a `--filter` miss would have produced the key
+   `ms-playwright-Linux-` shared by every Playwright version — one version's browsers served to
+   another, with no signal at all.
+
+THE PART THAT NEEDED THE MOST CARE was (3) — while it still existed — because "make the failing step non-fatal" is the shape
+of reward-hacking even when it is correct here. So the guard pins the ASYMMETRY, not the change:
+`continue-on-error` must appear EXACTLY ONCE in q3-e2e, and in the fonts step. The browser download,
+the services, the portal build and the suite itself must all still be able to red the job.
+
+Counting across the whole job rather than checking named steps is load-bearing, and the first draft
+got it wrong. That draft guarded the suite via `if (suite) { ... }` keyed on its literal
+`- run: pnpm --filter @ofbo/portal e2e` line — which goes vacuous the moment someone gives that step
+a `name:`. Proved it rather than asserting it: rename the suite step AND mark it continue-on-error,
+so a failing E2E test would no longer red CI, and the branch form reports green while the count form
+catches it. Same defect class this session kept finding elsewhere — a control claimed more broadly
+than it was built — this time in the guard written to prevent it.
+
+Evidence: harness suite 82/82. Every new assertion mutation-checked and caught by its own guard
+alone — remove `continue-on-error` from the fonts step; add it to the browser download; delete the
+version-emptiness check — with `ci.yml` restored byte-for-byte after each. ci.yml parses and the
+q3-e2e step table shows one `continue-on-error`, caps 4m/6m, job cap unchanged at 20m.
+
+Not settled here, and left for a human: dropping `--with-deps` (and this step) entirely is the
+larger lever — 89% of the install — but it is a behaviour change on CI shared by every PR.
+
+**CI evidence, and it is stronger than a clean run would have been.** On the verifying run
+([32237329042](https://github.com/openfinance-os/ofbo/actions/runs/32237329042)) the apt mirror was
+**still hanging** — the log carries
+`##[error]The action 'install Playwright system deps' has timed out after 4 minutes` — so the fonts
+step was killed at its cap, `continue-on-error` absorbed it, and the browser download, the services,
+the portal build and the E2E suite all ran and passed. That is the fifth mirror failure today, and
+under the previous shape it would have been the fifth `cancelled` in a row. All ten gating jobs
+green; q3-e2e finished in 410s against its 1200s cap, and the cache saved
+(`Cache saved with key: ms-playwright-Linux-1.60.0`), which also settles the unverified
+`actions/cache@v4` major.
+
+One caveat worth naming rather than leaving for someone to trip over: the jobs API reports that step
+as `conclusion: success`, because `continue-on-error` rewrites a failed step's conclusion. The
+timeout is in the log and raised as a run annotation, but a reader scanning the step table sees
+green. The step's cost while the mirror is down is four wasted minutes per run — which sharpens, but
+does not decide, the question left to a human above.
+
+**Warm-cache path proven on the next run** ([32238395327](https://github.com/openfinance-os/ofbo/actions/runs/32238395327)),
+which was the one thing the cold run could not show: `Cache hit for: ms-playwright-Linux-1.60.0` →
+`Cache restored from key: ms-playwright-Linux-1.60.0`, 259 MB in 7s, and `install Playwright
+Chromium` fell from 12s to **1s** because the browser was already present. That also settles the
+`actions/cache@v4` major, which the build session could not verify. On this run the mirror recovered
+— the fonts step completed in 145s and the whole 967-line log carries zero `##[error]` lines, so it
+succeeded rather than failing quietly. 10/10 gates green again, q3-e2e 331s.
+
+So both paths are now exercised: the cold run proved the fix holds when the mirror is down, and the
+warm run proved the cache restores. The measured cache saving is the ~11s predicted — the fix that
+mattered was making the fonts step unable to take the job with it.
+
+**DECIDED: the apt step is removed entirely** (handed back to me with "you decide", so the call and
+its evidence are recorded here rather than left open).
+
+The run above is the experiment that settles it. On 32237329042 the fonts step hung inside
+`apt-get update` and was killed at its cap having logged **zero `Setting up` lines** — not one
+package was installed — and the portal E2E suite then ran and passed in 25s. The suite has therefore
+already been observed working with no fonts present. Supporting checks, all negative: no screenshot
+or snapshot assertion anywhere in `apps/portal` (no `toHaveScreenshot`/`toMatchSnapshot`), no Arabic
+or RTL content, no `font-family` or `next/font` declaration, and the spec's only non-ASCII characters
+are `§ — →`, all in the base DejaVu set on the runner image.
+
+Against that: the step failed the job four times in one day on an external Ubuntu mirror, and on the
+two runs after that cost 253s (killed at the cap) and 145s, versus a ~92s healthy cost and an ~11s
+browser download. It is 89% of the install and buys nothing this suite uses.
+
+The consequence I care about most is that **`continue-on-error` is now gone from q3-e2e entirely** —
+which is what both advisory reviewers singled out as the thing a human should look at. There is no
+longer any step here whose failure is cosmetic, so the guard asserts the count is **zero**, not
+"one, on the harmless step". Residual risk, unchanged and accepted: if a future runner image drops a
+real Chromium library, the failure surfaces in the E2E step as a browser that will not launch —
+fatal, legible and attributable — instead of being absorbed by a provisioning step.
+
+The guard's comment-stripping is load-bearing and was proved, not assumed: the workflow's own
+comment block now discusses both `continue-on-error` and `install-deps`, so a guard counting raw
+text fails two assertions on an *unmodified* file. Verified by running the no-strip variant against
+a clean `ci.yml` — 2 failures. Six mutations checked in all (reintroduce the apt step, restore
+`--with-deps`, make the browser download non-fatal, delete the cache, drop the version-emptiness
+check, raise the job cap below `steps:`), each caught by exactly its own assertion.
+
 ## 2026-08-19 — BILL-16 addendum: the five hard-stop findings on PR #323
 
 The advisory hard-stop reviewer returned `VERDICT: FAIL (5 findings)` on #323. All five are fixed
