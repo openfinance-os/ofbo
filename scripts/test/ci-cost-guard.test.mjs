@@ -42,30 +42,68 @@ const prTypes = (text) => {
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : null
 }
 
-for (const file of ['mutation.yml', 'ai-review.yml']) {
-  test(`${file} does not re-run on every push (pull_request types exclude synchronize)`, () => {
-    const types = prTypes(workflow(file))
-    assert.ok(
-      types !== null,
-      `${file} must list pull_request \`types:\` explicitly. Omitting it means GitHub's default ` +
-        '(opened, synchronize, reopened), and `synchronize` fires on EVERY push to the branch.'
-    )
-    assert.ok(
-      !types.includes('synchronize'),
-      `${file} lists \`synchronize\`, so it re-runs on every push to a PR branch. That is the ` +
-        'exact regression HARNESS-18 removed — mutation burned 215 runner-minutes in two days on ' +
-        'runs the concurrency group then cancelled, and ai-review paid ~12 runner-minutes plus ' +
-        'two model calls per intermediate commit.'
-    )
-  })
+// HARNESS-19 SPLITS THE TWO WORKFLOWS, because they now control cost by different means and
+// asserting one rule over both is what let the HARNESS-18 hole through.
+//
+//   mutation.yml  — DOES take `synchronize`. Cost is controlled by the `changes` classifier
+//                   job, which decides on the PUSHED RANGE. Trigger breadth is deliberately
+//                   NOT the lever here: narrowing it (HARNESS-18) meant a push that FIRST
+//                   introduced a security-core change fired nothing at all.
+//   ai-review.yml — does NOT take `synchronize`. It has no per-push classifier because the
+//                   expensive part is the model call on the whole diff, which a classifier
+//                   cannot make cheaper. The accepted cost is a verdict that reflects the head
+//                   at open; the comment names its reviewed SHA so that is legible.
+test('mutation.yml takes synchronize, and gates cost on the classifier rather than trigger breadth', () => {
+  const types = prTypes(workflow('mutation.yml'))
+  assert.ok(types !== null, 'mutation.yml must list pull_request `types:` explicitly')
+  assert.ok(
+    types.includes('synchronize'),
+    'mutation.yml must keep `synchronize`. Without it, a PR opened non-draft that FIRST touches ' +
+      'the security core in a later push fires nothing: `paths:` did not match at `opened`, and ' +
+      '`ready_for_review` cannot fire for a PR that was never a draft. That PR then merges with ' +
+      'its four-eyes / high-class-audit changes mutation-tested zero times. This is the ' +
+      'HARNESS-18 regression; cost is controlled by the `changes` job instead.'
+  )
+})
 
-  test(`${file} still reviews the state a human is asked to merge`, () => {
+test('ai-review.yml does not re-run its model calls on every push', () => {
+  const types = prTypes(workflow('ai-review.yml'))
+  assert.ok(types !== null, 'ai-review.yml must list pull_request `types:` explicitly')
+  assert.ok(
+    !types.includes('synchronize'),
+    'ai-review.yml lists `synchronize`, so both reviewer legs re-read the entire diff on every ' +
+      'push — ~12 runner-minutes plus two model calls per intermediate commit (24 runs in one ' +
+      'day, 19 Aug 2026).'
+  )
+})
+
+test('ai-review.yml states which commit it reviewed, so a stale verdict cannot read as current', () => {
+  // The accepted cost of dropping `synchronize` is that the verdict lags the head. That is
+  // only tolerable if the artifact says so — otherwise a ✅ written at open sits on the PR
+  // looking current over every later push, which is the absent-control-looks-like-a-passing-one
+  // class this workflow exists to close.
+  const wf = workflow('ai-review.yml')
+  assert.match(
+    wf,
+    /REVIEWED_SHA:\s*\$\{\{\s*github\.event\.pull_request\.head\.sha\s*\}\}/,
+    'the comment step must be given the reviewed PR head SHA (not github.sha, which is the ' +
+      'ephemeral merge commit)'
+  )
+  assert.match(wf, /reviewedSha/, 'the comment body must render the reviewed SHA')
+  assert.match(
+    wf,
+    /verdict is stale/,
+    'the comment must tell the reader the verdict is stale if the PR has moved on'
+  )
+})
+
+for (const file of ['mutation.yml', 'ai-review.yml']) {
+  test(`${file} still covers the state a human is asked to merge`, () => {
     const types = prTypes(workflow(file))
-    // Dropping `synchronize` is only defensible if these two remain: `opened` catches the PR
-    // (drafts included), `ready_for_review` catches the final state. Losing either would turn a
-    // cost fix into a coverage cut.
+    // `opened` catches the PR (drafts included), `ready_for_review` catches the final state.
+    // Losing either turns a cost control into a coverage cut.
     for (const t of ['opened', 'ready_for_review']) {
-      assert.ok(types.includes(t), `${file} must keep the \`${t}\` trigger — without it, dropping \`synchronize\` would reduce coverage rather than cost`)
+      assert.ok(types.includes(t), `${file} must keep the \`${t}\` trigger`)
     }
   })
 
@@ -80,11 +118,12 @@ for (const file of ['mutation.yml', 'ai-review.yml']) {
   })
 }
 
-test('mutation.yml keeps the triggers that make dropping synchronize affordable', () => {
+test('mutation.yml keeps its schedule and on-demand paths', () => {
   const block = triggers(workflow('mutation.yml'))
   // The weekly schedule is what still exercises the security core independently of anyone
-  // opening a PR, and workflow_dispatch is the documented escape hatch (it accepts any ref,
-  // which is why mutation needs no label trigger).
+  // opening a PR — and it is the backstop that limited the blast radius of the HARNESS-18
+  // hole to "caught on the following Monday" rather than "never". workflow_dispatch is the
+  // documented escape hatch (it accepts any ref, which is why mutation needs no label trigger).
   assert.match(block, /schedule:/, 'mutation.yml must keep its weekly schedule')
   assert.match(block, /workflow_dispatch:/, 'mutation.yml must keep workflow_dispatch — it is the on-demand re-run path for a feature branch')
 })
