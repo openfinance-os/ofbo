@@ -204,7 +204,7 @@ test('ADR-0032: DELETING an accepted ADR is a violation with no satisfying route
   )
 })
 
-test('ADR-0032: an unpaired deletion is surfaced, a paired one is still a rewrite', () => {
+test('ADR-0032: a deletion is surfaced; a same-number D+A is still a rewrite', () => {
   // Leftover D with nothing to pair against -> genuine removal, now in scope.
   assert.deepEqual(parseNameStatus('D\tdocs/adrs/0007-a.md'), [
     { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md', deleted: true },
@@ -213,12 +213,14 @@ test('ADR-0032: an unpaired deletion is surfaced, a paired one is still a rewrit
   assert.deepEqual(parseNameStatus('D\tdocs/adrs/0007-a.md\nA\tdocs/adrs/0007-b.md'), [
     { path: 'docs/adrs/0007-b.md', basePath: 'docs/adrs/0007-a.md' },
   ])
-  // Two deletions, one addition: one pairs as a rewrite, the leftover is a deletion.
+  // Two deletions plus an unrelated addition: BOTH deletions are surfaced as deletions, and the
+  // addition is exempt. Cross-number pairing used to consume one of them and report it as a
+  // rewrite OF THE ADDED ADR — wrong file, wrong reason. ADR 0032 retired that pairing.
   const mixed = parseNameStatus(
     ['D\tdocs/adrs/0007-a.md', 'D\tdocs/adrs/0013-b.md', 'A\tdocs/adrs/0031-c.md'].join('\n'),
   )
-  assert.equal(mixed.length, 2)
-  assert.equal(mixed.filter((c) => c.deleted === true).length, 1, 'exactly one leftover deletion')
+  assert.deepEqual(mixed.map((c) => c.path).sort(), ['docs/adrs/0007-a.md', 'docs/adrs/0013-b.md'])
+  assert.ok(mixed.every((c) => c.deleted === true), 'both are deletions, neither a phantom rewrite')
 })
 
 test('superseding instead of amending is the other permitted route', () => {
@@ -265,29 +267,25 @@ test('FINDING-3: delete + re-add of the same ADR number is a modification, not a
     { path: 'docs/adrs/0008-rewritten.md', basePath: 'docs/adrs/0008-plain.md' },
   ])
 
-  // ASSERTION INVERTED IN ROUND 3, AND DELIBERATELY STRENGTHENED RATHER THAN RELAXED.
-  // This previously asserted that a D and an A with DIFFERENT numbers pair to nothing. That was
-  // finding 2: it is exactly how a rewrite escapes — delete accepted `0007-payables.md`, add
-  // `0031-payables-restated.md`, and the gate reported "nothing to check", exit 0. The number is
-  // a label, not the record. Leftovers now pair across numbers, so this case is EXAMINED.
-  const renumbered = parseNameStatus(
-    ['D\tdocs/adrs/0008-gone.md', 'A\tdocs/adrs/0031-brand-new.md'].join('\n'),
+  // RENUMBERED REWRITE — the round-3 finding-2 case. Round 3 closed it by pairing leftovers across
+  // numbers; ADR 0032 closes it more directly and retires that pairing, because the DELETION is
+  // itself the violation. The escape is shut without inventing a rewrite relationship between two
+  // unrelated files.
+  assert.deepEqual(
+    parseNameStatus(['D\tdocs/adrs/0008-gone.md', 'A\tdocs/adrs/0031-brand-new.md'].join('\n')),
+    [{ path: 'docs/adrs/0008-gone.md', basePath: 'docs/adrs/0008-gone.md', deleted: true }],
   )
-  assert.deepEqual(renumbered, [
-    { path: 'docs/adrs/0031-brand-new.md', basePath: 'docs/adrs/0008-gone.md' },
-  ])
 
-  // ASSERTION INVERTED BY ADR 0032, and the previous comment here recorded exactly why it could
-  // not be inverted at the time: a lone deletion was "still the documented carve-out, still
-  // exempt", because banning it "would be a decision change this script may not make". The
-  // control-plane owner has since made that decision (2026-08-22), so the script may now make it.
-  // The change is strictly stronger — a case that was silently exempt is now surfaced.
+  // ASSERTION INVERTED BY ADR 0032, and the comment it replaced predicted exactly this: a lone
+  // deletion was "still the documented carve-out, still exempt", because banning it "would be a
+  // decision change this script may not make". The owner made that decision (2026-08-22).
+  // Strictly stronger — a silently exempt case is now surfaced.
   assert.deepEqual(parseNameStatus('D\tdocs/adrs/0008-gone.md'), [
     { path: 'docs/adrs/0008-gone.md', basePath: 'docs/adrs/0008-gone.md', deleted: true },
   ])
 })
 
-test('name-status parsing: M included, C treated as a rename, a stray D+A paired', () => {
+test('name-status parsing: M included, C treated as a rename, a stray D surfaced', () => {
   const parsed = parseNameStatus(
     [
       'M\tdocs/adrs/0007-a.md',
@@ -300,10 +298,11 @@ test('name-status parsing: M included, C treated as a rename, a stray D+A paired
   assert.deepEqual(parsed, [
     { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
     { path: 'docs/adrs/0031-copy.md', basePath: 'docs/adrs/0005-src.md' },
-    // ADDED IN ROUND 3 (finding 2), not relaxed: the lone `A` and lone `D` in this fixture are
-    // now paired across their numbers rather than both dropped. The test name's "lone A and D
-    // exempt" was the bypass restated as an expectation.
-    { path: 'docs/adrs/0099-new.md', basePath: 'docs/adrs/0011-gone.md' },
+    // ADR 0032: the lone `D` is surfaced as a DELETION on its own path. Round 3 paired it with the
+    // lone `A` across numbers; that pairing is retired, because it reported a deletion as a
+    // rewrite of an unrelated added ADR. The lone `A` stays exempt — a new record is not a
+    // modification of an old one.
+    { path: 'docs/adrs/0011-gone.md', basePath: 'docs/adrs/0011-gone.md', deleted: true },
   ])
 })
 

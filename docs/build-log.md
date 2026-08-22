@@ -41,6 +41,21 @@ COST MEASURED BEFORE ADOPTING, not assumed: no ADR has ever been deleted in this
 something that has never happened, at the price of one status line if it ever does. That asymmetry
 is what made closing the exemption cheap, and it is why the agent recommended closing it.
 
+A LIVE PROBE ON THIS BRANCH THEN KILLED A CONTROL I HAD JUST DEFENDED. Round 3 closed the
+"rewrite AND renumber" escape by pairing a leftover deletion with a leftover addition ACROSS
+numbers, and I documented the false-red that costs (a PR deleting one ADR and adding an unrelated
+one gets flagged) as an accepted trade. Probing ADR 0032's new deletion rule showed the trade was
+worse than documented: deleting accepted ADR 0007 in a PR that also ADDS ADR 0032 paired the two,
+and the gate reported "0032 - an EXISTING amendment row was rewritten or removed" instead of
+"0007 - DELETED". Wrong file, wrong reason, wrong remedy printed. The false red was the smaller
+half of the problem; MISREPORTING was the larger.
+
+The pairing is now RETIRED, and ADR 0032 is what makes that safe: an unpaired deletion of an
+accepted ADR is a violation on its own, so the renumbered rewrite is caught as the deletion it
+contains, with no invented rewrite relationship between two unrelated files. Same-number D+A
+pairing stays - that pair really is one record rewritten, and the record still exists. Net effect:
+the new rule closed a bypass AND removed the false-red its predecessor had introduced.
+
 ONE TEST ASSERTION INVERTED, and its own comment had predicted this: it asserted a lone deletion
 was "still the documented carve-out, still exempt", because banning it "would be a decision change
 this script may not make". The owner has since made that decision, so the script may now make it.

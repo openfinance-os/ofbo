@@ -57,7 +57,8 @@
 //      had closed a false-RED and opened its mirror false-GREEN. Now both directions must hold:
 //      a row added AND every base row surviving unmodified (amendmentDelta).
 //   2  the D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
-//      entirely. Leftovers are now paired across numbers, deterministically.
+//      entirely. First closed by pairing leftovers across numbers; that pairing was RETIRED by
+//      ADR 0032, which closes the same escape directly and without misattributing deletions.
 //   3  the status allow-list dropped a git TYPECHANGE (`T`). Closed as a category, not a letter.
 //   4  NOT a code defect — the deletion carve-out's stated justification was factually wrong. The
 //      claim was corrected and the decision put to the ADR's owner, who chose to close the
@@ -318,28 +319,22 @@ export const parseNameStatus = (raw) => {
     }
   }
 
-  // PASS 2 — pair what is LEFT, across different numbers (finding 2, round 3). Keying the rewrite
-  // detection on the ADR number meant that deleting accepted `0007-payables.md` and adding
-  // `0031-payables-restated.md` produced no collision at all: `nothing to check`, exit 0. The
-  // number is a label, not the record; renumbering while rewriting is the same evasion as renaming
-  // while rewriting, which this script already refuses to honour ("where the author moves it to is
-  // exactly the freedom the bypass exploited").
+  // PASS 2 IS GONE, RETIRED BY ADR 0032 AS REDUNDANT — and it had become actively harmful.
   //
-  // ORDER IS DEFINED, NOT INCIDENTAL: both sides are sorted so the pairing is deterministic across
-  // machines and git versions — a gate whose verdict depends on map iteration order is not a gate.
+  // It used to pair a leftover deletion with a leftover addition ACROSS different numbers, to stop
+  // "rewrite AND renumber" escaping as an unpaired D+A (round-3 finding 2). ADR 0032 closes that
+  // escape directly: an unpaired deletion of an ACCEPTED ADR is now a violation on its own, so the
+  // renumbered rewrite is caught as the deletion it contains, with no pairing needed.
   //
-  // THE FALSE-RED THIS CAN CAUSE, AND WHY IT IS ACCEPTED. A PR that genuinely deletes one ADR under
-  // the carve-out AND separately adds an unrelated new ADR will pair them and demand a record. That
-  // is a real cost, and it is bounded three ways: an accepted ADR is only exempt-deletable under a
-  // carve-out whose stated justification turned out not to exist (see ADR 0031's amendment table);
-  // a deletion paired against a NON-accepted base is dropped downstream by `isAccepted`, so only
-  // accepted records can trigger it; and the remedy is cheap and obvious — split the PR, or record
-  // the amendment. Silently exempting a rewrite is the worse failure.
-  const deletedRest = [...deletedLeft.values()].sort()
-  const addedRest = [...addedLeft.values()].sort()
-  for (let i = 0; i < Math.min(deletedRest.length, addedRest.length); i++) {
-    collisions.push({ path: addedRest[i], basePath: deletedRest[i] })
-  }
+  // Keeping it would have MISATTRIBUTED every real deletion. Caught by a live probe on this very
+  // branch: deleting accepted ADR 0007 in a PR that also ADDS ADR 0032 paired the two, and the
+  // gate reported "0032 — an EXISTING amendment row was rewritten or removed" instead of
+  // "0007 — DELETED". Wrong file, wrong reason, and the remedy it printed was the wrong remedy.
+  // The false-red this pairing was documented as costing turned out to be the smaller half of the
+  // problem; the misreporting was the larger one.
+  //
+  // PASS 1 (same-number D+A) stays: that pair is unambiguously one record rewritten in place, the
+  // record still exists, and it is correctly judged on its amendment rows rather than as a removal.
 
   // PASS 3 (ADR 0032) — a deletion with nothing left to pair against is a GENUINE REMOVAL, and
   // that is now in scope rather than carved out. ADR 0031 exempted it on the stated ground that
@@ -349,7 +344,7 @@ export const parseNameStatus = (raw) => {
   //
   // These are emitted with `deleted: true` and NO head text, because there is no head file to read.
   // `violations` decides: only a base status of `Accepted` makes it a finding.
-  for (const deletedPath of deletedRest.slice(addedRest.length)) {
+  for (const deletedPath of [...deletedLeft.values()].sort()) {
     collisions.push({ path: deletedPath, basePath: deletedPath, deleted: true })
   }
 
