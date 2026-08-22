@@ -18,6 +18,11 @@
 // when it is unsure is not a cost control.
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
+// Imported rather than taken as a global: eslint.config.mjs grants `scripts/**/*.mjs` only
+// `fetch`, on the stated grounds that these CLIs import their `node:` builtins explicitly.
+// Same reason output goes through process.stdout.write rather than console.log — matching
+// doc-link-check.mjs, adr-number-check.mjs and ai-review-matrix.mjs.
+import process from 'node:process'
 
 // Kept in step with the `paths:` list in .github/workflows/mutation.yml — the guard test
 // asserts the two agree, so they cannot drift silently. Directory entries are git
@@ -146,11 +151,11 @@ function main() {
   if (summary) appendFileSync(summary, lines.join('\n') + '\n')
 
   if (!verdict.run) {
-    console.log(
-      `::notice title=Mutation gate NOT RUN::${verdict.reason} The gate is not applicable to this push — it is not a pass, and not a skip of a relevant check.`,
+    process.stdout.write(
+      `::notice title=Mutation gate NOT RUN::${verdict.reason} The gate is not applicable to this push — it is not a pass, and not a skip of a relevant check.\n`,
     )
   }
-  console.log(`run=${verdict.run} — ${verdict.reason}`)
+  process.stdout.write(`run=${verdict.run} — ${verdict.reason}\n`)
 }
 
 // Only run the CLI when invoked directly, so the test can import `decide` cleanly.
