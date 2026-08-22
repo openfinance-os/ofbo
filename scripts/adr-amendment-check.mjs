@@ -1,7 +1,7 @@
 // ADR 0032 (supersedes ADR 0031) — amending an accepted ADR. Enforces the convention that ADR
-// records the decision
-// for: in-place edits are allowed for statements of FACT, supersession is required for changes
-// of DECISION, and either way the change is recorded on the document's face.
+// records the decision for: in-place edits are allowed for statements of FACT, supersession is
+// required for changes of DECISION, an accepted ADR may not be DELETED at all, and either way the
+// change is recorded on the document's face.
 //
 // WHY THIS IS A GATE AND NOT A NOTE IN A PROCESS DOC. The convention existed informally and did
 // not hold. ADR 0007 was accepted on 2026-08-17 and substantively corrected the same day (65
@@ -208,7 +208,8 @@ export const violationFor = (c) => {
 /**
  * The pure rule, extracted so it is testable without git.
  *
- * @param changes one per changed ADR: { path, baseText, headText }
+ * @param changes one per changed ADR: { path, baseText, headText, deleted? }. `deleted: true`
+ *        marks a removal, which has no head text and is short-circuited before any is read.
  * @returns violations — `{ path, reason }` per accepted ADR modified without being recorded
  */
 export const violations = (changes) =>
@@ -252,8 +253,12 @@ const resolveBase = () => {
  * base text from the deleted path (still present on base). Duplicate ADR numbers are otherwise
  * forbidden (Q2b/Q2c), so a D+A collision always means "same ADR, rewritten", never two records.
  *
- * A plain `A` (new ADR, no matching delete) stays exempt; a plain `D` (outright deletion) is the
- * documented out-of-scope carve-out.
+ * A plain `A` (new ADR, no matching delete) stays exempt — a new record is not a modification of
+ * an old one. A plain `D` is NO LONGER exempt: ADR 0032 brought outright deletion into scope, so
+ * an unpaired deletion is emitted with `deleted: true` and judged by `violationFor`, which flags
+ * it when the base status was `Accepted`. (This sentence previously described the carve-out that
+ * the same commit removed — corrected after the hard-stop reviewer named it, since a docblock
+ * asserting what its code no longer does is precisely the defect ADR 0032 exists to prevent.)
  */
 export const parseNameStatus = (raw) => {
   const rows = raw
@@ -401,7 +406,7 @@ const main = () => {
     process.stderr.write(`  ${p} — ${detail}\n`)
   }
   process.stderr.write(`
-ADR 0031: an ADR that is Accepted on the base branch may be edited in place for statements of
+ADR 0032 (supersedes ADR 0031): an ADR that is Accepted on the base branch may be edited in place for statements of
 FACT, but the edit must be recorded on the document's face. Add a NEW row under:
 
     ### Amendments after acceptance
