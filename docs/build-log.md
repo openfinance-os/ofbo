@@ -3859,6 +3859,36 @@ flag MORE, not less - strictly stronger, which is the opposite of the reward-hac
 tripwire and Q1b exist to block. Recorded explicitly because a test edit accompanying a green run
 should always have to justify its direction.
 
+ROUND FOUR: both reviewers PASS (hard-stop VERDICT: PASS, contract-conformance VERDICT: CONFORMANT)
+and all ten deterministic gates green. Three non-blocking items were still worth fixing, and one of
+them matters more than its size.
+
+THE COMMENT WAS LYING ABOUT THE CODE, IN THE FILE THAT EXISTS TO STOP EXACTLY THAT. Round 3 closed
+the status allow-list "as a CATEGORY, not a letter" - and the guard shipped as `!/^([MRCDA]\d*)$/`,
+which excluded SCORED letters too. `M100` (git's break-rewrite form, emitted under -B) matched the
+exclusion, fell past every specific branch and parsed to []. The reviewer reproduced it, then went
+further and tried to reach it from real git: plain --name-status prints an unscored `M`, and
+diff.breakRewrites is unset by default, so it is a latent gap rather than a live bypass. That is why
+it survived two rounds. But the comment asserted a closure the code did not deliver - a document
+asserting what its history does not support, which is ADR 0031's entire thesis, occurring inside
+ADR 0031's own enforcement script. Fixed by listing the forms the specific branches actually handle
+(`M\d*|[RC]\d*|D|A`) and accepting a scored `M` as a modification; pinned by a regression assertion
+so the claim and the code cannot drift apart again.
+
+Also fixed: the q2c step label still read "ADR amendment record (ADR 0030)" after the 0030 -> 0031
+renumber, so the gate's user-visible name pointed at what is now a DIFFERENT ADR on main
+(0030-standards-baseline-registry). Caught by contract-conformance and hard-stop independently. And
+the test fixture stopped reusing `docs/adrs/0030-new.md` as a synthetic path, since that number is
+now a real record. ADR_BASE_REF added to the recorded KNOWN LIMITS: a caller setting it to HEAD gets
+an empty diff and a green gate - not defended against, because the workflow does not set it, so
+setting it would be a visible line in the diff, the same posture as the route-2 status-line limit.
+
+FOUR ROUNDS, AND THE PATTERN IS THE FINDING. FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS. Every fix opened
+its own hole: whole-row comparison closed a false-RED and opened a false-GREEN; the rename fix left
+renumbering open; the category closure leaked scored letters. A gate this small needed four
+adversarial passes to hold, which is the strongest available argument that HARNESS-16's reviewers are
+doing work no deterministic gate was doing.
+
 Evidence: 18 guard tests (54 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
 (accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
 EXISTING amendment table does not license silent editing forever after — the defect that would

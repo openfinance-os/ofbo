@@ -179,7 +179,7 @@ jobs:
       # Kept in this job rather than a new one — Q2c already fetches the base ref this check
       # needs, and adding a check-run name strands branch-protection rules pinned to the
       # existing ones.
-      - name: ADR amendment record (ADR 0030)
+      - name: ADR amendment record (ADR 0031)
         if: ${{ !cancelled() }}
         run: node scripts/adr-amendment-check.mjs
 

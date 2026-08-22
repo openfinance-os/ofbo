@@ -244,7 +244,7 @@ test('name-status parsing: M included, C treated as a rename, a stray D+A paired
   const parsed = parseNameStatus(
     [
       'M\tdocs/adrs/0007-a.md',
-      'A\tdocs/adrs/0030-new.md',
+      'A\tdocs/adrs/0099-new.md',
       'D\tdocs/adrs/0011-gone.md',
       'C075\tdocs/adrs/0005-src.md\tdocs/adrs/0031-copy.md',
       'M\tdocs/adrs/README.md',
@@ -256,7 +256,7 @@ test('name-status parsing: M included, C treated as a rename, a stray D+A paired
     // ADDED IN ROUND 3 (finding 2), not relaxed: the lone `A` and lone `D` in this fixture are
     // now paired across their numbers rather than both dropped. The test name's "lone A and D
     // exempt" was the bypass restated as an expectation.
-    { path: 'docs/adrs/0030-new.md', basePath: 'docs/adrs/0011-gone.md' },
+    { path: 'docs/adrs/0099-new.md', basePath: 'docs/adrs/0011-gone.md' },
   ])
 })
 
@@ -272,6 +272,18 @@ test('FINDING-3 (round 3): an unrecognised git status touching an ADR is not dro
   ])
   // Non-ADR paths stay out of scope whatever the status letter.
   assert.deepEqual(parseNameStatus('T\tdocs/build-log.md'), [])
+
+  // ROUND-4: a SCORED letter must not slip through the closure. The first guard read
+  // `!/^([MRCDA]\d*)$/`, so `M100` matched the exclusion, fell past every specific branch and
+  // parsed to [] — a gap in the very category the comment claimed to have sealed. Not reachable
+  // from plain `--name-status` (git prints an unscored `M`), which is why it survived review
+  // twice; pinned here so the claim and the code cannot drift apart again.
+  assert.deepEqual(parseNameStatus('M100\tdocs/adrs/0007-a.md'), [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
+  ])
+  assert.deepEqual(parseNameStatus('M\tdocs/adrs/0007-a.md'), [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md' },
+  ])
 })
 
 test('FINDING-1 (round 3): EDITING an existing amendment row does not satisfy the rule', () => {

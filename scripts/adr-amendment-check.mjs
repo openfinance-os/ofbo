@@ -62,6 +62,11 @@
 //     verifying "some other ADR supersedes this one" is a prose-parsing problem that would
 //     false-red, and because writing `Superseded` into a status line is a visible, reviewable
 //     lie sitting in the diff a human reads. The cheap bypass costs an obvious falsehood.
+//   * ADR_BASE_REF overrides the base ref, so a caller setting it to HEAD gets an empty diff and
+//     a green gate. Not defended against: the workflow does not set it (.github/workflows/ci.yml),
+//     so setting it would itself be a visible line in the diff a human reads — the same posture as
+//     the route-2 status-line limit above. Recorded because it is a reachable way this control
+//     goes quiet, and a quiet control is what this gate exists to prevent.
 //   * This step shares the q2c check-run with the ADR-number reservation, so a red here is not
 //     distinguishable from a red there on the checks tab — a mild HARNESS-07 tension. Kept
 //     in-job anyway: a new check-run name strands branch-protection rules pinned to the current
@@ -248,17 +253,27 @@ export const parseNameStatus = (raw) => {
   const addedByNum = new Map()
 
   for (const [status, a, b] of rows) {
-    if (status === 'M' && a && isAdrPath(a)) {
+    if (/^M\d*$/.test(status) && a && isAdrPath(a)) {
+      // `M` may carry a dissimilarity score (`M100`) when git is invoked with -B. The plain form
+      // is what --name-status emits today; accepting the scored form costs nothing and is what
+      // makes the catch-all below a genuine category closure rather than an almost-one.
       direct.push({ path: a, basePath: a })
-    } else if (!/^([MRCDA]\d*)$/.test(status) && a && isAdrPath(a)) {
+    } else if (!/^(M\d*|[RC]\d*|D|A)$/.test(status) && a && isAdrPath(a)) {
       // CATCH-ALL, and deliberately ahead of the specific branches for everything except `M`
       // (finding 3, round 3). The parser used to enumerate M/R/C/D/A and silently drop anything
       // else, so a git TYPECHANGE (`T` — e.g. replacing an accepted ADR with a symlink) reported
       // "nothing to check" and exited 0. Enumerating `T` alone would leave the same shape open for
       // the next letter (`U` unmerged, `X` unknown), so the allow-list is closed as a CATEGORY:
-      // any status git invents that touches an ADR path is treated as a modification of it. The
-      // reviewer rated the symlink case exotic and was unsure it was worth closing; closing the
-      // class rather than the instance is what makes it worth doing once.
+      // any status git invents that touches an ADR path is treated as a modification of it.
+      //
+      // ROUND-4 CORRECTION. The first version of this guard read `!/^([MRCDA]\d*)$/`, which let a
+      // SCORED letter through the crack it claimed to have sealed: `M100` matched the exclusion,
+      // fell past every specific branch, and parsed to []. The reviewer reproduced it and could
+      // not reach it from real git (plain `--name-status` prints an unscored `M`, and
+      // diff.breakRewrites is unset by default), so it was a latent gap rather than a live bypass
+      // — but the COMMENT asserted a closure the code did not deliver, which is the exact defect
+      // ADR 0031 exists to prevent, in the file that enforces it. The exclusion now lists the
+      // forms the specific branches actually handle, so the closure is real.
       direct.push({ path: a, basePath: a })
     } else if (/^[RC]\d*$/.test(status) && a && b && isAdrPath(a)) {
       // R100 / R087 / C075 — new path is field 3, old path field 2.
