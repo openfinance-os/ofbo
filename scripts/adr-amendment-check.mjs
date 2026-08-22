@@ -1,4 +1,5 @@
-// ADR 0031 — amending an accepted ADR. Enforces the convention that ADR records the decision
+// ADR 0032 (supersedes ADR 0031) — amending an accepted ADR. Enforces the convention that ADR
+// records the decision
 // for: in-place edits are allowed for statements of FACT, supersession is required for changes
 // of DECISION, and either way the change is recorded on the document's face.
 //
@@ -21,15 +22,21 @@
 // ADR 0031's consequences record the proportionate relaxation if that proves noisy.
 //
 // EXEMPT: ADRs ADDED by this branch (nothing has been relied on yet) and ADRs whose base status
-// is `Proposed` (drafts). The rule attaches at acceptance. Outright DELETION of an accepted ADR
-// is also out of scope by ADR 0031's stated decision; the D+A rewrite below is caught because it
-// is a modification wearing a deletion's clothes, not a genuine removal.
+// is `Proposed` (drafts). The rule attaches at acceptance.
 //
-// CORRECTION (round 3): this header used to justify that carve-out by claiming doc-link-check
-// "already blocks orphaning a referenced ADR". It does not. That check resolves FILE-PATH
-// references, and no ADR is referenced by path in the set it scans — ADRs are cited by NUMBER.
-// Deleting an accepted ADR is green on both gates and silent. ADR 0031 now records this, and
-// whether deletion should require a record is an open question for that ADR's owner.
+// DELETION IS NOW IN SCOPE (ADR 0032, and this is the change that superseded ADR 0031). Removing
+// an accepted ADR from the tree is a violation with no satisfying route: the remedy is not to
+// delete it, but to supersede it and leave the document in place. ADR 0012 was superseded in June
+// 2026 and is still readable today; that is the whole argument.
+//
+// WHY THE EXEMPTION FELL. ADR 0031 carved deletion out on the stated ground that doc-link-check
+// "already blocks orphaning a referenced ADR". The hard-stop reviewer checked, and it does not:
+// that check resolves FILE-PATH references, and no ADR is referenced by path anywhere in the set
+// it scans — ADRs are cited by NUMBER, which it cannot resolve. So deleting an accepted ADR was
+// green on both gates and silent, which is precisely the outcome the exemption claimed to make
+// impossible. The false claim was corrected in ADR 0031 and the decision it rested on was put to
+// the control-plane owner, who closed it (HG-0002). Cost of the new rule, measured before
+// adopting it: no ADR has ever been deleted in this repository's history.
 //
 // HARDENED after the hard-stop reviewer's FAIL(7) on PR #324 (each finding reproduced):
 //   1  statusOf missed the `- **Status:**` (bold) form — broadened.
@@ -53,8 +60,8 @@
 //      entirely. Leftovers are now paired across numbers, deterministically.
 //   3  the status allow-list dropped a git TYPECHANGE (`T`). Closed as a category, not a letter.
 //   4  NOT a code defect — the deletion carve-out's stated justification was factually wrong. The
-//      claim is corrected above and in ADR 0031; the decision it supported is now an open question
-//      for the ADR's owner rather than something this script should quietly decide.
+//      claim was corrected and the decision put to the ADR's owner, who chose to close the
+//      exemption; ADR 0032 supersedes ADR 0031 and this script now flags the deletion.
 //
 // KNOWN LIMITS, recorded rather than coded — raised by the same review as out-of-scope notes:
 //   * The route-2 exemption trusts the status line: flipping an ADR's status to `Superseded`
@@ -183,6 +190,11 @@ export const hasNewAmendmentRow = (baseText, headText) => {
 /** Why a given ADR fails, or null when it is fine. Distinct reasons get distinct guidance. */
 export const violationFor = (c) => {
   if (!isAccepted(c.baseText)) return null // added, or Proposed on base — exempt
+  // ADR 0032: removing an accepted ADR from the tree has NO valid route, so this is checked
+  // before anything else — a deleted file has no head text and no rows to compare. The remedy is
+  // not to delete it: set its status to `Superseded` and leave the document in place, which is
+  // what ADR 0012 did and why that record is still readable today.
+  if (c.deleted) return 'deleted-accepted-adr'
   if (isSuperseded(c.headText)) return null // route 2: a decision changed, superseded properly
   const { added, removed } = amendmentDelta(c.baseText, c.headText)
   // Checked BEFORE "no new row": a PR that rewrites an old row AND adds a new one is still
@@ -328,8 +340,18 @@ export const parseNameStatus = (raw) => {
   for (let i = 0; i < Math.min(deletedRest.length, addedRest.length); i++) {
     collisions.push({ path: addedRest[i], basePath: deletedRest[i] })
   }
-  // Any deleted ADR with no added counterpart left over is a genuine removal — the documented
-  // out-of-scope carve-out — and is intentionally not returned here.
+
+  // PASS 3 (ADR 0032) — a deletion with nothing left to pair against is a GENUINE REMOVAL, and
+  // that is now in scope rather than carved out. ADR 0031 exempted it on the stated ground that
+  // doc-link-check already blocked silent orphaning; the hard-stop reviewer showed that claim was
+  // false (ADRs are cross-referenced by NUMBER, which that check cannot resolve), so the exemption
+  // was resting on a control that does not exist. The owner's call was to close it.
+  //
+  // These are emitted with `deleted: true` and NO head text, because there is no head file to read.
+  // `violations` decides: only a base status of `Accepted` makes it a finding.
+  for (const deletedPath of deletedRest.slice(addedRest.length)) {
+    collisions.push({ path: deletedPath, basePath: deletedPath, deleted: true })
+  }
 
   return [...direct, ...collisions]
 }
@@ -357,10 +379,14 @@ const main = () => {
     process.stdout.write('adr-amendment-check: no accepted ADR modified — nothing to check\n')
     return
   }
-  const changes = paths.map(({ path, basePath }) => ({
+  const changes = paths.map(({ path, basePath, deleted }) => ({
     path,
+    deleted: deleted === true,
     baseText: mustGit(['show', `${base}:${basePath}`]),
-    headText: mustGit(['show', `HEAD:${path}`]),
+    // A deleted ADR has no head blob; reading `HEAD:<path>` would throw and surface as an
+    // environment fault rather than the finding it actually is. `violationFor` short-circuits on
+    // `deleted` before any head text is consulted.
+    headText: deleted === true ? '' : mustGit(['show', `HEAD:${path}`]),
   }))
   const bad = violations(changes)
   if (bad.length === 0) {
@@ -369,12 +395,14 @@ const main = () => {
     )
     return
   }
-  process.stderr.write('adr-amendment-check: accepted ADR modified without recording the amendment\n\n')
+  process.stderr.write('adr-amendment-check: an accepted ADR was changed without recording it\n\n')
   for (const { path: p, reason } of bad) {
     const detail =
-      reason === 'rewrote-or-removed-existing-row'
-        ? 'an EXISTING amendment row was rewritten or removed'
-        : 'no new amendment row'
+      reason === 'deleted-accepted-adr'
+        ? 'DELETED — an accepted ADR was removed from the tree'
+        : reason === 'rewrote-or-removed-existing-row'
+          ? 'an EXISTING amendment row was rewritten or removed'
+          : 'no new amendment row'
     process.stderr.write(`  ${p} — ${detail}\n`)
   }
   process.stderr.write(`
@@ -397,7 +425,14 @@ existing row does not satisfy this rule — it is the thing the rule exists to p
 row is itself wrong, restore it and add a NEW row saying so.
 
 If the DECISION changed rather than a fact, this is the wrong route: supersede it with a new
-ADR and set this one's status to Superseded (see ADR 0012 -> ADR 0016).\n`)
+ADR and set this one's status to Superseded (see ADR 0012 -> ADR 0016).
+
+IF THE ADR IS LISTED AS DELETED: removing an accepted decision record has no valid route, and
+ADR 0032 closed the exemption it used to have. Do not delete it. Supersede it instead — write the
+new ADR, and set this one's status to "Superseded by ADR NNNN", leaving the document in place.
+ADR 0012 was superseded in June and is still readable today; that is the point. A record that
+disappears takes its reasoning with it, and "git log" is not a substitute, because nobody reads
+git log before relying on a decision.\n`)
   process.exitCode = 1
 }
 

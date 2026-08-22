@@ -1,4 +1,4 @@
-// ADR 0031 — guard tests for the accepted-ADR amendment rule.
+// ADR 0032 (supersedes ADR 0031) — guard tests for the accepted-ADR amendment rule.
 //
 // The test that earns its place is the ANTI-VACUOUS-PASS one: a gate that cannot go red is not
 // a gate. ADR 0007 is the reason this check exists — accepted, then substantively corrected the
@@ -178,6 +178,49 @@ test('FINDING-2: a carried-over row does NOT satisfy a fresh edit (the rename by
   assert.ok(hasNewAmendmentRow(base, withSecond))
 })
 
+test('ADR-0032: DELETING an accepted ADR is a violation with no satisfying route', () => {
+  // ADR 0031 carved outright deletion out, on the stated ground that doc-link-check blocked
+  // silent orphaning of a referenced ADR. The hard-stop reviewer disproved that — ADRs are cited
+  // by NUMBER, which that check cannot resolve — so deletion was green on both gates and silent.
+  // The control-plane owner closed the exemption; ADR 0032 supersedes ADR 0031.
+  const deleted = { path: 'docs/adrs/0007-x.md', deleted: true, baseText: accepted, headText: '' }
+  assert.deepEqual(violations([deleted]), [
+    { path: 'docs/adrs/0007-x.md', reason: 'deleted-accepted-adr' },
+  ])
+
+  // The rule still attaches at ACCEPTANCE: a Proposed draft may be deleted freely.
+  assert.deepEqual(
+    violations([{ path: 'docs/adrs/0011-x.md', deleted: true, baseText: proposed, headText: '' }]),
+    [],
+  )
+
+  // There is deliberately NO route that satisfies a deletion — not a row, not a status flip —
+  // because neither can be written to a file that no longer exists. The remedy is to keep the
+  // document and supersede it, which is what ADR 0012 did and why it is still readable.
+  assert.equal(
+    violations([{ ...deleted, headText: withRow('2026-08-22') }])[0].reason,
+    'deleted-accepted-adr',
+    'a deletion is not redeemable by any head content',
+  )
+})
+
+test('ADR-0032: an unpaired deletion is surfaced, a paired one is still a rewrite', () => {
+  // Leftover D with nothing to pair against -> genuine removal, now in scope.
+  assert.deepEqual(parseNameStatus('D\tdocs/adrs/0007-a.md'), [
+    { path: 'docs/adrs/0007-a.md', basePath: 'docs/adrs/0007-a.md', deleted: true },
+  ])
+  // D+A on the same number is unchanged: a rewrite, judged on its rows, NOT flagged as a deletion.
+  assert.deepEqual(parseNameStatus('D\tdocs/adrs/0007-a.md\nA\tdocs/adrs/0007-b.md'), [
+    { path: 'docs/adrs/0007-b.md', basePath: 'docs/adrs/0007-a.md' },
+  ])
+  // Two deletions, one addition: one pairs as a rewrite, the leftover is a deletion.
+  const mixed = parseNameStatus(
+    ['D\tdocs/adrs/0007-a.md', 'D\tdocs/adrs/0013-b.md', 'A\tdocs/adrs/0031-c.md'].join('\n'),
+  )
+  assert.equal(mixed.length, 2)
+  assert.equal(mixed.filter((c) => c.deleted === true).length, 1, 'exactly one leftover deletion')
+})
+
 test('superseding instead of amending is the other permitted route', () => {
   const ok = violations([
     { path: 'docs/adrs/0012-x.md', baseText: accepted, headText: superseded },
@@ -234,10 +277,14 @@ test('FINDING-3: delete + re-add of the same ADR number is a modification, not a
     { path: 'docs/adrs/0031-brand-new.md', basePath: 'docs/adrs/0008-gone.md' },
   ])
 
-  // A deletion with NO addition left to pair against is a genuine removal — still the documented
-  // carve-out, still exempt. This is the boundary that keeps the pairing from becoming
-  // "deletion is now banned", which would be a decision change this script may not make.
-  assert.deepEqual(parseNameStatus('D\tdocs/adrs/0008-gone.md'), [])
+  // ASSERTION INVERTED BY ADR 0032, and the previous comment here recorded exactly why it could
+  // not be inverted at the time: a lone deletion was "still the documented carve-out, still
+  // exempt", because banning it "would be a decision change this script may not make". The
+  // control-plane owner has since made that decision (2026-08-22), so the script may now make it.
+  // The change is strictly stronger — a case that was silently exempt is now surfaced.
+  assert.deepEqual(parseNameStatus('D\tdocs/adrs/0008-gone.md'), [
+    { path: 'docs/adrs/0008-gone.md', basePath: 'docs/adrs/0008-gone.md', deleted: true },
+  ])
 })
 
 test('name-status parsing: M included, C treated as a rename, a stray D+A paired', () => {

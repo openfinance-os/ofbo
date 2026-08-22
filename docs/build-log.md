@@ -5,6 +5,55 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 
 ---
 
+## 2026-08-22 — ADR 0032: deleting an accepted ADR requires a record (supersedes ADR 0031)
+
+User decision, closing the question ADR 0031 left open. The build agent deliberately did NOT
+recommend on this one when ADR 0031 shipped - it recorded the question as an open control-plane
+matter under HG-0002 and stopped, which is the rule for a governance call. Asked for a
+recommendation later, the agent gave one (close the exemption) and the owner agreed.
+
+THE EXEMPTION WAS RESTING ON A CONTROL THAT DOES NOT EXIST. ADR 0031 carved outright deletion out
+of scope on two grounds. One holds: the delete-plus-re-add pairing catches a "deletion" that is
+really a rewrite, renumbered or not. The other was false, and the hard-stop AI reviewer found it by
+CHECKING rather than accepting: doc-link-check resolves FILE-PATH references, and no ADR is
+referenced by path anywhere in the set it scans - ADRs are cited by NUMBER, which it cannot
+resolve. Every real docs/adrs/NNNN-*.md path reference lives outside that set (backlog.yaml,
+docs/research/, docs/reviews/, mcp-gateway, ai-review.yml). So deleting an accepted ADR was green
+on both gates and silent, which is exactly what the exemption claimed was impossible.
+
+BOTH HALVES OF ADR 0031'S OWN RULE WERE EXERCISED BY ONE FINDING, which is the neatest thing about
+this change. The false claim was a statement of FACT, so it was corrected IN PLACE with a dated
+amendment row. Bringing deletion into scope changes the DECISION's scope, so it required a
+SUPERSEDING ADR - the convention applying to itself, in both directions, on the same defect.
+
+THE RULE: an accepted ADR may not be removed from the tree. There is deliberately NO satisfying
+route for a deletion - not a row, not a status flip - because neither can be written to a file that
+no longer exists. The remedy is to not delete it: supersede it and leave the document in place.
+ADR 0012 was superseded on 2026-06-21 and is still in the tree, still readable, still explaining
+why the generic analytics renderer was chosen and then reversed. That is the value at stake. A
+deleted record takes its reasoning with it, and git log is not a substitute for the same reason
+ADR 0031 gave about amendments in the first place: NOBODY READS GIT LOG BEFORE RELYING ON A
+DECISION. ADR 0031 itself is now Superseded and kept in place, which is the rule demonstrating
+itself on the first document it applies to.
+
+COST MEASURED BEFORE ADOPTING, not assumed: no ADR has ever been deleted in this repository -
+0001..0032 with no gaps, and no deletion in the history of docs/adrs/*.md. The rule constrains
+something that has never happened, at the price of one status line if it ever does. That asymmetry
+is what made closing the exemption cheap, and it is why the agent recommended closing it.
+
+ONE TEST ASSERTION INVERTED, and its own comment had predicted this: it asserted a lone deletion
+was "still the documented carve-out, still exempt", because banning it "would be a decision change
+this script may not make". The owner has since made that decision, so the script may now make it.
+Strictly stronger - a case that was silently exempt is now surfaced. Recorded because a test edit
+accompanying a green run must always justify its direction.
+
+Two self-inflicted breakages en route, both caught before commit and both the same shape: text
+inserted into a delimited context without checking the delimiters. Double quotes inside a
+double-quoted YAML scalar broke backlog.yaml; backticks inside a JS template literal broke the
+gate script twice. Parse checks caught all three.
+
+---
+
 ## 2026-06-11 — M0-FOUNDATION (PR #2, pre-loop)
 
 - Workspace, `@ofbo/contracts` (57 paths / 61 routes generated), `@ofbo/bff` 501-stub service with red-by-design `[contract-pending]` suite, `@ofbo/ports` P1–P9 (sim + enterprise stubs + shared contract harness), `@ofbo/db` (9 tables + matview, RLS, INSERT-only audit), `@ofbo/synthetic-data`, CI gates Q1–Q3.
