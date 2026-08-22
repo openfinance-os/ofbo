@@ -2068,6 +2068,22 @@ Net: 24 production files, **−893/+146** lines; `reconciliation/service.ts` 106
 
 **Aside, found while verifying:** `pnpm db:seed` is not idempotent. Re-seeding an already-seeded database inflates row counts and reds five assertions in `packages/db/test/seed-demo.int.spec.ts` (7 vs 5 cases, 5 vs 3 invoice runs, 4 vs 2 consoles). It cost a diagnosis here — the failures looked like the refactor until the diff was checked against `packages/`, which it never touches, and a pristine database went 144/144. CI never sees it because every run starts fresh. Left alone; worth a story if anyone ever seeds twice deliberately.
 
+## 2026-08-09 — CODE-03: 564 KB of screenshots nobody references, and two §4 items that turned out to be already guarded
+
+Repo-weight cleanup from the improvement plan's §4, plus a finding about the rest of that section.
+
+**Deleted:** `live-0{1..6}-*.png` at the repo root — 564 KB of portal screenshots with **zero references anywhere** in the tree (grepped across every file type, not just markdown). They arrived incidentally in `40102a9` (the BACKOFFICE-60/-53 MCP gateway spike) as verification artifacts and were never linked. Q2b confirms nothing broke. They remain in git history if anyone wants them back.
+
+**Left alone, deliberately:** `docs/proposals/rendered/` (1.1 MB of PDF/PPTX) is also unreferenced, but it is a *deliverable* — a distribution proposal and an executive deck — not a stray artifact. Unreferenced is not the same as unwanted when the file is somebody's work product. That is a human call, not a cleanup.
+
+**Two §4 items examined and declined, which is the more useful outcome.**
+
+*Generating `IMPLEMENTED_ROUTES` from a per-module registration pattern* (§4, hedged as "consider") would **remove a working control**. The hand-kept set is not an unguarded list: `contract-stubs.spec.ts` runs `it.fails` over every route *not* in it, asserting `status !== 501`. A route that gets implemented without being added therefore returns non-501, the assertion succeeds, the body does not throw, and `it.fails` **goes red** — naming the route. The list is hand-kept *on purpose*: it forces each story to consciously graduate its route from stub to real contract tests, exactly as the docstring says ("BREAKS the moment a story implements it"). Deriving it from registration would make that graduation automatic and silent. The ~100 lines in `app.ts` are the cost of a tripwire that works.
+
+*Single-sourcing the duplicated `the-loom-ways-of-working.html`* (144 KB, byte-identical between `docs/` and `apps/portal/public/`) is already guarded by two sync tests plus an e2e reference. Trading a guarded duplication for a build step buys 144 KB and adds build complexity; the drift it would prevent is already caught.
+
+Both are the same shape, and worth stating plainly: §2 of the plan found controls that were *absent* — real gaps, all closed. The remaining §4 suggestions are hedged notes against things that already have controls. Reading them as a checklist would have retired two working guards.
+
 ---
 
 ## 2026-08-13 — BILL-09/BILL-10: profitability and hosted tenant billing completion
