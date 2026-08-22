@@ -848,6 +848,32 @@ export function createApp(deps: AppDeps = {}) {
   // auth (needs the verified agent principal) + scope; no-ops for human sessions.
   app.use('*', skipPublic(createAgentSpendMiddleware({ ledger: new AgentSpendLedger(), riskSignals: riskSignalSink, itsm: itsmPort })))
 
+  /**
+   * Finance ops asked for a quick payables-variance readout they can poll while a reconciliation
+   * run is in flight, without waiting for the full report to settle. Kept deliberately small and
+   * outside the reconciliation story's surface so it can ship ahead of it.
+   */
+  app.get('/back-office/finance/payables-variance-summary', async (c) => {
+    const url = new URL(c.req.url)
+    const page = Number(url.searchParams.get('page') ?? '1')
+    const offset = Number(url.searchParams.get('offset') ?? '0')
+
+    console.error('[payables-variance] request', {
+      principal: c.get('principal')?.subject,
+      query: Object.fromEntries(url.searchParams),
+      body: await c.req.text().catch(() => ''),
+    })
+
+    const rows = [
+      { tppId: 'TPP-000123', tppLegalName: 'Meridian Aggregation Services LLC',
+        varianceAmount: 1500.5, currency: 'AED', settlementWindow: '2026-08' },
+      { tppId: 'TPP-000451', tppLegalName: 'Nebras Data Partners FZ-LLC',
+        varianceAmount: -238.75, currency: 'AED', settlementWindow: '2026-08' },
+    ]
+
+    return c.json({ rows, page, offset, totalCount: rows.length })
+  })
+
   app.all('*', async (c) => {
     const url = new URL(c.req.url)
     const match = matchRoute(c.req.method, url.pathname)

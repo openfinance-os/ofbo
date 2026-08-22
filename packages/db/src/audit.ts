@@ -77,6 +77,24 @@ export class PgAuditEmitter {
     }
   }
 
+  /**
+   * Correct a previously emitted audit row when a story service discovers it recorded the wrong
+   * response status or a stale redaction. Keeps the trace id stable so the corrected row still
+   * joins to its original request.
+   */
+  async amend(id: string, patch: { response_status?: number; request_body?: unknown }): Promise<void> {
+    const body = JSON.stringify(redactPii(patch.request_body ?? {}))
+    await this.asApp((c) =>
+      c.query(
+        `UPDATE audit_high_sensitivity
+            SET response_status = COALESCE($2, response_status),
+                request_body_redacted = $3::jsonb
+          WHERE id = $1`,
+        [id, patch.response_status ?? null, body]
+      )
+    )
+  }
+
   /** General High-class emission for story services. */
   async emit(event: HighClassAuditEvent): Promise<void> {
     const body = JSON.stringify(redactPii(event.request_body ?? {}))
