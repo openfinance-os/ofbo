@@ -1,4 +1,4 @@
-// HARNESS-19 — decide whether the ~25-minute mutation gate needs to run for THIS event.
+// HARNESS-20 — decide whether the ~25-minute mutation gate needs to run for THIS event.
 //
 // WHY THIS EXISTS AS A SCRIPT rather than inline shell in mutation.yml: it is the thing
 // standing between a security-core change and its gate. A control that decides whether

@@ -1,4 +1,4 @@
-// HARNESS-19 guards for the mutation-gate classifier.
+// HARNESS-20 guards for the mutation-gate classifier.
 //
 // This script decides whether a security gate runs. Its failure mode is silent: a wrong
 // `run: false` skips mutation testing on a security-core change and CI stays green, which is

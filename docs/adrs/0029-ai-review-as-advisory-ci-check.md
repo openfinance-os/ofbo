@@ -19,7 +19,8 @@ because an accepted ADR edited in place should say so on its face.
 | --- | --- |
 | 2026-08-16 | Parity reworked from a per-engine flag to a harness rule over the whole review control plane; `requires_workflow_parity` removed. A missing credential now fails the job while structural non-runs stay green. |
 | 2026-08-17 | Engine status table corrected — `claude` had been marked "proven in CI" when that meant only "resolves and preflights", and `codex` had been marked "never run end to end" when it had run and failed. The Codex bubblewrap finding was recorded here for the first time, and a verification record added. |
-| 2026-08-22 | **The trigger was narrowed** (HARNESS-18) to `opened` + `ready_for_review` + `reopened`, and then corrected (HARNESS-19). The Cost bullet below described `synchronize` firing on every push as current behaviour and offered the narrowing as a hypothetical; that is now what ships, and the bullet has been rewritten in place to say so. The cost it named — "the check no longer reflecting current HEAD" — was real and was NOT avoided: HARNESS-18's rationale claimed the narrowing was "a cost change, not a coverage change", which contradicted this ADR. HARNESS-19 accepts the trade instead of denying it and makes it legible, by naming the reviewed SHA in every review comment. |
+| 2026-08-22 | The injected-violation self-test debt below is **discharged**. It had read "still owed"; PR #331 planted six violations and both reviewers caught all six with every deterministic gate green. The paragraph now records the result instead of the obligation, and a scorecard is added to the verification record. |
+| 2026-08-22 | **The trigger was narrowed** (HARNESS-18) to `opened` + `ready_for_review` + `reopened`, and then corrected (HARNESS-20). The Cost bullet below described `synchronize` firing on every push as current behaviour and offered the narrowing as a hypothetical; that is now what ships, and the bullet has been rewritten in place to say so. The cost it named — "the check no longer reflecting current HEAD" — was real and was NOT avoided: HARNESS-18's rationale claimed the narrowing was "a cost change, not a coverage change", which contradicted this ADR. HARNESS-20 accepts the trade instead of denying it and makes it legible, by naming the reviewed SHA in every review comment. |
 | 2026-08-22 | **A `labeled` trigger was added**, narrowed on the `config` job to the `ai-review` label. It is the only way to re-review the CURRENT head: there is no `workflow_dispatch` (no merge base, nowhere to post) and a Checks-tab re-run replays the ORIGINAL head SHA. Recorded because it widens who can start a credentialed run — a *triage*-permission actor can now re-fire a review against a head someone with write access authored, where previously every trigger required write. The control-plane parity preflight still blocks any head that edits the review control plane. |
 
 Whether a factual correction to an accepted ADR should instead be a superseding ADR is a
@@ -199,9 +200,66 @@ source rather than taking the prose at face value. Contract-conformance also fou
 in the diff — a "here" that pointed at the wrong file — and correctly declined to file it as a
 finding while recording the omission, so the judgement was stated rather than silent.
 
-**Still owed, and unchanged by this:** the injected-violation self-test. A comment-only diff
-cannot show that a reviewer *catches* a violation, only that the path runs and that the
-reviewers reason about scope. A green verdict here is weak evidence by construction.
+**The injected-violation self-test — DISCHARGED 2026-08-22 (PR #331).** This paragraph used to
+say the test was still owed, and why the evidence up to that point was weak: a comment-only diff
+cannot show that a reviewer *catches* a violation, only that the path runs. That gap is now
+closed by measurement rather than by argument. Six violations were deliberately planted in a
+branch written to look like ordinary work — a plausible commit message, a plausible cover story
+in the code comment, and passing unit tests. **Both reviewers caught all six, and every one of
+the ten deterministic gates stayed green.** The scorecard is in the verification record below.
+
+The control condition is the half that matters: CI's deterministic gates found nothing wrong with
+an endpoint that served finance data to every persona, mutated the INSERT-only audit table, and
+logged raw request bodies to stdout. That is not a defect in those gates — none of them is built
+to see any of it. It is the measurement this ADR's decision rested on and had not yet made.
+
+### Injected-violation scorecard (PR #331, 2026-08-22)
+
+Hard-stop returned `VERDICT: FAIL (6 findings)`; contract-conformance returned
+`VERDICT: DRIFT (12 findings)`. All ten deterministic gates green.
+
+| plant | rule | caught | cited at |
+| --- | --- | --- | --- |
+| Unspecced route serving finance data, no scope | hard-stop 1 | yes | `app.ts:856`, traced via `rbac.ts:40-44` -> `:61` |
+| ...therefore zero enforcement layers, not two | hard-stop 8 | yes | `app.ts:856` + `:893-901` |
+| `amend()` issuing `UPDATE audit_high_sensitivity` | hard-stop 2 | yes | `audit.ts:85`, SQL `:89-92` (both reviewers) |
+| Unredacted request body + query to `console.error` | hard-stop 3 | yes | `app.ts:861-864` (both reviewers) |
+| Bare body, no `{data,meta}` envelope | contract 2 | yes | `app.ts:874` |
+| camelCase wire fields | contract 3 | yes | `app.ts:868-871,874` |
+| `page` / `offset` parameters | contract 4 | yes | `app.ts:858-859` |
+| Float money `1500.5` | contract 6 | yes | `app.ts:869,871` |
+
+**Misses: none.** Twelve further findings were returned that were not planted, of which two
+matter beyond bookkeeping. The first is composition (rule 9): the route is a second, parallel
+routing and authorisation path around the spec-driven `matchRoute`/`ROUTES` primitive. The second
+is the more useful result of the whole exercise, and both reviewers found it independently: THE
+PLANTED TESTS WERE STRUCTURALLY INCAPABLE OF CATCHING THE BUG. All three authenticated with
+`AUTHED_HEADERS`, a `platform-super-admin` token that satisfies any scope check by construction,
+so the suite could never have surfaced the missing scope gate, and no test asserted a 403 for a
+non-finance persona. A suite that looks like coverage and proves nothing is precisely the failure
+Q1b and the mutation ratchet exist to catch and cannot see.
+
+Both reviewers were also calibrated rather than merely loud. Hard-stop flagged the synthetic TPP
+legal names as a candidate and then reasoned correctly that corporate names are not personal data
+— "recorded only so the judgement is visible rather than silently made". Contract-conformance
+marked three findings with explicitly lower confidence, and cleared the UUID check with reasoning
+(`organisation_id` is a plain string in the contract, so `TPP-000123` is not a format breach).
+Each routed the other's findings across rather than double-counting or dropping them.
+
+The branch was closed unmerged and deleted. It is not a fixture and is not intended to be re-run
+as one: the plants were tuned to the reviewers' current prompts, so re-running it would measure
+those prompts and not the code.
+
+**What this self-test did NOT establish, recorded so the gap is not inherited silently.** HARNESS-16's
+backlog note asked that the self-test *also* assert the review FILE EXISTS, not merely that the job
+exited — the reliability hole where a reviewer completes having written nothing and, on an advisory
+non-gating check, looks identical to one that ran. This test did not assert it. The harness does
+already red that case (`.github/workflows/ai-review.yml:384` -> `:459`, "DID NOT COMPLETE — This is
+not a pass"), and on PR #331 both reviewers demonstrably produced a file — full review bodies, real
+verdicts, no banner. But that was an observation, not a designed check, and the two are not the same
+thing: proving the banner fires needs a deliberate silent non-run injected on purpose. That is a
+different experiment from planting violations, and it is carried into HARNESS-20 rather than counted
+here. Marking it satisfied would be precisely the unstated assumption this ADR exists to refuse.
 
 Also observed during verification, and worth recording because the design's central claim was
 tested harder by accident than by design: a GitHub Actions runner-availability failure left

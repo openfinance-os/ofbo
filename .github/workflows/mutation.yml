@@ -15,7 +15,7 @@ on:
   schedule:
     # Weekly, Monday 03:17 UTC (off-peak, off-minute so the fleet doesn't stampede the runner pool).
     - cron: '17 3 * * 1'
-  # HARNESS-19 — `synchronize` is BACK, and cost is controlled by the `changes` job below
+  # HARNESS-20 — `synchronize` is BACK, and cost is controlled by the `changes` job below
   # instead of by trigger breadth. This CORRECTS HARNESS-18, which removed `synchronize` and in
   # doing so opened a real coverage hole. The hole, found by the hard-stop reviewer on PR #329:
   #
@@ -66,7 +66,7 @@ concurrency:
 
 jobs:
   # =====================================================================================
-  # HARNESS-19. Decides whether the ~25-minute gate below needs to run for THIS event.
+  # HARNESS-20. Decides whether the ~25-minute gate below needs to run for THIS event.
   # Always runs, always reports — a gate that does not run must say so and say why, never
   # be silently absent (HARNESS-07 doctrine, and the q1b "NOT RUN" handling in ci.yml).
   #

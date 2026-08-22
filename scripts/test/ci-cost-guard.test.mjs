@@ -42,7 +42,7 @@ const prTypes = (text) => {
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : null
 }
 
-// HARNESS-19 SPLITS THE TWO WORKFLOWS, because they now control cost by different means and
+// HARNESS-20 SPLITS THE TWO WORKFLOWS, because they now control cost by different means and
 // asserting one rule over both is what let the HARNESS-18 hole through.
 //
 //   mutation.yml  — DOES take `synchronize`. Cost is controlled by the `changes` classifier

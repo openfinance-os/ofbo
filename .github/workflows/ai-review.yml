@@ -48,7 +48,7 @@ on:
   # Draft PRs are NOT excluded — `opened` fires for them, and a draft is still work this
   # check exists to review.
   #
-  # HARNESS-19 corrects the reasoning that used to sit here. It read "the build agent opens
+  # HARNESS-20 corrects the reasoning that used to sit here. It read "the build agent opens
   # its PRs as drafts", stated as fact; `.claude/skills/next-story/SKILL.md` says only "open
   # the PR" and never mentions drafts, and PRs in this repository are opened both ways. The
   # conclusion is unchanged and does not need the premise: including drafts costs nothing and
@@ -420,7 +420,7 @@ jobs:
           ATTRIBUTION: ${{ matrix.engine.attribution }}
           STATUS: ${{ steps.verdict.outputs.status }}
           DETAIL: ${{ steps.verdict.outputs.detail }}
-          # HARNESS-19. The PR HEAD that was actually reviewed — NOT github.sha, which for a
+          # HARNESS-20. The PR HEAD that was actually reviewed — NOT github.sha, which for a
           # pull_request event is the ephemeral merge commit and appears nowhere a reader can
           # compare it against.
           REVIEWED_SHA: ${{ github.event.pull_request.head.sha }}
@@ -432,7 +432,7 @@ jobs:
             } = process.env;
             const marker = `<!-- ofbo-ai-review:${MARKER_KEY} -->`;
 
-            // HARNESS-19 — THE COMMENT STATES WHICH COMMIT IT REVIEWED.
+            // HARNESS-20 — THE COMMENT STATES WHICH COMMIT IT REVIEWED.
             //
             // Since HARNESS-18 this check does not run on `synchronize`, so a verdict is
             // written against the head at open (or at ready-for-review) and then STAYS on the
