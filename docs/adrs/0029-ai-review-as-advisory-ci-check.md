@@ -248,6 +248,17 @@ The branch was closed unmerged and deleted. It is not a fixture and is not inten
 as one: the plants were tuned to the reviewers' current prompts, so re-running it would measure
 those prompts and not the code.
 
+**What this self-test did NOT establish, recorded so the gap is not inherited silently.** HARNESS-16's
+backlog note asked that the self-test *also* assert the review FILE EXISTS, not merely that the job
+exited — the reliability hole where a reviewer completes having written nothing and, on an advisory
+non-gating check, looks identical to one that ran. This test did not assert it. The harness does
+already red that case (`.github/workflows/ai-review.yml:384` -> `:459`, "DID NOT COMPLETE — This is
+not a pass"), and on PR #331 both reviewers demonstrably produced a file — full review bodies, real
+verdicts, no banner. But that was an observation, not a designed check, and the two are not the same
+thing: proving the banner fires needs a deliberate silent non-run injected on purpose. That is a
+different experiment from planting violations, and it is carried into HARNESS-19 rather than counted
+here. Marking it satisfied would be precisely the unstated assumption this ADR exists to refuse.
+
 Also observed during verification, and worth recording because the design's central claim was
 tested harder by accident than by design: a GitHub Actions runner-availability failure left
 jobs undispatched (`runner_id: 0`, no steps, logs 404). Those checks went **red**, not green.
