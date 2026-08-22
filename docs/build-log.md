@@ -3736,6 +3736,200 @@ Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` 
 ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
 Still docs-only — no source, no spec, no tests changed.
 
+---
+
+## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
+
+User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
+question rather than assuming an answer after the hard-stop AI reviewer raised it twice on
+PR #318, at explicitly stated low-to-moderate confidence, and declined to rule on it — correctly,
+since it is a governance call for a control-plane owner rather than a reviewer.
+
+THE INVESTIGATION CHANGED THE QUESTION. The practice already existed and was undocumented:
+ADR 0007 was accepted on 2026-08-17 and substantively corrected THE SAME DAY — commit 0f0a79a,
+"correct VAT, query-window, and collection mechanics", 65 insertions and 22 deletions against an
+accepted decision record — by the BILL-11 work stream, with nothing on the document saying so.
+Only `git log` knew. So the choice was never whether to start allowing in-place amendment; it was
+keep doing it silently, stop entirely, or do it with a record. ADR 0029 was not the first case,
+only the first FLAGGED case, and the only one carrying an amendment table.
+
+Also established while checking: there is no written ADR process anywhere (no README in
+docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
+(ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
+for the case at hand. 29 ADRs before this PR: 23 Accepted, 5 Proposed, 1 Superseded (30 / 24 / 5 / 1
+with ADR 0031 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
+— a count that did not even sum to 29, and it is worth recording WHY it was wrong: it was measured
+with the FIRST draft of the classifier, whose status regex silently missed the `- **Status:**` bold
+form. The gate's own bug undercounted the population the gate applies to. Re-measured with the
+fixed exports over the real corpus, enumerated rather than totalled.
+
+THE RULE. Statement of fact changed (what was built, measured, or proved) -> edit in place and
+add a dated row to an "Amendments after acceptance" table. DECISION changed (option chosen, or
+its scope) -> supersede with a new ADR, the 0012 -> 0016 route. Proposed ADRs are exempt: the
+rule attaches at acceptance, the point at which someone might be building against the document.
+
+ENFORCED, NOT MERELY WRITTEN. scripts/adr-amendment-check.mjs fails a PR that modifies an ADR
+whose BASE-BRANCH status is Accepted unless the diff adds a dated amendment row or flips the
+status to Superseded. This repo's own history is the argument: an unenforced convention is "a
+local convention wearing a gate's clothes" (HARNESS-09), and ADR 0007 is proof this particular
+one would not have held. Discoverability is mechanical rather than documentary — nobody reads a
+process doc before editing a file, so the failure message states the rule at the one moment
+somebody wants it.
+
+Placement follows HARNESS-07 doctrine: a separately guarded step in the EXISTING q2c job, not a
+new job. Q2c already fetches the base ref this check needs, and adding a check-run name would
+strand branch-protection rules pinned to the current ones. Guarded on `!cancelled()` so an
+earlier step's failure cannot skip it — a skipped gate looks exactly like a passing one.
+
+DELIBERATE COST, recorded in the ADR: a typo fix in an accepted ADR also costs a row. The check
+cannot separate substantive from cosmetic without making a judgement call in CI, and a gate that
+guesses is worse than one that is slightly heavy. If it proves noisy the proportionate relaxation
+is to require a row only when the diff REMOVES lines, and that change must itself be an amendment
+to ADR 0031 recorded in its own table.
+
+ADR 0007 BACKFILLED in the same change — the one known case where document and history disagree
+with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
+including a row recording that the table was added retrospectively.
+
+THE HARNESS EARNED ITS KEEP ON THIS PR, TWICE, AGAINST A GATE I WROTE. HARNESS-16's advisory
+hard-stop reviewer returned VERDICT: FAIL (7 findings) on the first draft of this check and
+REPRODUCED three live bypasses rather than asserting them. Round two returned FAIL (3) and
+reproduced two more — both the same root cause: the rename branch tested `isAdrPath` on the
+DESTINATION path, so renaming an accepted ADR out of the matched shape while rewriting it walked
+past the gate entirely (`0007-payables.md` -> `adr-0007-payables.md`, exit 0, "nothing to check"),
+as did moving it out of `docs/adrs/` (a bare `D` under the old pathspec, read as the documented
+deletion carve-out). Fixed by scoping on the ORIGIN path and dropping the pathspec: what puts a
+change in scope is that the thing being edited WAS an accepted ADR on base — where the author
+moves it to is exactly the freedom the bypass exploited.
+
+Two findings were mine to own, not the reviewer's to catch. A commit claimed a rename fix and two
+tests and shipped NEITHER: a live bypass probe ran `git add -A && git commit` (sweeping
+uncommitted work) then `git reset --hard HEAD~1` (discarding it), and the commit message carried
+the tell in its own test count. Both reviewers caught the empty commit. Process fix adopted and
+held since: COMMIT FIRST, THEN PROBE. Separately the reviewer flagged, out of scope, a FALSE-RED
+I had introduced while fixing finding 2 — `hasNewAmendmentRow` keyed its row set on the ISO date
+alone, so a second genuine amendment on a day the ADR had already been amended read as "already
+there". ADR 0007 carries two rows dated 2026-08-17, so it was days from biting. A false red on
+compliant work is worse than most bypasses: a bypass lets one bad change through, a false red
+blocks a good one and teaches people the gate is noise, which is how a control stops being read
+at all. Now compared on whole normalised rows.
+
+ROUND THREE: VERDICT: FAIL (4 findings), all four reproduced, three of them code defects I had
+introduced while fixing rounds one and two. This is the entry worth reading twice, because the
+pattern is that EVERY fix opened its own hole.
+
+(1) Route 1 was satisfied by EDITING an existing amendment row rather than adding one. Comparing
+whole rows had closed a false-RED (a same-day second amendment) and opened its exact mirror: an
+edited row is absent from the base set, so it reads as "new". Appending ONE PERIOD to an old row
+licensed an arbitrary rewrite - and the reviewer's reproduction changed the DECISION SCOPE, the
+one case ADR 0031 routes to supersession rather than to a row. The gate green-lit the case the
+convention most exists to catch. Neither end of that trade is safe alone; membership is now judged
+in BOTH directions - a new row must appear AND every base row must survive unmodified.
+
+(2) The D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
+completely. Same evasion as renaming while rewriting, which this script already refused to honour;
+the number is a label, not the record. Leftover deletions and additions now pair across numbers,
+deterministically sorted. Accepted cost, stated: a PR that genuinely deletes one ADR and adds an
+unrelated one will now be flagged. Checked before accepting it - 0001..0030 with no gaps, and NO
+ADR HAS EVER BEEN DELETED in this repo's history, so the false-red is hypothetical while the
+bypass was demonstrated. A lone deletion with nothing to pair against stays exempt.
+
+(3) parseNameStatus enumerated M/R/C/D/A and silently dropped everything else, so a git TYPECHANGE
+(T - replacing an accepted ADR with a symlink) reported "nothing to check". Closed as a CATEGORY
+rather than a letter: any status git invents that touches an ADR path is treated as a
+modification. The reviewer rated this exotic and was unsure it was worth closing; closing the
+class rather than the instance is what made it worth doing once.
+
+(4) NOT a code defect, and the most important of the four. The deletion carve-out was justified in
+ADR 0031 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
+by a current-state doc". That is FALSE, and I verified it independently rather than taking the
+finding on trust: doc-link-check resolves FILE-PATH references, and there are ZERO
+docs/adrs/NNNN-*.md path references anywhere in the set it scans. ADRs are cited by NUMBER. Every
+real path reference lives in docs/backlog.yaml, docs/research/, docs/reviews/, mcp-gateway, and
+ai-review.yml - all outside the scanned set. So deleting an accepted ADR is green on both gates
+and silent, which is precisely the outcome the ADR claimed was prevented. A decision record
+asserting something its own history does not support is the exact failure mode ADR 0031 exists to
+stop, and it was doing it in the paragraph justifying an exemption. Corrected in place; whether
+deletion should require a record is now an OPEN CONTROL-PLANE QUESTION for the ADR's owner, not
+something this script decides quietly.
+
+TWO TEST ASSERTIONS WERE INVERTED, AND THE DISTINCTION MATTERS. Both had encoded a bypass as an
+expectation ("an unrelated D and A ... both exempt"; "lone A and D exempt"). They were changed to
+flag MORE, not less - strictly stronger, which is the opposite of the reward-hacking move the
+tripwire and Q1b exist to block. Recorded explicitly because a test edit accompanying a green run
+should always have to justify its direction.
+
+ROUND FOUR: both reviewers PASS (hard-stop VERDICT: PASS, contract-conformance VERDICT: CONFORMANT)
+and all ten deterministic gates green. Three non-blocking items were still worth fixing, and one of
+them matters more than its size.
+
+THE COMMENT WAS LYING ABOUT THE CODE, IN THE FILE THAT EXISTS TO STOP EXACTLY THAT. Round 3 closed
+the status allow-list "as a CATEGORY, not a letter" - and the guard shipped as `!/^([MRCDA]\d*)$/`,
+which excluded SCORED letters too. `M100` (git's break-rewrite form, emitted under -B) matched the
+exclusion, fell past every specific branch and parsed to []. The reviewer reproduced it, then went
+further and tried to reach it from real git: plain --name-status prints an unscored `M`, and
+diff.breakRewrites is unset by default, so it is a latent gap rather than a live bypass. That is why
+it survived two rounds. But the comment asserted a closure the code did not deliver - a document
+asserting what its history does not support, which is ADR 0031's entire thesis, occurring inside
+ADR 0031's own enforcement script. Fixed by listing the forms the specific branches actually handle
+(`M\d*|[RC]\d*|D|A`) and accepting a scored `M` as a modification; pinned by a regression assertion
+so the claim and the code cannot drift apart again.
+
+Also fixed: the q2c step label still read "ADR amendment record (ADR 0030)" after the 0030 -> 0031
+renumber, so the gate's user-visible name pointed at what is now a DIFFERENT ADR on main
+(0030-standards-baseline-registry). Caught by contract-conformance and hard-stop independently. And
+the test fixture stopped reusing `docs/adrs/0030-new.md` as a synthetic path, since that number is
+now a real record. ADR_BASE_REF added to the recorded KNOWN LIMITS: a caller setting it to HEAD gets
+an empty diff and a green gate - not defended against, because the workflow does not set it, so
+setting it would be a visible line in the diff, the same posture as the route-2 status-line limit.
+
+FOUR ROUNDS, AND THE PATTERN IS THE FINDING. FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS. Every fix opened
+its own hole: whole-row comparison closed a false-RED and opened a false-GREEN; the rename fix left
+renumbering open; the category closure leaked scored letters. A gate this small needed four
+adversarial passes to hold, which is the strongest available argument that HARNESS-16's reviewers are
+doing work no deterministic gate was doing.
+
+Evidence: 18 guard tests (59 across scripts/test after HARNESS-17 merged in its own five) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+(accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
+EXISTING amendment table does not license silent editing forever after — the defect that would
+quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
+
+---
+
+## 2026-08-18 — ADR 0031 addendum: the review harness caught a bypass in the gate, and a false fix
+
+Two corrections to the entry above, both found by the AI reviewers on PR #324 and both worth
+recording because of what they say about the harness rather than about the gate.
+
+1. RENAME BYPASS IN THE GATE. hard-stop found that `modifiedAdrs` filtered `git diff
+   --name-status` on status `M` exactly, so renaming an accepted ADR while editing it — git
+   reports `R100`/`R087`, never `M` — walked straight past the check. The cheapest possible way
+   around the rule the gate exists to enforce, in the PR that adds the gate. It did not infer
+   this: it REPRODUCED the bypass in a scratch repository and confirmed the gate reports "no
+   accepted ADR modified" and exits 0. Fixed by `parseNameStatus`, which handles `R*` and `C*`
+   and reads base text from the OLD path.
+
+2. A FIX THAT WAS NOT IN THE BRANCH. The first attempt at (1), commit 2e1eb40, claimed a code
+   change and two tests and shipped neither — its stat was ADR prose only. Cause: the "live
+   bypass test" ran `git add -A && git commit` to stage a throwaway probe, sweeping up the
+   still-uncommitted fix and tests, then `git reset --hard HEAD~1` discarded the lot. The ADR
+   prose survived only because it was written after the reset, which is exactly why the branch
+   ended up asserting a behaviour it did not have. Both reviewers caught the discrepancy on the
+   next run — contract-conformance by diffing HEAD against the commit the message described,
+   hard-stop by noticing the stat and the unchanged test count.
+
+   The commit message carried the tell: "11 in this file, 45 across scripts/test". 11 + 36 = 47.
+   The arithmetic did not add up and was not checked.
+
+   Process fix: COMMIT FIRST, THEN PROBE. A destructive probe must never be able to take
+   uncommitted work with it. Applied here — the fix was committed before the rename probe ran,
+   and verified present afterwards.
+
+This is the strongest evidence to date for HARNESS-16, and it is not the green verdicts. The
+harness caught a security-relevant bypass in a merge gate, then caught a false claim that the
+bypass had been fixed. Both times a human reading the diff would have had to diff a commit
+message against its own contents to notice.
+
 ## 2026-08-19 — HARNESS-17: the portal E2E install stops eating the job (PR #328)
 
 The Q3 portal E2E job failed four times on 2026-08-19, every time on
