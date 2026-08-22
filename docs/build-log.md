@@ -4491,3 +4491,70 @@ then mutate. The second run was clean.
 Evidence: `scripts/test` 58/58, discovery harness 40/40, `doc-link-check` 61 docs / 30 ADRs,
 `discovery-link-check` OK, both workflows parse and their resolved triggers were inspected, and
 the classifier was exercised end-to-end against real commit ranges in this repository.
+
+---
+
+## 2026-08-22 — HARNESS-21: the AI-review parity guard judges the PR diff, not the distance from main
+
+Found by being on the receiving end of it. #323 was marked ready for review, and both reviewer
+legs skipped with:
+
+    this PR modifies the review control plane (.github/workflows/ai-review.yml)
+
+#323 modifies no control-plane file. HARNESS-20 had merged twenty minutes earlier and edited
+`ai-review.yml` on main; #323 was simply behind. The guard could not tell those apart.
+
+THE COMPARISON ASKED THE WRONG QUESTION. The preflight ran
+
+    git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}"
+
+a TWO-DOT diff, which compares main's TIP against the PR head and answers *do these files differ?*
+The question the guard needs answered is *did this PR change them?* — the three-dot merge-base
+form. Checked both ways on #323 before changing anything: two-dot names `ai-review.yml`, three-dot
+is empty.
+
+Two harms beyond the wrong skip, and the second is the one that would have kept it hidden:
+
+- The skip is NON-FATAL by design (a fork PR must not be permanently red through no fault of its
+  author), so an over-broad skip renders the check **green** while its comment says *this is not a
+  pass*. That is the HARNESS-07 class again, in its worst form: the reader has to open a comment to
+  discover the green is hollow.
+- The message's own remedy is backwards for staleness. *This resolves once the PR merges* is true
+  of a genuine modification; a stale PR resolves by merging main **in**, the opposite direction. An
+  author following the instruction would wait for the wrong event.
+
+It also decays silently and gets worse as main's commit rate rises — every control-plane edit
+re-blocks every open PR behind it.
+
+THE SECURITY INTENT IS UNCHANGED, and was the first thing re-checked rather than the last.
+`on: pull_request` runs the workflow FROM THE PR HEAD with the credential in scope, so a PR must
+not be able to rewrite the reviewer and collect its token in the same run. Three-dot still refuses
+exactly that PR. Only the diff form changed: the `control_plane` list, the fork guard, the
+credential guard and the fatal/non-fatal split are untouched.
+
+The reason string was corrected too — it now says the files changed *relative to its merge base
+with* main, which is what is now measured.
+
+Guard: `scripts/test/ai-review-parity-scope.test.mjs`, 3 tests. Two of them LIFT THE COMMAND
+VERBATIM out of the workflow and execute it against synthetic repositories where main advances on
+the control-plane file after the branch forks — so they bind the guard's BEHAVIOUR, not its
+spelling, and would still catch a rewrite that changed the wording while keeping the wrong
+semantics. The third is the anti-vacuous-pass half: a PR that genuinely edits the file must still
+be flagged. **That third test passed before the fix**, which is what shows this narrows nothing
+that matters — the change removes false positives only.
+
+Mutation-proved in both directions, because a guard that only ever reports *nothing changed* would
+satisfy the first two tests trivially:
+
+| mutation | caught by |
+| --- | --- |
+| revert to the two-dot form | both staleness tests |
+| scope the diff to no control-plane path | anti-vacuous-pass |
+| compare `HEAD...HEAD` — always empty | anti-vacuous-pass |
+
+Evidence: harness suite 121/121, `ai-review.yml` parses, and the three mutations above each red
+their own assertion with the workflow restored byte-for-byte after each.
+
+Parked, not fixed here: HARNESS-20's note asks for a backlog-ID reservation gate — Q2c does this
+for ADR numbers, nothing does it for backlog IDs, and 17/18/20 all collided across concurrent
+branches. 21 was free on main at branch time; if another branch also took it, this one yields.

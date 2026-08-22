@@ -246,12 +246,24 @@ jobs:
             # Deliberate consequence: no engine reviews the PR that changes how reviews run.
             # This harness cannot review its own control-plane changes — that is the correct
             # behaviour, and it self-resolves the moment such a PR merges.
+            # HARNESS-21 — THREE dots. `A...B` diffs against the MERGE BASE, so this reports only
+            # what THIS PR changed. The two-dot `"origin/${DEFAULT_REF}" HEAD` form asked a
+            # different question — "do these files differ?" — and so could not tell a PR that
+            # rewrites the reviewer from one that has merely fallen behind main on the same file.
+            # Observed on PR #323: HARNESS-20 edited this file on main, and twenty minutes later a
+            # PR touching no control-plane file at all had both reviewer legs skipped, each stating
+            # it "modifies the review control plane". Stale is not modified, and the skip is
+            # non-fatal, so that PR rendered GREEN while its comments said "this is not a pass".
+            # The anti-exfiltration intent is unchanged: a PR that really does touch these files
+            # still gets no review. Guarded by scripts/test/ai-review-parity-scope.test.mjs, which
+            # runs THIS command against synthetic repos rather than matching its text.
+            #
             # paste -sd',' then space out: a multi-char -d is a CYCLING delimiter list, so
             # `-d', '` would join three files as "a,b c".
-            changed="$(git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
+            changed="$(git diff --name-only "origin/${DEFAULT_REF}...HEAD" -- "${control_plane[@]}" | paste -sd',' - | sed 's/,/, /g')"
           fi
           if [ -z "${reason:-}" ] && [ -n "${changed:-}" ]; then
-            reason="this PR modifies the review control plane (${changed}), which differs from origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
+            reason="this PR modifies the review control plane (${changed}) relative to its merge base with origin/${DEFAULT_REF}. No engine reviews a PR that changes how reviews run or which credential they are handed — otherwise a PR could rewrite the reviewer AND obtain its token in the same run. This resolves once the PR merges"
           fi
           if [ -z "${reason:-}" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
