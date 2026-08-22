@@ -53,7 +53,7 @@ M0 foundation → M1 substrate + demo deployment live (auto-deploy on merge) →
 
 ## Hard stops (regulatory — non-negotiable)
 
-- No PII in browser storage, operational logs, fixtures, test names, or telemetry. Synthetic test data only (no real PSU data, ever).
+- No PII in browser storage, operational logs, fixtures, test names, or telemetry. Synthetic test data only (no real PSU data, ever). **Identifier-SHAPED literals are permitted in tests that assert a redaction control** — a redaction test whose input the redactor does not recognise proves nothing — but only in the synthetic ranges: UAE IBANs use the unallocated bank code `000` (`AE07000…`), national identifiers use prefix `999`, never the real `784`, and neither shape appears in shipped source. Enforced in CI by `scripts/test/pii-literal-check.test.mjs`; the session hook that refuses to write a real Emirates ID does not run in CI, which is the gap that guard closes.
 - FAPI 2.0 posture untouched: mTLS, PAR, PKCE; scheme certificate chain handled by the egress gateway (P6).
 - Retention: INSERT-only audit, 24-month hot / 5-year immutable; no deletion path for regulated records.
 - Scope hygiene per PRD §2: Customer Care ≠ Finance ≠ Risk scopes; the persona scope matrix is load-bearing — granting beyond it is an automatic review FAIL.

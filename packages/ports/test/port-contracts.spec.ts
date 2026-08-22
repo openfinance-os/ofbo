@@ -194,6 +194,58 @@ function describePortContract(
       expect(posted.journal_batch_ref).toBeTruthy()
     })
 
+    it('P9 dispatches an approved payable idempotently and reports its status (BILL-16)', async () => {
+      // The port-swap gate: a new port method cannot skip it. These same assertions drive the sim
+      // adapter and the enterprise adapter, so the replay and fail-closed guarantees are properties
+      // of the INTERFACE rather than of whichever implementation happens to be wired.
+      const p9 = get('p9-financial-system')
+      const instruction = {
+        payable_id: 'PAY-2026-06-001',
+        period: '2026-06',
+        counterparty_id: 'NEBRAS',
+        counterparty_type: 'nebras' as const,
+        amount_fils: 2625,
+        currency: 'AED',
+        approval_request_id: 'apr-0000-4000-8000-000000000001',
+        document_reference: 'NEB-INV-2026-06-0001',
+        idempotency_key: `pay-${profile}-2026-06-001`
+      }
+
+      const first = await p9.dispatchPayableInstruction(instruction, trace)
+      expect(first.accepted).toBe(true)
+      expect(first.dispatch_ref).toBeTruthy()
+      expect(first.replayed).toBe(false)
+      expect(['dispatched', 'mandate_active', 'presented', 'collected']).toContain(first.payable_status)
+
+      // Retry-safe: IG §10.14–10.15 collection is a direct-debit PULL, so a duplicated dispatch would
+      // authorise honouring the same debit twice.
+      const replay = await p9.dispatchPayableInstruction(instruction, trace)
+      expect(replay.dispatch_ref).toBe(first.dispatch_ref)
+      expect(replay.replayed).toBe(true)
+
+      const status = await p9.getPayableStatus(first.dispatch_ref, trace)
+      expect(['dispatched', 'mandate_active', 'presented', 'collected', 'rejected'])
+        .toContain(status.payable_status)
+    })
+
+    it('P9 REFUSES a payable carrying no four-eyes approval reference (BILL-16)', async () => {
+      // Downstream fail-closed. The four-eyes gate is enforced in the service layer; this asserts the
+      // port does not quietly accept a payable that arrived without it, which is what would make the
+      // gate bypassable by anything that can reach the adapter.
+      const p9 = get('p9-financial-system')
+      await expect(p9.dispatchPayableInstruction({
+        payable_id: 'PAY-2026-06-002',
+        period: '2026-06',
+        counterparty_id: 'NEBRAS',
+        counterparty_type: 'nebras',
+        amount_fils: 1000,
+        currency: 'AED',
+        approval_request_id: '   ',
+        document_reference: 'NEB-INV-2026-06-0002',
+        idempotency_key: `pay-${profile}-2026-06-002`
+      }, trace)).rejects.toThrow()
+    })
+
     it('P10 hands an STR draft to the bank workflow and returns a workflow ref (never calls AML GO)', async () => {
       const p10 = get('p10-str-workflow')
       const out = await p10.handoffStrDraft(

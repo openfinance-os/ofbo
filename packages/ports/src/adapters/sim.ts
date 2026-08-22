@@ -351,8 +351,46 @@ const simFinancialSystem: FinancialSystemPort = {
     })
     if (!balanced) throw new Error(`financial-system simulator rejected unbalanced batch ${batch.batch_id}`)
     return { accepted: true, journal_batch_ref: `fms-${batch.batch_id}` }
+  },
+  async dispatchPayableInstruction(instruction) {
+    // Idempotent on the caller's key: a retried dispatch must not authorise the debit twice. The
+    // simulator keeps the same guarantee the enterprise adapter is held to, since the contract suite
+    // asserts it against both.
+    const existing = simPayableDispatches.get(instruction.idempotency_key)
+    if (existing) return { ...existing, replayed: true }
+    if (!Number.isSafeInteger(instruction.amount_fils) || instruction.amount_fils <= 0) {
+      throw new Error(`financial-system simulator rejected payable ${instruction.payable_id}: amount must be positive minor units`)
+    }
+    if (!instruction.approval_request_id.trim()) {
+      // Fail closed. An unapproved payable reaching the financial system is the four-eyes gate being
+      // bypassed downstream of the place that enforces it.
+      throw new Error(`financial-system simulator rejected payable ${instruction.payable_id}: no approval reference`)
+    }
+    const result = {
+      accepted: true,
+      dispatch_ref: `fms-pay-${instruction.payable_id}`,
+      payable_status: 'dispatched' as const,
+      replayed: false
+    }
+    simPayableDispatches.set(instruction.idempotency_key, result)
+    return result
+  },
+  async getPayableStatus(dispatch_ref) {
+    for (const entry of simPayableDispatches.values()) {
+      if (entry.dispatch_ref === dispatch_ref) return { payable_status: entry.payable_status }
+    }
+    // Deterministic for an unknown ref rather than inventing a lifecycle position.
+    throw new Error(`financial-system simulator has no payable dispatch ${dispatch_ref}`)
   }
 }
+
+/** Keyed by idempotency key — the replay contract both adapters are held to. */
+const simPayableDispatches = new Map<string, {
+  accepted: boolean
+  dispatch_ref: string
+  payable_status: 'dispatched' | 'mandate_active' | 'presented' | 'collected' | 'rejected'
+  replayed: boolean
+}>()
 
 // P10 — the bank's STR workflow. Records the handoff and returns a deterministic workflow
 // reference; it NEVER calls the CBUAE AML GO portal (there is no AML GO client in the sim).

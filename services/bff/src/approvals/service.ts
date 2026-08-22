@@ -1,4 +1,4 @@
-import type { AuthAuditSink, Principal } from '../auth.js'
+import { normalisePrincipal, type AuthAuditSink, type Principal } from '../auth.js'
 import { hasScope } from '../rbac.js'
 import { addBusinessHours } from '../business-hours.js'
 import { summariseOperation } from './operation-summary.js'
@@ -23,6 +23,17 @@ export interface ApprovalRecord {
   approver_required_scope: string
   approver: string | null
   expires_at: string
+  /**
+   * When the approval actually happened. Null while pending, and on rows written before
+   * migration 0042 added the column.
+   *
+   * `expires_at` is a DEADLINE, not a record of what occurred: from state alone a later reader can
+   * see THAT a request was approved and not WHETHER it was approved in time. BILL-13's migration
+   * 0039 made "approved, and expires_at had not passed when approved" a blocking obligation on the
+   * dispatch write path, deliberately independent of this service — so the fact has to be recorded,
+   * not inferred from this service having refused a late approval.
+   */
+  approved_at?: string | null
   reject_reason: string | null
   execution_result?: unknown
 }
@@ -32,6 +43,22 @@ export interface ApprovalStore {
   get(id: string): Promise<ApprovalRecord | null>
   update(record: ApprovalRecord): Promise<void>
   listPending(): Promise<ApprovalRecord[]>
+  /**
+   * Atomically move a row from `pending` to `approved`, returning false if it was NOT pending —
+   * i.e. somebody else claimed it first.
+   *
+   * This exists because `update()` cannot express it. `update` sets `state` unconditionally, so
+   * the read-check-execute-then-persist sequence in `approve()` left a window in which two
+   * approvers both saw `pending`, both passed every check, and both ran the gated operation. For
+   * `billing.tpp_cost.period_close` that closes a period twice; for any money-moving operation it
+   * moves the money twice.
+   *
+   * The claim happens BEFORE the operation runs, which chooses the safer of the two failure modes:
+   * a claim that succeeds and an execution that then fails leaves an `approved` row with no
+   * `execution_result` — visible, and recoverable — whereas executing first risks doing the
+   * irreversible thing twice.
+   */
+  claimForApproval(id: string, approver: string, approvedAt: string): Promise<boolean>
 }
 
 
@@ -40,11 +67,31 @@ export interface GatedOperation {
   initiatorScope: string
   approverScope: string
   /**
-   * Runs ONLY on the second principal's approval. `ctx` carries the approving principal so an
-   * operation that records who approved (e.g. four-eyes query-purpose registration → approved_by)
-   * has it; existing operations that don't need it simply ignore the argument.
+   * Runs ONLY on the second principal's approval. `ctx` carries the AUTHORITATIVE facts about the
+   * approval — the ones this service owns and an operation cannot be trusted to supply — so an
+   * operation recording four-eyes evidence takes them from here rather than from its payload.
+   * Operations that don't need them ignore the argument; the field is optional, so adding to it
+   * does not disturb the six existing implementations.
+   *
+   * `initiator`, `approvalRequestId` and `approverIsSuperadmin` were added for BILL-16. Without
+   * them a gated operation had only `operation_payload` to read, and `POST /approvals` accepts an
+   * arbitrary payload — so the recorded initiator was operator-supplied, and the approval id could
+   * not be recorded at all because `requestApproval` mints it AFTER the payload is built. Four-eyes
+   * evidence that names a caller-chosen initiator, and cites no approval, is not evidence.
    */
-  execute(payload: Record<string, unknown>, ctx?: { approver: string; approverPersona: string }): Promise<unknown>
+  execute(
+    payload: Record<string, unknown>,
+    ctx?: {
+      approver: string
+      approverPersona: string
+      /** The request's real initiator, from the approval record — never from the payload. */
+      initiator: string
+      /** The approval being executed, so the operation can cite what authorised it. */
+      approvalRequestId: string
+      /** PRD §2: stamped on every High-class record produced under platform:superadmin. */
+      approverIsSuperadmin: boolean
+    }
+  ): Promise<unknown>
 }
 
 export class ApprovalError extends Error {
@@ -135,6 +182,17 @@ export class ApprovalsService {
   async getFor(principal: Principal, id: string, traceId: string): Promise<ApprovalRecord> {
     const r = await this.store.get(id)
     if (!r) throw new ApprovalError(404, 'BACKOFFICE.APPROVAL_NOT_FOUND', `approval ${id} does not exist`)
+    // EXACT match, deliberately, and not the normalised comparison approve() uses.
+    //
+    // The same edit has opposite effects in the two places. In approve(), normalising NARROWS: more
+    // principals are caught by "you are the initiator, you may not approve this". Here it WIDENS:
+    // a principal whose subject differs from the initiator's only in case or padding would gain
+    // read access to an approval it is not party to. A previous version of this line normalised,
+    // with a comment claiming it "fails in the safe direction" — that reasoning was inverted, and
+    // an authorisation predicate is the wrong place to be wrong in that direction.
+    //
+    // If two subjects can really differ only in spelling, the fix is canonicalising the subject
+    // where it is minted, not loosening the check that reads it.
     const isParty = r.initiator === principal.subject || hasScope(principal.scopes, r.approver_required_scope)
     if (!isParty) throw new ApprovalError(403, 'BACKOFFICE.SCOPE_DENIED', 'reading an approval requires being its initiator or holding its approver scope')
     return this.settleExpiry(r, principal, traceId)
@@ -161,8 +219,14 @@ export class ApprovalsService {
     const r = await this.getFor(principal, id, traceId)
     if (r.state === 'timed_out') throw new ApprovalError(409, 'BACKOFFICE.APPROVAL_EXPIRED', 'the approval window (2 business hours) has passed; the request timed out')
     if (r.state !== 'pending') throw new ApprovalError(409, 'BACKOFFICE.APPROVAL_NOT_PENDING', `approval is already ${r.state}`)
-    // initiator ≠ approver, regardless of scope — incl. platform:superadmin
-    if (r.initiator === principal.subject) throw new ApprovalError(409, 'BACKOFFICE.SELF_APPROVAL', 'the initiator cannot approve their own request (four-eyes)')
+    // initiator ≠ approver, regardless of scope — incl. platform:superadmin.
+    // Compared as IDENTITIES, not strings: a raw === let one human approve their own request by
+    // re-typing their subject with different case or padding, which is the cheapest possible way
+    // to defeat four-eyes. Every gated operation registered here inherits this check, so the
+    // normalisation has to live at the primitive rather than in the operations that remembered it.
+    if (normalisePrincipal(r.initiator) === normalisePrincipal(principal.subject)) {
+      throw new ApprovalError(409, 'BACKOFFICE.SELF_APPROVAL', 'the initiator cannot approve their own request (four-eyes)')
+    }
     if (!hasScope(principal.scopes, r.approver_required_scope)) {
       throw new ApprovalError(403, 'BACKOFFICE.SCOPE_DENIED', `approving requires ${r.approver_required_scope}`)
     }
@@ -170,7 +234,50 @@ export class ApprovalsService {
     if (!op) throw new ApprovalError(409, 'BACKOFFICE.OPERATION_UNREGISTERED', `${r.operation_type} has no registered executor — refusing to approve silently`)
     r.state = 'approved'
     r.approver = principal.subject
-    r.execution_result = await op.execute(r.operation_payload, { approver: principal.subject, approverPersona: principal.persona })
+    // Stamped from this service's own clock at the moment the window check above passed, so the
+    // row carries evidence the approval was in time rather than requiring a later reader to take
+    // this service's word for it.
+    r.approved_at = this.now().toISOString()
+    // Checked HERE, before the operation runs, and not left to migration 0042's CHECK.
+    //
+    // This method executes the gated operation and only then persists the approved state. That
+    // ordering predates this story, but 0042 gave the persisting UPDATE a NEW way to fail — a
+    // stamp after expires_at now violates a constraint — and a failure there lands after the
+    // money has already moved, with the row still `pending` and therefore still approvable. So
+    // the constraint would have turned a sub-millisecond race into a double execution.
+    //
+    // Refusing here means the DB constraint can never be the thing that fails on this path: it
+    // stays a backstop against some future caller, which is what a backstop is for.
+    if (new Date(r.approved_at).getTime() > new Date(r.expires_at).getTime()) {
+      throw new ApprovalError(
+        409, 'BACKOFFICE.APPROVAL_EXPIRED',
+        'the approval window (2 business hours) closed between reading this request and approving it'
+      )
+    }
+    // CLAIM BEFORE EXECUTE. Everything above is a check on a snapshot read at line 203; nothing
+    // between that read and here stops a second approver reaching the same point on the same
+    // `pending` row. This is the compare-and-swap that makes the gate hold: exactly one caller
+    // transitions pending -> approved, and only that caller runs the operation.
+    //
+    // Raised as FAIL 5 by the hard-stop review of PR #323. The ordering predates BILL-16, but
+    // migration 0042 made it load-bearing, and a four-eyes gate that executes twice under a race
+    // is not a gate.
+    const claimed = await this.store.claimForApproval(r.approval_request_id, r.approver, r.approved_at)
+    if (!claimed) {
+      throw new ApprovalError(
+        409, 'BACKOFFICE.APPROVAL_NOT_PENDING',
+        'this request was already settled by another approver while this approval was in flight'
+      )
+    }
+    r.execution_result = await op.execute(r.operation_payload, {
+      approver: principal.subject,
+      approverPersona: principal.persona,
+      // From the RECORD and the approving PRINCIPAL, not from the payload: these are the facts this
+      // service established, and they are what four-eyes evidence must be built from.
+      initiator: r.initiator,
+      approvalRequestId: r.approval_request_id,
+      approverIsSuperadmin: principal.scopes.includes('platform:superadmin')
+    })
     await this.store.update(r)
     await this.auditEvent('approval_approved', principal, r.approval_request_id, traceId)
     return r

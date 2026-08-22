@@ -173,6 +173,57 @@ export interface FinancialSystemPort {
     batch: FinancialJournalBatch,
     trace: TraceContext
   ): Promise<{ accepted: boolean; journal_batch_ref: string }>
+  /**
+   * BILL-16 — hand an APPROVED payable to the financial system (ADR 0007 D4).
+   *
+   * Not a push payment, and the distinction is the whole design. IG v5.0 §10.14–10.15 makes
+   * collection a scheme-operated DIRECT DEBIT PULL: the DDA is presented to the Nebras sponsoring
+   * bank on the 10th and collected by the 30th. So P9's execution role here is direct-debit mandate
+   * management plus matching the pulled debit to the approved payable — never initiating a transfer.
+   *
+   * The four-eyes AP approval upstream authorises HONOURING the debit; this call records that
+   * authority downstream. `approval_request_id` is carried so the financial system holds the same
+   * evidence OFBO does, and `idempotency_key` because a retried dispatch must not authorise twice.
+   */
+  dispatchPayableInstruction(
+    instruction: PayableDispatchInstruction,
+    trace: TraceContext
+  ): Promise<PayableDispatchResult>
+  /** BILL-16 — where an already-dispatched payable stands in the financial system. */
+  getPayableStatus(
+    dispatch_ref: string,
+    trace: TraceContext
+  ): Promise<{ payable_status: PayableDispatchStatus }>
+}
+
+/** Lifecycle of a dispatched payable. `rejected` is terminal; the others progress in order. */
+export type PayableDispatchStatus =
+  | 'dispatched' | 'mandate_active' | 'presented' | 'collected' | 'rejected'
+
+export interface PayableDispatchInstruction {
+  payable_id: string
+  period: string
+  /** The counterparty being paid — the Hub, or an underlying LFI. */
+  counterparty_id: string
+  counterparty_type: 'nebras' | 'underlying_lfi'
+  /** Integer minor units, per the binding money convention. */
+  amount_fils: number
+  currency: string
+  /** The four-eyes approval that authorised honouring the debit. */
+  approval_request_id: string
+  /** Provider tax invoice the payable was accepted against. */
+  document_reference: string
+  /** Net-settlement offset applied under IG §10.16, where the counterparty is also a TPP. */
+  netted_against_fils?: number
+  idempotency_key: string
+}
+
+export interface PayableDispatchResult {
+  accepted: boolean
+  dispatch_ref: string
+  payable_status: PayableDispatchStatus
+  /** True when the call matched an existing dispatch rather than creating one. */
+  replayed: boolean
 }
 
 /** P10 — the bank's existing STR (Suspicious Transaction Report) workflow (ADR 0022,

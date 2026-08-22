@@ -18,6 +18,39 @@ function fakeTransport(routes: Record<string, { status?: number; body?: unknown 
 }
 
 describe('P9 financial-system adapter (invoice EXECUTION transport only)', () => {
+  it('never echoes the vendor payable_status into the refusal message', async () => {
+    // This message is not just a message. payable-dispatch writes it into audit_high_sensitivity —
+    // INSERT-only, five-year retention, no deletion path — so anything quoted here lands there
+    // permanently, and it lands ahead of the service's own redaction rather than behind it.
+    //
+    // The offending value is synthetic and identifier-SHAPED on purpose: if the adapter ever quotes
+    // the field again, this fails on a value that looks exactly like the thing that must not escape.
+    const leak = 'AE070001234567890123456'
+    for (const [route, call] of [
+      ['/payables', (a: ReturnType<typeof createFinancialSystemAdapter>) =>
+        a.dispatchPayableInstruction(
+          {
+            idempotency_key: 'idem-1', payable_id: 'PAY-1', amount_fils: 2625, currency: 'AED',
+            approval_request_id: 'apr-0000-4000-8000-000000000001'
+          } as never,
+          trace
+        )],
+      ['/status', (a: ReturnType<typeof createFinancialSystemAdapter>) =>
+        a.getPayableStatus('fms-pay-1', trace)]
+    ] as const) {
+      const { fetchImpl } = fakeTransport({
+        [route]: { body: { accepted: true, dispatch_ref: 'fms-pay-1', payable_status: leak } }
+      })
+      const adapter = createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl })
+
+      await expect(call(adapter), route).rejects.toThrow(FinancialSystemError)
+      await call(adapter).catch((error: Error) => {
+        expect(error.message, route).not.toContain(leak)
+        expect(error.message, route).toMatch(/deliberately not echoed/i)
+      })
+    }
+  })
+
   it('registers a counterparty and returns its financial_system_ref', async () => {
     const { calls, fetchImpl } = fakeTransport({ '/counterparties': { body: { financial_system_ref: 'fms-org-001' } } })
     const adapter = createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 'tok', fetchImpl })

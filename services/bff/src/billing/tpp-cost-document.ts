@@ -12,7 +12,7 @@ import type { ItsmPort } from '@ofbo/ports'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { assertScope } from '../rbac.js'
-import type { Principal } from '../auth.js'
+import { normalisePrincipal, type Principal } from '../auth.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied } from '../errors.js'
@@ -128,11 +128,6 @@ const DOCUMENT_TYPES: readonly TppCostDocumentType[] = [
   'nebras_tax_invoice', 'nebras_settlement_statement', 'lfi_self_invoice',
   'credit_note', 'debit_note', 'manual_adjustment'
 ]
-
-/** Case- and padding-insensitive, so one human under two spellings cannot pass as two people. */
-function normalisePrincipal(value: string): string {
-  return value.trim().toLowerCase()
-}
 
 export class TppCostDocumentIngestService {
   private readonly now: () => Date
