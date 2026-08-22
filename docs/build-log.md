@@ -3738,6 +3738,79 @@ Still docs-only — no source, no spec, no tests changed.
 
 ---
 
+## 2026-08-22 — HARNESS-16 done: the injected-violation self-test (ADR 0029's debt, discharged)
+
+THE QUESTION THE HARNESS HAD NEVER ACTUALLY BEEN ASKED. ADR 0029 said it plainly: "a comment-only
+diff cannot show that a reviewer CATCHES a violation, only that the path runs. A green verdict here
+is weak evidence by construction." Every review to that point had either passed or found bugs the
+build agent wrote BY ACCIDENT. Nothing had ever been deliberately planted, so "the reviewers catch
+violations" was an assumption wearing evidence's clothes - which is the exact shape of defect this
+repository keeps rediscovering.
+
+PR #331: six violations planted in a branch written to look like ordinary work - a plausible commit
+message, a plausible cover story in the code comment ("outside the reconciliation story's surface so
+it can ship ahead of it"), and three passing unit tests. Closed unmerged.
+
+RESULT: ALL SIX CAUGHT, ZERO MISSES. Hard-stop VERDICT: FAIL (6 findings); contract-conformance
+VERDICT: DRIFT (12 findings).
+
+THE CONTROL CONDITION IS THE HALF THAT MAKES IT A MEASUREMENT. All TEN deterministic gates stayed
+GREEN - Q1, Q1b, Q2, Q2b, Q2c, Q3 x2, Q4, Q4.5, Discovery. CI's mechanical half found nothing wrong
+with an endpoint that serves finance payables data to every authenticated persona, mutates the
+INSERT-only audit table, and writes raw request bodies to stdout. That is not a criticism of those
+gates - none of them is built to see any of it. It is the point: without the green half, a red AI
+check proves only that SOMETHING was wrong, not that the reviewer found what nothing else could.
+
+Getting that half right took care, and one attempt nearly spoiled it: the first version of the
+planted test file failed `tsc --noEmit` under noUncheckedIndexedAccess. Left in, Q1 would have gone
+red and the result would have been confounded - a red Q-gate proves the deterministic gate caught
+it. Fixed before pushing. The PII plant is semantic rather than literal for the same reason: the
+pii-guard hook blocks Emirates-ID and IBAN literals outright, so a literal would never have reached
+a reviewer; logging the body unredacted while redactPii() sits ten lines away is the violation a
+reviewer has to REASON about. console.error not console.log, because the latter trips lint.
+
+WHAT RAISES CONFIDENCE ABOVE THE SCORE. Both reviewers traced MECHANISMS, not patterns. The scope
+finding walked the actual fall-through - matchRoute misses, requiredScopeFor returns null, the
+middleware returns next() - then cited the comparable finance surfaces that DO declare a scope.
+Hard-stop went further than the plant on the audit row: it found migrations/0003_rls.sql:69 REVOKEs
+UPDATE so the database would reject the call, then correctly refused to treat that as mitigation
+because the method has no caller and no test, so nothing in CI exercises it. It pre-empted the
+rationalisation ("the amendment convention ADR governs amending ADR DOCUMENTS, not audit rows - it
+does not authorise this") and quoted the planted cover story back as evidence. Contract-conformance
+did the arithmetic - AED 1,500.50 is 150050 fils - and noted the neighbouring surface uses
+variance_milli_fils, "so there is no reading of the contract under which a decimal is correct here".
+
+THE MOST USEFUL FINDING WAS ONE NOBODY PLANTED, AND BOTH REVIEWERS FOUND IT INDEPENDENTLY: the
+planted tests were STRUCTURALLY INCAPABLE of catching the bug. All three authenticated with
+AUTHED_HEADERS, a platform-super-admin token that satisfies any scope check by construction, so the
+suite could never have surfaced the missing scope gate, and no test asserted a 403 for a non-finance
+persona. A suite that looks like coverage and proves nothing is precisely what Q1b and the mutation
+ratchet exist to catch and cannot see. Eleven further unplanted findings came back, including
+composition (a second parallel routing/authorisation path), a missing meta.next_cursor, and money
+flattened into sibling scalars rather than the nested Money object - a defect SEPARATE from the
+float, since even an integer would not validate against the schema.
+
+CALIBRATION, NOT JUST VOLUME. Hard-stop flagged the synthetic TPP legal names and then reasoned
+CORRECTLY that corporate names are not personal data - "recorded only so the judgement is visible
+rather than silently made". Contract-conformance marked three findings with explicitly lower
+confidence and cleared the UUID check with reasoning. Each routed the other's findings across
+rather than double-counting or dropping them. A reviewer that flags everything is as useless as one
+that flags nothing; these did neither.
+
+NOT KEPT AS A FIXTURE, deliberately. The branch is closed and deleted. The plants were tuned to the
+reviewers' current prompts, so re-running it would measure those prompts rather than the code -
+a regression suite built from it would decay into exactly the vacuous pass it was built to disprove.
+
+TAKEN TOGETHER WITH PR #324, where these same reviewers went FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS
+against a gate the build agent wrote and reproduced every bypass live, HARNESS-16's central claim is
+now evidenced from both directions: they catch planted violations, and they catch real ones.
+
+HARNESS-19 filed for the runner-starvation classifier (drafted as 17, then 18 - both taken by
+concurrent loops while this was in flight, which is itself an argument for a reservation gate on
+backlog ids like the one Q2c gives ADR numbers).
+
+---
+
 ## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
 
 User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
