@@ -20,6 +20,8 @@ because an accepted ADR edited in place should say so on its face.
 | 2026-08-16 | Parity reworked from a per-engine flag to a harness rule over the whole review control plane; `requires_workflow_parity` removed. A missing credential now fails the job while structural non-runs stay green. |
 | 2026-08-17 | Engine status table corrected — `claude` had been marked "proven in CI" when that meant only "resolves and preflights", and `codex` had been marked "never run end to end" when it had run and failed. The Codex bubblewrap finding was recorded here for the first time, and a verification record added. |
 | 2026-08-22 | The injected-violation self-test debt below is **discharged**. It had read "still owed"; PR #331 planted six violations and both reviewers caught all six with every deterministic gate green. The paragraph now records the result instead of the obligation, and a scorecard is added to the verification record. |
+| 2026-08-22 | **The trigger was narrowed** (HARNESS-18) to `opened` + `ready_for_review` + `reopened`, and then corrected (HARNESS-20). The Cost bullet below described `synchronize` firing on every push as current behaviour and offered the narrowing as a hypothetical; that is now what ships, and the bullet has been rewritten in place to say so. The cost it named — "the check no longer reflecting current HEAD" — was real and was NOT avoided: HARNESS-18's rationale claimed the narrowing was "a cost change, not a coverage change", which contradicted this ADR. HARNESS-20 accepts the trade instead of denying it and makes it legible, by naming the reviewed SHA in every review comment. |
+| 2026-08-22 | **A `labeled` trigger was added**, narrowed on the `config` job to the `ai-review` label. It is the only way to re-review the CURRENT head: there is no `workflow_dispatch` (no merge base, nowhere to post) and a Checks-tab re-run replays the ORIGINAL head SHA. Recorded because it widens who can start a credentialed run — a *triage*-permission actor can now re-fire a review against a head someone with write access authored, where previously every trigger required write. The control-plane parity preflight still blocks any head that edits the review control plane. |
 
 Whether a factual correction to an accepted ADR should instead be a superseding ADR is a
 **governance question for a control-plane owner**, not one the build agent should settle. It was
@@ -256,7 +258,7 @@ already red that case (`.github/workflows/ai-review.yml:384` -> `:459`, "DID NOT
 not a pass"), and on PR #331 both reviewers demonstrably produced a file — full review bodies, real
 verdicts, no banner. But that was an observation, not a designed check, and the two are not the same
 thing: proving the banner fires needs a deliberate silent non-run injected on purpose. That is a
-different experiment from planting violations, and it is carried into HARNESS-19 rather than counted
+different experiment from planting violations, and it is carried into HARNESS-20 rather than counted
 here. Marking it satisfied would be precisely the unstated assumption this ADR exists to refuse.
 
 Also observed during verification, and worth recording because the design's central claim was
@@ -355,11 +357,15 @@ same reviewer found nothing", not as an approval.
   cannot write to, and are visible on the PR rather than only in the agent's own build log.
 - **Cost.** Opus 5 at $5/$25 per MTok, roughly 100–200k input and 5–10k output per reviewer,
   is about **$0.50–$1.25 per reviewer** — **~$1–$2.50 per PR** for both. Billed to the Claude
-  subscription behind `CLAUDE_CODE_OAUTH_TOKEN`. It runs on every push to a PR
-  (`synchronize`), so a story with many pushes multiplies that; `concurrency.cancel-in-progress`
-  limits the waste from rapid successive pushes. If this proves expensive in practice, the
-  cheaper knob is narrowing the trigger to `opened` + `ready_for_review`, at the cost of the
-  check no longer reflecting current HEAD.
+  subscription behind `CLAUDE_CODE_OAUTH_TOKEN`. **Amended 2026-08-22 (HARNESS-18/19):** this
+  originally ran on every push (`synchronize`) and multiplied per push. It proved expensive
+  exactly as anticipated — 24 runs in one day, ~12 runner-minutes each, plus the tokens — so
+  the knob named here was taken: the trigger is now `opened` + `reopened` + `ready_for_review`
+  + `labeled`, with **no `synchronize`** — a push to an open PR starts nothing at all.
+  **The cost named here is real and was accepted, not avoided:** the verdict reflects the
+  head at open (or at ready-for-review), not current HEAD. That is made legible rather than
+  left implicit — every review comment names the SHA it reviewed and says the verdict is stale
+  if the PR has moved on. The `ai-review` label re-reviews the current head.
 - **A path-filtered PR shows no check at all**, rather than a skipped one. `paths-ignore`
   omits docs-only and discovery-only PRs. Acceptable for an advisory check, but stated here
   rather than left to be discovered. Note the consequence that a PR touching *only*

@@ -4299,3 +4299,112 @@ before merge, once runners are available again.
 The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
 eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
 and they obscure the real signal.
+
+## 2026-08-22 — HARNESS-17 + HARNESS-18 merged; billing restored; HG-0001 waiver recorded
+
+The Actions allowance was topped up at ~06:50Z, ending a ~3-day repo-wide CI outage (19 Aug
+10:0xZ → 22 Aug 06:5xZ) during which every job was rejected at dispatch with `runner_id: 0`, no
+runner, no logs. Confirmed restored by re-running the rejected runs rather than by pushing empty
+commits: both got real runners immediately and executed normally.
+
+Both PRs verified green on their actual merge heads — all nine pinned required contexts plus
+Discovery — and merged:
+
+| PR | Story | Merge commit |
+|---|---|---|
+| #328 | HARNESS-17 — portal E2E Playwright install | `026f8f0` |
+| #329 | HARNESS-18 — mutation + ai-review trigger breadth | `53d439e` |
+
+`#329` needed a real merge of `main` first: both branches append to this append-only journal, so
+`docs/build-log.md` conflicted. Resolved by keeping **both** blocks in date order (HARNESS-17
+08-19, then HARNESS-18 08-21) per the journal's chronology rule — nothing dropped or rewritten.
+`docs/backlog.yaml` auto-merged; both entries verified present. Re-verified on the merged tree:
+`scripts/test` 49/49 (the two guard suites now cross-check each other's workflow edits),
+discovery 40/40, docs and waist gates clean.
+
+**The saving is already observable.** The `synchronize` push of the merge commit ran `ci` only —
+`mutation` and `ai-review` did not fire, which before HARNESS-18 would have cost ~25 and ~12
+runner-minutes respectively for no new information.
+
+Also fixed en route: the main checkout and the worktree were both sitting on the same branch (a
+`checkout -B` collision from this session), which made the main checkout's tree read as "uncommitted
+changes" that were in fact the exact inverse of the branch's own commits. Committing that would have
+reverted the work. Main checkout is now on `main`; the worktree owns the feature branch.
+
+**HG-0001 deviation.** These merges were performed by the agent, on the harness owner's explicit
+in-session authorisation, with branch protection not yet enabled. HG-0001 forbids agent self-merge
+and is unchanged. The deviation is recorded at
+`docs/governance/waivers/2026-08-22-01-HG-0001-agent-performed-merge.md` and linked from HG-0001,
+because the release evidence bundle seals commit provenance as Art. 12/17 attribution — an
+unexplained agent merge in that bundle is a finding, a recorded one is a decision. The waiver is
+scoped to these two merges and argues for prioritising the branch-protection runbook, which would
+have refused them outright.
+
+## 2026-08-22 — HARNESS-20: close the mutation-gate coverage hole HARNESS-18 opened
+
+The advisory hard-stop reviewer found a real defect in HARNESS-18 — four minutes after PR #329
+had already been merged. Worth recording both halves of that: the control this harness exists to
+run did its job, and merging before it finished is what let the defect land.
+
+**The hole.** HARNESS-18 narrowed `mutation.yml` to `opened`/`ready_for_review`/`reopened` and
+claimed "a cost change, not a coverage change". False, and ADR 0029 had already named the trade
+before the change was made:
+
+1. PR opened **non-draft**, diff touches no security-core path → `opened` fires, `paths:` does
+   not match, no run. Correct.
+2. A later push adds `approvals/service.ts` or `high-class-audit.ts` → `synchronize` was gone,
+   so **nothing fired**.
+3. `ready_for_review` cannot fire — the PR was never a draft.
+4. The PR merges with its four-eyes / high-class-audit changes mutation-tested **zero times**,
+   caught only by the weekly schedule, on the Monday after it is already on `main`.
+
+The whole-diff `paths:` semantics that caused HARNESS-18's cost problem were also what made that
+case safe. Removing `synchronize` removed the cost and the safety together.
+
+**The fix separates two questions `paths:` conflates.** `paths:` answers "is this *branch*
+relevant?" — GitHub evaluates it against the cumulative PR diff, so a branch that never touches
+the security core still starts nothing and costs zero. A new ~1-minute `changes` classifier job
+answers "did *this push* touch it?" against the pushed range `before..after`, which `paths:`
+cannot express. The ~25-minute job is gated on it.
+
+So a docs-only push to a branch that touched `auth.ts` last week costs ~1 minute; a push that
+edits `auth.ts` runs the gate; and case 2 above now runs the gate. Against the 18–19 Aug window
+that motivated HARNESS-18: ~30 × 25 min becomes ~30 × 1 min plus the few that genuinely qualify.
+**The saving is kept, not reversed.**
+
+**The classifier fails open by construction.** Force-pushed base, missing payload range,
+un-computable diff — all run the gate rather than guess. A cost control that skips a security
+gate on uncertainty is not a cost control. It is a pure decision function in
+`scripts/mutation-scope-check.mjs` rather than inline workflow shell, precisely so all three
+fail-open branches are reachable from tests instead of only from a live CI event.
+
+**Also from the same review.** `ai-review` comments now name the SHA they reviewed and say the
+verdict is stale if the PR has moved on. Dropping `synchronize` there remains right — a
+classifier cannot make a whole-diff model call cheaper — but the accepted cost was a verdict that
+lags the head, and a sticky ✅ from head-at-open otherwise reads as current over every later push.
+Costs no extra job and no extra runner minute. ADR 0029 was amended in place using its own
+existing dated-table convention: its Cost bullet described `synchronize` as current and offered
+the narrowing as a hypothetical, and now states what ships and that the predicted cost was
+**accepted, not avoided**. The `labeled` trigger is recorded there too, including that it lets a
+triage-permission actor re-fire a credentialed run where every prior trigger required write. The
+"the build agent opens its PRs as drafts" premise is corrected rather than repeated —
+`next-story/SKILL.md` never says it, PRs here are opened both ways, and the conclusion (do not
+exclude drafts) never needed it.
+
+**Guards, proven non-hollow.** `scripts/test/mutation-scope-check.test.mjs` (8 tests) covers every
+decision branch, each fail-open path individually, and asserts `SECURITY_CORE` cannot drift from
+the workflow's `paths:` list. `ci-cost-guard.test.mjs` is restructured — its old assertion that
+*both* workflows exclude `synchronize` is now exactly backwards for `mutation.yml`, so the two are
+asserted separately, because they control cost by different means. Seven mutations checked, each
+caught by exactly its own assertion, tree restored clean: reintroduce the narrow trigger, ungate
+the job, drift the file list, drop `REVIEWED_SHA`, add `synchronize` to ai-review, make the
+classifier fail **closed**, and make it skip on a failed diff.
+
+A process note worth keeping, because it cost real rework: the first mutation-check run used
+`git checkout --` to restore files whose HARNESS-20 edits were still **uncommitted**, which
+reverted them to `HEAD` and destroyed the work rather than undoing the mutation. Commit first,
+then mutate. The second run was clean.
+
+Evidence: `scripts/test` 58/58, discovery harness 40/40, `doc-link-check` 61 docs / 30 ADRs,
+`discovery-link-check` OK, both workflows parse and their resolved triggers were inspected, and
+the classifier was exercised end-to-end against real commit ranges in this repository.

@@ -76,3 +76,14 @@ Remaining bank-config step (enforcement of record, outside the agent's write sco
 - Ends autonomous merge-to-main; the loop becomes "propose + verify," humans dispose.
 - Requires a named human reviewer group and a change-record convention (HG-0003).
 - Must be enforced *outside* the agent's write scope (HG-0002), or the agent could relax it.
+
+## Recorded deviations
+
+Branch protection is not yet enabled (see Decision, and the activation runbook), so this control
+is currently enforced by convention rather than by GitHub. Every departure from it is recorded in
+`docs/governance/waivers/` — an unexplained agent-performed merge in the release evidence bundle
+is a finding; a recorded one is a decision.
+
+| Waiver | Date | What |
+|---|---|---|
+| [2026-08-22-01](waivers/2026-08-22-01-HG-0001-agent-performed-merge.md) | 2026-08-22 | Agent performed the merge of PRs #328 / #329 (harness CI-cost changes), authorised in-session by the harness owner |
