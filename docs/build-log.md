@@ -3889,7 +3889,7 @@ renumbering open; the category closure leaked scored letters. A gate this small 
 adversarial passes to hold, which is the strongest available argument that HARNESS-16's reviewers are
 doing work no deterministic gate was doing.
 
-Evidence: 18 guard tests (54 across scripts/test) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+Evidence: 18 guard tests (59 across scripts/test after HARNESS-17 merged in its own five) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
 (accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
 EXISTING amendment table does not license silent editing forever after — the defect that would
 quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
