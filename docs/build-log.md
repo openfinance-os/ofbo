@@ -3807,3 +3807,414 @@ bank still has no evidence an STR was ever filed. ADR 0011 remains open.
 Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
 ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
 Still docs-only — no source, no spec, no tests changed.
+
+---
+
+## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
+
+User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
+question rather than assuming an answer after the hard-stop AI reviewer raised it twice on
+PR #318, at explicitly stated low-to-moderate confidence, and declined to rule on it — correctly,
+since it is a governance call for a control-plane owner rather than a reviewer.
+
+THE INVESTIGATION CHANGED THE QUESTION. The practice already existed and was undocumented:
+ADR 0007 was accepted on 2026-08-17 and substantively corrected THE SAME DAY — commit 0f0a79a,
+"correct VAT, query-window, and collection mechanics", 65 insertions and 22 deletions against an
+accepted decision record — by the BILL-11 work stream, with nothing on the document saying so.
+Only `git log` knew. So the choice was never whether to start allowing in-place amendment; it was
+keep doing it silently, stop entirely, or do it with a record. ADR 0029 was not the first case,
+only the first FLAGGED case, and the only one carrying an amendment table.
+
+Also established while checking: there is no written ADR process anywhere (no README in
+docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
+(ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
+for the case at hand. 29 ADRs before this PR: 23 Accepted, 5 Proposed, 1 Superseded (30 / 24 / 5 / 1
+with ADR 0031 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
+— a count that did not even sum to 29, and it is worth recording WHY it was wrong: it was measured
+with the FIRST draft of the classifier, whose status regex silently missed the `- **Status:**` bold
+form. The gate's own bug undercounted the population the gate applies to. Re-measured with the
+fixed exports over the real corpus, enumerated rather than totalled.
+
+THE RULE. Statement of fact changed (what was built, measured, or proved) -> edit in place and
+add a dated row to an "Amendments after acceptance" table. DECISION changed (option chosen, or
+its scope) -> supersede with a new ADR, the 0012 -> 0016 route. Proposed ADRs are exempt: the
+rule attaches at acceptance, the point at which someone might be building against the document.
+
+ENFORCED, NOT MERELY WRITTEN. scripts/adr-amendment-check.mjs fails a PR that modifies an ADR
+whose BASE-BRANCH status is Accepted unless the diff adds a dated amendment row or flips the
+status to Superseded. This repo's own history is the argument: an unenforced convention is "a
+local convention wearing a gate's clothes" (HARNESS-09), and ADR 0007 is proof this particular
+one would not have held. Discoverability is mechanical rather than documentary — nobody reads a
+process doc before editing a file, so the failure message states the rule at the one moment
+somebody wants it.
+
+Placement follows HARNESS-07 doctrine: a separately guarded step in the EXISTING q2c job, not a
+new job. Q2c already fetches the base ref this check needs, and adding a check-run name would
+strand branch-protection rules pinned to the current ones. Guarded on `!cancelled()` so an
+earlier step's failure cannot skip it — a skipped gate looks exactly like a passing one.
+
+DELIBERATE COST, recorded in the ADR: a typo fix in an accepted ADR also costs a row. The check
+cannot separate substantive from cosmetic without making a judgement call in CI, and a gate that
+guesses is worse than one that is slightly heavy. If it proves noisy the proportionate relaxation
+is to require a row only when the diff REMOVES lines, and that change must itself be an amendment
+to ADR 0031 recorded in its own table.
+
+ADR 0007 BACKFILLED in the same change — the one known case where document and history disagree
+with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
+including a row recording that the table was added retrospectively.
+
+THE HARNESS EARNED ITS KEEP ON THIS PR, TWICE, AGAINST A GATE I WROTE. HARNESS-16's advisory
+hard-stop reviewer returned VERDICT: FAIL (7 findings) on the first draft of this check and
+REPRODUCED three live bypasses rather than asserting them. Round two returned FAIL (3) and
+reproduced two more — both the same root cause: the rename branch tested `isAdrPath` on the
+DESTINATION path, so renaming an accepted ADR out of the matched shape while rewriting it walked
+past the gate entirely (`0007-payables.md` -> `adr-0007-payables.md`, exit 0, "nothing to check"),
+as did moving it out of `docs/adrs/` (a bare `D` under the old pathspec, read as the documented
+deletion carve-out). Fixed by scoping on the ORIGIN path and dropping the pathspec: what puts a
+change in scope is that the thing being edited WAS an accepted ADR on base — where the author
+moves it to is exactly the freedom the bypass exploited.
+
+Two findings were mine to own, not the reviewer's to catch. A commit claimed a rename fix and two
+tests and shipped NEITHER: a live bypass probe ran `git add -A && git commit` (sweeping
+uncommitted work) then `git reset --hard HEAD~1` (discarding it), and the commit message carried
+the tell in its own test count. Both reviewers caught the empty commit. Process fix adopted and
+held since: COMMIT FIRST, THEN PROBE. Separately the reviewer flagged, out of scope, a FALSE-RED
+I had introduced while fixing finding 2 — `hasNewAmendmentRow` keyed its row set on the ISO date
+alone, so a second genuine amendment on a day the ADR had already been amended read as "already
+there". ADR 0007 carries two rows dated 2026-08-17, so it was days from biting. A false red on
+compliant work is worse than most bypasses: a bypass lets one bad change through, a false red
+blocks a good one and teaches people the gate is noise, which is how a control stops being read
+at all. Now compared on whole normalised rows.
+
+ROUND THREE: VERDICT: FAIL (4 findings), all four reproduced, three of them code defects I had
+introduced while fixing rounds one and two. This is the entry worth reading twice, because the
+pattern is that EVERY fix opened its own hole.
+
+(1) Route 1 was satisfied by EDITING an existing amendment row rather than adding one. Comparing
+whole rows had closed a false-RED (a same-day second amendment) and opened its exact mirror: an
+edited row is absent from the base set, so it reads as "new". Appending ONE PERIOD to an old row
+licensed an arbitrary rewrite - and the reviewer's reproduction changed the DECISION SCOPE, the
+one case ADR 0031 routes to supersession rather than to a row. The gate green-lit the case the
+convention most exists to catch. Neither end of that trade is safe alone; membership is now judged
+in BOTH directions - a new row must appear AND every base row must survive unmodified.
+
+(2) The D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
+completely. Same evasion as renaming while rewriting, which this script already refused to honour;
+the number is a label, not the record. Leftover deletions and additions now pair across numbers,
+deterministically sorted. Accepted cost, stated: a PR that genuinely deletes one ADR and adds an
+unrelated one will now be flagged. Checked before accepting it - 0001..0030 with no gaps, and NO
+ADR HAS EVER BEEN DELETED in this repo's history, so the false-red is hypothetical while the
+bypass was demonstrated. A lone deletion with nothing to pair against stays exempt.
+
+(3) parseNameStatus enumerated M/R/C/D/A and silently dropped everything else, so a git TYPECHANGE
+(T - replacing an accepted ADR with a symlink) reported "nothing to check". Closed as a CATEGORY
+rather than a letter: any status git invents that touches an ADR path is treated as a
+modification. The reviewer rated this exotic and was unsure it was worth closing; closing the
+class rather than the instance is what made it worth doing once.
+
+(4) NOT a code defect, and the most important of the four. The deletion carve-out was justified in
+ADR 0031 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
+by a current-state doc". That is FALSE, and I verified it independently rather than taking the
+finding on trust: doc-link-check resolves FILE-PATH references, and there are ZERO
+docs/adrs/NNNN-*.md path references anywhere in the set it scans. ADRs are cited by NUMBER. Every
+real path reference lives in docs/backlog.yaml, docs/research/, docs/reviews/, mcp-gateway, and
+ai-review.yml - all outside the scanned set. So deleting an accepted ADR is green on both gates
+and silent, which is precisely the outcome the ADR claimed was prevented. A decision record
+asserting something its own history does not support is the exact failure mode ADR 0031 exists to
+stop, and it was doing it in the paragraph justifying an exemption. Corrected in place; whether
+deletion should require a record is now an OPEN CONTROL-PLANE QUESTION for the ADR's owner, not
+something this script decides quietly.
+
+TWO TEST ASSERTIONS WERE INVERTED, AND THE DISTINCTION MATTERS. Both had encoded a bypass as an
+expectation ("an unrelated D and A ... both exempt"; "lone A and D exempt"). They were changed to
+flag MORE, not less - strictly stronger, which is the opposite of the reward-hacking move the
+tripwire and Q1b exist to block. Recorded explicitly because a test edit accompanying a green run
+should always have to justify its direction.
+
+ROUND FOUR: both reviewers PASS (hard-stop VERDICT: PASS, contract-conformance VERDICT: CONFORMANT)
+and all ten deterministic gates green. Three non-blocking items were still worth fixing, and one of
+them matters more than its size.
+
+THE COMMENT WAS LYING ABOUT THE CODE, IN THE FILE THAT EXISTS TO STOP EXACTLY THAT. Round 3 closed
+the status allow-list "as a CATEGORY, not a letter" - and the guard shipped as `!/^([MRCDA]\d*)$/`,
+which excluded SCORED letters too. `M100` (git's break-rewrite form, emitted under -B) matched the
+exclusion, fell past every specific branch and parsed to []. The reviewer reproduced it, then went
+further and tried to reach it from real git: plain --name-status prints an unscored `M`, and
+diff.breakRewrites is unset by default, so it is a latent gap rather than a live bypass. That is why
+it survived two rounds. But the comment asserted a closure the code did not deliver - a document
+asserting what its history does not support, which is ADR 0031's entire thesis, occurring inside
+ADR 0031's own enforcement script. Fixed by listing the forms the specific branches actually handle
+(`M\d*|[RC]\d*|D|A`) and accepting a scored `M` as a modification; pinned by a regression assertion
+so the claim and the code cannot drift apart again.
+
+Also fixed: the q2c step label still read "ADR amendment record (ADR 0030)" after the 0030 -> 0031
+renumber, so the gate's user-visible name pointed at what is now a DIFFERENT ADR on main
+(0030-standards-baseline-registry). Caught by contract-conformance and hard-stop independently. And
+the test fixture stopped reusing `docs/adrs/0030-new.md` as a synthetic path, since that number is
+now a real record. ADR_BASE_REF added to the recorded KNOWN LIMITS: a caller setting it to HEAD gets
+an empty diff and a green gate - not defended against, because the workflow does not set it, so
+setting it would be a visible line in the diff, the same posture as the route-2 status-line limit.
+
+FOUR ROUNDS, AND THE PATTERN IS THE FINDING. FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS. Every fix opened
+its own hole: whole-row comparison closed a false-RED and opened a false-GREEN; the rename fix left
+renumbering open; the category closure leaked scored letters. A gate this small needed four
+adversarial passes to hold, which is the strongest available argument that HARNESS-16's reviewers are
+doing work no deterministic gate was doing.
+
+Evidence: 18 guard tests (59 across scripts/test after HARNESS-17 merged in its own five) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+(accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
+EXISTING amendment table does not license silent editing forever after — the defect that would
+quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
+
+---
+
+## 2026-08-18 — ADR 0031 addendum: the review harness caught a bypass in the gate, and a false fix
+
+Two corrections to the entry above, both found by the AI reviewers on PR #324 and both worth
+recording because of what they say about the harness rather than about the gate.
+
+1. RENAME BYPASS IN THE GATE. hard-stop found that `modifiedAdrs` filtered `git diff
+   --name-status` on status `M` exactly, so renaming an accepted ADR while editing it — git
+   reports `R100`/`R087`, never `M` — walked straight past the check. The cheapest possible way
+   around the rule the gate exists to enforce, in the PR that adds the gate. It did not infer
+   this: it REPRODUCED the bypass in a scratch repository and confirmed the gate reports "no
+   accepted ADR modified" and exits 0. Fixed by `parseNameStatus`, which handles `R*` and `C*`
+   and reads base text from the OLD path.
+
+2. A FIX THAT WAS NOT IN THE BRANCH. The first attempt at (1), commit 2e1eb40, claimed a code
+   change and two tests and shipped neither — its stat was ADR prose only. Cause: the "live
+   bypass test" ran `git add -A && git commit` to stage a throwaway probe, sweeping up the
+   still-uncommitted fix and tests, then `git reset --hard HEAD~1` discarded the lot. The ADR
+   prose survived only because it was written after the reset, which is exactly why the branch
+   ended up asserting a behaviour it did not have. Both reviewers caught the discrepancy on the
+   next run — contract-conformance by diffing HEAD against the commit the message described,
+   hard-stop by noticing the stat and the unchanged test count.
+
+   The commit message carried the tell: "11 in this file, 45 across scripts/test". 11 + 36 = 47.
+   The arithmetic did not add up and was not checked.
+
+   Process fix: COMMIT FIRST, THEN PROBE. A destructive probe must never be able to take
+   uncommitted work with it. Applied here — the fix was committed before the rename probe ran,
+   and verified present afterwards.
+
+This is the strongest evidence to date for HARNESS-16, and it is not the green verdicts. The
+harness caught a security-relevant bypass in a merge gate, then caught a false claim that the
+bypass had been fixed. Both times a human reading the diff would have had to diff a commit
+message against its own contents to notice.
+
+## 2026-08-19 — HARNESS-17: the portal E2E install stops eating the job (PR #328)
+
+The Q3 portal E2E job failed four times on 2026-08-19, every time on
+`playwright install --with-deps chromium` and never on anything in this repo. Three of those runs
+consumed the full 20-minute job cap and reported `cancelled`, which reads as neither pass nor fail —
+the suite never started, so the gate produced no evidence either way.
+
+MEASURED FIRST, AND THE MEASUREMENT KILLED THE OBVIOUS FIX. On the last healthy run (job
+95996474055) the combined step cost 103s, split:
+
+    apt, via --with-deps    07:50:15 -> 07:51:47    ~92s   (89%)
+    browser downloads       07:51:47 -> 07:51:58    ~11s   (11%)
+
+Caching the browsers — what I proposed to the user before looking — would have saved about eleven
+seconds and fixed nothing. apt is both the cost and the hang risk. Recorded because the wrong answer
+was already on the table when the numbers arrived.
+
+WHAT apt WAS ACTUALLY INSTALLING, from that same run's output: fonts-freefont-ttf,
+fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic, xfonts-*. Nothing else
+was unpacked — Chromium's own libraries are already on the ubuntu-latest image, so the browser
+launches with or without the step. The last failure stalled at
+`Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages` and emitted
+nothing for five and a half minutes.
+
+Four changes:
+
+1. Cache `~/.cache/ms-playwright`, keyed on the RESOLVED Playwright version rather than a lockfile
+   hash — an unrelated dependency bump must not evict 290 MiB of browsers.
+2. Split apt from the download into separate, individually capped steps (4m / 6m) so a slow mirror
+   fails fast and names itself instead of silently consuming the job budget.
+3. The apt step is now `continue-on-error: true`. It installs fonts an English-language portal suite
+   does not exercise; blocking every PR on an external Ubuntu mirror to get them is the worse trade.
+   *(SUPERSEDED — see "DECIDED" below. The step was made non-fatal first; once CI proved
+   the suite runs with no packages installed at all, it was removed outright and q3-e2e now
+   carries no `continue-on-error`.)*
+4. The version resolution refuses an empty value. `echo "v=$(cmd)"` exits 0 even when cmd fails, and
+   the pipe through `tr` swallows the status, so a `--filter` miss would have produced the key
+   `ms-playwright-Linux-` shared by every Playwright version — one version's browsers served to
+   another, with no signal at all.
+
+THE PART THAT NEEDED THE MOST CARE was (3) — while it still existed — because "make the failing step non-fatal" is the shape
+of reward-hacking even when it is correct here. So the guard pins the ASYMMETRY, not the change:
+`continue-on-error` must appear EXACTLY ONCE in q3-e2e, and in the fonts step. The browser download,
+the services, the portal build and the suite itself must all still be able to red the job.
+
+Counting across the whole job rather than checking named steps is load-bearing, and the first draft
+got it wrong. That draft guarded the suite via `if (suite) { ... }` keyed on its literal
+`- run: pnpm --filter @ofbo/portal e2e` line — which goes vacuous the moment someone gives that step
+a `name:`. Proved it rather than asserting it: rename the suite step AND mark it continue-on-error,
+so a failing E2E test would no longer red CI, and the branch form reports green while the count form
+catches it. Same defect class this session kept finding elsewhere — a control claimed more broadly
+than it was built — this time in the guard written to prevent it.
+
+Evidence: harness suite 82/82. Every new assertion mutation-checked and caught by its own guard
+alone — remove `continue-on-error` from the fonts step; add it to the browser download; delete the
+version-emptiness check — with `ci.yml` restored byte-for-byte after each. ci.yml parses and the
+q3-e2e step table shows one `continue-on-error`, caps 4m/6m, job cap unchanged at 20m.
+
+Not settled here, and left for a human: dropping `--with-deps` (and this step) entirely is the
+larger lever — 89% of the install — but it is a behaviour change on CI shared by every PR.
+
+**CI evidence, and it is stronger than a clean run would have been.** On the verifying run
+([32237329042](https://github.com/openfinance-os/ofbo/actions/runs/32237329042)) the apt mirror was
+**still hanging** — the log carries
+`##[error]The action 'install Playwright system deps' has timed out after 4 minutes` — so the fonts
+step was killed at its cap, `continue-on-error` absorbed it, and the browser download, the services,
+the portal build and the E2E suite all ran and passed. That is the fifth mirror failure today, and
+under the previous shape it would have been the fifth `cancelled` in a row. All ten gating jobs
+green; q3-e2e finished in 410s against its 1200s cap, and the cache saved
+(`Cache saved with key: ms-playwright-Linux-1.60.0`), which also settles the unverified
+`actions/cache@v4` major.
+
+One caveat worth naming rather than leaving for someone to trip over: the jobs API reports that step
+as `conclusion: success`, because `continue-on-error` rewrites a failed step's conclusion. The
+timeout is in the log and raised as a run annotation, but a reader scanning the step table sees
+green. The step's cost while the mirror is down is four wasted minutes per run — which sharpens, but
+does not decide, the question left to a human above.
+
+**Warm-cache path proven on the next run** ([32238395327](https://github.com/openfinance-os/ofbo/actions/runs/32238395327)),
+which was the one thing the cold run could not show: `Cache hit for: ms-playwright-Linux-1.60.0` →
+`Cache restored from key: ms-playwright-Linux-1.60.0`, 259 MB in 7s, and `install Playwright
+Chromium` fell from 12s to **1s** because the browser was already present. That also settles the
+`actions/cache@v4` major, which the build session could not verify. On this run the mirror recovered
+— the fonts step completed in 145s and the whole 967-line log carries zero `##[error]` lines, so it
+succeeded rather than failing quietly. 10/10 gates green again, q3-e2e 331s.
+
+So both paths are now exercised: the cold run proved the fix holds when the mirror is down, and the
+warm run proved the cache restores. The measured cache saving is the ~11s predicted — the fix that
+mattered was making the fonts step unable to take the job with it.
+
+**DECIDED: the apt step is removed entirely** (handed back to me with "you decide", so the call and
+its evidence are recorded here rather than left open).
+
+The run above is the experiment that settles it. On 32237329042 the fonts step hung inside
+`apt-get update` and was killed at its cap having logged **zero `Setting up` lines** — not one
+package was installed — and the portal E2E suite then ran and passed in 25s. The suite has therefore
+already been observed working with no fonts present. Supporting checks, all negative: no screenshot
+or snapshot assertion anywhere in `apps/portal` (no `toHaveScreenshot`/`toMatchSnapshot`), no Arabic
+or RTL content, no `font-family` or `next/font` declaration, and the spec's only non-ASCII characters
+are `§ — →`, all in the base DejaVu set on the runner image.
+
+Against that: the step failed the job four times in one day on an external Ubuntu mirror, and on the
+two runs after that cost 253s (killed at the cap) and 145s, versus a ~92s healthy cost and an ~11s
+browser download. It is 89% of the install and buys nothing this suite uses.
+
+The consequence I care about most is that **`continue-on-error` is now gone from q3-e2e entirely** —
+which is what both advisory reviewers singled out as the thing a human should look at. There is no
+longer any step here whose failure is cosmetic, so the guard asserts the count is **zero**, not
+"one, on the harmless step". Residual risk, unchanged and accepted: if a future runner image drops a
+real Chromium library, the failure surfaces in the E2E step as a browser that will not launch —
+fatal, legible and attributable — instead of being absorbed by a provisioning step.
+
+The guard's comment-stripping is load-bearing and was proved, not assumed: the workflow's own
+comment block now discusses both `continue-on-error` and `install-deps`, so a guard counting raw
+text fails two assertions on an *unmodified* file. Verified by running the no-strip variant against
+a clean `ci.yml` — 2 failures. Six mutations checked in all (reintroduce the apt step, restore
+`--with-deps`, make the browser download non-fatal, delete the cache, drop the version-emptiness
+check, raise the job cap below `steps:`), each caught by exactly its own assertion.
+
+## 2026-08-21 — HARNESS-18: stop mutation + ai-review re-running on every push (Actions budget)
+
+The GitHub Actions allowance was being exhausted in roughly four days of each month. Measured over
+18–19 Aug 2026 from per-job timings — GitHub bills the **sum of every job**, each rounded up to the
+whole minute, so a `ci` run that reads as 6 minutes on the Actions tab bills 22:
+
+| workflow | jobs/run | billable min/run | runs / 2 days | ~billable min |
+|---|---|---|---|---|
+| `ci` | 10 | 22 | 60 | ~870 |
+| `mutation` | 1 | 25 (10–14 cancelled) | 30 | ~380 |
+| `ai-review` | 3 | 12 | 30 | ~220 |
+| `deploy` | 5 | 9 | ~4 | ~36 |
+
+~1,500 billable minutes in two days — ~750/day, ~16,000/month against a 3,000-minute allowance.
+
+The recent spike was not drift. A `paths:` filter on `pull_request` is evaluated against the **whole
+PR diff**, not the commits just pushed, so the moment a branch touched `services/bff/src/auth.ts`
+once, every later push re-ran the 25-minute mutation job — doc-only pushes included. Both live
+branches touch `auth.ts` and `approvals/service.ts`, which is why 30 of the 51 mutation runs this
+workflow has ever had (created 24 Jun) landed in those two days. Fifteen of the thirty were cancelled
+by the concurrency group after burning 10–14 minutes each: 215 runner-minutes that produced no
+mutation score at all. Six of thirty completed. `ai-review` compounded it independently — created
+15 Aug, 24 runs on 19 Aug alone at ~12 min each, because both reviewer legs spend ~5 minutes in a
+model call re-reading the entire diff, re-paid per intermediate commit plus the tokens behind them.
+
+Both now use `types: [opened, ready_for_review, reopened]`. This is a **cost** change, not a coverage
+change: mutation still sees every security-core PR and ai-review still reviews every PR, at open
+(drafts included — `opened` fires for them, preserving ai-review's deliberate no-skip-drafts rule)
+and again at ready-for-review, the state a human is actually asked to merge. What is dropped is the
+~20 intermediate re-runs per PR that re-proved the same thing. Safe because **neither is a required
+status check** — the pinned contexts in `docs/governance/runbooks/main-branch-protection-activation.md`
+are Q1, Q1b, Q2, Q2b, Q3 ×2, Q4, Q4.5 and Discovery only.
+
+Escape hatches differ because the two workflows differ. `mutation` already has `workflow_dispatch`,
+which accepts any ref, so it needs no label. `ai-review` deliberately has none (no merge base, nowhere
+to post) and a Checks-tab re-run replays the *original* head SHA — so it gets `labeled`, narrowed on
+the `config` job to the `ai-review` label. That is the only way to re-review the current head, and the
+narrowing stops an unrelated label costing two model calls.
+
+Guard: `scripts/test/ci-cost-guard.test.mjs`, 8 assertions in the dependency-free discovery-gates
+glob. Verified non-hollow by putting `synchronize` back and watching exactly one assertion go red. It
+asserts the coverage half too — `opened`, `ready_for_review` and `cancel-in-progress` must survive —
+so a later edit cannot quietly turn the cost fix into a coverage cut.
+
+**Deliberately not taken, both needing a human decision.** (1) Folding `q45-lineage` into
+`q3-integration-contract`: q45 re-runs `pnpm test:integration` byte-identically to q3 and then a
+one-second `lineage:gate` — ~2 billable minutes and a redundant Postgres container per `ci` run — but
+`Q4.5 — BCBS 239 lineage validation` is a **pinned required-check context**, so merging it renames the
+check and blocks every merge until an admin updates branch protection. (2) Path-filtering `ci.yml` so
+docs-only PRs skip Q1/Q3/Q3-E2E/Q4.5 (~50 min/day): `ci.yml` has no paths filter at all, so an ADR-only
+PR runs Playwright E2E and three Postgres containers — but conditionally skipping gates contradicts
+this repo's own HARNESS-07 / q1b doctrine that an omitted gate must never be indistinguishable from a
+passing one.
+
+Also noted, not fixed: the mutation job has grown from the ~8 minutes its header claimed to ~25,
+now flush against its own `timeout-minutes: 25` ceiling. A job pinned to its timeout is the job most
+likely to start failing spuriously, and the 3× growth is unexplained. The stale header claim was
+corrected rather than left to drift (Q2b). Playwright's 2m57s uncached browser install is not in scope
+— HARNESS-17 / PR #328 already removes the 92-second `--with-deps` apt step and caches the browsers.
+
+Expected saving ~270 min/day, ~36% of total spend, without weakening a merge gate.
+
+Evidence: `scripts/test` 44/44, discovery harness 40/40, `docs:check` 60 docs / 30 ADRs, `discovery:link`
+OK, backlog YAML parses, both workflows parse and their resolved triggers were inspected. No source,
+spec, or product tests changed — CI configuration, one new guard test, and docs.
+
+### Addendum, 2026-08-21 — the allowance is not "running low", it is EXHAUSTED
+
+Found while watching PR #329's own checks. Every job on it failed 2-3 seconds after creation with
+`runner_id: 0`, no runner name, **zero steps executed** and no log file (the logs endpoint 404s). That
+is GitHub refusing to allocate a runner at dispatch, not a gate finding a defect.
+
+Bisected against the run history:
+
+| | run | created | outcome |
+|---|---|---|---|
+| last success | ci #959 (PR #328) | `2026-08-19T10:02:08Z` | success, 4m |
+| first failure | ci #960 (PR #328) | `2026-08-19T10:08:30Z` | failure, 0m — now on `run_attempt: 8` |
+
+So the cutover is between **10:02 and 10:08 UTC on 19 Aug 2026**, and CI has been down repo-wide for
+~42 hours. It is not branch-specific: the same signature appears on `feature/HARNESS-17-…`,
+`claude/adr-0030-amendment-convention` (retried 7 times) and `claude/github-actions-budget-jryfmy`,
+across `ci`, `mutation` and `ai-review` alike. Nothing merges until the spending limit is raised or
+the monthly allowance resets.
+
+Two consequences worth recording. First, the burn measurements in the entry above were taken over
+18-19 Aug — which is precisely the window that spent the allowance, so they describe the run rate that
+caused this, not a quiet period. Second, HARNESS-18 could not be verified in CI: the gates it touches
+were run locally instead (`scripts/test` 44/44 including the 8 new guards, discovery harness 40/40,
+`doc-link-check` 60 docs / 30 ADRs, `discovery-link-check` OK, both workflows parsed and their resolved
+triggers inspected). The change touches no source — CI configuration, one dependency-free guard test,
+and docs — so the locally-runnable gates are the ones that cover it. It still needs a green CI run
+before merge, once runners are available again.
+
+The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
+eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
+and they obscure the real signal.
