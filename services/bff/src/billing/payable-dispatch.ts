@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { FinancialSystemPort, PayableDispatchStatus } from '@ofbo/ports'
 import { assertScope } from '../rbac.js'
 import type { Principal } from '../auth.js'
@@ -101,6 +102,24 @@ export interface PayableDispatchOutcome {
   replayed: boolean
 }
 
+/**
+ * Hash, not redact, and not raw.
+ *
+ * `Idempotency-Key` is an inbound header: its content is whatever the operator or an integrating
+ * system put there. Convention says opaque UUID; nothing enforces it. The dispatch row it lands in
+ * is INSERT-only with no deletion path, so anything a human typed into that header would be
+ * permanent (hard-stop: 24-month hot / 5-year immutable, no deletion path for regulated records).
+ *
+ * `redactText` is the wrong instrument here — it masks recognised identifier patterns and passes
+ * everything else through, so an unrecognised-but-sensitive value would survive, and a masked value
+ * would no longer be a usable dedupe key. A digest is total (nothing survives in the clear) and
+ * deterministic (`UNIQUE (bank_id, idempotency_key, dispatch_state)` still dedupes a retry exactly
+ * as it did). The `sha256:` prefix follows the digest convention already used in the billing stores.
+ */
+function hashIdempotencyKey(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`
+}
+
 export class PayableDispatchService {
   constructor(private readonly deps: PayableDispatchDeps) {}
 
@@ -138,7 +157,7 @@ export class PayableDispatchService {
         'Obtain the four-eyes AP approval before dispatching.'
       )
     }
-    await this.assertApprovalAuthorises(payable, payableId)
+    await this.assertApprovalAuthorises(principal, payable, payableId)
 
     try {
       const result = await this.deps.financialSystem.dispatchPayableInstruction({
@@ -169,7 +188,9 @@ export class PayableDispatchService {
         dispatchRef: redactText(result.dispatch_ref),
         status: result.payable_status,
         approvalRequestId: payable.approvalRequestId,
-        idempotencyKey
+        // Hashed on the way into the INSERT-only row; the raw key still went to P9 above, where the
+        // vendor's own dedupe needs the caller's actual value.
+        idempotencyKey: hashIdempotencyKey(idempotencyKey)
       }, traceId)
 
       await this.deps.audit.emit({
@@ -247,6 +268,7 @@ export class PayableDispatchService {
    * period it closes, and a payable belongs to exactly one period.
    */
   private async assertApprovalAuthorises(
+    principal: Principal,
     payable: ApprovedPayable,
     payableId: string
   ): Promise<void> {
@@ -340,6 +362,31 @@ export class PayableDispatchService {
         `Approval ${approvalId} records no second principal, so it evidences one person twice.`,
         409,
         'Have a different finance principal approve the close.'
+      )
+    }
+    // WHO IS DISPATCHING. Every check above verifies the CLOSE — that it happened, for this period,
+    // in time, by two distinct principals. None of them verified who is calling dispatch, and
+    // dispatch is where the money actually moves. Before this, any holder of
+    // `finance:reconciliation:write` could honour a scheme direct debit by quoting an approval they
+    // had no part in.
+    //
+    // The rule is participation, not a third signature: the dispatcher must be one of the two
+    // principals whose four-eyes act authorised this close. Requiring a third human would be
+    // six-eyes, which PRD §10 does not ask for and which no approval mechanism here expresses —
+    // and inventing one would be a new platform primitive (CLAUDE.md rule 6) rather than a binding
+    // of the existing one.
+    //
+    // Compared as IDENTITIES via normalisePrincipal, for the same reason the self-approval check is:
+    // a raw === would let re-spelled padding or case decide who may move money.
+    const participants = [approval.initiator, approval.approver as string]
+    if (!participants.some((p) => normalisePrincipal(p) === normalisePrincipal(principal.subject))) {
+      throw new PayableDispatchError(
+        'BACKOFFICE.DISPATCH_NOT_AUTHORISED',
+        `Approval ${approvalId} was granted by two other principals, so it does not authorise `
+        + `${principal.subject} to honour this debit. An approval authorises the people who made `
+        + 'it, not everyone who can read its id.',
+        403,
+        'Dispatch as the principal who initiated or approved this period close.'
       )
     }
   }

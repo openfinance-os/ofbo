@@ -15,8 +15,12 @@ import type { Principal } from '../src/auth.js'
  * make the evidence a downstream system can influence — so the service is given no way to reach them.
  */
 
+// The APPROVER of the cited close, and therefore a principal entitled to dispatch it. Dispatch
+// authority is bound to participation in the four-eyes act (see the authority tests at the foot of
+// this file), so this subject must match the `approver` on the approval fixture below — a bystander
+// holding the same scope is refused, which is the point.
 const APPROVER: Principal = {
-  subject: 'demo:finance-analyst@bank',
+  subject: 'demo:finance-manager@alpha-bank',
   persona: 'finance-analyst',
   scopes: ['finance:reconciliation:write', 'billing:write'],
   bankId: '11111111-1111-4111-8111-111111111111'
@@ -168,13 +172,17 @@ describe('BILL-16 payable dispatch', () => {
       subject: 'demo:platform-super-admin@alpha-bank',
       scopes: [...APPROVER.scopes, 'platform:superadmin']
     }
+    // The superadmin has to be a PARTICIPANT in the close to dispatch it — holding
+    // platform:superadmin is not a four-eyes bypass, and building the fixture the other way would
+    // have quietly asserted that it is. So the approval fixture names them as its approver.
+    const asApprover = { approver: superadmin.subject }
 
-    const ok = harness()
+    const ok = harness({}, asApprover)
     await ok.service.dispatch(superadmin, 'PAY-2026-06-001', 'idem-ok', 'trace-1')
     expect(ok.audited.find((e) => e.event_type === 'billing_tpp_cost_payable_dispatched')?.superadmin_marker)
       .toBe(true)
 
-    const bad = harness()
+    const bad = harness({}, asApprover)
     bad.port.dispatchPayableInstruction.mockRejectedValueOnce(new Error('financial-system 503'))
     await expect(bad.service.dispatch(superadmin, 'PAY-2026-06-001', 'idem-bad', 'trace-1')).rejects.toThrow()
     expect(bad.audited.find((e) => e.event_type === 'billing_tpp_cost_payable_dispatch_failed')?.superadmin_marker)
@@ -282,5 +290,72 @@ describe('BILL-16 PayableDispatchError', () => {
   it('carries its own remediation', () => {
     const error = new PayableDispatchError('BACKOFFICE.X', 'm', 409, 'fix it')
     expect(error).toMatchObject({ code: 'BACKOFFICE.X', status: 409, remediation: 'fix it' })
+  })
+})
+
+/**
+ * Raised as FAIL 3 and FAIL 5 by the hard-stop reviewer on PR #323.
+ *
+ * FAIL 3 (`payable-dispatch.ts:172`): the caller-supplied Idempotency-Key went UNREDACTED into
+ * `store.recordDispatch`, an INSERT-only table with no deletion path — while the adjacent field on
+ * the same call was redacted, and the failure-path audit redacted the very same value eleven lines
+ * below. Redaction is the wrong tool here though: the column is a dedupe key and has to stay
+ * comparable, so it is HASHED. The hash is deterministic, so `UNIQUE (bank_id, idempotency_key,
+ * dispatch_state)` still dedupes exactly as before, and whatever an operator typed into the header
+ * is no longer permanent.
+ *
+ * FAIL 5 (`payable-dispatch.ts:117`): dispatch executed on a single principal's call with nothing
+ * correlating that principal to the approval it cited. Any holder of the scope could move money on
+ * an approval they had no part in. The dispatcher must now be one of the two principals whose
+ * four-eyes act authorised the close.
+ */
+describe('BILL-16 — dispatch authority is bound to the approval it cites', () => {
+  it('REFUSES a dispatcher who took no part in the four-eyes act', async () => {
+    const { service, port, store } = harness()
+    const bystander = { ...APPROVER, subject: 'demo:finance-bystander@alpha-bank' } as Principal
+    await expect(service.dispatch(bystander, 'PAY-2026-06-001', 'idem-1', 'trace-1'))
+      .rejects.toMatchObject({ code: 'BACKOFFICE.DISPATCH_NOT_AUTHORISED' })
+    // Refused BEFORE the port is touched: the money must not move and then be reasoned about.
+    expect(port.dispatchPayableInstruction).not.toHaveBeenCalled()
+    expect(store.recordDispatch).not.toHaveBeenCalled()
+  })
+
+  it('ALLOWS either principal of the four-eyes act, spelled any way', async () => {
+    for (const subject of [
+      'demo:finance-manager@alpha-bank',      // the approver
+      'demo:finance-analyst@alpha-bank',      // the initiator
+      '  DEMO:Finance-Manager@Alpha-Bank  '   // same human, re-spelled
+    ]) {
+      const { service, port } = harness()
+      const who = { ...APPROVER, subject } as Principal
+      await expect(service.dispatch(who, 'PAY-2026-06-001', 'idem-1', 'trace-1')).resolves.toBeTruthy()
+      expect(port.dispatchPayableInstruction).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('HASHES the caller-supplied idempotency key into the INSERT-only store, but not to P9', async () => {
+    const { service, store, dispatched } = harness()
+    const raw = 'ops-retry-key-for-ahmed-0501234567'
+    await service.dispatch(APPROVER, 'PAY-2026-06-001', raw, 'trace-1')
+
+    const stored = (store.recordDispatch as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(stored.idempotencyKey).not.toBe(raw)
+    expect(stored.idempotencyKey).not.toContain('0501234567')
+    expect(stored.idempotencyKey).toMatch(/^sha256:[0-9a-f]{64}$/)
+
+    // P9 still gets the RAW key. The vendor's own dedupe is keyed on what the caller sent, so
+    // hashing it on the way out would make every retry a new instruction — the exact double-debit
+    // this service exists to prevent.
+    expect(dispatched[0]!.idempotency_key).toBe(raw)
+  })
+
+  it('hashes deterministically, so the store still dedupes a retry', async () => {
+    const a = harness()
+    const b = harness()
+    await a.service.dispatch(APPROVER, 'PAY-2026-06-001', 'same-key', 'trace-1')
+    await b.service.dispatch(APPROVER, 'PAY-2026-06-001', 'same-key', 'trace-2')
+    const ka = (a.store.recordDispatch as ReturnType<typeof vi.fn>).mock.calls[0]![0].idempotencyKey
+    const kb = (b.store.recordDispatch as ReturnType<typeof vi.fn>).mock.calls[0]![0].idempotencyKey
+    expect(ka).toBe(kb)
   })
 })

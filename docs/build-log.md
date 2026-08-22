@@ -4121,6 +4121,89 @@ a clean `ci.yml` — 2 failures. Six mutations checked in all (reintroduce the a
 `--with-deps`, make the browser download non-fatal, delete the cache, drop the version-emptiness
 check, raise the job cap below `steps:`), each caught by exactly its own assertion.
 
+## 2026-08-19 — BILL-16 addendum: the five hard-stop findings on PR #323
+
+The advisory hard-stop reviewer returned `VERDICT: FAIL (5 findings)` on #323. All five are fixed
+here. Three of them were open questions I had escalated to the user earlier in the session and which
+came back as "you decide", so the decisions and their reasoning are recorded rather than left
+implicit.
+
+**FAIL 5 — `approvals/service.ts`: the four-eyes gate did not gate under concurrency.** `approve()`
+read the record, checked `pending`, ran the gated operation, and only THEN persisted — with
+`store.update` setting `state` unconditionally. Two approvers on one pending request both pass every
+check before either write lands, so both execute. For `billing.tpp_cost.period_close` that closes a
+period twice; for any money-moving gated operation it moves the money twice.
+
+Reproduced before fixing, which is the part worth recording: a test holding the operation open until
+both approvers are past their checks reported `expected 2 to be 1`. The gate was decorative under a
+race.
+
+Fixed with a compare-and-swap: `ApprovalStore.claimForApproval(id, approver, approvedAt)` performs
+`UPDATE ... WHERE approval_request_id = $1 AND state = 'pending'` and reports whether it won. The
+claim happens BEFORE the operation runs, which picks the safer failure mode — a claim that succeeds
+and an execution that then fails leaves an `approved` row with no `execution_result`, which is
+visible and recoverable, whereas executing first risks doing the irreversible thing twice.
+
+Verified at the database, not only in the in-memory store (whose atomicity is an accident of Node
+being single-threaded and proves nothing about Postgres): two concurrent claims on separate
+connections gave rowCount 1 and 0, a third claim on the now-approved row gave 0, and neither
+`approver` nor `approved_at` was overwritten by the late claim.
+
+**FAIL 5 — `payable-dispatch.ts`: nothing correlated the dispatcher with the approval it cited.**
+Every existing check verified the CLOSE — that it happened, for this period, in time, by two distinct
+principals. None verified who was calling dispatch, which is where the money actually moves. Any
+holder of `finance:reconciliation:write` could honour a scheme direct debit by quoting an approval
+they had no part in.
+
+The rule chosen is PARTICIPATION, not a third signature: the dispatcher must be the initiator or the
+approver of the cited close. Requiring a third human would be six-eyes, which PRD §10 does not ask
+for and which no approval mechanism here expresses — inventing one would be a new platform primitive
+(rule 6) rather than a binding of the existing one. Compared via `normalisePrincipal`, for the same
+reason the self-approval check is: a raw `===` would let re-spelled padding decide who may move
+money.
+
+Consequence for the fixtures, stated plainly because it changed existing tests: the harness's
+dispatching principal was `demo:finance-analyst@bank`, which is neither participant, so eight tests
+went red on the new rule. They were fixed by pointing the `APPROVER` constant at the identity the
+approval fixture already names as its approver — the constant now means what it is called. The
+superadmin fixture likewise had to become a participant: holding `platform:superadmin` is not a
+four-eyes bypass, and building that fixture the other way would have quietly asserted that it is.
+
+**FAIL 3 — `payable-dispatch.ts`: the caller-supplied `Idempotency-Key` went raw into an INSERT-only
+row.** The adjacent field on the same call was redacted, and the failure-path audit redacted the very
+same value eleven lines below — the diff's own reasoning applied inconsistently.
+
+Redaction is the wrong instrument here: the column is a dedupe key and must stay comparable, and
+`redactText` masks only recognised patterns so an unrecognised-but-sensitive value would survive. It
+is HASHED instead — `sha256:<hex>`, matching the digest convention already used in the billing
+stores. Deterministic, so `UNIQUE (bank_id, idempotency_key, dispatch_state)` still dedupes a retry
+exactly as before; total, so nothing a human typed into that header survives in the clear. P9 still
+receives the RAW key, because the vendor's own dedupe is keyed on what the caller sent — hashing it
+on the way out would make every retry a new instruction, which is the double-debit this service
+exists to prevent.
+
+**FAIL 3 ×2 — IBAN/email-shaped literals in two fixtures.** Both are deliberate redaction canaries,
+and a redaction test whose input the redactor does not recognise proves nothing. The reviewer said as
+much and then made the point that actually mattered: *"that exemption is not written down anywhere I
+could find"*. It was right. A survey of the tree found the convention already holding perfectly —
+all eight IBAN-shaped literals use the unallocated bank code `000`, and there are zero real-prefix
+`784` Emirates IDs — and NOTHING enforcing it. A convention held only by everyone remembering is one
+bad afternoon from breaking silently.
+
+So it is now written into CLAUDE.md's hard stops and enforced by
+`scripts/test/pii-literal-check.test.mjs` (3 tests, in the Discovery harness glob). Worth noting why
+a CI guard and not just the existing hook: the repo already has a session hook that refuses to write
+a real-prefix Emirates ID — it fired on this session's own proof script, correctly — but hooks run in
+the agent session, not in CI. That is the gap the guard closes.
+
+Evidence: unit 1591/1591 (223 files), integration **188/188 against a real Postgres**, typecheck
+clean across all nine packages, lint clean, harness 79/79. Each new assertion was checked by
+mutation: the concurrency test reported `expected 2 to be 1` before the CAS; the dispatch-authority
+and hash tests both failed before their fixes; and the three PII assertions were each driven red by
+one planted literal (a bank-code-033 IBAN, a real-prefix Emirates ID assembled at runtime, and an
+IBAN shape in shipped source), each caught by exactly its own assertion with the file restored
+afterwards.
+
 ## 2026-08-21 — HARNESS-18: stop mutation + ai-review re-running on every push (Actions budget)
 
 The GitHub Actions allowance was being exhausted in roughly four days of each month. Measured over
