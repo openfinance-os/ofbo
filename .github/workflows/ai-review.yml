@@ -313,12 +313,36 @@ jobs:
       - name: Review — Claude engine
         if: ${{ steps.preflight.outputs.run == 'true' && matrix.engine.key == 'claude' }}
         uses: anthropics/claude-code-action@v1
+        # HARNESS-22 — the turn budget below was 30, and 30 was too small. Measured across every
+        # leg that actually invoked an engine: 16 reviews completed, all on PRs of 5-10 changed
+        # files; 2 legs reported DID NOT COMPLETE, both on PR #325 at 41 changed files. No
+        # success above 10 files, no failure below 41.
+        #
+        # FILE COUNT separates, CHURN DOES NOT — #324 reviewed fine at 1080 churn across 6 files.
+        # A context limit would track churn; a per-file TOOL-CALL budget tracks file count, and
+        # the prompt requires the reviewer to Read each changed file to cite findings at
+        # file:line. That is what --max-turns caps.
+        #
+        # WHAT IS NOT KNOWN, stated because the number is sized from it: both failures are the
+        # same PR (one independent observation), the 10-41 file gap is unsampled, and the
+        # engine's own error was never read — GitHub caps the job-log response at ~1.2KB of tail
+        # and the full download is a blob redirect this environment cannot follow. Correlation
+        # plus a mechanism that fits, NOT a quoted error.
+        #
+        # 80 is headroom over a demonstrated failure at 41 files, not a computed requirement.
+        # RESIDUAL, NOT FIXED HERE: a large enough PR still exhausts any fixed budget and still
+        # reports the generic DID NOT COMPLETE. Making exhaustion distinguishable from a crash
+        # is the follow-up this story does not do.
+        #
+        # NOTE: claude_args below is a literal block passed straight to the CLI — a `#` line
+        # inside it becomes an ARGUMENT, not a comment. That is why this sits out here.
+        # Guarded by scripts/test/ai-review-turn-budget.test.mjs.
         with:
           claude_code_oauth_token: ${{ secrets[matrix.engine.secret] }}
           prompt: ${{ env.REVIEW_PROMPT }}
           claude_args: |
             --model ${{ matrix.engine.model }}
-            --max-turns 30
+            --max-turns 80
             --allowedTools "Read,Grep,Glob,Bash,Write"
 
       # RUN IN CI, AND IT DOES NOT WORK AS WRITTEN. Do not point `active` at codex expecting
