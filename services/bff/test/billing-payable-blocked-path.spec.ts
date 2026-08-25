@@ -43,6 +43,7 @@ function mutableCloseStore(initial: Array<{ lineRef: string; breakType: string }
   return {
     store: {
       openPayableBreaks: vi.fn(async () => open),
+      closeForPeriod: vi.fn(async () => null),
       saveClose: vi.fn(async () => ({ closeId: 'close-1', created: true }))
     },
     resolveAll: () => { open = [] }
@@ -70,6 +71,7 @@ describe('BILL-15 criterion 3 — the blocked path, end to end', () => {
     const openLater: Array<{ lineRef: string; breakType: string }> = []
     const store = {
       openPayableBreaks: vi.fn(async () => openLater),
+      closeForPeriod: vi.fn(async () => null),
       saveClose: vi.fn(async () => ({ closeId: 'close-1', created: true }))
     }
     const service = new PayableCloseService({

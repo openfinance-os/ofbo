@@ -4748,3 +4748,71 @@ PostgreSQL 16.13; Q4.5 lineage PASSED with both new tables covered and allowed g
 against a live BFF; docs:check, discovery:link and pii-literal-check clean. The full four-eyes close
 was walked against the running BFF: request → 202 + approval_request → second principal approves →
 the close row lands with both principals normalised from the approval record.
+
+## 2026-08-25 — addendum: the two reviewers on the BILL-16/17 branch (1 hard stop, 4 drifts)
+
+Both reviewers ran before the PR left draft. Every finding was real; all are fixed on the branch.
+
+**HARD STOP — the cross-tenant grant rested on a claim broader than the control.** Migration 0043
+granted `bank_internal_view` SELECT on `billing_tpp_cost_ap_dispatch` asserting "no unredacted
+provider text reachable in this table". True for `response_payload`, which the store screens at the
+write boundary — and NOT true for `financial_system_ref` beside it. 0039 enumerated three free-form
+columns and missed that one; the only control on it was `redactText`, which masks exactly three
+SHAPES (Emirates ID, IBAN, e-mail) and passes everything else through. A P9 reference reading
+`DD/2026-07/NEBRAS - mandate held by A. Rahman, acct ending 4412` matches nothing, and lands
+permanently in a table with no deletion path.
+
+Fixed by constraining the SHAPE rather than trying to mask harder: a dispatch reference is an
+opaque vendor identifier, so anything that is not one is REFUSED. That is total in the way masking
+is not — prose cannot get in at all, rather than getting in unrecognised. It fails closed (an
+unrecordable reference stops the dispatch being recorded, which is the right direction when the
+alternative is a permanent name), and it admits the `[REDACTED:*]` markers the service may have
+substituted, so it is not a denial of service on correct data — the failure mode BILL-14 already hit
+once when a generic digit rule ate the required TRNs.
+
+The reviewer also noted the evidence gap: 0040's bar was redaction "proven by a test against a
+persisted row", and the discharge proved a REFUSAL (`count == 0`). There is now a test that writes a
+dispatch, reads the row back, and asserts no IBAN, Emirates-ID or e-mail shape survives in either
+provider-fed column or the idempotency key.
+
+**DRIFT 1 — store refusals were untyped 500s.** `PayableWriteError` was mapped nowhere in the BFF,
+so an unknown payable, an illegal dispatch transition and every write-time approval check escaped to
+`app.onError`. The contract declares 404 and 409 for exactly those, which made both branches
+unreachable on the deployed path — `serve.ts` and `worker.ts` both wire the real Pg store. The error
+now carries its own status and remediation (the status belongs with the code that decides which
+refusal occurred, not in a route-side lookup that drifts when a refusal is added).
+
+**DRIFT 2 — an already-closed period answered 202.** The request path checked only breaks, so
+re-closing minted a second approval and sent a second principal to approve an act that had already
+happened. The store refused a divergent close at EXECUTION, but that is a different endpoint hours
+later. `closeForPeriod` now refuses at request time, BEFORE the break query — a closed period is a
+settled fact, and reporting it as break-blocked would send an operator to resolve breaks that cannot
+unblock anything.
+
+**DRIFT 3 — a real money bug.** `net`, `vat` and `gross` were each rounded independently from
+milli-fils, which breaks the source row's own CHECK on the wire: 2500 → 3, 1500 → 2, 4000 → 4, and
+3 + 2 is not 4. The repo has `toWireMoneyTriple` for exactly this and the sibling BILL-14 route
+already used it; this one did not. Now pinned by a test asserting the wire publishes 5.
+
+**DRIFT 4 — `replayed` on an HTTP replay.** Retrying with the same Idempotency-Key returns the
+original body verbatim, so `replayed` carries whatever it said first time. The flag reports what
+happened DOWNSTREAM (P9 or our ledger matched an existing instruction), not at the HTTP layer. The
+spec now says so precisely rather than implying the cache re-stamps it.
+
+Advisories also taken: `billing.tpp_cost.period_close` gains a non-PII `operation_summary`
+(approving it authorises money movement, so a blank summary was the worst case for one, not a
+cosmetic gap), and the 202 now carries `expires_at` so a client can show the two-hour window.
+
+One more found by `verify:contract` against a live BFF rather than by either reviewer: the demo seed
+used a readable `demo-approval-...` id where `ApprovalRequest.approval_request_id` is declared
+`format: uuid`, so `GET /approvals/pending` drifted. The seed now derives a deterministic v4-shaped
+id by hash — idempotent AND conformant.
+
+Left open, and recorded rather than fixed: the `app.tenant_group IS NULL` fail-open fallback that
+0043 replicates into two more policies is a known weakness owned by HOST-04; this diff widens its
+blast radius rather than introducing it. `ApprovalRequest` declares no `required` list, which is why
+a thin four-eyes body validates — that affects every gated path, not this one, and belongs in its
+own spec-change.
+
+Re-verified after the fixes: unit 1659/1659, integration 214/214, Q4.5 PASSED allowed gaps none,
+coverage 94.87% lines, typecheck 11/11, ESLint clean, `verify:contract` 33 conformant / 0 drift.

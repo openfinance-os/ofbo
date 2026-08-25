@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
@@ -18,6 +19,23 @@ import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
  * Synthetic-only, idempotent (natural-key guards), and emits BCBS 239 lineage for every
  * table it touches (Q4.5 stays green). No PSU PII — class/party/ref data only.
  */
+/**
+ * A deterministic, UUID-v4-SHAPED id derived from a stable key.
+ *
+ * The seed has to be idempotent, which rules out `randomUUID()` — a fresh id every run would insert
+ * a second approval on every re-seed. But `approval_request_id` is declared `format: uuid` on the
+ * contract's ApprovalRequest, and a readable id like `demo-approval-...` fails live response
+ * validation on GET /approvals/pending. `verify:contract` caught exactly that.
+ *
+ * Hashing the key gives both: same key, same id, and a well-formed v4 shape (version nibble 4,
+ * variant nibble 8..b) that AJV's uuid format accepts.
+ */
+function deterministicUuid(key: string): string {
+  const h = createHash('sha256').update(key).digest('hex')
+  const variant = ((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
 const CH = 'internal_retail'
 const DEFAULT_DEMO_TENANT = DEMO_TENANTS.find((tenant) => tenant.bank_id === DEMO_BANK_ID)!
 
@@ -241,7 +259,7 @@ async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
 
   // ── The CLOSED period: a real four-eyes approval, a close row citing it, and a dispatch.
   const closed = await seedPeriod(closedPeriod, { withLfi: true })
-  const closeApprovalId = `demo-approval-tpp-cost-close-${closedPeriod}`
+  const closeApprovalId = deterministicUuid(`demo-approval-tpp-cost-close:${closedPeriod}`)
   await pool.query(
     `INSERT INTO approval_request
        (bank_id, channel, approval_request_id, operation_type, operation_payload, state, initiator,

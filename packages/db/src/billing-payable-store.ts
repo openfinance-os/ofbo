@@ -59,10 +59,29 @@ const LEGAL_NEXT: Record<PayableDispatchState, readonly PayableDispatchState[]> 
  */
 export const dispatchStateForPayableStatus = payableLedgerDispatchState
 
+/**
+ * A refusal from the write path, carrying the HTTP status the contract declares for it.
+ *
+ * The status lives here rather than in a mapping table at the route because the store is what
+ * decides WHICH refusal occurred, and a route-side lookup keyed on the code drifts the moment a new
+ * refusal is added — which is how these ended up as unhandled 500s: `PayableWriteError` was mapped
+ * nowhere in the BFF, so the declared 404 and 409 branches were unreachable on the deployed path.
+ */
+const WRITE_ERROR_STATUS: Record<string, number> = {
+  'BACKOFFICE.NOT_FOUND': 404,
+  'BACKOFFICE.UNREDACTED_PROVIDER_PAYLOAD': 422,
+  'BACKOFFICE.UNSAFE_PROVIDER_REFERENCE': 422
+}
+
 export class PayableWriteError extends Error {
-  constructor(readonly code: string, message: string) {
+  readonly status: number
+
+  constructor(readonly code: string, message: string, readonly remediation?: string) {
     super(message)
     this.name = 'PayableWriteError'
+    // 409 by default: every remaining refusal here is a conflict between what the caller asked for
+    // and the state the ledger is actually in.
+    this.status = WRITE_ERROR_STATUS[code] ?? 409
   }
 }
 
@@ -88,6 +107,41 @@ function normalise(value: string): string {
 }
 
 /**
+ * `financial_system_ref` is provider free text, and redaction alone cannot make it safe.
+ *
+ * 0039 enumerated three free-form columns and missed this one; the service's `redactText` masks
+ * exactly three SHAPES (Emirates ID, IBAN, e-mail) and passes everything else through verbatim — so
+ * a vendor reference carrying a personal name matches nothing and survives, permanently, in a table
+ * with no deletion path. That is the same class of unconstrained provider text 0039 withheld the
+ * cross-tenant grant over, which means the grant cannot rest on the response-payload check alone.
+ *
+ * Constraining the SHAPE is what closes it, and it is total in the way masking is not: a dispatch
+ * reference is an opaque vendor identifier, so anything that is not one — prose, spaces, commas,
+ * punctuation a reference would never carry — is REFUSED rather than partially masked. The
+ * `[REDACTED:*]` markers the service may have substituted are admitted, because a masked value is
+ * still a legitimate thing to store; what cannot get in is free text nobody recognised.
+ *
+ * Fails closed: an unrecognisable reference stops the dispatch being RECORDED. That is the correct
+ * direction — the debit has already been authorised by P9 at that point, and an operator
+ * investigating an unrecorded dispatch is a far better outcome than a permanent, unremovable name.
+ */
+const REFERENCE_SHAPE = /^[A-Za-z0-9._:/=+-]{1,128}$/
+
+function assertReferenceShaped(value: string, label: string): void {
+  const withoutMarkers = value.replace(/\[REDACTED:[a-z_]+\]/g, 'X')
+  if (!REFERENCE_SHAPE.test(withoutMarkers)) {
+    throw new PayableWriteError(
+      'BACKOFFICE.UNSAFE_PROVIDER_REFERENCE',
+      `refusing to persist a ${label} that is not reference-shaped. The column is provider free text `
+      + 'in an INSERT-only family with no deletion path, and masking recognises only known identifier '
+      + 'shapes — so an opaque-identifier shape is the only check that is total. Expected up to 128 '
+      + 'characters of [A-Za-z0-9._:/=+-]; got a value containing other characters (value not echoed).',
+      'Have the financial system return an opaque dispatch reference; free text cannot be stored here.'
+    )
+  }
+}
+
+/**
  * Criterion 5(c), at the boundary that makes a write permanent.
  *
  * The service redacts before it calls; this refuses if anything still matches a customer-detail
@@ -102,7 +156,9 @@ function assertRedactedResponse(payload: unknown): void {
       'BACKOFFICE.UNREDACTED_PROVIDER_PAYLOAD',
       'refusing to persist an unredacted financial-system response: '
       + `${removedPaths.length} field(s) still match a customer-detail shape. Paths (names only, no `
-      + `values): ${removedPaths.join(', ')}`
+      + `values): ${removedPaths.join(', ')}`,
+      'Redact the P9 response before dispatch; the named fields carry customer detail into an '
+      + 'INSERT-only table with no deletion path.'
     )
   }
 }
@@ -215,26 +271,31 @@ abstract class TenantScopedStore {
 
     if (!row) {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_NOT_FOUND',
-        `approval ${approvalRequestId} does not exist for this tenant`)
+        `approval ${approvalRequestId} does not exist for this tenant`,
+        'Re-request the four-eyes approval for this period before writing.')
     }
     if (row.operation_type !== expectedOperationType) {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_WRONG_OPERATION',
-        `approval ${approvalRequestId} authorises ${String(row.operation_type)}, not ${expectedOperationType}`)
+        `approval ${approvalRequestId} authorises ${String(row.operation_type)}, not ${expectedOperationType}`,
+        'Cite the approval granted for this operation.')
     }
     const payload = (row.operation_payload ?? {}) as Record<string, unknown>
     if (payload.period !== expectedPeriod) {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_WRONG_PERIOD',
-        `approval ${approvalRequestId} covers ${String(payload.period)}, not ${expectedPeriod}`)
+        `approval ${approvalRequestId} covers ${String(payload.period)}, not ${expectedPeriod}`,
+        'Cite the approval granted for this period.')
     }
     if (row.state !== 'approved') {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_NOT_APPROVED',
-        `approval ${approvalRequestId} is ${String(row.state)}, so nothing has authorised this write`)
+        `approval ${approvalRequestId} is ${String(row.state)}, so nothing has authorised this write`,
+        'Have a second finance principal approve the close first.')
     }
     const approver = (row.approver as string | null) ?? ''
     const initiator = (row.initiator as string | null) ?? ''
     if (!approver.trim() || normalise(approver) === normalise(initiator)) {
       throw new PayableWriteError('BACKOFFICE.FOUR_EYES_SAME_PRINCIPAL',
-        `approval ${approvalRequestId} records no second principal, so it evidences one person twice`)
+        `approval ${approvalRequestId} records no second principal, so it evidences one person twice`,
+        'Have a different finance principal approve the close.')
     }
     // Refused rather than assumed. `approved_at` is nullable on approval_request (migration 0042)
     // because legacy rows predate the column — but it is NOT NULL on the dispatch row, and for money
@@ -243,7 +304,8 @@ abstract class TenantScopedStore {
     if (!approvedAt) {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_TIME_UNPROVEN',
         `approval ${approvalRequestId} is approved but carries no approved_at, so it cannot be shown `
-        + 'to have been approved within its window')
+        + 'to have been approved within its window',
+        'Re-request the close so the approval records when it was granted (migration 0042).')
     }
     const approvedAtIso = approvedAt instanceof Date ? approvedAt.toISOString() : new Date(approvedAt).toISOString()
     const expiresAt = row.expires_at as Date | string
@@ -251,7 +313,8 @@ abstract class TenantScopedStore {
     if (Date.parse(approvedAtIso) > Date.parse(expiresIso)) {
       throw new PayableWriteError('BACKOFFICE.APPROVAL_EXPIRED',
         `approval ${approvalRequestId} was approved at ${approvedAtIso}, after its window closed at `
-        + `${expiresIso}. A late approval authorises nothing.`)
+        + `${expiresIso}. A late approval authorises nothing.`,
+        'Re-request the close so a live approval authorises it.')
     }
     return {
       initiatedBy: normalise(initiator),
@@ -271,6 +334,25 @@ export class PgPayableCloseStore extends TenantScopedStore {
     const rows = await this.asApp(async (client) =>
       (await client.query(OPEN_PAYABLE_BREAKS_SQL, [period])).rows as Array<Record<string, unknown>>)
     return rows.map(mapOpenPayableBreak)
+  }
+
+  /**
+   * The close already on file, or null — the request path's already-closed refusal reads this.
+   *
+   * Read-only, and deliberately narrow: it returns when and under what approval, which is what a
+   * refusal message needs to name, and nothing else.
+   */
+  async closeForPeriod(period: string): Promise<{ closedAt: string; approvalRequestId: string } | null> {
+    const row = await this.asApp(async (client) => (await client.query(
+      `SELECT closed_at, approval_request_id FROM billing_tpp_cost_period_close
+        WHERE billing_period = $1`,
+      [period]
+    )).rows[0] as Record<string, unknown> | undefined)
+    if (!row) return null
+    return {
+      closedAt: iso(row.closed_at as Date | string),
+      approvalRequestId: row.approval_request_id as string
+    }
   }
 
   /**
@@ -297,7 +379,8 @@ export class PgPayableCloseStore extends TenantScopedStore {
       // interface types this nullable because the approval id is minted after the request, so an
       // absent one at execution means the operation was invoked outside the approvals primitive.
       throw new PayableWriteError('BACKOFFICE.FOUR_EYES_NO_APPROVAL',
-        `the close of ${input.period} cites no approval, so nothing evidences a second principal`)
+        `the close of ${input.period} cites no approval, so nothing evidences a second principal`,
+        'Request the close through POST /back-office/billing/cost-periods/{period}:close.')
     }
     const approvalRequestId = input.approvalRequestId
     const result = await this.asApp(async (client) => {
@@ -313,7 +396,8 @@ export class PgPayableCloseStore extends TenantScopedStore {
           'BACKOFFICE.FOUR_EYES_EVIDENCE_MISMATCH',
           `the close of ${input.period} names principals that are not the ones who granted approval `
           + `${approvalRequestId}. Denormalised evidence that disagrees with the row it cites is `
-          + 'worse than none, because it reads as corroboration.'
+          + 'worse than none, because it reads as corroboration.',
+          'Re-request the close so the recorded principals are the ones who granted the approval.'
         )
       }
 
@@ -345,14 +429,16 @@ export class PgPayableCloseStore extends TenantScopedStore {
       )).rows[0] as { id: string; evidence_hash: string } | undefined
       if (!existing) {
         throw new PayableWriteError('BACKOFFICE.CLOSE_WRITE_LOST',
-          `the close of ${input.period} neither inserted nor resolved to an existing row`)
+          `the close of ${input.period} neither inserted nor resolved to an existing row`,
+          'Retry the close; if it recurs the ledger is in an unexpected state and needs investigation.')
       }
       if (existing.evidence_hash !== hash) {
         throw new PayableWriteError(
           'BACKOFFICE.PERIOD_ALREADY_CLOSED',
           `cost period ${input.period} is already closed under different four-eyes evidence. `
           + 'Re-closing would mint a second record for one act; correct the period by re-rating, '
-          + 'which appends an immutable delta rather than reopening a closed period.'
+          + 'which appends an immutable delta rather than reopening a closed period.',
+          'Correct a closed period by re-rating it, not by closing it again.'
         )
       }
       return { closeId: existing.id, created: false }
@@ -446,7 +532,11 @@ export class PgPayableDispatchStore extends TenantScopedStore {
   ): Promise<{ dispatchId: string; created: boolean; dispatchedAt: string }> {
     const dispatchState = dispatchStateForPayableStatus(input.status)
     const responsePayload = input.responsePayload === undefined ? null : input.responsePayload
+    // Both provider-fed columns, checked before anything can be written. The payload screen catches
+    // recognised identifier shapes and known PSU keys; the reference screen catches everything else
+    // by refusing any value that is not an opaque identifier in the first place.
     assertRedactedResponse(responsePayload)
+    assertReferenceShaped(input.dispatchRef, 'financial_system_ref')
 
     const result = await this.asApp(async (client) => {
       const payable = (await client.query(
@@ -457,7 +547,8 @@ export class PgPayableDispatchStore extends TenantScopedStore {
         [input.payableId]
       )).rows[0] as Record<string, unknown> | undefined
       if (!payable) {
-        throw new PayableWriteError('BACKOFFICE.NOT_FOUND', `no payable ${input.payableId} for this tenant`)
+        throw new PayableWriteError('BACKOFFICE.NOT_FOUND', `no payable ${input.payableId} for this tenant`,
+          'Check the payable id against GET /back-office/billing/cost-periods/{period}.')
       }
 
       const evidence = await this.fourEyesEvidence(
@@ -488,7 +579,8 @@ export class PgPayableDispatchStore extends TenantScopedStore {
             `dispatch ${input.idempotencyKey} is ${latest}; ${dispatchState} does not legally follow `
             + `it. ${LEGAL_NEXT[latest].length === 0
               ? `${latest} is terminal.`
-              : `Legal next states: ${LEGAL_NEXT[latest].join(', ')}.`}`
+              : `Legal next states: ${LEGAL_NEXT[latest].join(', ')}.`}`,
+            'Record only a state that legally follows the one already on file.'
           )
         }
       }
@@ -527,7 +619,8 @@ export class PgPayableDispatchStore extends TenantScopedStore {
       )).rows[0] as { id: string; dispatched_at: Date | string } | undefined
       if (!existing) {
         throw new PayableWriteError('BACKOFFICE.DISPATCH_WRITE_LOST',
-          `dispatch ${input.idempotencyKey} neither inserted nor resolved to an existing row`)
+          `dispatch ${input.idempotencyKey} neither inserted nor resolved to an existing row`,
+          'Retry the dispatch with the same Idempotency-Key; it will not double-authorise the debit.')
       }
       return { dispatchId: existing.id, created: false, dispatchedAt: iso(existing.dispatched_at) }
     })

@@ -527,6 +527,7 @@ export function createApp(deps: AppDeps = {}) {
   const payableCloseService: PayableCloseService = new PayableCloseService({
     store: deps.payableCloseStore ?? {
       openPayableBreaks: async () => { throw new Error('payable close store is not configured') },
+      closeForPeriod: async () => { throw new Error('payable close store is not configured') },
       saveClose: async () => { throw new Error('payable close store is not configured') }
     },
     approvals: {

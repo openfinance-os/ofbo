@@ -1,6 +1,6 @@
 import { assertScope } from '../rbac.js'
 import type { Principal } from '../auth.js'
-import { toMinorUnitMoney } from '@ofbo/billing'
+import { toMinorUnitMoney, toWireMoneyTriple } from '@ofbo/billing'
 
 /**
  * BILL-16 — the payable state of one cost period, as one read.
@@ -117,25 +117,37 @@ export class PayablePeriodService {
         variance: toMinorUnitMoney(entry.varianceMilliFils, 'AED'),
         reconciliation_break_id: entry.reconciliationBreakId
       })),
-      payables: payables.map((row) => ({
-        payable_id: row.payableId,
-        period: row.period,
-        cost_recipient_type: row.costRecipientType,
-        cost_recipient_id: row.costRecipientId,
-        document_reference: row.documentReference,
-        gross_amount: toMinorUnitMoney(row.grossMilliFils, 'AED'),
-        net_amount: toMinorUnitMoney(row.netMilliFils, 'AED'),
-        vat_amount: toMinorUnitMoney(row.vatMilliFils, 'AED'),
+      payables: payables.map((row) => {
+        // Gross is derived from the ROUNDED parts, never rounded independently. The source row's
+        // CHECK guarantees net + VAT = gross in MILLI-fils; three separate half-up divisions break
+        // that on the wire (2500 -> 3, 1500 -> 2, 4000 -> 4, and 3 + 2 is not 4), publishing a
+        // contract violation over perfectly good evidence. toWireMoneyTriple is the repo's helper
+        // for exactly this, and the sibling BILL-14 document route already uses it.
+        const money = toWireMoneyTriple({
+          netMilliFils: row.netMilliFils,
+          vatMilliFils: row.vatMilliFils,
+          grossMilliFils: row.grossMilliFils
+        }, 'AED')
+        return {
+          payable_id: row.payableId,
+          period: row.period,
+          cost_recipient_type: row.costRecipientType,
+          cost_recipient_id: row.costRecipientId,
+          document_reference: row.documentReference,
+          gross_amount: money.gross,
+          net_amount: money.net,
+          vat_amount: money.vat,
         // Null until the period closes. The payable exists as soon as a document reconciles; what
         // the close adds is the AUTHORITY to honour the debit, which is why this reads from the
         // close rather than from the payable's own row.
-        approval_request_id: close?.approvalRequestId ?? null,
-        dispatch_state: row.dispatchState,
-        dispatched_at: row.dispatchedAt,
-        netted_against: row.nettedAgainstMilliFils === null
-          ? null
-          : toMinorUnitMoney(row.nettedAgainstMilliFils, 'AED')
-      }))
+          approval_request_id: close?.approvalRequestId ?? null,
+          dispatch_state: row.dispatchState,
+          dispatched_at: row.dispatchedAt,
+          netted_against: row.nettedAgainstMilliFils === null
+            ? null
+            : toMinorUnitMoney(row.nettedAgainstMilliFils, 'AED')
+        }
+      })
     }
   }
 }

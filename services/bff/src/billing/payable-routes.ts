@@ -3,6 +3,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { scopeDenied } from '../errors.js'
 import { replayable, type IdempotencyStore } from '../idempotency.js'
+import { PayableWriteError } from '@ofbo/db'
 import { PayableCloseError, type PayableCloseService } from './payable-close.js'
 import { PayableDispatchError, type PayableDispatchService } from './payable-dispatch.js'
 import { PayablePeriodError, type PayablePeriodService } from './payable-period.js'
@@ -28,6 +29,28 @@ function domainFailure(
   )
 }
 
+/**
+ * The STORE's refusals, answered with the status the contract declares for them.
+ *
+ * `PayableWriteError` was mapped nowhere in the BFF, so every store-layer refusal — an unknown
+ * payable, an illegal dispatch transition, an approval that does not authorise the write — escaped
+ * to `app.onError` as an untyped `500`. The contract declares 404 and 409 for exactly those cases,
+ * which made both branches unreachable on the deployed path: `serve.ts` and `worker.ts` both wire
+ * the real Pg store, so this was not a theoretical gap.
+ */
+function writeFailure(c: Context, error: PayableWriteError): Response {
+  return c.json(
+    errorEnvelope(
+      error.code,
+      error.message,
+      error.remediation
+        ?? 'Resolve the conflict the message describes and retry with the same Idempotency-Key.',
+      DOCS_BASE
+    ),
+    error.status as ContentfulStatusCode
+  )
+}
+
 export function payableRoutes(
   services: {
     close: PayableCloseService
@@ -43,6 +66,7 @@ export function payableRoutes(
         return c.json(dataEnvelope(view), 200)
       } catch (error) {
         if (error instanceof PayablePeriodError) return domainFailure(c, error)
+        if (error instanceof PayableWriteError) return writeFailure(c, error)
         const denied = scopeDenied(c, error)
         if (denied) return denied
         throw error
@@ -60,13 +84,17 @@ export function payableRoutes(
           )
           // 202 and an approval_request, never an inline close. The gated operation runs on the
           // SECOND principal's approval through POST /back-office/approvals/{id}:approve.
+          // `expires_at` is carried because a client cannot show the two-business-hour window
+          // (PRD §10) without it, and every other four-eyes route returns it.
           return c.json(dataEnvelope({
             approval_request_id: result.approval_request_id,
             state: result.state,
-            operation_type: 'billing.tpp_cost.period_close'
+            operation_type: 'billing.tpp_cost.period_close',
+            ...(result.expires_at ? { expires_at: result.expires_at } : {})
           }), 202)
         } catch (error) {
           if (error instanceof PayableCloseError) return domainFailure(c, error)
+          if (error instanceof PayableWriteError) return writeFailure(c, error)
           const denied = scopeDenied(c, error)
           if (denied) return denied
           throw error
@@ -99,6 +127,7 @@ export function payableRoutes(
           }), 200)
         } catch (error) {
           if (error instanceof PayableDispatchError) return domainFailure(c, error)
+          if (error instanceof PayableWriteError) return writeFailure(c, error)
           const denied = scopeDenied(c, error)
           if (denied) return denied
           throw error

@@ -3405,7 +3405,9 @@ export interface paths {
          * TPP cost-period state — close, payables and what is blocking them (BILL-16)
          * @description The payable side of a billing period in one read: whether the period has closed, which four-eyes approval closed it, the payables it authorises, and the unresolved breaks that are holding it open.
          *
-         *     `close_state` is DERIVED, never stored as a workflow column. `blocked` means `open_break_count` is above zero, so a close would be refused; `open` means the period is clear and nobody has asked to close it; `closed` means a second finance principal approved the close and the row exists. There is no `pending_approval` value because a requested close lives on the approvals queue, not here — a period with an outstanding request is still `open`, and `GET /back-office/approvals/pending` is where that request is visible.
+         *     `close_state` is DERIVED, never stored as a workflow column. `closed` means a second finance principal approved the close and the row exists; `blocked` means no close exists and `open_break_count` is above zero, so a close would be refused; `open` means neither.
+         *
+         *     `closed` takes PRECEDENCE over `blocked`: a break raised after a period closed is real and stays visible in `blockers`, but it cannot un-close the period, and reporting `blocked` there would present history as a live refusal. What stops a break raised BEFORE approval slipping through is the re-check at close execution, not this field. There is no `pending_approval` value because a requested close lives on the approvals queue, not here — a period with an outstanding request is still `open`, and `GET /back-office/approvals/pending` is where that request is visible.
          */
         get: {
             parameters: {
@@ -3535,7 +3537,11 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Dispatched, or replayed. A replay returns the same result without authorising a second debit — `replayed` says which happened. */
+                /**
+                 * @description Dispatched, or replayed. Either way no second debit is authorised.
+                 *
+                 *     `replayed` reports what happened DOWNSTREAM — that the financial system matched an existing instruction, or that our own append-only ledger already held this dispatch. It is not an HTTP-level flag: retrying with the SAME `Idempotency-Key` replays the original response body verbatim, per the idempotency convention, so `replayed` on that response carries whatever it said the first time. To observe the downstream flag flip, the caller must send a fresh key for the same payable — which is exactly the case where the ledger or P9 recognises the instruction and refuses to double it.
+                 */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -5763,7 +5769,7 @@ export interface components {
          */
         TppCostDispatchState: "pending" | "dispatched" | "accepted" | "rejected" | "failed";
         /**
-         * @description Derived, never stored. `blocked` = unresolved material payable breaks exist; `open` = clear but not closed; `closed` = a second finance principal approved the close.
+         * @description Derived, never stored. `closed` = a second finance principal approved the close (and takes precedence — a break raised afterwards cannot un-close a period); `blocked` = not closed and unresolved material payable breaks exist; `open` = neither.
          * @enum {string}
          */
         TppCostCloseState: "open" | "blocked" | "closed";

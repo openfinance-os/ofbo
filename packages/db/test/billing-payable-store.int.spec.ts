@@ -115,7 +115,8 @@ describe('BILL-16 — payable close and AP dispatch', () => {
    */
   const OWNED_PERIODS = [
     PERIOD, '2026-04', '2026-02', '2026-03', '2026-01',
-    '2025-12', '2025-11', '2025-10', '2025-09', '2025-08', '2025-07', '2025-06'
+    '2025-12', '2025-11', '2025-10', '2025-09', '2025-08', '2025-07', '2025-06',
+    '2025-05', '2025-04', '2025-03', '2025-02'
   ]
 
   beforeAll(async () => {
@@ -604,6 +605,104 @@ describe('BILL-16 — payable close and AP dispatch', () => {
     } finally {
       await otherPeriod.close()
     }
+  })
+
+  it('REFUSES a financial_system_ref that is not reference-shaped (the grant\'s real basis)', async () => {
+    // The gap the cross-tenant grant actually turns on. `redactText` masks three SHAPES — Emirates
+    // ID, IBAN, e-mail — and passes everything else through, so a vendor reference carrying a
+    // personal name matches nothing and would survive into a column with no deletion path. Shape
+    // constraint is the only check that is total for free text.
+    const period = '2025-05'
+    const { payableId } = await seedPayableForPeriod(period)
+    const approval = await seedApproval({ period })
+    await closeStore.saveClose({
+      period, initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
+      approvalRequestId: approval, feedsMonthlySignOff: true
+    }, 'trace-ref-0')
+
+    await expect(dispatchStore.recordDispatch({
+      payableId,
+      // Prose a masking redactor recognises nothing in. No identifier shape, no PSU key.
+      dispatchRef: 'DD/2026-07/NEBRAS - mandate held by A. Rahman, acct ending 4412',
+      status: 'dispatched',
+      approvalRequestId: approval,
+      idempotencyKey: `idem-${randomUUID()}`
+    }, 'trace-ref-1')).rejects.toThrow(/not reference-shaped/)
+
+    const written = (await admin.query(
+      `SELECT count(*)::int AS n FROM billing_tpp_cost_ap_dispatch WHERE approval_request_id = $1`,
+      [approval]
+    )).rows[0].n
+    expect(written).toBe(0)
+  })
+
+  it('admits an opaque vendor reference, and the masking markers the service may substitute', async () => {
+    // The constraint must not reject legitimate references, or it would be a denial of service on
+    // correct data — the same failure BILL-14 hit when a generic digit rule ate the required TRNs.
+    const period = '2025-04'
+    const { payableId } = await seedPayableForPeriod(period)
+    const approval = await seedApproval({ period })
+    await closeStore.saveClose({
+      period, initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
+      approvalRequestId: approval, feedsMonthlySignOff: true
+    }, 'trace-ref-ok-0')
+
+    for (const ref of ['P9-DD-2026-07/NEBRAS:0042', 'urn:p9:dispatch:9f3c=', '[REDACTED:iban]']) {
+      await expect(dispatchStore.recordDispatch({
+        payableId, dispatchRef: ref, status: 'dispatched',
+        approvalRequestId: approval, idempotencyKey: `idem-${randomUUID()}`
+      }, 'trace-ref-ok-1')).resolves.toMatchObject({ created: true })
+    }
+  })
+
+  it('PERSISTS no customer detail in either provider-fed column — read back from the row', async () => {
+    // 0040 set the bar as redaction "proven by a test against a persisted row". A refusal test
+    // proves the guard fires; this proves what actually LANDS, which is the claim migration 0043
+    // makes when it grants the cross-tenant read.
+    const period = '2025-03'
+    const { payableId } = await seedPayableForPeriod(period)
+    const approval = await seedApproval({ period })
+    await closeStore.saveClose({
+      period, initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
+      approvalRequestId: approval, feedsMonthlySignOff: true
+    }, 'trace-persist-0')
+
+    const key = `idem-${randomUUID()}`
+    const recorded = await dispatchStore.recordDispatch({
+      payableId,
+      dispatchRef: 'P9-DD-2025-03-0001',
+      status: 'dispatched',
+      approvalRequestId: approval,
+      idempotencyKey: key,
+      responsePayload: { payable_status: 'dispatched', replayed: false, accepted: true }
+    }, 'trace-persist-1')
+
+    const row = (await admin.query(
+      `SELECT financial_system_ref, response_payload::text AS payload, idempotency_key
+         FROM billing_tpp_cost_ap_dispatch WHERE id = $1`,
+      [recorded.dispatchId]
+    )).rows[0]
+
+    const stored = `${row.financial_system_ref} ${row.payload} ${row.idempotency_key}`
+    // No UAE IBAN, no Emirates-ID shape, no e-mail, anywhere in what was actually written.
+    expect(stored).not.toMatch(/AE\d{2}(?:[ ._-]?\d){19}/i)
+    expect(stored).not.toMatch(/\b\d{3}[-._ ]?\d{4}[-._ ]?\d{7}[-._ ]?\d\b/)
+    expect(stored).not.toMatch(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/)
+    // And the reference itself is opaque, not prose.
+    expect(row.financial_system_ref).toMatch(/^[A-Za-z0-9._:/=+-]{1,128}$/)
+  })
+
+  it('reports an already-closed period so the request path can refuse it', async () => {
+    const period = '2025-02'
+    const approval = await seedApproval({ period })
+    expect(await closeStore.closeForPeriod(period)).toBeNull()
+    await closeStore.saveClose({
+      period, initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
+      approvalRequestId: approval, feedsMonthlySignOff: true
+    }, 'trace-cfp-1')
+    const existing = await closeStore.closeForPeriod(period)
+    expect(existing?.approvalRequestId).toBe(approval)
+    expect(existing?.closedAt).toBeTruthy()
   })
 
   /** Same as seedPayable, but for a nominated period so each test owns its own close. */

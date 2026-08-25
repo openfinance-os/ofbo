@@ -40,6 +40,15 @@ export interface OpenPayableBreak {
 
 export interface PayableCloseStore {
   openPayableBreaks(period: string): Promise<OpenPayableBreak[]>
+  /**
+   * The close already on file for this period, or null.
+   *
+   * Without this the request path could only check breaks, so asking to close an ALREADY CLOSED
+   * period minted a second approval request and answered 202 — sending a second principal to
+   * approve an act that had already happened. The store refuses a divergent second close at
+   * execution, but that is a different endpoint and hours later; the contract declares 409 here.
+   */
+  closeForPeriod(period: string): Promise<{ closedAt: string; approvalRequestId: string } | null>
   saveClose(
     input: {
       period: string
@@ -58,7 +67,7 @@ export interface PayableApprovalRequester {
     operationType: string,
     payload: Record<string, unknown>,
     traceId: string
-  ): Promise<{ approval_request_id: string; state: string }>
+  ): Promise<{ approval_request_id: string; state: string; expires_at?: string }>
 }
 
 export interface PayableCloseDeps {
@@ -84,7 +93,7 @@ export class PayableCloseService {
     principal: Principal | undefined,
     period: string,
     traceId: string
-  ): Promise<{ approval_request_id: string; state: string; period: string }> {
+  ): Promise<{ approval_request_id: string; state: string; period: string; expires_at?: string }> {
     if (!principal) {
       throw new PayableCloseError('BACKOFFICE.UNAUTHENTICATED', 'Authentication required.', 401,
         'Present a valid bearer token from the enterprise identity provider (P2).')
@@ -95,6 +104,19 @@ export class PayableCloseService {
         'Supply the cost period as YYYY-MM, e.g. 2026-06.')
     }
 
+    // Closed first, breaks second: a closed period is a settled fact, and reporting it as
+    // "blocked by breaks" would send an operator to resolve breaks that cannot unblock anything.
+    const existing = await this.deps.store.closeForPeriod(period)
+    if (existing) {
+      throw new PayableCloseError(
+        'BACKOFFICE.PERIOD_ALREADY_CLOSED',
+        `Cost period ${period} was closed at ${existing.closedAt} under approval `
+        + `${existing.approvalRequestId}. Re-closing would mint a second four-eyes record for one act.`,
+        409,
+        'Correct a closed period by re-rating it, which appends an immutable delta rather than '
+        + 'reopening a period that is already shut.'
+      )
+    }
     await this.assertNoOpenBreaks(period)
     const approval = await this.deps.approvals.request(principal, PAYABLE_CLOSE_OPERATION, {
       period,
