@@ -4673,3 +4673,78 @@ Two things make this waiver weightier than 01, and they are stated there rather 
 Two agent-performed merges in one day is the point at which "exception" reads as "practice". The
 branch-protection runbook would have refused both. That, and HARNESS-16 — an advisory control that
 cannot complete is not advisory, it is absent — are the two follow-ups the waiver names.
+
+## 2026-08-25 — BILL-16 done, BILL-15 closed, BILL-17 console shipped (the payable side works end to end)
+
+BILL-16 had domain, service and port layers and no store, so not one of its criteria was
+deliverable end to end. This closes that, closes the BILL-15 criterion that was waiting on it,
+and ships the console that makes the whole payable side demonstrable.
+
+**The store, and the three obligations the schema could not carry.** Migration 0043 adds
+`billing_tpp_cost_period_close` — a table rather than a status column, because a close is evidence
+of a four-eyes act (two named principals, an approval, a moment) and this family has no UPDATE
+grant a flag could be set through. `UNIQUE (bank_id, billing_period)` makes a retry idempotent and
+a divergent second close unrepresentable rather than merely unusual. Three store classes, not one:
+folding `recordDispatch` into `PgBillingTppCostStore` would have destroyed the property the dispatch
+service's own comment claims — that its store surface cannot reach the evidence tables — while
+leaving the comment behind to assert it.
+
+Criterion 5 is discharged by reading `approval_request` inside the SAME tenant transaction as the
+INSERT rather than accepting operator-shaped arguments: the cited approval must be approved, for
+this period, granted in time; both principals are stamped from the approval RECORD and normalised,
+and a mismatch against the caller's own view is refused; the P9 response is redacted before the
+first INSERT and re-checked at the write boundary, with the caller-supplied Idempotency-Key stored
+as a digest because an inbound header's content is whatever an operator typed into it. Transition
+ORDER — which 0039 states the UNIQUE constraint does not carry — is refused too.
+
+Migration 0043 also grants `bank_internal_view` the read on `billing_tpp_cost_ap_dispatch` that
+0039 withheld and 0040 deferred to this story. The condition was redaction proven against a
+persisted row; that control now exists, and the two integration assertions that tracked the
+condition flipped deliberately.
+
+**Two findings the tests produced rather than review.** Migration 0042 already CHECKs
+`approved_at <= expires_at`, so a late approval cannot EXIST to be cited — the criterion is met one
+level stronger than the write path needs, and the test now asserts the INSERT is refused instead of
+seeding an impossible row. And nothing in production set `reconciliationBreakId`, so every diff line
+persisted with a null id — which `openPayableBreaks` reads as "raised and not yet worked". The first
+break of any period would have blocked its close FOREVER, with no workflow anywhere able to clear
+it: the gate could only ever say no. `TppCostReconcileService` now escalates material payable breaks
+into real E1 breaks and stamps the ids before persisting, idempotent on the run.
+
+That escalation is what lets **BILL-15 criterion 3** be walked end to end — an open break refuses
+the close request, refuses the close EXECUTION when it lands inside the approval window, and leaves
+the payable unapproved so dispatch refuses; resolving it lets the same period close. Each leg is
+asserted in its own right rather than relying on the first to protect the rest.
+
+**IG §10.16 netting** is REPORTED, not applied: ADR 0007 keeps both role ledgers gross, so each
+position stays on the wire as its own signed line and `nettedMilliFils` states how much cancelled.
+An adjustment citing no approval is refused — otherwise a desk could make a residue disappear by
+asserting it away. Residue posts to suspense AND raises an E1 break, derived exactly as the ledger
+derives it.
+
+**Also fixed, because it made the surface unreachable:** the BILL-14/15 document and reconcile routes
+were never wired into `worker.ts` or `serve.ts`, so every deployed call hit a fail-closed default
+that threw a plain `Error` the route could not type — an unhandled 500 rather than the contract's
+envelope.
+
+**BILL-17 (partial).** A TPP Cost Management section on the existing billing console rather than a
+new module, plus the one IA pass (`/billing` → "Billing & TPP Cost", `/tpp-billing` → "LFI Revenue &
+TPP Registry"; hrefs and API paths unchanged). Deterministic demo scenarios seed a CLOSED period
+with a dispatched-then-accepted payable and a BLOCKED period with an escalated VAT-variance break —
+two periods, because one cannot demonstrate the gate in both directions. Hosted smoke asserts the
+totals tie out and that a close is never 200.
+
+Still owed on BILL-17, recorded on the item: a dedicated Stitch screen (no Stitch tooling was
+reachable from the session that built this, so the console was built token-only against the existing
+UIF-01 primitives and passes design-conformance, no-raw-style and axe); a TPP-cost-specific governed
+export; most of the named scenario list as seeded demos rather than tests; and browser E2E.
+
+Spec-first: 95 → 98 paths. `TppCostDispatchState` mirrors the 0039 CHECK value for value — the
+BILL-17 obligation not to let those vocabularies drift.
+
+Evidence: unit 1654/1654 across 229 files; integration 210/210 across 80 files on a pristine
+PostgreSQL 16.13; Q4.5 lineage PASSED with both new tables covered and allowed gaps none; coverage
+94.78% lines; typecheck 11/11 packages; ESLint clean; `verify:contract` 33 conformant / 0 drift
+against a live BFF; docs:check, discovery:link and pii-literal-check clean. The full four-eyes close
+was walked against the running BFF: request → 202 + approval_request → second principal approves →
+the close row lands with both principals normalised from the approval record.

@@ -145,6 +145,92 @@ describe('demo BFF (Cloudflare Worker)', () => {
     expectDigest(review.data)
   }, 30_000)
 
+  /**
+   * BILL-17 — the TPP Cost Management (payable) surface on the hosted demo.
+   *
+   * Asserts the TOTALS, not just a 200: the console's headline figures are derived from the payable
+   * rows, so a read that succeeds while the arithmetic drifts is exactly the failure a status-code
+   * smoke misses. Money is checked as integer MINOR units — the ledger's finer milli-fils must not
+   * reach the wire (the CODE-03 ruling), and a period whose gross does not equal net + VAT would
+   * mean the boundary conversion had gone wrong somewhere it is expensive to find later.
+   *
+   * Period-agnostic by design. The demo seed provisions the last two months relative to whenever it
+   * ran, so pinning a month here would make the suite fail on the first of every month rather than
+   * when something is actually broken.
+   */
+  it('serves the TPP cost-period surface with totals that tie out', async () => {
+    const month = period()
+    const res = await fetch(`${BFF}/back-office/billing/cost-periods/${month}`, {
+      headers: { 'x-fapi-interaction-id': fapi(), authorization: billingToken }
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      data: {
+        period: string
+        close_state: string
+        open_break_count: number
+        blockers: Array<{ variance: { amount: number; currency: string } }>
+        payables: Array<{
+          net_amount: { amount: number; currency: string }
+          vat_amount: { amount: number; currency: string }
+          gross_amount: { amount: number; currency: string }
+          cost_recipient_type: string
+        }>
+      }
+    }
+    const view = body.data
+    expect(view.period).toBe(month)
+    expect(['open', 'blocked', 'closed']).toContain(view.close_state)
+    // Derived, never stored: a period carrying unresolved breaks and no close row IS blocked.
+    if (view.close_state === 'blocked') expect(view.open_break_count).toBeGreaterThan(0)
+    expect(view.open_break_count).toBe(view.blockers.length)
+
+    for (const payable of view.payables) {
+      for (const money of [payable.net_amount, payable.vat_amount, payable.gross_amount]) {
+        // Integer minor units, per the binding convention. A milli-fils leak shows up here as a
+        // non-integer or as a figure a thousand times too large.
+        expect(Number.isInteger(money.amount)).toBe(true)
+        expect(money.currency).toMatch(/^[A-Z]{3}$/)
+      }
+      expect(payable.gross_amount.amount).toBe(payable.net_amount.amount + payable.vat_amount.amount)
+      expect(['nebras', 'underlying_lfi']).toContain(payable.cost_recipient_type)
+    }
+  }, 30_000)
+
+  /**
+   * The four-eyes rule, asserted as a REFUSAL to act inline.
+   *
+   * A close either returns `202` with an approval request — meaning nothing has closed and a second
+   * principal must still act — or `409`, meaning the period is blocked or already shut. A `200`
+   * would mean the period closed on one person's say-so, which is the single thing this control
+   * exists to prevent, so it is called out by name rather than folded into a range check.
+   */
+  it('never closes a cost period inline — 202 with an approval, or a refusal', async () => {
+    const res = await fetch(`${BFF}/back-office/billing/cost-periods/${period()}:close`, {
+      method: 'POST',
+      headers: {
+        'x-fapi-interaction-id': fapi(),
+        'idempotency-key': `deploy-smoke-close-${randomUUID()}`,
+        authorization: billingToken
+      }
+    })
+    expect(res.status).not.toBe(200)
+    expect([202, 409]).toContain(res.status)
+    const body = (await res.json()) as {
+      data?: { approval_request_id?: string; state?: string; operation_type?: string }
+      error?: { code?: string; remediation?: string }
+    }
+    if (res.status === 202) {
+      expect(body.data?.operation_type).toBe('billing.tpp_cost.period_close')
+      expect(body.data?.state).toBe('pending')
+      expect(body.data?.approval_request_id).toBeTruthy()
+    } else {
+      // A refusal still has to tell the operator what to do about it.
+      expect(body.error?.code).toBeTruthy()
+      expect(body.error?.remediation).toBeTruthy()
+    }
+  }, 30_000)
+
   it.skipIf(!DATABASE_URL)(
     'persists a High-class audit record for the sign-in (request_trace_id = x-fapi-interaction-id)',
     async () => {
