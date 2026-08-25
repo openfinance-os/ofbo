@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import { assertScope } from '../rbac.js'
 import type { Principal } from '../auth.js'
-import { toMinorUnitMoney, toWireMoneyTriple } from '@ofbo/billing'
+import type { HighClassAuditSink } from '../high-class-audit.js'
+import { canonicalJson, toMinorUnitMoney, toWireMoneyTriple } from '@ofbo/billing'
 
 /**
  * BILL-16 — the payable state of one cost period, as one read.
@@ -57,6 +59,8 @@ export interface PeriodPayableRow {
 
 export interface PayablePeriodStore {
   periodClose(period: string): Promise<StoredPeriodClose | null>
+  /** BILL-17 — every payable artefact for the period, as one consistent snapshot. */
+  evidencePack(period: string): Promise<TppCostEvidencePack>
   payablesForPeriod(period: string): Promise<PeriodPayableRow[]>
   openPayableBreaks(period: string): Promise<Array<{
     lineRef: string
@@ -68,8 +72,58 @@ export interface PayablePeriodStore {
   }>>
 }
 
+export interface TppCostEvidencePack {
+  documents: unknown[]
+  reconciliations: unknown[]
+  diffLines: unknown[]
+  closes: unknown[]
+  dispatches: unknown[]
+}
+
 export interface PayablePeriodDeps {
   store: PayablePeriodStore
+  /**
+   * Optional so the read model works without it. The EXPORT refuses rather than degrading when it
+   * is absent — see `exportEvidence`.
+   */
+  audit?: HighClassAuditSink
+  now?: () => Date
+}
+
+/** The pack's body, digest excluded. Shared by the issuer and by anyone recomputing it. */
+export function tppCostEvidenceExportBody(input: {
+  period: string
+  generatedAt: string
+  pack: TppCostEvidencePack
+}): Record<string, unknown> {
+  return {
+    schema_version: '1',
+    period: input.period,
+    generated_at: input.generatedAt,
+    record_counts: {
+      documents: input.pack.documents.length,
+      reconciliations: input.pack.reconciliations.length,
+      diff_lines: input.pack.diffLines.length,
+      closes: input.pack.closes.length,
+      dispatches: input.pack.dispatches.length
+    },
+    documents: input.pack.documents,
+    reconciliations: input.pack.reconciliations,
+    diff_lines: input.pack.diffLines,
+    closes: input.pack.closes,
+    dispatches: input.pack.dispatches
+  }
+}
+
+/**
+ * Canonical digest over the body.
+ *
+ * `canonicalJson` sorts keys recursively, so two issues of the same period produce the same digest
+ * regardless of column or property order — which is what makes a recipient's recomputation a real
+ * check rather than a coin flip on serialisation order.
+ */
+export function tppCostEvidenceExportDigest(body: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalJson(body)).digest('hex')
 }
 
 export class PayablePeriodService {
@@ -149,5 +203,63 @@ export class PayablePeriodService {
         }
       })
     }
+  }
+
+  /**
+   * Issue the period's evidence pack (BILL-17).
+   *
+   * Audited on EVERY call, not only on anomalies: reading the whole evidence base for a period is a
+   * disclosure event regardless of what it contains, and an export that leaves no trace is exactly
+   * the one an investigator later cannot account for.
+   *
+   * The audit sink is REQUIRED here and optional for the read model above. A governed export whose
+   * governance silently disappears when nobody wired a sink is not a governed export — so this
+   * refuses rather than exporting unaudited.
+   */
+  async exportEvidence(
+    principal: Principal | undefined,
+    period: string,
+    traceId: string
+  ): Promise<Record<string, unknown>> {
+    if (!principal) {
+      throw new PayablePeriodError('BACKOFFICE.UNAUTHENTICATED', 'Authentication required.', 401,
+        'Present a valid bearer token from the enterprise identity provider (P2).')
+    }
+    assertScope(principal, PAYABLE_PERIOD_SCOPE)
+    if (!PERIOD.test(period)) {
+      throw new PayablePeriodError('BACKOFFICE.INVALID_PERIOD', `Period ${period} is not YYYY-MM.`, 400,
+        'Supply the cost period as YYYY-MM, e.g. 2026-06.')
+    }
+    const audit = this.deps.audit
+    if (!audit) {
+      throw new PayablePeriodError(
+        'BACKOFFICE.EXPORT_NOT_GOVERNED',
+        'The TPP cost evidence export is not configured with an audit sink, and an unaudited '
+        + 'governed export is a contradiction.',
+        503,
+        'Configure the High-class audit sink before enabling the evidence export.'
+      )
+    }
+
+    const pack = await this.deps.store.evidencePack(period)
+    const generatedAt = (this.deps.now ?? (() => new Date()))().toISOString()
+    const body = tppCostEvidenceExportBody({ period, generatedAt, pack })
+    const sha256 = tppCostEvidenceExportDigest(body)
+
+    await audit.emit({
+      event_type: 'billing_tpp_cost_evidence_exported',
+      acting_principal: principal.subject,
+      acting_persona: principal.persona,
+      scope_used: PAYABLE_PERIOD_SCOPE,
+      superadmin_marker: principal.scopes.includes('platform:superadmin'),
+      request_trace_id: traceId,
+      response_status: 200,
+      // The digest and the counts, never the pack. The audit trail records WHAT was disclosed and
+      // that it can be identified later; copying the evidence into the audit table would duplicate
+      // the whole ledger into a second INSERT-only store on every download.
+      request_body: { period, sha256, record_counts: body.record_counts }
+    })
+
+    return { ...body, sha256 }
   }
 }

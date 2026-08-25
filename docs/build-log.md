@@ -4884,3 +4884,73 @@ own spec-change.
 
 Re-verified after the fixes: unit 1659/1659, integration 214/214, Q4.5 PASSED allowed gaps none,
 coverage 94.87% lines, typecheck 11/11, ESLint clean, `verify:contract` 33 conformant / 0 drift.
+
+## 2026-08-25 — BILL-17 second pass: governed evidence export, real materiality, browser E2E
+
+Four of the five gaps the first BILL-17 pass left open are closed. The Stitch obligation is not, and
+is still recorded as owed rather than worked around.
+
+**Governed TPP cost evidence export.** `GET /back-office/billing/tpp-cost-export` (spec-first,
+98 → 99 paths, `billing:read`) issues one period's payable evidence as a single pack — documents
+with their parsed lines nested, reconciliations, diff lines, the four-eyes close, the append-only AP
+dispatch log. Distinct from `GET /back-office/billing/export`, which is the tenant *portability*
+artifact: that one answers "give me my data if I leave", this one answers "show me the evidence
+behind this month's payable".
+
+Three decisions worth recording. The five collections are read in **one transaction**, because
+across five a dispatch landing between two of them would make the pack attest to a period that
+never existed at any instant. Rows come from `to_jsonb(t)` rather than an enumerated projection —
+a hand-written column list silently stops exporting whatever a later migration adds, and this is
+evidence. And the digest covers the body **excluding itself**: a digest that covered itself could
+never be recomputed, because the recipient would need the answer to check the answer.
+
+Audited on every call, since reading a period's whole evidence base is a disclosure event whatever
+it contains. The audit row carries the digest and the counts, never the pack — copying it in would
+duplicate the ledger into a second INSERT-only store on every download. The service **refuses (503)
+when no audit sink is configured** rather than exporting ungoverned; an unaudited governed export is
+a contradiction, and degrading silently is how it would become one.
+
+Amounts inside the pack stay in the ledger's milli-fils rather than wire `Money`, stated in the
+schema so it reads as a decision: the digest must attest to what the ledger holds, not to a rounded
+restatement. The console reads its own figures from the cost-period endpoint, which does emit Money.
+
+Verified end to end against a live BFF, with the digest recomputed by an independent Python
+implementation — `39acbcaa…` published, `39acbcaa…` recomputed.
+
+**Materiality — the one the last pass listed as deliberately unchanged.** `PayableBreak.material`
+was hardcoded `true` at seven construction sites, so `openPayableBreaks`'s `AND d.material` filtered
+nothing. It is now derived **once, centrally**, over the whole break array before anything reads it.
+Seven inline copies of a judgement is exactly how the hardcoded value survived — every site looked
+locally reasonable, and nobody noticed that no site had decided anything. The seven literals are now
+a named `MATERIALITY_DECIDED_CENTRALLY` placeholder, so a reader cannot mistake them for verdicts.
+
+Stated precisely, because it is less than it sounds: **at the defaults, materiality equals the
+matching tolerance**, so every break that exists is still material and no default behaviour moves.
+What moves is that the judgement is derived and configurable. A test pins that equality rather than
+implying a gap that the defaults do not open. `wrong_recipient` is material at zero variance — the
+spec's own `TppCostDiffLine.material` description says so — and the constant documents that payables
+count milli-fils while the E1 `BreakThreshold` counts fils, a factor of a thousand apart.
+
+**Browser E2E, and a CI gap it uncovered.** Eight Playwright specs cover the new section. Writing
+them surfaced something the first pass had not: the `q3-e2e` job ran only `pnpm db:seed`, which
+creates **zero** TPP cost evidence — `seedTppCostEvidence` lives behind `db:seed:demo`, which only
+`deploy.yml` ran. The console therefore rendered empty in CI, and any spec asserting seeded data
+would have failed. The job now runs the demo seed too, matching the hosted demo it is meant to
+mirror. Measured on a clean database: `db:seed` alone → 0 closes, 0 dispatches, 0 documents;
+with `db:seed:demo` → the closed period 2026-06 with a `dispatched`→`accepted` log, and 2026-07
+blocked by a material VAT variance linked to a real E1 break.
+
+One thing deliberately **not** asserted in the browser: the read-only branch (`billing:read` without
+`finance:reconciliation:write`). No demo persona holds that combination — `finance-analyst` has
+both and every other persona lacks `billing:read` entirely — so a browser test for it would assert a
+fiction. It is covered at component level, where the input can actually be constructed.
+
+**Still owed: Stitch.** Re-checked this session. The toolset has `DesignSync` (claude.ai
+design-system projects) and the connector registry has no Stitch entry, so the project CLAUDE.md
+binds to (`8050269076066130289`) is unreachable from here. Citing a screen id that was never
+generated would be worse than leaving this open.
+
+Evidence: unit 1677/1677 · integration 215/215 on a pristine PostgreSQL 16.13 · Q4.5 PASSED, allowed
+gaps none · typecheck 11/11 · ESLint clean · `verify:contract` 34 conformant / 0 drift against a
+live BFF · docs:check, pii-literal-check, design-conformance, no-raw-style, design-tokens and axe
+all clean.

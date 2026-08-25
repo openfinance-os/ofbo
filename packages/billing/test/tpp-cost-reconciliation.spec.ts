@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS,
   DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS,
+  isPayableBreakMaterial,
   NEBRAS_QUERY_WINDOW_DAYS,
   fils,
   payableBreakToLineType,
@@ -385,5 +387,56 @@ describe('BILL-15 payable break_type → contract LineType (criterion 6a)', () =
     // A Hub fee variance is nebras_fees; the same variance against an underlying LFI is not.
     expect(payableBreakToLineType('rate_variance', 'nebras')).toBe('nebras_fees')
     expect(payableBreakToLineType('rate_variance', 'underlying_lfi')).not.toBe('nebras_fees')
+  })
+})
+
+describe('BILL-15/16 payable-break materiality', () => {
+  it('coincides with the tolerance at the DEFAULTS, so the gate stays conservative out of the box', () => {
+    // Measured, not assumed: both defaults are one fil, so with no bank configuration every break
+    // that exists at all is also material. Replacing the hardcoded `true` therefore changes no
+    // default behaviour — what it changes is that the judgement is now DERIVED and configurable
+    // instead of asserted, which is what let a sub-fil difference block a month before.
+    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS)
+    expect(isPayableBreakMaterial('rate_variance', fils(1) + 1)).toBe(true)
+    expect(isPayableBreakMaterial('rate_variance', fils(2))).toBe(true)
+  })
+
+  it('opens a gap between "is a break" and "blocks the close" once a bank configures one', () => {
+    // The gap the two constants exist to allow. Above the matching tolerance so a break EXISTS and
+    // stays queryable inside the IG §10.13 window; below the bank's blocking threshold so it does
+    // not refuse the month.
+    const configured = fils(100)
+    expect(isPayableBreakMaterial('rate_variance', fils(2), configured)).toBe(false)
+  })
+
+  it('treats the threshold as exclusive, so a variance exactly at it is immaterial', () => {
+    expect(isPayableBreakMaterial('quantity_variance', fils(1))).toBe(false)
+  })
+
+  it('judges on absolute variance — an undercharge is as material as an overcharge', () => {
+    expect(isPayableBreakMaterial('rate_variance', -fils(5))).toBe(true)
+    expect(isPayableBreakMaterial('rate_variance', fils(5))).toBe(true)
+  })
+
+  it('holds a wrong recipient material at ZERO variance', () => {
+    // Paying exactly the right amount to the wrong counterparty is not a rounding difference.
+    // The spec's TppCostDiffLine.material description states this verbatim.
+    expect(isPayableBreakMaterial('wrong_recipient', 0)).toBe(true)
+  })
+
+  it('honours a bank-configured threshold rather than only the default', () => {
+    // AED 1.00 = 100 fils. A bank that only wants to stop the month for real money.
+    const configured = fils(100)
+    expect(isPayableBreakMaterial('vat_variance', fils(50), configured)).toBe(false)
+    expect(isPayableBreakMaterial('vat_variance', fils(150), configured)).toBe(true)
+  })
+
+  it('does not confuse the milli-fils and fils vocabularies', () => {
+    // The trap this constant exists to avoid: the E1 threshold for nebras_fees is `1` under
+    // unit 'aed' (one FIL). Passing that 1 straight through as milli-fils would make anything above
+    // a single milli-fil material — a thousand times too sensitive.
+    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(1000)
+    expect(isPayableBreakMaterial('rate_variance', 2, 1)).toBe(true)
+    expect(isPayableBreakMaterial('rate_variance', 2, DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS)).toBe(false)
   })
 })

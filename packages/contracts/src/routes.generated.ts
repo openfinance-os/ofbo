@@ -564,6 +564,13 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/billing/tpp-cost-export",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
     "path": "/back-office/tpp-counterparties",
     "tag": "tpp-billing",
     "scope": "billing:read",

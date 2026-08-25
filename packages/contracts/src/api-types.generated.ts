@@ -3588,6 +3588,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/back-office/billing/tpp-cost-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Governed TPP cost evidence pack for one period (BILL-17)
+         * @description Every payable artefact for one cost period as ONE downloadable pack: the provider documents and their parsed lines, the reconciliations, the diff lines, the four-eyes period close, and the AP dispatch log. Separate from `GET /back-office/billing/export`, which is the TENANT portability export (statements, statement lines, re-ratings) — that one answers "give me my data if I leave", this one answers "show me the evidence behind this month's payable".
+         *
+         *     `sha256` is a canonical digest over the pack's own body, so a recipient can recompute it and prove the file was not edited after issue. The digest covers the body only, never itself.
+         *
+         *     Audited as a governed export on every call, because reading the whole evidence base for a period is a disclosure event whether or not anything is wrong with it. Tenant-scoped by row level security; the pack can only ever contain the caller's own bank.
+         *
+         *     Contains no PSU identifiers. The payable ledger references metering event ids rather than customers by construction, and the provider-fed columns are redacted at ingest.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Cost period as YYYY-MM. */
+                    period: string;
+                };
+                header: {
+                    /** @description Used as the OTel trace ID end-to-end (NFR-26) */
+                    "x-fapi-interaction-id": components["parameters"]["fapiInteractionId"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The evidence pack. Empty collections where the period produced no such artefact. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["TppCostEvidenceExport"];
+                        };
+                    };
+                };
+                /** @description The period is absent or not YYYY-MM. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                default: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/back-office/tpp-counterparties": {
         parameters: {
             query?: never;
@@ -5845,6 +5908,38 @@ export interface components {
             approval_request_id: string;
             /** Format: date-time */
             dispatched_at?: string;
+        };
+        /** @description One period's payable evidence, as issued. Amounts inside the collections are the ledger's own stored values in milli-fils rather than wire Money, deliberately: this is an EVIDENCE pack whose purpose is to reproduce what the ledger holds, and rounding it to fils here would make the digest attest to a rounded restatement rather than to the records themselves. The console reads its figures from `GET /back-office/billing/cost-periods/{period}`, which does emit Money. */
+        TppCostEvidenceExport: {
+            /** @example 1 */
+            schema_version: string;
+            period: string;
+            /** Format: date-time */
+            generated_at: string;
+            /** @description Row count per collection, so a truncated file is detectable without parsing it. */
+            record_counts: {
+                [key: string]: number;
+            };
+            /** @description Provider cost documents with their parsed lines. Provider-fed text is redacted at ingest. */
+            documents: {
+                [key: string]: unknown;
+            }[];
+            reconciliations: {
+                [key: string]: unknown;
+            }[];
+            diff_lines: {
+                [key: string]: unknown;
+            }[];
+            /** @description The four-eyes period close, when the period has closed. At most one per period. */
+            closes: {
+                [key: string]: unknown;
+            }[];
+            /** @description The append-only AP dispatch state log. One row per state per instruction. */
+            dispatches: {
+                [key: string]: unknown;
+            }[];
+            /** @description Canonical SHA-256 over this pack's body, excluding this field. Recomputable by the recipient — that is what makes the pack evidence rather than a report. */
+            sha256: string;
         };
         InvoiceRun: {
             /** Format: uuid */

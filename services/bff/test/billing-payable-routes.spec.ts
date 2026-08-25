@@ -37,7 +37,10 @@ function app(overrides: Record<string, unknown> = {}) {
     payablePeriodStore: {
       periodClose: vi.fn(async () => null),
       payablesForPeriod: vi.fn(async () => []),
-      openPayableBreaks: vi.fn(async () => [])
+      openPayableBreaks: vi.fn(async () => []),
+      evidencePack: vi.fn(async () => ({
+        documents: [], reconciliations: [], diffLines: [], closes: [], dispatches: []
+      }))
     },
     payableCloseStore: {
       openPayableBreaks: vi.fn(async () => []),

@@ -607,6 +607,48 @@ describe('BILL-16 — payable close and AP dispatch', () => {
     }
   })
 
+  it('BILL-17: the evidence pack is one consistent snapshot, scoped to the caller\'s own tenant', async () => {
+    // A period no other test in this file touches: closes are UNIQUE per (bank, period), so a
+    // shared one makes this test's outcome depend on execution order.
+    const period = '2026-07'
+    const { payableId } = await seedPayableForPeriod(period)
+    const approval = await seedApproval({ period })
+    await closeStore.saveClose({
+      period, initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
+      approvalRequestId: approval, feedsMonthlySignOff: true
+    }, 'trace-pack-1')
+    await dispatchStore.recordDispatch({
+      payableId,
+      dispatchRef: 'P9-REF-2025-09',
+      status: 'dispatched',
+      approvalRequestId: approval,
+      idempotencyKey: 'idem-pack-1',
+      responsePayload: { payable_status: 'dispatched', replayed: false }
+    }, 'trace-pack-2')
+
+    const pack = await periodStore.evidencePack(period)
+    expect(pack.closes).toHaveLength(1)
+    expect(pack.dispatches).toHaveLength(1)
+    expect(pack.reconciliations.length).toBeGreaterThan(0)
+    // Documents carry their parsed lines nested, so a reader never has to rejoin two collections
+    // to see what a document actually said.
+    expect(pack.documents.length).toBeGreaterThan(0)
+    expect(Array.isArray((pack.documents[0] as { lines?: unknown }).lines)).toBe(true)
+
+    // RLS, not a WHERE clause, is what keeps another tenant out. Proven by asking as one.
+    const otherPeriod = new PgPayablePeriodStore(DATABASE_URL!, OTHER_TENANT, lineage)
+    try {
+      const foreign = await otherPeriod.evidencePack(period)
+      expect(foreign.closes).toHaveLength(0)
+      expect(foreign.dispatches).toHaveLength(0)
+      expect(foreign.documents).toHaveLength(0)
+      expect(foreign.reconciliations).toHaveLength(0)
+      expect(foreign.diffLines).toHaveLength(0)
+    } finally {
+      await otherPeriod.close()
+    }
+  })
+
   it('REFUSES a financial_system_ref that is not reference-shaped (the grant\'s real basis)', async () => {
     // The gap the cross-tenant grant actually turns on. `redactText` masks three SHAPES — Emirates
     // ID, IBAN, e-mail — and passes everything else through, so a vendor reference carrying a

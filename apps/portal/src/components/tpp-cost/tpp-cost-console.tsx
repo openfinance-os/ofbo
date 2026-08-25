@@ -101,18 +101,31 @@ export function TppCostConsole({
         </span>
       }
       action={
-        canWrite ? (
-          <RequestCloseForm
-            period={period}
-            action={closeAction}
-            disabled={closed || view.close_state === 'blocked'}
-            disabledReason={
-              closed
-                ? 'This period is already closed. Correct it by re-rating, which appends an immutable delta.'
-                : `Blocked by ${view.open_break_count} unresolved material break(s).`
-            }
-          />
-        ) : null
+        <div className="flex items-center gap-3">
+          {/* Governed export. Not gated on canWrite: reading the evidence base is a billing:read
+              capability, and the people who most need to hand it to an auditor are usually the ones
+              without write. The href points at the portal's own proxy, never the BFF — the httpOnly
+              Bearer stays inside the Worker and the pack never lands in browser storage. */}
+          <a
+            href={`/api/billing/tpp-cost-export?period=${encodeURIComponent(period)}`}
+            className="text-sm underline text-primary"
+            data-testid="tpp-cost-export-link"
+          >
+            Export evidence
+          </a>
+          {canWrite ? (
+            <RequestCloseForm
+              period={period}
+              action={closeAction}
+              disabled={closed || view.close_state === 'blocked'}
+              disabledReason={
+                closed
+                  ? 'This period is already closed. Correct it by re-rating, which appends an immutable delta.'
+                  : `Blocked by ${view.open_break_count} unresolved material break(s).`
+              }
+            />
+          ) : null}
+        </div>
       }
     >
       {approvalRequestId ? (

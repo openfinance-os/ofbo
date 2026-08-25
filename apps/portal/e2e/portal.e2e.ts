@@ -149,3 +149,103 @@ test.describe('mutating server actions (the actions.ts files)', () => {
     }
   })
 })
+
+/**
+ * BILL-17 — the TPP Cost Management section of the billing console.
+ *
+ * Driven against the seeded demo evidence, which deliberately seeds TWO periods so the close gate
+ * can be demonstrated in both directions: the month before last is CLOSED (with a dispatched then
+ * accepted payable) and last month is BLOCKED by a material VAT-variance break. One period could
+ * only ever show one of those states.
+ */
+test.describe('TPP Cost Management console (BILL-17)', () => {
+  // Mirrors packages/db/src/seed-demo.ts: closed = month(2), blocked = month(1), UTC.
+  const month = (back: number) => {
+    const now = new Date()
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1)).toISOString().slice(0, 7)
+  }
+  const CLOSED = month(2)
+  const BLOCKED = month(1)
+
+  test('the closed period reports closed and shows its four-eyes evidence', async ({ page }) => {
+    await login(page, SUPER)
+    await page.goto(`/billing?period=${CLOSED}`)
+    await expect(page.getByTestId('tpp-cost-console')).toBeVisible()
+    await expect(page.getByTestId('close-state')).toContainText(/reconciled|closed/i)
+    // The close is evidence of a four-eyes act, so the screen must show WHO — a period that closed
+    // itself would be the defect this whole gate exists to prevent.
+    await expect(page.getByTestId('close-evidence')).toBeVisible()
+  })
+
+  test('the blocked period names its blockers and refuses the close control', async ({ page }) => {
+    await login(page, SUPER)
+    await page.goto(`/billing?period=${BLOCKED}`)
+    await expect(page.getByTestId('tpp-cost-console')).toBeVisible()
+    await expect(page.getByTestId('cost-blockers')).toBeVisible()
+    // Blocked means the close cannot be requested. A control that looked available and then 409'd
+    // would teach the operator to ignore the refusal — and the reason must be stated, not implied
+    // by a greyed-out button.
+    await expect(page.getByTestId('request-close-form').getByRole('button')).toBeDisabled()
+    await expect(page.getByTestId('close-disabled-reason')).toBeVisible()
+  })
+
+  test('a blocker links to its real E1 break so "Investigate" resolves', async ({ page }) => {
+    await login(page, SUPER)
+    await page.goto(`/billing?period=${BLOCKED}`)
+    const link = page.getByTestId('cost-blockers').getByRole('link').first()
+    await expect(link).toBeVisible()
+    await link.click()
+    // Lands on the investigation surface rather than a dead href — the escalation path this story
+    // had to build for the gate to be clearable at all.
+    await expect(page).toHaveURL(/\/reconciliation\/breaks\//)
+  })
+
+  test('the payables table shows the dispatch state from the append-only log', async ({ page }) => {
+    await login(page, SUPER)
+    await page.goto(`/billing?period=${CLOSED}`)
+    await expect(page.getByTestId('cost-payables')).toBeVisible()
+    // Seeded as dispatched THEN accepted (two rows — the table is a state log), so the latest
+    // state is what the console must show.
+    await expect(page.getByTestId('cost-payables')).toContainText(/accepted/i)
+  })
+
+  test('the governed export is offered to the finance persona, beside the write controls', async ({ page }) => {
+    // NOT asserted here: the read-only branch (billing:read WITHOUT
+    // finance:reconciliation:write). No demo persona holds that combination — finance-analyst has
+    // both and every other persona lacks billing:read entirely — so a browser test for it would be
+    // asserting a fiction. The `canWrite: false` branch is covered at component level instead
+    // (tpp-cost-console.spec.tsx), where the input can actually be constructed.
+    await login(page, 'finance-analyst')
+    await page.goto(`/billing?period=${BLOCKED}`)
+    await expect(page.getByTestId('tpp-cost-console')).toBeVisible()
+    await expect(page.getByTestId('tpp-cost-export-link')).toBeVisible()
+    await expect(page.getByTestId('request-close-form')).toBeVisible()
+  })
+
+  test('the governed evidence export downloads a pack with a recomputable digest', async ({ page }) => {
+    await login(page, SUPER)
+    const response = await page.request.get(`/api/billing/tpp-cost-export?period=${CLOSED}`)
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-disposition']).toContain(`ofbo-tpp-cost-evidence-${CLOSED}.json`)
+    const pack = await response.json()
+    expect(pack.period).toBe(CLOSED)
+    expect(typeof pack.sha256).toBe('string')
+    expect(pack.record_counts.closes).toBeGreaterThan(0)
+    expect(pack.record_counts.dispatches).toBeGreaterThan(0)
+    // No PSU identifier can reach the payable ledger by construction; assert it on the artefact a
+    // human actually receives, not only on the rows behind it.
+    expect(JSON.stringify(pack)).not.toMatch(/\b784-\d{4}-\d{7}-\d\b/)
+  })
+
+  test('the export refuses a malformed period rather than guessing one', async ({ page }) => {
+    await login(page, SUPER)
+    const response = await page.request.get('/api/billing/tpp-cost-export?period=2026-13')
+    expect(response.status()).toBe(400)
+  })
+
+  test('the IA rename ships: billing is "Billing & TPP Cost", the registry is "LFI Revenue"', async ({ page }) => {
+    await login(page, SUPER)
+    await expect(page.getByTestId('nav-billing-console')).toContainText(/TPP Cost/i)
+    await expect(page.getByTestId('nav-billing')).toContainText(/LFI Revenue/i)
+  })
+})

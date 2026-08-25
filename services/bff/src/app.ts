@@ -258,6 +258,7 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/billing/tpp-cost-documents',
   'post /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
   'get /back-office/billing/cost-periods/{period}',
+  'get /back-office/billing/tpp-cost-export',
   'post /back-office/billing/cost-periods/{period}:close',
   'post /back-office/billing/payables/{payable_id}:dispatch',
   'get /back-office/analytics/finance-view',
@@ -682,8 +683,10 @@ export function createApp(deps: AppDeps = {}) {
     store: deps.payablePeriodStore ?? {
       periodClose: async () => { throw new Error('payable period store is not configured') },
       payablesForPeriod: async () => { throw new Error('payable period store is not configured') },
-      openPayableBreaks: async () => { throw new Error('payable period store is not configured') }
-    }
+      openPayableBreaks: async () => { throw new Error('payable period store is not configured') },
+      evidencePack: async () => { throw new Error('payable period store is not configured') }
+    },
+    audit: highClassAudit
   })
   const billingConsoleService = new BillingConsoleService({
     tenant: deps.billingTenant ?? {

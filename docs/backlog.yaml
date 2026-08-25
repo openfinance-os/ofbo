@@ -1661,30 +1661,74 @@ milestones:
           cost_recipient_type, break_type, presence) match; fee_stream, customer_segment and
           vat_treatment are still unexposed and inherit the obligation. The second BLOCKING criterion
           is CLOSED by the CODE-03 ruling - Money at the wire, milli-fils behind the boundary.
-          NOT DONE, and each for a stated reason.
-          (1) STITCH. The binding convention is Stitch-first with screen ids cited in the PR, and no
-          Stitch tooling is reachable from the session that built this - there is no upload_design_md
-          or equivalent in the available toolset. The console was therefore built token-only against
-          the existing UIF-01 primitives, which are themselves derived from the pinned Stitch
-          references, and passes the design-conformance and no-raw-style gates plus axe. A dedicated
-          Stitch screen for TPP Cost Management is still OWED and must be generated before this story
-          closes; the audit doc's reference map needs the new route pinned to it.
-          (2) GOVERNED EXPORT. BILL-13 already carries statements, statement lines and re-ratings in
-          the tenant portable export with a recomputable digest, and the hosted smoke verifies that
-          digest. A TPP-cost-SPECIFIC governed export - documents, reconciliations, diff lines, closes
-          and dispatches as one downloadable evidence pack behind a server-only proxy - is not built.
-          (3) SCENARIO LIST. The named list (paired discount limited to one Balance and one CoP per
-          payment, corporate 40 fils/page with no free tier, per-LFI effective-dated overage,
-          insurance producing no payable_lfi, chargeable refund GET, exactly-once duplicates, credit
-          note, VAT mismatch, absence alarm, dispute-deadline alert, dual-role settlement with residue
-          break, RLS denial) is covered by unit and integration tests from BILL-12..16 - not as
-          SEEDED demo scenarios a human can click through. Two of them are seeded (VAT mismatch,
-          dual-role period); the rest are not.
-          (4) The longer workflow chain the note describes - upload, parse review, investigate,
-          assign, dispute evidence, variance approve/reject - reuses screens and endpoints that
-          already exist; only the close, AP approval and dispatch legs are wired into this console.
-          (5) Browser E2E. Component-level a11y is proven (axe, WCAG 2.1 AA) but no Playwright run
-          covers the new section.
+          SECOND PASS, 2026-08-25. Four of the five gaps below are now closed; the Stitch one is not.
+          (2) GOVERNED EXPORT — DONE. GET /back-office/billing/tpp-cost-export (billing:read,
+          spec-first, 98 -> 99 paths) issues one period's payable evidence as a single pack:
+          documents with their parsed lines nested, reconciliations, diff lines, the four-eyes close
+          and the append-only AP dispatch log. Read in ONE transaction so the five collections are a
+          consistent snapshot - across five transactions a dispatch landing between two of them
+          would make the pack attest to a period that never existed at any instant. Rows come from
+          to_jsonb(t) rather than an enumerated projection, because a hand-written column list
+          silently stops exporting whatever a later migration adds, and this is evidence. sha256 is
+          a canonical digest over the body EXCLUDING itself, so a recipient can recompute it; a
+          digest covering itself could never be checked. Audited on every call - reading a period's
+          whole evidence base is a disclosure event whatever it contains - and the audit row carries
+          the digest and counts, never the pack, so the ledger is not duplicated into a second
+          INSERT-only store per download. The service REFUSES (503) when no audit sink is wired
+          rather than exporting ungoverned. Downloaded through the portal's own server-only proxy
+          (apps/portal/src/app/api/billing/tpp-cost-export), so the httpOnly Bearer stays in the
+          Worker and no export payload reaches browser storage; the period is re-validated there
+          because it lands in a Content-Disposition filename. Amounts inside the pack stay in the
+          ledger's milli-fils rather than wire Money, deliberately and stated in the schema: the
+          digest must attest to what the ledger holds, not to a rounded restatement. The console
+          link is NOT gated on canWrite - handing evidence to an auditor is a read capability, and
+          its main audience is often the persona without write.
+          (5) BROWSER E2E — DONE. Eight Playwright specs over the new section: the closed period
+          reports closed with its four-eyes evidence, the blocked period names its blockers and
+          disables the close control with a stated reason, a blocker link resolves to its real E1
+          break, the payables table shows the latest state from the append-only log, the export
+          downloads with a recomputable digest and refuses a malformed period, and the IA rename is
+          present. Not asserted there: the read-only branch (billing:read WITHOUT
+          finance:reconciliation:write). NO demo persona holds that combination - finance-analyst
+          has both, every other persona lacks billing:read - so a browser test for it would assert a
+          fiction; it is covered at component level instead, where the input can be constructed.
+          CI FIX this uncovered: the q3-e2e job ran only `pnpm db:seed`, which creates ZERO TPP cost
+          evidence - seedTppCostEvidence lives behind `db:seed:demo`, which only deploy.yml ran. So
+          the console rendered empty in CI and any spec asserting seeded data would have failed.
+          The job now runs the demo seed too, matching the hosted demo it is meant to mirror.
+          MATERIALITY — DONE, and it was listed as deliberately unchanged. PayableBreak.material was
+          hardcoded true at seven construction sites, so openPayableBreaks's `AND d.material`
+          filtered nothing. It is now DERIVED once, centrally, over the whole break array before
+          anything reads it - seven inline copies of a judgement is how the hardcoded value survived,
+          since every site looked locally reasonable. isPayableBreakMaterial holds wrong_recipient
+          material at ZERO variance (paying the right amount to the wrong counterparty is not a
+          rounding difference, and the spec's own TppCostDiffLine.material description says so) and
+          judges everything else on absolute variance. Stated precisely, because it is less than it
+          sounds: at the DEFAULTS materiality equals the matching tolerance, so every break that
+          exists is still material and no default behaviour moves. What moves is that the judgement
+          is derived and configurable, so a bank can now have a break stay real, recorded and
+          queryable inside the IG 10.13 window without holding the month open. The two vocabularies
+          are NOT interchangeable and the constant says so - payables count milli-fils, the E1
+          BreakThreshold counts fils under unit 'aed', and passing one for the other is wrong by a
+          factor of a thousand.
+          STILL NOT DONE.
+          (1) STITCH — unchanged and still OWED. Re-checked this session: the toolset has DesignSync
+          (claude.ai design-system projects) and the connector registry has no Stitch entry, so the
+          project CLAUDE.md binds to (8050269076066130289) remains unreachable. Citing a screen id
+          that was never generated would be worse than leaving this open, so it stays open. The
+          console remains token-only against the UIF-01 primitives - themselves derived from the
+          pinned Stitch references - and passes design-conformance, no-raw-style, design-tokens and
+          axe. The audit doc's reference map still needs the new route pinned.
+          (3) SCENARIO LIST — partly. The seeded demo covers VAT mismatch, the dual-role period, the
+          close gate in both directions and a dispatched-then-accepted payable. The metering and
+          rating scenarios (paired discount limited to one Balance and one CoP, corporate 40
+          fils/page with no free tier, per-LFI effective-dated overage, insurance producing no
+          payable_lfi, chargeable refund GET, exactly-once duplicates, credit note, absence alarm,
+          dispute-deadline alert, RLS denial) remain covered by BILL-12..16 unit and integration
+          tests rather than as clickable demos.
+          (4) The longer workflow chain (upload, parse review, investigate, assign, dispute
+          evidence, variance approve/reject) still reuses existing screens and endpoints; only the
+          close, AP approval and dispatch legs are wired into this console.
         acceptance:
           - Stitch screen ids cited in the PR; screens are token-only with the DEMO banner
             and scope gating; the nav rename ships in the same pass.

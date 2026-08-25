@@ -73,6 +73,22 @@ export function payableRoutes(
       }
     },
 
+    'get /back-office/billing/tpp-cost-export': async (c) => {
+      try {
+        const pack = await services.period.exportEvidence(
+          c.get('principal'),
+          c.req.query('period') ?? '',
+          c.req.header('x-fapi-interaction-id') ?? 'unknown'
+        )
+        return c.json(dataEnvelope(pack), 200)
+      } catch (error) {
+        if (error instanceof PayablePeriodError) return domainFailure(c, error)
+        const denied = scopeDenied(c, error)
+        if (denied) return denied
+        throw error
+      }
+    },
+
     'post /back-office/billing/cost-periods/{period}:close': replayable(
       idempotency,
       (params, subject, key) => `billing:tpp-cost-close|${params.period}|${subject}|${key}`,

@@ -735,4 +735,72 @@ export class PgPayablePeriodStore extends TenantScopedStore {
       (await client.query(OPEN_PAYABLE_BREAKS_SQL, [period])).rows as Array<Record<string, unknown>>)
     return rows.map(mapOpenPayableBreak)
   }
+
+  /**
+   * Every payable artefact for one period, as one pack (BILL-17).
+   *
+   * `to_jsonb(t)` rather than an enumerated column list, deliberately: this is EVIDENCE, and a
+   * hand-written projection silently stops exporting any column a later migration adds. The rows
+   * are what the ledger holds — the export's job is to reproduce them, not to restate them.
+   *
+   * Read inside ONE transaction so the five collections are a consistent snapshot. Across five
+   * separate transactions a dispatch could land between two of them and the pack would attest to a
+   * period that never existed at any instant.
+   *
+   * RLS scopes every read to the caller's own bank, so the pack cannot contain another tenant's
+   * rows even if the period string collides.
+   */
+  async evidencePack(period: string): Promise<{
+    documents: unknown[]
+    reconciliations: unknown[]
+    diffLines: unknown[]
+    closes: unknown[]
+    dispatches: unknown[]
+  }> {
+    return this.asApp(async (client) => {
+      const rows = async (sql: string): Promise<unknown[]> =>
+        (await client.query(sql, [period])).rows.map((row) => (row as { record: unknown }).record)
+
+      // Documents carry their parsed lines nested, so a reader does not have to rejoin two
+      // collections to see what a document actually said.
+      const documents = (await client.query(
+        `SELECT to_jsonb(d) || jsonb_build_object(
+                  'lines', COALESCE((
+                    SELECT jsonb_agg(to_jsonb(l) ORDER BY l.line_ref)
+                      FROM billing_tpp_cost_document_line l
+                     WHERE l.document_id = d.id
+                  ), '[]'::jsonb)
+                ) AS record
+           FROM billing_tpp_cost_document d
+          WHERE d.billing_period = $1
+          ORDER BY d.document_reference ASC`,
+        [period]
+      )).rows.map((row) => (row as { record: unknown }).record)
+
+      const reconciliations = await rows(
+        `SELECT to_jsonb(r) AS record FROM billing_tpp_cost_reconciliation r
+          WHERE r.billing_period = $1 ORDER BY r.created_at ASC, r.id ASC`)
+
+      // Diff lines join through their reconciliation, which is what carries the period.
+      const diffLines = await rows(
+        `SELECT to_jsonb(dl) AS record
+           FROM billing_tpp_cost_diff_line dl
+           JOIN billing_tpp_cost_reconciliation r ON r.id = dl.reconciliation_id
+          WHERE r.billing_period = $1
+          ORDER BY dl.created_at ASC, dl.line_ref ASC`)
+
+      const closes = await rows(
+        `SELECT to_jsonb(c) AS record FROM billing_tpp_cost_period_close c
+          WHERE c.billing_period = $1 ORDER BY c.closed_at ASC`)
+
+      const dispatches = await rows(
+        `SELECT to_jsonb(a) AS record
+           FROM billing_tpp_cost_ap_dispatch a
+           JOIN billing_tpp_cost_reconciliation r ON r.id = a.reconciliation_id
+          WHERE r.billing_period = $1
+          ORDER BY a.created_at ASC, a.id ASC`)
+
+      return { documents, reconciliations, diffLines, closes, dispatches }
+    })
+  }
 }

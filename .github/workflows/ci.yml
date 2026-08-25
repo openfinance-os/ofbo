@@ -245,6 +245,11 @@ jobs:
       - run: pnpm gen
       - run: pnpm db:apply
       - run: pnpm db:seed
+      # The portal E2E drives the DEMO stack, so it needs the demo dataset — deploy.yml already
+      # runs this for the hosted demo. Without it the TPP Cost Management section renders empty
+      # and its BILL-17 specs assert against a period that was never seeded. Superset of and
+      # idempotent with the base seed above.
+      - run: pnpm db:seed:demo
       # HARNESS-17. The single `playwright install --with-deps chromium` step below was split in
       # two and given a cache, because on 2026-08-19 it timed out THREE times in a row and took
       # the whole 20-minute job with it — the E2E suite never started, and the job reported

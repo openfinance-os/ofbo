@@ -231,6 +231,42 @@ describe('demo BFF (Cloudflare Worker)', () => {
     }
   }, 30_000)
 
+  /**
+   * BILL-17 — the governed evidence pack, with its digest recomputed INDEPENDENTLY.
+   *
+   * The acceptance criterion is that the hosted smoke recomputes the export digest rather than
+   * trusting the one the service published. So the body is re-canonicalised and re-hashed here with
+   * this file's own helper — the same thing a recipient holding only the downloaded file would do.
+   * Note the digest here carries NO `sha256:` prefix, unlike the other billing artefacts: the pack
+   * publishes a bare hex digest, and asserting the prefixed form would silently never match.
+   */
+  it('issues a TPP cost evidence pack whose digest an outside party can recompute', async () => {
+    const month = period()
+    const res = await fetch(`${BFF}/back-office/billing/tpp-cost-export?period=${month}`, {
+      headers: { 'x-fapi-interaction-id': fapi(), authorization: billingToken }
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { data: Record<string, unknown> }
+    const { sha256, ...pack } = body.data
+    expect(pack.period).toBe(month)
+    expect(pack.schema_version).toBe('1')
+
+    // Recomputed, not trusted.
+    expect(sha256).toBe(createHash('sha256').update(canonicalJson(pack)).digest('hex'))
+
+    // The counts must describe the collections beside them, or a truncated file would pass a
+    // digest check while under-reporting what it contains.
+    const counts = pack.record_counts as Record<string, number>
+    for (const key of ['documents', 'reconciliations', 'diff_lines', 'closes', 'dispatches']) {
+      expect(counts[key]).toBe((pack[key] as unknown[]).length)
+    }
+
+    // No PSU identifier can reach the payable ledger by construction. Asserted on the artefact a
+    // human actually receives, not only on the rows behind it. Synthetic ranges only (CLAUDE.md):
+    // real Emirates IDs start 784, so this shape-checks for one without embedding one.
+    expect(JSON.stringify(pack)).not.toMatch(/\b784-\d{4}-\d{7}-\d\b/)
+  }, 30_000)
+
   it.skipIf(!DATABASE_URL)(
     'persists a High-class audit record for the sign-in (request_trace_id = x-fapi-interaction-id)',
     async () => {

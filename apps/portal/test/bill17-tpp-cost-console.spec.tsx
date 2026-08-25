@@ -214,6 +214,19 @@ describe('BILL-17 — the console', () => {
     expect(screen.queryByRole('button', { name: /dispatch to p9/i })).not.toBeInTheDocument()
   })
 
+  it('still offers the governed export to a read-only persona', () => {
+    // The export is a READ capability and must survive the write gate. The people who hand evidence
+    // to an auditor are frequently the ones without write, so gating it on canWrite would deny it to
+    // precisely its main audience. Asserted here rather than in the browser suite because no demo
+    // persona currently holds billing:read WITHOUT finance:reconciliation:write, so this branch is
+    // only reachable by constructing the input directly.
+    renderConsole(view(), { canWrite: false })
+    const link = screen.getByTestId('tpp-cost-export-link')
+    expect(link).toHaveAttribute('href', expect.stringContaining('/api/billing/tpp-cost-export'))
+    // Points at the portal's OWN proxy, never the BFF: the httpOnly Bearer must stay in the Worker.
+    expect(link.getAttribute('href')).not.toMatch(/^https?:/)
+  })
+
   it('renders the typed error with remediation instead of a blank panel', () => {
     renderConsole(null, {
       error: 'The TPP cost ledger is temporarily unavailable.',
