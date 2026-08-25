@@ -391,52 +391,65 @@ describe('BILL-15 payable break_type → contract LineType (criterion 6a)', () =
 })
 
 describe('BILL-15/16 payable-break materiality', () => {
-  it('coincides with the tolerance at the DEFAULTS, so the gate stays conservative out of the box', () => {
-    // Measured, not assumed: both defaults are one fil, so with no bank configuration every break
-    // that exists at all is also material. Replacing the hardcoded `true` therefore changes no
-    // default behaviour — what it changes is that the judgement is now DERIVED and configurable
-    // instead of asserted, which is what let a sub-fil difference block a month before.
-    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS)
-    expect(isPayableBreakMaterial('rate_variance', fils(1) + 1)).toBe(true)
-    expect(isPayableBreakMaterial('rate_variance', fils(2))).toBe(true)
+  /** A break of the given type whose NET variance is zero — the shape that exposed the defect. */
+  const mag = (breakType: string, over: Record<string, number> = {}) => ({
+    breakType: breakType as never,
+    varianceMilliFils: 0,
+    expectedUnits: 100,
+    actualUnits: 100,
+    expectedVatMilliFils: 0,
+    actualVatMilliFils: 0,
+    ...over
   })
 
-  it('opens a gap between "is a break" and "blocks the close" once a bank configures one', () => {
-    // The gap the two constants exist to allow. Above the matching tolerance so a break EXISTS and
-    // stays queryable inside the IG §10.13 window; below the bank's blocking threshold so it does
-    // not refuse the month.
-    const configured = fils(100)
-    expect(isPayableBreakMaterial('rate_variance', fils(2), configured)).toBe(false)
+  it('REGRESSION: a VAT break blocks the close even though its NET variance is zero', () => {
+    // classifyVariance only reaches vat_variance after the net test fails, so a VAT break's net
+    // variance is ~0 BY CONSTRUCTION. Judging materiality on net made every VAT error immaterial at
+    // any magnitude — it stopped blocking the four-eyes close, stopped escalating to an E1 break,
+    // and stopped raising the IG 10.13 window alarm, so the charge would just become accepted.
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(400) }))).toBe(true)
+    // A sub-threshold VAT difference is still a rounding artefact.
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: 500 }))).toBe(false)
+  })
+
+  it('REGRESSION: a quantity break blocks the close when only the COUNTS disagree', () => {
+    // 100 units at 10 fils vs 200 units at 5 fils is a real quantity dispute worth exactly nothing
+    // in net terms. Units are counted facts (UNIT_TOLERANCE is 0), so any difference is real.
+    expect(isPayableBreakMaterial(mag('quantity_variance', { actualUnits: 200 }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('quantity_variance'))).toBe(false)
+  })
+
+  it('judges a rate break on its net variance', () => {
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(2) }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(1) }))).toBe(false)
   })
 
   it('treats the threshold as exclusive, so a variance exactly at it is immaterial', () => {
-    expect(isPayableBreakMaterial('quantity_variance', fils(1))).toBe(false)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(1) }))).toBe(false)
   })
 
   it('judges on absolute variance — an undercharge is as material as an overcharge', () => {
-    expect(isPayableBreakMaterial('rate_variance', -fils(5))).toBe(true)
-    expect(isPayableBreakMaterial('rate_variance', fils(5))).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: -fils(5) }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(5) }))).toBe(true)
   })
 
   it('holds a wrong recipient material at ZERO variance', () => {
     // Paying exactly the right amount to the wrong counterparty is not a rounding difference.
-    // The spec's TppCostDiffLine.material description states this verbatim.
-    expect(isPayableBreakMaterial('wrong_recipient', 0)).toBe(true)
+    expect(isPayableBreakMaterial(mag('wrong_recipient'))).toBe(true)
   })
 
   it('honours a bank-configured threshold rather than only the default', () => {
-    // AED 1.00 = 100 fils. A bank that only wants to stop the month for real money.
     const configured = fils(100)
-    expect(isPayableBreakMaterial('vat_variance', fils(50), configured)).toBe(false)
-    expect(isPayableBreakMaterial('vat_variance', fils(150), configured)).toBe(true)
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(50) }), configured)).toBe(false)
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(150) }), configured)).toBe(true)
   })
 
   it('does not confuse the milli-fils and fils vocabularies', () => {
-    // The trap this constant exists to avoid: the E1 threshold for nebras_fees is `1` under
-    // unit 'aed' (one FIL). Passing that 1 straight through as milli-fils would make anything above
-    // a single milli-fil material — a thousand times too sensitive.
+    // The E1 threshold for nebras_fees is `1` under unit 'aed' — one FIL. Passing that straight
+    // through as milli-fils would be a thousand times too sensitive.
     expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(1000)
-    expect(isPayableBreakMaterial('rate_variance', 2, 1)).toBe(true)
-    expect(isPayableBreakMaterial('rate_variance', 2, DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS)).toBe(false)
+    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: 2 }), 1)).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: 2 }))).toBe(false)
   })
 })

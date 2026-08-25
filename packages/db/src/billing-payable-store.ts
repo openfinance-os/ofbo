@@ -756,6 +756,8 @@ export class PgPayablePeriodStore extends TenantScopedStore {
     diffLines: unknown[]
     closes: unknown[]
     dispatches: unknown[]
+    /** How many fields the read-boundary redactor scrubbed. Non-zero means investigate the period. */
+    redactedPathCount: number
   }> {
     return this.asApp(async (client) => {
       const rows = async (sql: string): Promise<unknown[]> =>
@@ -764,7 +766,13 @@ export class PgPayablePeriodStore extends TenantScopedStore {
       // Documents carry their parsed lines nested, so a reader does not have to rejoin two
       // collections to see what a document actually said.
       const documents = (await client.query(
-        `SELECT to_jsonb(d) || jsonb_build_object(
+        // `- 'raw_document_ref'` is the one deliberate subtraction from the to_jsonb projection.
+        // That column is the ADDRESS of the raw-artifact archive, which holds UNREDACTED provider
+        // content by design (services/bff/src/billing/tpp-cost-document.ts:253-268) and is
+        // deliberately not one of the cost tables for exactly that reason. Publishing the locator in
+        // a downloadable pack would hand out the way to the unredacted original — the evidence of
+        // what was charged is the parsed lines beside it, not the pointer to the scan.
+        `SELECT (to_jsonb(d) - 'raw_document_ref') || jsonb_build_object(
                   'lines', COALESCE((
                     SELECT jsonb_agg(to_jsonb(l) ORDER BY l.line_ref)
                       FROM billing_tpp_cost_document_line l
@@ -800,7 +808,27 @@ export class PgPayablePeriodStore extends TenantScopedStore {
           WHERE r.billing_period = $1
           ORDER BY a.created_at ASC, a.id ASC`)
 
-      return { documents, reconciliations, diffLines, closes, dispatches }
+      // Redact at the READ boundary too, not only at ingest.
+      //
+      // Migration 0039:22-29 names three provider-fed free-form columns the schema cannot constrain,
+      // and the ingest redactor's own comment records the residual risk: "a bare account or card
+      // number under a key this list does not recognise would survive". This store already asserts
+      // redaction on the way IN for exactly that reason; a new download surface deserves the same
+      // check on the way OUT. Two heuristic passes catch more than one, and the asymmetry was the
+      // gap — the pack is the first thing that puts these columns in front of a human as a file.
+      //
+      // Scrubbed rather than refused. Refusing would deny an auditor the whole period's evidence
+      // because of one legacy row, which is the wrong failure for a read; the count is returned so
+      // the caller can audit that it happened and investigate the row.
+      const scrubbed = redactProviderPayload({ documents, reconciliations, diffLines, closes, dispatches })
+      const pack = scrubbed.redacted as {
+        documents: unknown[]
+        reconciliations: unknown[]
+        diffLines: unknown[]
+        closes: unknown[]
+        dispatches: unknown[]
+      }
+      return { ...pack, redactedPathCount: scrubbed.removedPaths.length }
     })
   }
 }

@@ -299,7 +299,21 @@ async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
     )
   }
 
-  // ── The BLOCKED period: a material VAT-variance break, escalated so "Investigate →" resolves.
+  // ── The BLOCKED period: a material RATE-variance break, escalated so "Investigate →" resolves.
+  //
+  // Seeded as `rate_variance`, not `vat_variance`, and the distinction is the point. A review found
+  // the earlier version wrote a row `reconcilePayable` can NEVER produce: classifyVariance only
+  // returns `vat_variance` once the NET variance is inside tolerance, so a genuine VAT break carries
+  // a net variance of ~0 — while this row carried 225,000 milli-fils of it. The demo was asserting
+  // against a shape the engine does not emit, which is worse than a thin demo because it looks like
+  // coverage. A 225,000 milli-fil net overcharge IS a rate_variance, so this is now the same money
+  // with the classification the engine would actually give it.
+  //
+  // Known limitation this exposed, recorded rather than papered over: billing_tpp_cost_diff_line has
+  // no VAT columns and persists `variance_milli_fils` as the NET variance for every break type
+  // (tpp-cost-reconciliation.ts:660), so a persisted vat_variance shows a variance of ~0 and the
+  // console understates a VAT dispute to zero. The close GATE is unaffected — materiality is judged
+  // in memory, where the VAT figures still exist — but the reporting weakness is real.
   const blocked = await seedPeriod(blockedPeriod, { withLfi: false })
   const breakRunId = `demo-tpp-cost-break-${blockedPeriod}`
   const e1 = await pool.query(
@@ -321,12 +335,12 @@ async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
        (bank_id,channel,reconciliation_id,line_ref,break_type,cost_recipient_type,cost_recipient_id,
         fee_class,expected_milli_fils,actual_milli_fils,variance_milli_fils,variance_basis_points,
         material,presence,reason_code,reconciliation_break_id)
-     SELECT $1,$2,$3,$4,'vat_variance','nebras','NEBRAS','hub.standard',$5,$6,$7,50,true,'both',
-            'vat_rounding_disagreement',$8
+     SELECT $1,$2,$3,$4,'rate_variance','nebras','NEBRAS','hub.standard',$5,$6,$7,50,true,'both',
+            'applied_rate_above_schedule',$8
       WHERE NOT EXISTS (
         SELECT 1 FROM billing_tpp_cost_diff_line WHERE bank_id=$1 AND reconciliation_id=$3 AND line_ref=$4)`,
     [DEMO_BANK_ID, CH, blocked.nebrasReconciliationId, `NEB-INV-${blockedPeriod}|SI-CORP-PAY`,
-      VAT, VAT + 225_000, 225_000, e1.rows[0].id]
+      NET, NET + 225_000, 225_000, e1.rows[0].id]
   )
 }
 

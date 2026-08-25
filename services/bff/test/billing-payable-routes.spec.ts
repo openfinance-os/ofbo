@@ -39,7 +39,8 @@ function app(overrides: Record<string, unknown> = {}) {
       payablesForPeriod: vi.fn(async () => []),
       openPayableBreaks: vi.fn(async () => []),
       evidencePack: vi.fn(async () => ({
-        documents: [], reconciliations: [], diffLines: [], closes: [], dispatches: []
+        documents: [{ id: 'doc-1', document_reference: 'NEB-2026-06', lines: [] }],
+        reconciliations: [], diffLines: [], closes: [], dispatches: [], redactedPathCount: 0
       }))
     },
     payableCloseStore: {
@@ -401,5 +402,50 @@ describe('BILL-16 — money ties out on the wire', () => {
     // 5, not the 4 an independent rounding of 4000 milli-fils would have published.
     expect(money.gross_amount.amount).toBe(5)
     expect(money.gross_amount.amount).toBe(money.net_amount.amount + money.vat_amount.amount)
+  })
+
+  /**
+   * The HTTP surface of the governed export, driven through `createApp`.
+   *
+   * The unit suite covers the service and the digest; what only a request can prove is that the
+   * generated route table actually carries this path, that the scope middleware runs, and that the
+   * body arrives inside the `{data, meta}` envelope rather than bare.
+   */
+  describe('GET /back-office/billing/tpp-cost-export', () => {
+    it('returns the pack inside the data envelope with a recomputable digest', async () => {
+      const res = await app().request(
+        '/back-office/billing/tpp-cost-export?period=2026-06',
+        { headers: headers() }
+      )
+      expect(res.status).toBe(200)
+      const body = await res.json() as { data: Record<string, unknown>; meta: Record<string, unknown> }
+      expect(body.meta.request_id).toBeTruthy()
+      expect(body.data.period).toBe('2026-06')
+      expect(body.data.schema_version).toBe('1')
+      // Bare hex, not the `sha256:`-prefixed form the other billing artefacts use.
+      expect(body.data.sha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(body.data.record_counts).toMatchObject({ documents: 1 })
+    })
+
+    it('refuses a malformed period with a full error envelope', async () => {
+      const res = await app().request(
+        '/back-office/billing/tpp-cost-export?period=2026-13',
+        { headers: headers() }
+      )
+      expect(res.status).toBe(400)
+      const body = await res.json() as { error: Record<string, unknown> }
+      expect(body.error.code).toBe('BACKOFFICE.INVALID_PERIOD')
+      // Every field the convention requires — a refusal has to tell the operator what to do.
+      expect(body.error.remediation).toBeTruthy()
+      expect(body.error.docs_url).toBeTruthy()
+    })
+
+    it('refuses a persona without billing:read', async () => {
+      const res = await app().request(
+        '/back-office/billing/tpp-cost-export?period=2026-06',
+        { headers: headers('risk-analyst') }
+      )
+      expect(res.status).toBe(403)
+    })
   })
 })

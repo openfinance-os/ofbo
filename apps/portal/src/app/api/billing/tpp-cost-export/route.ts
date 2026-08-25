@@ -6,6 +6,13 @@ import { getSession } from '../../../../lib/session'
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/
 
 /**
+ * Every error body here carries the full four-field envelope the API convention requires
+ * (code, message, remediation, docs_url). The sibling proxies predate that and emit only two on
+ * their auth branches; this one does not copy the deviation.
+ */
+const DOCS_URL = 'https://github.com/openfinance-os/ofbo/blob/main/specs/backoffice-openapi.yaml'
+
+/**
  * BILL-17 — server-side download proxy for the governed TPP cost evidence pack.
  *
  * The httpOnly Bearer never leaves the portal Worker, and the pack itself is streamed straight to
@@ -17,13 +24,27 @@ export async function GET(request: Request): Promise<Response> {
   const session = await getSession()
   if (!session) {
     return NextResponse.json(
-      { error: { code: 'BACKOFFICE.UNAUTHENTICATED', message: 'Sign in is required.' } },
+      {
+        error: {
+          code: 'BACKOFFICE.UNAUTHENTICATED',
+          message: 'Sign in is required.',
+          remediation: 'Sign in with a persona holding billing:read, then retry the download.',
+          docs_url: DOCS_URL
+        }
+      },
       { status: 401 }
     )
   }
   if (!session.principal.superadmin && !session.principal.scopes.includes(SCOPES.billingRead)) {
     return NextResponse.json(
-      { error: { code: 'BACKOFFICE.SCOPE_DENIED', message: 'billing:read is required.' } },
+      {
+        error: {
+          code: 'BACKOFFICE.SCOPE_DENIED',
+          message: 'billing:read is required.',
+          remediation: 'Switch to a persona holding billing:read — the Finance Analyst has it.',
+          docs_url: DOCS_URL
+        }
+      },
       { status: 403 }
     )
   }
@@ -36,7 +57,8 @@ export async function GET(request: Request): Promise<Response> {
         error: {
           code: 'BACKOFFICE.INVALID_PERIOD',
           message: `Period ${period || '(absent)'} is not YYYY-MM.`,
-          remediation: 'Request the export with a period such as 2026-06.'
+          remediation: 'Request the export with a period such as 2026-06.',
+          docs_url: DOCS_URL
         }
       },
       { status: 400 }
@@ -60,7 +82,14 @@ export async function GET(request: Request): Promise<Response> {
       )
     }
     return NextResponse.json(
-      { error: { code: 'BACKOFFICE.ERROR', message: 'TPP cost evidence export failed.' } },
+      {
+        error: {
+          code: 'BACKOFFICE.ERROR',
+          message: 'TPP cost evidence export failed.',
+          remediation: 'Retry once the back office is reachable; the export is a read and is safe to repeat.',
+          docs_url: DOCS_URL
+        }
+      },
       { status: 502 }
     )
   }

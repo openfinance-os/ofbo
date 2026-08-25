@@ -88,18 +88,6 @@ export const DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS = fils(1)
 export const DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS = fils(1)
 
 /**
- * Is this break material — big enough to hold the period open?
- *
- * `wrong_recipient` is material at ZERO variance, and that is not an edge case bolted on: paying
- * exactly the right amount to the wrong counterparty is not a rounding difference, it is money sent
- * to someone who was not owed it. The spec's own `TppCostDiffLine.material` description says so
- * verbatim ("A wrong recipient is material at zero variance"), so the code and the contract agree
- * rather than merely coexisting.
- *
- * Everything else is judged on the absolute variance, because a break's direction says who benefits,
- * not how much is at stake.
- */
-/**
  * The value each construction site writes, and none of them decides.
  *
  * Every break is judged in ONE place (`isPayableBreakMaterial`, applied over the whole array before
@@ -109,13 +97,58 @@ export const DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS = fils(1)
  */
 const MATERIALITY_DECIDED_CENTRALLY = false
 
+/** The magnitudes a materiality judgement needs. Structural, so `PayableBreak` satisfies it. */
+export interface PayableBreakMagnitudes {
+  breakType: PayableBreakType
+  /** NET variance. Not the right measure for every break type — see below. */
+  varianceMilliFils: number
+  expectedUnits: number
+  actualUnits: number
+  expectedVatMilliFils: number
+  actualVatMilliFils: number
+}
+
+/**
+ * Is this break material — big enough to hold the period open?
+ *
+ * JUDGED ON THE DIMENSION THE BREAK IS ABOUT, which is the whole point and was got wrong once
+ * already. An earlier version of this function took the net variance for every type, and that is
+ * silently catastrophic for two of them, because `classifyVariance` reaches them only when the NET
+ * variance is inside tolerance:
+ *
+ *   - `vat_variance` is returned only after `Math.abs(netVariance) <= tolerance` fails to produce a
+ *     `rate_variance`. So its net variance is ~0 BY CONSTRUCTION, and a net-based test made every
+ *     VAT break immaterial at any magnitude of VAT error.
+ *   - `quantity_variance` fires on a unit difference regardless of money. 100 units at 10 fils
+ *     against 200 units at 5 fils is a real quantity dispute with a net variance of exactly zero.
+ *
+ * Both would have stopped blocking the four-eyes close, stopped escalating to an E1 break, and
+ * stopped raising the IG §10.13 window alarm — the charge would simply become accepted when the
+ * 30-day window shut. Measured, not reasoned: both returned `material: false` before this fix.
+ *
+ * Units are counted facts, so ANY difference is real — `UNIT_TOLERANCE` is 0 for that reason, and a
+ * quantity break is material whenever the counts disagree, whatever it is worth. Judging it on money
+ * would reintroduce the same defect one level down.
+ *
+ * `wrong_recipient` is material at ZERO variance: paying exactly the right amount to the wrong
+ * counterparty is not a rounding difference, it is money sent to someone who was not owed it. The
+ * spec's own `TppCostDiffLine.material` description says so verbatim.
+ */
 export function isPayableBreakMaterial(
-  breakType: PayableBreakType,
-  varianceMilliFils: number,
+  entry: PayableBreakMagnitudes,
   materialityMilliFils: number = DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS
 ): boolean {
-  if (breakType === 'wrong_recipient') return true
-  return Math.abs(varianceMilliFils) > materialityMilliFils
+  switch (entry.breakType) {
+    case 'wrong_recipient':
+      return true
+    case 'quantity_variance':
+      return entry.actualUnits !== entry.expectedUnits
+        || Math.abs(entry.varianceMilliFils) > materialityMilliFils
+    case 'vat_variance':
+      return Math.abs(entry.actualVatMilliFils - entry.expectedVatMilliFils) > materialityMilliFils
+    default:
+      return Math.abs(entry.varianceMilliFils) > materialityMilliFils
+  }
 }
 
 /** Units are counted facts, so any difference is real; the constant exists to name that choice. */
@@ -778,7 +811,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
   // literal `true` that filtered nothing — and a bank that sets a higher threshold can now have a
   // break stay real, recorded and queryable without holding the month open.
   for (const entry of breaks) {
-    entry.material = isPayableBreakMaterial(entry.breakType, entry.varianceMilliFils, materiality)
+    entry.material = isPayableBreakMaterial(entry, materiality)
   }
 
   // --- Per-document rollup ---------------------------------------------------------------------

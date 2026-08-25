@@ -78,6 +78,8 @@ export interface TppCostEvidencePack {
   diffLines: unknown[]
   closes: unknown[]
   dispatches: unknown[]
+  /** Fields the store's read-boundary redactor scrubbed. Non-zero is worth investigating. */
+  redactedPathCount?: number
 }
 
 export interface PayablePeriodDeps {
@@ -257,7 +259,15 @@ export class PayablePeriodService {
       // The digest and the counts, never the pack. The audit trail records WHAT was disclosed and
       // that it can be identified later; copying the evidence into the audit table would duplicate
       // the whole ledger into a second INSERT-only store on every download.
-      request_body: { period, sha256, record_counts: body.record_counts }
+      // The scrub count rides the audit row: if the read-boundary redactor had to remove anything,
+      // that means unredacted provider content had reached the ledger, and the investigation starts
+      // from this record rather than from someone noticing the file looked odd.
+      request_body: {
+        period,
+        sha256,
+        record_counts: body.record_counts,
+        redacted_path_count: pack.redactedPathCount ?? 0
+      }
     })
 
     return { ...body, sha256 }

@@ -607,6 +607,25 @@ describe('BILL-16 — payable close and AP dispatch', () => {
     }
   })
 
+  it('BILL-17: the pack never publishes raw_document_ref, the locator for unredacted originals', async () => {
+    // The archive behind that column holds UNREDACTED provider content by design
+    // (services/bff/src/billing/tpp-cost-document.ts:253-268) and is deliberately not one of the
+    // cost tables for that reason. Publishing its address in a downloadable file would hand out the
+    // route to the original — the evidence of what was charged is the parsed lines, not the scan.
+    const period = '2026-08'
+    await seedPayableForPeriod(period)
+
+    const pack = await periodStore.evidencePack(period)
+    expect(pack.documents.length).toBeGreaterThan(0)
+    for (const document of pack.documents) {
+      expect(Object.keys(document as Record<string, unknown>)).not.toContain('raw_document_ref')
+    }
+    // Asserted on the serialised artefact too, which is what a human actually receives — a nested
+    // copy under some other key would pass the key check above.
+    expect(JSON.stringify(pack)).not.toContain('raw_document_ref')
+    expect(JSON.stringify(pack)).not.toContain('s3://')
+  })
+
   it('BILL-17: the evidence pack is one consistent snapshot, scoped to the caller\'s own tenant', async () => {
     // A period no other test in this file touches: closes are UNIQUE per (bank, period), so a
     // shared one makes this test's outcome depend on execution order.

@@ -155,7 +155,7 @@ test.describe('mutating server actions (the actions.ts files)', () => {
  *
  * Driven against the seeded demo evidence, which deliberately seeds TWO periods so the close gate
  * can be demonstrated in both directions: the month before last is CLOSED (with a dispatched then
- * accepted payable) and last month is BLOCKED by a material VAT-variance break. One period could
+ * accepted payable) and last month is BLOCKED by a material rate-variance break. One period could
  * only ever show one of those states.
  */
 test.describe('TPP Cost Management console (BILL-17)', () => {

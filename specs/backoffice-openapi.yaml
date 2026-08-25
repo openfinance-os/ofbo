@@ -2192,8 +2192,19 @@ paths:
         level security; the pack can only ever contain the caller's own bank.
 
 
-        Contains no PSU identifiers. The payable ledger references metering event ids rather than
-        customers by construction, and the provider-fed columns are redacted at ingest.
+        PSU-free by construction for every schema-constrained column: the payable ledger references
+        metering event ids rather than customers. The provider-fed free-form columns
+        (`parsed_payload`, `response_payload`) are a narrower claim and are stated as one — they are
+        redacted at ingest by a redactor keyed on field names and identifier shapes, and scrubbed
+        AGAIN at this read boundary, because that redactor is heuristic and its own documentation
+        records the residual risk of a bare account number under an unrecognised key. Two heuristic
+        passes are not a proof; the count of anything the second pass removed is written to the audit
+        trail so a leak is investigable rather than invisible.
+
+
+        `raw_document_ref` is deliberately EXCLUDED from the pack. It addresses the raw-artifact
+        archive, which holds unredacted provider originals by design, and the evidence of what was
+        charged is the parsed lines — not a pointer to the scan.
       x-rate-limit-per-min: 10
       x-required-scope: billing:read
       parameters:
@@ -4106,7 +4117,14 @@ components:
         variance_basis_points: { type: integer }
         material:
           type: boolean
-          description: Exceeds the tolerance. A wrong recipient is material at zero variance.
+          description: >
+            Exceeds the MATERIALITY threshold — big enough to hold the period open — which is
+            configurable independently of the matching tolerance that decides whether a break exists
+            at all. The two are equal at the shipped defaults. Judged on the dimension the break is
+            about: a VAT break on its VAT variance, a quantity break on its counts, the rest on net
+            variance. Judging every type on net would make a VAT break permanently immaterial, since
+            classification only reaches `vat_variance` once the net variance is inside tolerance. A
+            wrong recipient is material at zero variance.
         reason_code: { type: string }
         reconciliation_break_id:
           type: string
@@ -4118,7 +4136,7 @@ components:
       description: >
         Money amounts are `Money` (integer minor units + ISO 4217), per the binding convention.
         Milli-fils — thousandths of a fil — is a RATING AND STORAGE precision only, needed because
-        ADR 0007 prices scheme tariffs at 2.5 and 0.5 fils; it never reaches the wire as an amount.
+        ADR 0007 prices scheme tariffs at 2.5 and 0.5 fils; it never reaches the wire as an amount on THIS schema or its siblings. One deliberate exception exists and is named here so the two statements do not contradict each other: `TppCostEvidenceExport` (BILL-17) ships the ledger's stored rows verbatim, milli-fils included, because its digest must attest to what the ledger HOLDS rather than to a rounded restatement of it. That pack is an evidence artefact, not a read model — the console reads its figures from these schemas, which do emit `Money`.
         The two integer fields that remain in milli-fils are a matching threshold and a unit rate,
         neither of which is an amount.
       required:
@@ -4326,8 +4344,12 @@ components:
           items: { type: object, additionalProperties: true }
         sha256:
           type: string
+          pattern: '^[0-9a-f]{64}$'
           description: >
-            Canonical SHA-256 over this pack's body, excluding this field. Recomputable by the
+            Canonical SHA-256 over this pack's body, excluding this field. BARE hex, deliberately
+            unlike the `sha256:`-prefixed form used by `TppCostDocument.document_sha256` and the
+            other billing artefacts; pinned by pattern so it cannot be silently "harmonised" to the
+            prefixed convention, which would break every recipient's recomputation. Recomputable by the
             recipient — that is what makes the pack evidence rather than a report.
     InvoiceRun:
       type: object
