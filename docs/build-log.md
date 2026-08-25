@@ -4674,6 +4674,74 @@ Two agent-performed merges in one day is the point at which "exception" reads as
 branch-protection runbook would have refused both. That, and HARNESS-16 — an advisory control that
 cannot complete is not advisory, it is absent — are the two follow-ups the waiver names.
 
+---
+
+## 2026-08-22 — HARNESS-22: the reviewers were running out of turns, and saying nothing about it
+
+HARNESS-16 shipped the reviewers and proved they CATCH violations (PR #331, all six plants found).
+What it had not established is that they *finish*. On PR #325 both legs died after 326s and 397s
+with a valid credential, writing no review file, and #325 merged with no AI review of record —
+recorded in HG-0001 waiver 02 as the sharpest cost of this defect.
+
+**Job conclusion is the wrong instrument, and using it would have produced a false answer.** A
+reviewer that finds violations also exits red. PR #331 shows as `failure` and is a *working*
+review with six findings. Legs were therefore classified by whether the **engine step** failed —
+engine success + enforce-verdict failure means a real review that reported findings; engine
+failure means no review file at all.
+
+Across every leg that actually invoked an engine:
+
+| outcome | n | changed files | churn |
+| --- | --- | --- | --- |
+| reviewed ok | 16 | **5 – 10** | 16 – 1080 |
+| DID NOT COMPLETE | 2 | **41** | 1430 |
+
+Complete separation — no success above 10 files, no failure below 41.
+
+**File count separates; churn does not.** #324 reviewed fine at 1080 churn across 6 files while
+#325 failed at 41 files. That asymmetry is the whole argument for the mechanism: a context-window
+limit would track lines, a per-file **tool-call** budget tracks file count, and the prompt requires
+the reviewer to Read each changed file to cite findings at `file:line`. That budget is
+`--max-turns`, which was **30**. Raised to **80**.
+
+**What is not known, stated because the number is sized from it.** Both failures are the same PR,
+so this is one independent observation, not two. The 10–41 file gap is unsampled, so the real cliff
+is somewhere inside it. And the engine's own error was never read: GitHub caps the job-log API
+response at ~1.2 KB of tail, and the full-log download is a blob-host redirect this environment
+cannot follow. Correlation plus a mechanism that fits — not a quoted error. 80 is headroom over a
+demonstrated failure, not a computed requirement.
+
+**Residual, deliberately not fixed here:** a large enough PR still exhausts any fixed budget, and
+still surfaces as the generic DID NOT COMPLETE. Making exhaustion distinguishable from a crash is a
+separate story, and it is the one that would have let this be diagnosed in minutes instead of by
+correlating twenty-seven job records.
+
+### The guard, and the mistake that shaped it
+
+`scripts/test/ai-review-turn-budget.test.mjs`, 3 tests: the budget must be **declared** (absent
+means the action's unpinned default), must **exceed the value that demonstrably failed**, and
+`claude_args` must contain **only flags**.
+
+That third test exists because I made exactly that mistake while writing this fix. `claude_args: |`
+is a literal block handed straight to the CLI, so the rationale comment I first wrote *inside* it
+would have been passed as an argument. It failed in the quietest possible way: the YAML still
+parsed, and the guard's own regex still read the correct number out of an argument list the engine
+would have rejected — a guard reporting a budget the engine never received. The rationale now lives
+in YAML comments outside the block, and the shipped test enforces it rather than my scratch probe.
+
+Mutation-proved four ways, workflow restored byte-for-byte after each:
+
+| mutation | caught by |
+| --- | --- |
+| revert to 30 | budget-floor assertion |
+| lower to 45 — above the old value, below the floor | budget-floor assertion |
+| remove `--max-turns` entirely | budget-declared assertion |
+| smuggle a `#` comment into `claude_args` | args-are-flags assertion |
+
+Evidence: harness suite 127/127; `ai-review.yml` parses with a single `with:` block carrying
+exactly three keys (an intermediate edit left a duplicate `with:` — caught by parsing the step back
+out rather than by eye).
+
 ## 2026-08-25 — BILL-16 done, BILL-15 closed, BILL-17 console shipped (the payable side works end to end)
 
 BILL-16 had domain, service and port layers and no store, so not one of its criteria was
