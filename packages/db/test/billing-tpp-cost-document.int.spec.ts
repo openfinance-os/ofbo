@@ -231,18 +231,25 @@ describe('PgBillingTppCostStore — provider documents', () => {
   })
 
   it('grants the internal-view read on documents now that redaction is proven (migration 0040)', async () => {
-    // BILL-13 withheld this deliberately; BILL-14 earns it. AP dispatch stays withheld for BILL-16.
+    // BILL-13 withheld this deliberately; BILL-14 earns it.
     const granted = await admin.query(
       `SELECT has_table_privilege('bank_internal_view', $1, 'SELECT') AS ok`,
       ['billing_tpp_cost_document']
     )
     expect(granted.rows[0].ok).toBe(true)
 
-    const stillWithheld = await admin.query(
+    // AP dispatch was withheld here for BILL-16 on the SAME terms, and BILL-16 has now met them:
+    // PgPayableDispatchStore redacts the P9 response before the first INSERT and re-checks at the
+    // write boundary, refusing outright if any field still matches a customer-detail shape. The
+    // proof of that control is billing-payable-store.int.spec.ts; migration 0043 is the grant.
+    //
+    // This assertion has flipped deliberately. It tracked a CONDITION — redaction proven for that
+    // table's write path — not a frozen table list, and the condition is now satisfied.
+    const nowGranted = await admin.query(
       `SELECT has_table_privilege('bank_internal_view', $1, 'SELECT') AS ok`,
       ['billing_tpp_cost_ap_dispatch']
     )
-    expect(stillWithheld.rows[0].ok).toBe(false)
+    expect(nowGranted.rows[0].ok).toBe(true)
   })
 
   it('scopes that internal-view read to the caller tenant group — one customer cannot read another\'s documents', async () => {

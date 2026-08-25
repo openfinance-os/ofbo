@@ -23,6 +23,10 @@ import {
   PgTppCounterpartyStore,
   PgBillingRecordStore,
   PgInvoiceRunStore,
+  PgBillingTppCostStore,
+  PgPayableCloseStore,
+  PgPayableDispatchStore,
+  PgPayablePeriodStore,
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
   PgCertificationStore,
@@ -78,6 +82,13 @@ const complianceMetricsStore = url && audit ? new PgComplianceMetricsStore(url, 
 const riskMetricsStore = url && audit ? new PgRiskMetricsStore(url, tenancy, audit) : undefined
 const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
 const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
+// BILL-14/15/16 — the TPP Cost Management ledger, matching worker.ts. Without these the local dev
+// server hits the fail-closed defaults and the whole payable surface answers 500 instead of the
+// contract's error envelope, which is exactly the state the deployed worker was in.
+const tppCostLedgerStore = url ? new PgBillingTppCostStore(url, tenancy, lineage) : undefined
+const payableCloseStore = url ? new PgPayableCloseStore(url, tenancy, lineage) : undefined
+const payableDispatchStore = url ? new PgPayableDispatchStore(url, tenancy, lineage) : undefined
+const payablePeriodStore = url ? new PgPayablePeriodStore(url, tenancy, lineage) : undefined
 
 const app = createApp({
   ...(audit ? { audit } : {}),
@@ -97,6 +108,10 @@ const app = createApp({
   ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
   ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
   ...(reconciliationThresholdStore ? { reconciliationThresholdStore } : {}),
+  ...(tppCostLedgerStore ? { tppCostDocumentStore: tppCostLedgerStore, tppCostReconcileStore: tppCostLedgerStore } : {}),
+  ...(payableCloseStore ? { payableCloseStore } : {}),
+  ...(payableDispatchStore ? { payableDispatchStore } : {}),
+  ...(payablePeriodStore ? { payablePeriodStore } : {}),
   ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
   ...(billingRecordStore ? { billingRecordStore } : {}),
   ...(invoiceRunStore ? { invoiceRunStore } : {}),

@@ -490,24 +490,28 @@ describe('PgBillingTppCostStore', () => {
     }
   })
 
-  it('withholds cross-tenant internal-view reads on any provider-fed payload table lacking redaction', async () => {
-    // Least privilege until redaction exists for that table's write path. BILL-13 withheld BOTH
-    // provider-fed tables; BILL-14 then earned the document one by redacting at parse time and
-    // proving it against a persisted row, and granted it in migration 0040. ap_dispatch is still
-    // withheld because its response_payload is P9's, written by BILL-16, with no redaction yet — so
-    // this assertion tracks the CONDITION (redaction proven) rather than a frozen table list.
+  it('grants cross-tenant internal-view reads only where the write path proves redaction', async () => {
+    // Least privilege until redaction exists for that table's write path, tracking the CONDITION
+    // rather than a frozen table list. BILL-13 withheld BOTH provider-fed tables. BILL-14 earned the
+    // document one by redacting at parse time and proving it against a persisted row (migration
+    // 0040). BILL-16 has now earned ap_dispatch on the same terms: its P9 response_payload is
+    // redacted before the first INSERT and re-checked at the write boundary, the dispatch_ref is
+    // redacted in the service before it reaches the store, and the caller-supplied Idempotency-Key
+    // is stored as a digest rather than in the clear (migration 0043).
     const granted = await admin.query(
       `SELECT table_name FROM information_schema.role_table_grants
         WHERE grantee = 'bank_internal_view' AND privilege_type = 'SELECT'
           AND table_name LIKE 'billing_tpp_cost%'`
     )
     const names = granted.rows.map((row) => row.table_name as string)
-    expect(names).not.toContain('billing_tpp_cost_ap_dispatch')
-    // Granted only once its redaction control shipped and was tested (BILL-14 criterion 5).
+    // Both provider-fed tables, each granted only once its redaction control shipped and was tested.
     expect(names).toContain('billing_tpp_cost_document')
+    expect(names).toContain('billing_tpp_cost_ap_dispatch')
     // The schema-constrained, PSU-free relations keep the ratified governed-aggregate access.
     expect(names).toContain('billing_tpp_cost_statement')
     expect(names).toContain('billing_tpp_cost_statement_line')
+    // The close carries no provider-fed column at all — a period, two principals, an approval id.
+    expect(names).toContain('billing_tpp_cost_period_close')
   })
 
   it('binds the four-eyes approval reference to the tenant, not just to a global id', async () => {

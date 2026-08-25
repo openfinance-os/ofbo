@@ -366,3 +366,257 @@ export function buildPayableSettlement(input: PayableSettlementInput): JournalIn
     line(contra, 'credit', input.amountFils, input.via === 'cash' ? 'settlement_cash' : 'settlement_clearing', input.sourceRefs)
   ])
 }
+
+// ---------------------------------------------------------------------------------------------
+// P9 status -> ledger dispatch state (criterion 3 / criterion 5)
+// ---------------------------------------------------------------------------------------------
+
+/** Mirrors the `dispatch_state` CHECK on `billing_tpp_cost_ap_dispatch` (migration 0039) exactly. */
+export type PayableLedgerDispatchState = 'pending' | 'dispatched' | 'accepted' | 'rejected' | 'failed'
+
+/**
+ * Collapse P9's finer lifecycle onto the coarse ledger state.
+ *
+ * `mandate_active` and `presented` both become `dispatched` deliberately. What the ledger's
+ * `UNIQUE (bank_id, idempotency_key, dispatch_state)` bounds is "one dispatch per instruction", not
+ * the debit's progress through the scheme's collection window (IG §10.14-10.15: DDA presented on
+ * the 10th, collected by the 30th). Giving each P9 status its own ledger state would let the same
+ * instruction hold three rows that all mean "in flight", which is exactly the double-authorisation
+ * the constraint exists to bound. P9's precise status is preserved in `response_payload`, so the
+ * finer fact is recorded — it simply is not what uniqueness counts.
+ *
+ * Lives here, in the pure package, because both the store that writes the column and the service
+ * that reports it on the wire need the SAME mapping. Two copies would be two vocabularies.
+ */
+export function payableLedgerDispatchState(status: string): PayableLedgerDispatchState {
+  switch (status) {
+    case 'collected': return 'accepted'
+    case 'rejected': return 'rejected'
+    case 'dispatched':
+    case 'mandate_active':
+    case 'presented': return 'dispatched'
+    default:
+      throw new RangeError(`unknown P9 payable status: ${status}`)
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// IG §10.16 dual-role net settlement (criterion 4)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * One counterparty's position across BOTH roles in a period.
+ *
+ * The scheme confirms the netting in IG v5.0 §10.16: amounts payable to LFIs are netted against fees
+ * owed to Nebras where the LFI also operates as a TPP. That is a statement about ONE counterparty
+ * appearing on both sides of our ledger, which is why this is keyed by counterparty rather than by
+ * invoice — netting invoice-by-invoice would find nothing, because a receivable invoice and a
+ * payable invoice never share an id.
+ */
+export interface DualRoleCounterpartyPosition {
+  counterpartyId: string
+  /** What they owe us as a consuming TPP. Gross of nothing — it is the receivable as invoiced. */
+  receivableMilliFils: number
+  /** What we owe them as an underlying LFI, or the Hub. */
+  payableMilliFils: number
+  costRecipientType: CostRecipientType
+  receivableLedgerRefs: readonly string[]
+  payableLedgerRefs: readonly string[]
+}
+
+/** A variance the desk accepted, carried into the settlement so the residue is not overstated. */
+export interface ApprovedSettlementAdjustment {
+  adjustmentRef: string
+  /** Signed: positive increases what we expect to receive, negative decreases it. */
+  signedMilliFils: number
+  approvalRequestId: string
+  reason: string
+}
+
+export interface NetSettlementInput {
+  settlementReference: string
+  period: string
+  /** The cash the scheme actually moved, signed: positive is money in. */
+  receivedMilliFils: number
+  positions: readonly DualRoleCounterpartyPosition[]
+  adjustments?: readonly ApprovedSettlementAdjustment[]
+  /** Sub-fil residues are rounding artefacts; a break for one trains the desk to close them unread. */
+  residueToleranceMilliFils?: number
+}
+
+export interface NetSettlementCounterpartyExplanation {
+  counterpartyId: string
+  costRecipientType: CostRecipientType
+  receivableMilliFils: number
+  payableMilliFils: number
+  /** What actually moves for this counterparty once the two roles offset. */
+  netMilliFils: number
+  /** The smaller of the two sides — the amount that never moves as cash because it cancels. */
+  nettedMilliFils: number
+  dualRole: boolean
+}
+
+export interface NetSettlementDecomposition {
+  settlementReference: string
+  period: string
+  receivedMilliFils: number
+  /** Gross receivables minus Nebras costs minus underlying-LFI costs plus approved adjustments. */
+  expectedNetMilliFils: number
+  grossReceivableMilliFils: number
+  nebrasCostMilliFils: number
+  underlyingLfiCostMilliFils: number
+  approvedAdjustmentMilliFils: number
+  /** Total offset by dual-role netting — cash that never moved because it cancelled. */
+  totalNettedMilliFils: number
+  residueMilliFils: number
+  residueToleranceMilliFils: number
+  counterparties: NetSettlementCounterpartyExplanation[]
+  /** Shaped for `settlementJournal` and `settlementResidueBreaks`, which both already consume it. */
+  lines: Array<{
+    role: 'lfi_receivable' | 'tpp_of_record_payable'
+    sourceId: string
+    counterpartyId: string
+    signedMilliFils: number
+    ledgerRef: string
+  }>
+  break: {
+    amountMilliFils: number
+    receivableLedgerRefs: string[]
+    payableLedgerRefs: string[]
+  } | null
+}
+
+function safeSigned(value: number, label: string): number {
+  if (!Number.isSafeInteger(value)) throw new RangeError(`${label} must be a safe integer in milli-fils`)
+  return value
+}
+
+/**
+ * Decompose one scheme settlement, explaining the dual-role offset line by line.
+ *
+ * WHY THE NETTING IS REPORTED RATHER THAN APPLIED. Both roles keep their GROSS ledgers — ADR 0007
+ * decided netting happens only at settlement — so this does not collapse a counterparty's two
+ * positions into one number and throw the other away. Each position stays on the wire as its own
+ * signed line (that is what `lines` carries into `settlementJournal`), and `nettedMilliFils` states
+ * how much of the pair cancelled. An auditor asking "why did AED 40,000 of receivable not arrive as
+ * cash" gets the answer from the row rather than from someone's memory of the offset.
+ *
+ * The residue is what the cash could not be explained by. It posts to suspense in the journal AND
+ * raises an E1 break through `settlementResidueBreaks` — the suspense line alone balances the batch,
+ * and a balanced batch reads as finished, which leaves unexplained money with no owner and no clock.
+ */
+export function decomposeNetSettlement(input: NetSettlementInput): NetSettlementDecomposition {
+  if (!input.settlementReference.trim()) throw new Error('settlementReference is required')
+  assertPeriod(input.period)
+  safeSigned(input.receivedMilliFils, 'receivedMilliFils')
+  const tolerance = input.residueToleranceMilliFils ?? MF_PER_FIL
+  if (!Number.isSafeInteger(tolerance) || tolerance < 0) {
+    throw new RangeError('residueToleranceMilliFils must be a non-negative safe integer in milli-fils')
+  }
+  const ids = input.positions.map((p) => p.counterpartyId)
+  if (new Set(ids).size !== ids.length) {
+    // One counterparty must appear ONCE, carrying both roles. Two rows for the same id would each
+    // net against nothing and the offset would silently not happen — the exact failure §10.16 is
+    // about, arriving as a data-shape accident rather than a decision.
+    throw new Error('a counterparty may appear at most once: both roles belong on one position')
+  }
+
+  const counterparties: NetSettlementCounterpartyExplanation[] = []
+  const lines: NetSettlementDecomposition['lines'] = []
+  let grossReceivable = 0
+  let nebrasCost = 0
+  let underlyingLfiCost = 0
+  let totalNetted = 0
+
+  for (const position of input.positions) {
+    const receivable = safeSigned(position.receivableMilliFils, `receivable ${position.counterpartyId}`)
+    const payable = safeSigned(position.payableMilliFils, `payable ${position.counterpartyId}`)
+    if (receivable < 0 || payable < 0) {
+      throw new RangeError(`position ${position.counterpartyId} must state each role as a non-negative amount`)
+    }
+    grossReceivable += receivable
+    if (position.costRecipientType === 'nebras') nebrasCost += payable
+    else underlyingLfiCost += payable
+
+    const dualRole = receivable > 0 && payable > 0
+    const netted = dualRole ? Math.min(receivable, payable) : 0
+    totalNetted += netted
+
+    counterparties.push({
+      counterpartyId: position.counterpartyId,
+      costRecipientType: position.costRecipientType,
+      receivableMilliFils: receivable,
+      payableMilliFils: payable,
+      netMilliFils: receivable - payable,
+      nettedMilliFils: netted,
+      dualRole
+    })
+
+    // Gross lines, both roles. Payables are carried NEGATIVE, which is the sign convention
+    // `settlementJournal` and `settlementResidueBreaks` already read.
+    if (receivable !== 0) {
+      for (const ref of position.receivableLedgerRefs) {
+        lines.push({
+          role: 'lfi_receivable',
+          sourceId: ref,
+          counterpartyId: position.counterpartyId,
+          // The whole receivable rides its FIRST ledger ref; splitting it evenly across refs would
+          // invent per-invoice amounts the ledger never posted.
+          signedMilliFils: ref === position.receivableLedgerRefs[0] ? receivable : 0,
+          ledgerRef: ref
+        })
+      }
+    }
+    if (payable !== 0) {
+      for (const ref of position.payableLedgerRefs) {
+        lines.push({
+          role: 'tpp_of_record_payable',
+          sourceId: ref,
+          counterpartyId: position.counterpartyId,
+          signedMilliFils: ref === position.payableLedgerRefs[0] ? -payable : 0,
+          ledgerRef: ref
+        })
+      }
+    }
+  }
+
+  const adjustments = input.adjustments ?? []
+  const adjustmentRefs = adjustments.map((a) => a.adjustmentRef)
+  if (new Set(adjustmentRefs).size !== adjustmentRefs.length) throw new Error('duplicate adjustment reference')
+  for (const adjustment of adjustments) {
+    if (!adjustment.approvalRequestId.trim()) {
+      // "Approved adjustments" is the whole category. An unapproved one would let a desk make a
+      // residue disappear by asserting it away, which is the opposite of what the break is for.
+      throw new Error(`adjustment ${adjustment.adjustmentRef} cites no approval`)
+    }
+    safeSigned(adjustment.signedMilliFils, `adjustment ${adjustment.adjustmentRef}`)
+  }
+  const approvedAdjustment = adjustments.reduce((sum, a) => sum + a.signedMilliFils, 0)
+
+  const expectedNetMilliFils = grossReceivable - nebrasCost - underlyingLfiCost + approvedAdjustment
+  const residueMilliFils = input.receivedMilliFils - expectedNetMilliFils
+  const material = Math.abs(residueMilliFils) > tolerance
+
+  return {
+    settlementReference: input.settlementReference,
+    period: input.period,
+    receivedMilliFils: input.receivedMilliFils,
+    expectedNetMilliFils,
+    grossReceivableMilliFils: grossReceivable,
+    nebrasCostMilliFils: nebrasCost,
+    underlyingLfiCostMilliFils: underlyingLfiCost,
+    approvedAdjustmentMilliFils: approvedAdjustment,
+    totalNettedMilliFils: totalNetted,
+    residueMilliFils,
+    residueToleranceMilliFils: tolerance,
+    counterparties,
+    lines,
+    break: material
+      ? {
+        amountMilliFils: residueMilliFils,
+        receivableLedgerRefs: input.positions.flatMap((p) => [...p.receivableLedgerRefs]),
+        payableLedgerRefs: input.positions.flatMap((p) => [...p.payableLedgerRefs])
+      }
+      : null
+  }
+}

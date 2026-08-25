@@ -5,6 +5,7 @@ import type { Principal } from '../auth.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 import { PAYABLE_CLOSE_OPERATION, PAYABLE_CLOSE_SCOPE, normalisePrincipal } from './payable-close.js'
 import { redactText } from '@ofbo/redaction'
+import { payableLedgerDispatchState, type PayableLedgerDispatchState } from '@ofbo/billing'
 
 /**
  * BILL-16 criterion 3 (service half) — hand an approved payable to P9.
@@ -56,9 +57,17 @@ export interface PayableDispatchStore {
       status: PayableDispatchStatus
       approvalRequestId: string
       idempotencyKey: string
+      /**
+       * P9's response, for the `response_payload` column.
+       *
+       * Passed as data rather than assembled in the store because the store must not know P9's
+       * shape — but it is REDACTED here and re-checked there, because criterion 5(c) asks for
+       * redaction "before the first INSERT" and the write is unremovable.
+       */
+      responsePayload?: unknown
     },
     traceId: string
-  ): Promise<{ dispatchId: string; created: boolean }>
+  ): Promise<{ dispatchId: string; created: boolean; dispatchedAt: string }>
 }
 
 /**
@@ -100,6 +109,17 @@ export interface PayableDispatchOutcome {
   dispatchRef: string
   status: PayableDispatchStatus
   replayed: boolean
+  /**
+   * The LEDGER's coarse state, beside P9's finer `status`.
+   *
+   * Both are reported because they answer different questions: `status` is what the financial
+   * system says about the debit, `dispatchState` is what our own INSERT-only log recorded — and
+   * three P9 statuses map onto one ledger state, so a caller shown only one of them cannot
+   * reconstruct the other.
+   */
+  dispatchState: PayableLedgerDispatchState
+  approvalRequestId: string
+  dispatchedAt: string
 }
 
 /**
@@ -173,7 +193,7 @@ export class PayableDispatchService {
         idempotency_key: idempotencyKey
       }, { trace_id: traceId })
 
-      await this.deps.store.recordDispatch({
+      const recorded = await this.deps.store.recordDispatch({
         payableId: payable.payableId,
         // Redacted at the SUCCESS path too, which it was not before. `dispatch_ref` is the one
         // field on P9's response that stays vendor-shaped — `payable_status` beside it is
@@ -190,7 +210,17 @@ export class PayableDispatchService {
         approvalRequestId: payable.approvalRequestId,
         // Hashed on the way into the INSERT-only row; the raw key still went to P9 above, where the
         // vendor's own dedupe needs the caller's actual value.
-        idempotencyKey: hashIdempotencyKey(idempotencyKey)
+        idempotencyKey: hashIdempotencyKey(idempotencyKey),
+        // Criterion 5(c). The vendor's own status and replay flag are worth keeping — they are the
+        // only record of what P9 actually said — but the reference beside them is vendor-shaped
+        // free text, so it is redacted here exactly as it is on the column above. The store refuses
+        // the INSERT outright if anything in this object still matches a customer-detail shape.
+        responsePayload: {
+          payable_status: result.payable_status,
+          replayed: result.replayed,
+          accepted: result.accepted,
+          dispatch_ref: redactText(result.dispatch_ref)
+        }
       }, traceId)
 
       await this.deps.audit.emit({
@@ -217,7 +247,19 @@ export class PayableDispatchService {
           replayed: result.replayed
         }
       })
-      return { dispatchRef: result.dispatch_ref, status: result.payable_status, replayed: result.replayed }
+      return {
+        dispatchRef: result.dispatch_ref,
+        status: result.payable_status,
+        // P9's `replayed` says the VENDOR matched an existing instruction; `recorded.created` says
+        // our own ledger did. Either one means no new debit was authorised, so the wire reports the
+        // disjunction rather than P9's flag alone — a vendor that replays while our row is new (or
+        // the reverse, after a crash between the two writes) would otherwise be reported as a fresh
+        // authorisation.
+        replayed: result.replayed || !recorded.created,
+        dispatchState: payableLedgerDispatchState(result.payable_status),
+        approvalRequestId: payable.approvalRequestId,
+        dispatchedAt: recorded.dispatchedAt
+      }
     } catch (error) {
       // Audited on the way out. A failure here is the case an investigator most needs and least often
       // has — "did we authorise this debit?" must be answerable when the answer is no.

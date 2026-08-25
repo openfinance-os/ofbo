@@ -6,7 +6,7 @@ import { HTTPException } from 'hono/http-exception'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
-import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
+import { ApprovalsService, InMemoryApprovalStore, type ApprovalsDeps } from './approvals/service.js'
 import {
   createJustificationMiddleware,
   isServiceAccountSubject,
@@ -111,6 +111,15 @@ import {
   type LatePaymentSource,
   type TppCostReconcileStore
 } from './billing/tpp-cost-reconcile.js'
+import {
+  PayableCloseService,
+  makePayableCloseOperation,
+  PAYABLE_CLOSE_OPERATION,
+  type PayableCloseStore
+} from './billing/payable-close.js'
+import { PayableDispatchService, type PayableDispatchStore } from './billing/payable-dispatch.js'
+import { PayablePeriodService, type PayablePeriodStore } from './billing/payable-period.js'
+import { payableRoutes } from './billing/payable-routes.js'
 import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
 import { strDraftRoutes } from './str/routes.js'
 import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceProfitabilityReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
@@ -248,6 +257,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/billing/export',
   'post /back-office/billing/tpp-cost-documents',
   'post /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
+  'get /back-office/billing/cost-periods/{period}',
+  'post /back-office/billing/cost-periods/{period}:close',
+  'post /back-office/billing/payables/{payable_id}:dispatch',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
@@ -330,6 +342,12 @@ export interface AppDeps {
   tppCostDocumentStore?: TppCostDocumentStore
   tppCostReconcileStore?: TppCostReconcileStore
   tppCostLatePayments?: LatePaymentSource
+  /** BILL-16 — the four-eyes cost-period close ledger. */
+  payableCloseStore?: PayableCloseStore
+  /** BILL-16 — the append-only AP dispatch log. Two methods; it cannot reach billing evidence. */
+  payableDispatchStore?: PayableDispatchStore
+  /** BILL-16 — read model behind GET /back-office/billing/cost-periods/{period}. */
+  payablePeriodStore?: PayablePeriodStore
   /** BILL-14 — retention of the raw provider artifact, outside the ledger. */
   rawDocumentArchive?: RawDocumentArchive
   /** BILL-05 — append-only settlement decomposition and direct-collection action store. */
@@ -494,8 +512,39 @@ export function createApp(deps: AppDeps = {}) {
   // the second principal's approval (makeAgentRegisterOperation.execute).
   const agentStore = deps.agentStore ?? new InMemoryAgentStore()
   const agentRegisterOperation = makeAgentRegisterOperation({ store: agentStore, audit: highClassAudit })
-  const approvals = new ApprovalsService(audit, {
+  // BILL-16 — the four-eyes cost-period close.
+  //
+  // Constructed BEFORE the ApprovalsService so its gated operation can be registered in the same
+  // map as every other one. The request↔execute cycle is broken by the lazy arrow below rather than
+  // by a holder object: `approvals` is a const declared just after this, and the closure only runs
+  // when a close is actually requested, long after assignment.
+  //
+  // It fails closed without a store, and throws rather than answering: an unconfigured close store
+  // that reported "no open breaks" would close a period over evidence it never looked at.
+  // Explicitly annotated, all three. The cycle here is real — the service closes over `approvals`,
+  // whose operations map holds an operation built from the service — and TypeScript cannot infer a
+  // type through it. Annotating breaks the inference cycle without introducing a holder object.
+  const payableCloseService: PayableCloseService = new PayableCloseService({
+    store: deps.payableCloseStore ?? {
+      openPayableBreaks: async () => { throw new Error('payable close store is not configured') },
+      saveClose: async () => { throw new Error('payable close store is not configured') }
+    },
+    approvals: {
+      request: async (
+        principal, operationType, payload, traceId
+      ): Promise<{ approval_request_id: string; state: string }> =>
+        approvals.requestApproval(principal, { operation_type: operationType, operation_payload: payload }, traceId)
+    },
+    audit: highClassAudit
+  })
+  // One store instance, shared. The dispatch service needs to READ an approval without a
+  // principal (it is verifying evidence, not acting on someone's behalf), and `getFor` is
+  // deliberately principal-scoped. Passing the store to both beats adding an unscoped read
+  // method to the shared primitive, which every caller would then inherit.
+  const approvalStore = deps.approvals?.store ?? new InMemoryApprovalStore()
+  const approvals: ApprovalsService = new ApprovalsService(audit, {
     ...deps.approvals,
+    store: approvalStore,
     operations: {
       ...deps.approvals?.operations,
       [REFUND_OPERATION]: refundOperation,
@@ -507,7 +556,8 @@ export function createApp(deps: AppDeps = {}) {
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
       [REPORT_GENERATION_OPERATION]: reportGenerationOperation,
       [AGENT_REGISTER_OPERATION]: agentRegisterOperation,
-      [STR_HANDOFF_OPERATION]: strHandoffOperation
+      [STR_HANDOFF_OPERATION]: strHandoffOperation,
+      [PAYABLE_CLOSE_OPERATION]: makePayableCloseOperation(payableCloseService)
     }
   })
   const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit, idp)
@@ -606,7 +656,33 @@ export function createApp(deps: AppDeps = {}) {
       saveReconciliation: async () => { throw new Error('TPP cost reconciliation store is not configured') }
     },
     ...(deps.tppCostLatePayments ? { latePayments: deps.tppCostLatePayments } : {}),
+    // BILL-15 criterion 6(a) — payable breaks join the E1 queue on the SAME store the receivable
+    // engine writes to. Without this the diff lines persist with a null break id, and
+    // `openPayableBreaks` reads a null as "raised and not yet worked" — so the first break of a
+    // period would block its close permanently, with no workflow able to clear it.
+    breakEscalation: reconciliationBreakStore,
     audit: highClassAudit
+  })
+  // BILL-16 — AP dispatch and the period read model. Both fail closed without a store: an
+  // unconfigured dispatch store would authorise a debit it could not record, and a missing store is
+  // a deployment fault whose only safe reading is a refusal.
+  const payableDispatchService = new PayableDispatchService({
+    store: deps.payableDispatchStore ?? {
+      approvedPayable: async () => { throw new Error('payable dispatch store is not configured') },
+      recordDispatch: async () => { throw new Error('payable dispatch store is not configured') }
+    },
+    financialSystem: getAdapter('p9-financial-system', profileFromConfig(process.env)),
+    // The narrowest possible view: one read, no mutation. Dispatch verifies the four-eyes evidence
+    // it acts on without gaining any power to create or alter it.
+    approvals: { get: async (id: string) => approvalStore.get(id) },
+    audit: highClassAudit
+  })
+  const payablePeriodService = new PayablePeriodService({
+    store: deps.payablePeriodStore ?? {
+      periodClose: async () => { throw new Error('payable period store is not configured') },
+      payablesForPeriod: async () => { throw new Error('payable period store is not configured') },
+      openPayableBreaks: async () => { throw new Error('payable period store is not configured') }
+    }
   })
   const billingConsoleService = new BillingConsoleService({
     tenant: deps.billingTenant ?? {
@@ -771,6 +847,11 @@ export function createApp(deps: AppDeps = {}) {
     ...billingConsoleRoutes(billingConsoleService, idempotencyStore),
     ...tppCostDocumentRoutes(tppCostDocumentService, idempotencyStore),
     ...tppCostReconcileRoutes(tppCostReconcileService, idempotencyStore),
+    ...payableRoutes({
+      close: payableCloseService,
+      dispatch: payableDispatchService,
+      period: payablePeriodService
+    }, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),

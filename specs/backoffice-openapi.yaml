@@ -2008,6 +2008,155 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         default: { $ref: '#/components/responses/Error' }
 
+
+  /back-office/billing/cost-periods/{period}:
+    get:
+      tags: [tpp-billing]
+      summary: TPP cost-period state — close, payables and what is blocking them (BILL-16)
+      description: >
+        The payable side of a billing period in one read: whether the period has closed, which
+        four-eyes approval closed it, the payables it authorises, and the unresolved breaks that
+        are holding it open.
+
+
+        `close_state` is DERIVED, never stored as a workflow column. `blocked` means
+        `open_break_count` is above zero, so a close would be refused; `open` means the period is
+        clear and nobody has asked to close it; `closed` means a second finance principal approved
+        the close and the row exists. There is no `pending_approval` value because a requested close
+        lives on the approvals queue, not here — a period with an outstanding request is still
+        `open`, and `GET /back-office/approvals/pending` is where that request is visible.
+      x-rate-limit-per-min: 60
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: period
+          in: path
+          required: true
+          description: Cost period as YYYY-MM.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: "2026-07" }
+      responses:
+        '200':
+          description: Cost-period state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostPeriod' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/cost-periods/{period}:close:
+    post:
+      tags: [tpp-billing]
+      summary: Request the four-eyes close of a TPP cost period (BILL-16)
+      description: >
+        Never closes inline. Returns `202` with an `approval_request`, and the close executes only
+        when a SECOND finance principal approves it — the binding four-eyes rule, on the existing
+        approvals primitive rather than a second close mechanism.
+
+
+        Refused with `409` while the period carries unresolved material payable breaks. That refusal
+        is what makes BILL-15's reconciliation load-bearing rather than advisory: without it a
+        disputed line reaches an approved payable and gets paid. The check runs again at execution,
+        because approval is a separate act up to two business hours later and a break raised in
+        between must still stop the close.
+
+
+        The close is a gated PRECONDITION feeding the existing BACKOFFICE-06 monthly sign-off. It is
+        not a sign-off of its own, and it does not dispatch anything — honouring the scheme direct
+        debit is a separate, separately-authorised act.
+      x-rate-limit-per-min: 10
+      x-required-scope: finance:reconciliation:write
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - name: period
+          in: path
+          required: true
+          description: Cost period as YYYY-MM.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: "2026-07" }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        '409':
+          description: >
+            The period carries unresolved material payable breaks, or it is already closed. Both are
+            refusals rather than no-ops: closing over an open break would approve a disputed line,
+            and re-closing a closed period would mint a second four-eyes record for one act.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/payables/{payable_id}:dispatch:
+    post:
+      tags: [tpp-billing]
+      summary: Hand an approved payable to the financial system (BILL-16)
+      description: >
+        Authorises HONOURING a scheme direct debit; it does not push a payment. IG v5.0 §10.14–10.15
+        makes collection a scheme-operated pull — the DDA is presented to the Nebras sponsoring bank
+        on the 10th and collected by the 30th — so P9's role is mandate management plus matching the
+        pulled debit to the approved payable.
+
+
+        The four-eyes period close is a hard precondition, and the cited approval is re-verified here
+        rather than trusted: it must be `approved`, for THIS payable's own period, granted inside its
+        two-business-hour window, and by two distinct principals. The caller must be one of those two
+        — an approval authorises the people who made it, not everyone who can read its id.
+
+
+        `Idempotency-Key` is required and is never generated server-side: a generated key would make
+        every retry a new dispatch, which is exactly how one debit gets authorised twice. The key is
+        stored as a digest, not in the clear.
+      x-rate-limit-per-min: 10
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - name: payable_id
+          in: path
+          required: true
+          description: The reconciliation whose accepted payable is being dispatched.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: >
+            Dispatched, or replayed. A replay returns the same result without authorising a second
+            debit — `replayed` says which happened.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostPayableDispatch' }
+        '403':
+          description: >
+            The caller took no part in the four-eyes approval being cited, so it does not authorise
+            them to honour this debit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: No such payable for this tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >
+            The payable has no live four-eyes approval — absent, expired, approved late, rejected,
+            for another period, or evidencing one principal twice — or the dispatch state being
+            recorded does not legally follow the one already on file.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
   # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------
   /back-office/tpp-counterparties:
     get:
@@ -3968,6 +4117,110 @@ components:
         breaks:
           type: array
           items: { $ref: '#/components/schemas/TppCostDiffLine' }
+    TppCostDispatchState:
+      type: string
+      description: >
+        Coarse lifecycle of an AP dispatch. Mirrors the `dispatch_state` CHECK on
+        `billing_tpp_cost_ap_dispatch` (migration 0039) value for value — the column is in an
+        INSERT-only family with no deletion path, so the two vocabularies cannot be allowed to
+        drift. The P9 port's own finer status (`mandate_active`, `presented`, `collected`) is
+        reported separately as `payable_status`; several of those map onto `dispatched` here,
+        because what this value bounds is "one dispatch per instruction", not the debit's progress.
+      enum: [pending, dispatched, accepted, rejected, failed]
+    TppCostCloseState:
+      type: string
+      description: >
+        Derived, never stored. `blocked` = unresolved material payable breaks exist; `open` = clear
+        but not closed; `closed` = a second finance principal approved the close.
+      enum: [open, blocked, closed]
+    TppCostPayable:
+      type: object
+      required:
+        [payable_id, period, cost_recipient_type, cost_recipient_id, document_reference,
+         gross_amount, net_amount, vat_amount, approval_request_id, dispatch_state]
+      description: >
+        One accepted payable, keyed by the reconciliation that established it. `gross_amount` is
+        what the scheme debit collects; `net_amount` is what accrues as cost. Both are Money —
+        integer minor units — even though the ledger stores the finer milli-fils behind the
+        boundary.
+      properties:
+        payable_id: { type: string, format: uuid, description: The reconciliation this payable was established by }
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        document_reference: { type: string, description: The provider tax invoice the payable was accepted against }
+        gross_amount: { $ref: '#/components/schemas/Money' }
+        net_amount: { $ref: '#/components/schemas/Money' }
+        vat_amount: { $ref: '#/components/schemas/Money' }
+        approval_request_id:
+          type: string
+          nullable: true
+          description: The four-eyes close that authorises honouring this debit; null until the period closes.
+        dispatch_state:
+          nullable: true
+          description: Latest recorded dispatch state; null when never dispatched.
+          allOf: [ { $ref: '#/components/schemas/TppCostDispatchState' } ]
+        dispatched_at: { type: string, format: date-time, nullable: true }
+        netted_against:
+          nullable: true
+          description: IG §10.16 offset applied where this counterparty also operates as a TPP.
+          allOf: [ { $ref: '#/components/schemas/Money' } ]
+    TppCostPeriodBlocker:
+      type: object
+      required: [line_ref, break_type, cost_recipient_type, cost_recipient_id, variance, reconciliation_break_id]
+      description: One unresolved material payable break holding the period open.
+      properties:
+        line_ref: { type: string }
+        break_type: { $ref: '#/components/schemas/PayableBreakType' }
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        variance: { $ref: '#/components/schemas/Money' }
+        reconciliation_break_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The E1 break this was escalated as; null means raised but not yet worked.
+    TppCostPeriod:
+      type: object
+      required: [period, close_state, open_break_count, blockers, payables, feeds_monthly_signoff]
+      description: >
+        The payable state of one cost period — close, payables, and blockers — as one read.
+      properties:
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        close_state: { $ref: '#/components/schemas/TppCostCloseState' }
+        closed_at: { type: string, format: date-time, nullable: true }
+        initiated_by: { type: string, nullable: true, description: Principal who requested the close; normalised. }
+        approved_by: { type: string, nullable: true, description: The second principal who approved it; normalised. }
+        approval_request_id: { type: string, nullable: true }
+        feeds_monthly_signoff:
+          type: boolean
+          description: >
+            Always true. Recorded as data rather than convention so the relationship to the
+            BACKOFFICE-06 monthly sign-off is readable from the row.
+        open_break_count: { type: integer, minimum: 0 }
+        blockers:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostPeriodBlocker' }
+        payables:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostPayable' }
+    TppCostPayableDispatch:
+      type: object
+      required: [payable_id, dispatch_ref, dispatch_state, payable_status, replayed, approval_request_id]
+      description: >
+        The outcome of handing one approved payable to P9. `dispatch_ref` is the financial system's
+        own reference, redacted before it is persisted.
+      properties:
+        payable_id: { type: string, format: uuid }
+        dispatch_ref: { type: string }
+        dispatch_state: { $ref: '#/components/schemas/TppCostDispatchState' }
+        payable_status:
+          type: string
+          enum: [dispatched, mandate_active, presented, collected, rejected]
+          description: The P9 port's own finer status for the debit.
+        replayed: { type: boolean, description: True when the call matched an existing dispatch rather than authorising a new one }
+        approval_request_id: { type: string }
+        dispatched_at: { type: string, format: date-time }
     InvoiceRun:
       type: object
       properties:
