@@ -214,7 +214,11 @@ importers:
         specifier: ^4.19.2
         version: 4.22.4
 
-  packages/synthetic-data: {}
+  packages/synthetic-data:
+    dependencies:
+      '@ofbo/billing':
+        specifier: workspace:*
+        version: link:../billing
 
   services/bff:
     dependencies:

@@ -312,15 +312,29 @@ export function generateDemoDataset(seed: number = DEFAULT_SEED): DemoDataset {
     }
   })
 
-  // fee schedule in fils-as-minor-units; aggregated lines stay integer
+  // Fee schedule in fils-as-minor-units; aggregated lines stay integer.
+  //
+  // The period is RELATIVE — it was pinned to 2026-05, so the reconciliation and billing surfaces
+  // aged out of the demo's own timeline and by August were showing a quarter-old book. Lines land
+  // in the PREVIOUS complete month, which is the one an operator reconciles: the current month is
+  // still accruing, and a period that is still moving cannot be signed off.
+  const lastComplete = new Date()
+  lastComplete.setUTCDate(1)
+  lastComplete.setUTCMonth(lastComplete.getUTCMonth() - 1)
+  const period = lastComplete.toISOString().slice(0, 7)
+  const daysInPeriod = new Date(Date.UTC(lastComplete.getUTCFullYear(), lastComplete.getUTCMonth() + 1, 0)).getUTCDate()
+
   const billing_lines = Array.from({ length: 120 }, (_, i) => ({
-    line_ref: `bill-2026-05-${String(i + 1).padStart(4, '0')}`,
+    line_ref: `bill-${period}-${String(i + 1).padStart(4, '0')}`,
     channel: CHANNELS[i % CHANNELS.length]!,
     line_type: pick.of(LINE_TYPES),
     tpp_organisation_id: pick.of(TPPS),
     fee: { amount: pick.int(1, 500), currency: 'AED' as const },
-    occurred_at: `2026-05-${String(pick.int(1, 31)).padStart(2, '0')}T${String(pick.int(0, 23)).padStart(2, '0')}:${String(pick.int(0, 59)).padStart(2, '0')}:00Z`
+    occurred_at: `${period}-${String(pick.int(1, daysInPeriod)).padStart(2, '0')}T${String(pick.int(0, 23)).padStart(2, '0')}:${String(pick.int(0, 59)).padStart(2, '0')}:00Z`
   }))
 
   return { bank_id: DEMO_BANK_ID, persona_logins: PERSONA_LOGINS, psus, billing_lines }
 }
+
+/** DEMO billing book of business — volumes priced by the real rating engine. */
+export * from './billing-book.js'
