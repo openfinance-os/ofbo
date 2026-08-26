@@ -70,6 +70,87 @@ export const NEBRAS_QUERY_WINDOW_DAYS = 30
  */
 export const DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS = fils(1)
 
+/**
+ * How large a break must be to BLOCK the period close.
+ *
+ * A different question from the tolerance above, and conflating them is the trap. Tolerance asks
+ * "is this a difference at all, or a milli-fils/fils unit artefact" — below it, no break exists.
+ * Materiality asks "is this difference worth refusing to close a period over" — below it the break
+ * is real, recorded and queryable, it simply does not hold the month open.
+ *
+ * The two vocabularies are NOT interchangeable and never were: the payable side counts milli-fils,
+ * while the E1 `BreakThreshold` counts fils under `unit: 'aed'`. Comparing one against the other
+ * without converting judges almost every break immaterial by a factor of a thousand. This constant
+ * is stated in milli-fils, like everything else on this side of the boundary, and equals the E1
+ * default of one fil for `nebras_fees` and `lfi_access_log` — the two line types a payable break can
+ * ever map to.
+ */
+export const DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS = fils(1)
+
+/**
+ * The value each construction site writes, and none of them decides.
+ *
+ * Every break is judged in ONE place (`isPayableBreakMaterial`, applied over the whole array before
+ * anything reads it), so the field here is a placeholder rather than a verdict. Named, because the
+ * previous literal `true` at all seven sites read as a decision each site had made — which is
+ * exactly why nobody noticed that no site had made one.
+ */
+const MATERIALITY_DECIDED_CENTRALLY = false
+
+/** The magnitudes a materiality judgement needs. Structural, so `PayableBreak` satisfies it. */
+export interface PayableBreakMagnitudes {
+  breakType: PayableBreakType
+  /** NET variance. Not the right measure for every break type — see below. */
+  varianceMilliFils: number
+  expectedUnits: number
+  actualUnits: number
+  expectedVatMilliFils: number
+  actualVatMilliFils: number
+}
+
+/**
+ * Is this break material — big enough to hold the period open?
+ *
+ * JUDGED ON THE DIMENSION THE BREAK IS ABOUT, which is the whole point and was got wrong once
+ * already. An earlier version of this function took the net variance for every type, and that is
+ * silently catastrophic for two of them, because `classifyVariance` reaches them only when the NET
+ * variance is inside tolerance:
+ *
+ *   - `vat_variance` is returned only after `Math.abs(netVariance) <= tolerance` fails to produce a
+ *     `rate_variance`. So its net variance is ~0 BY CONSTRUCTION, and a net-based test made every
+ *     VAT break immaterial at any magnitude of VAT error.
+ *   - `quantity_variance` fires on a unit difference regardless of money. 100 units at 10 fils
+ *     against 200 units at 5 fils is a real quantity dispute with a net variance of exactly zero.
+ *
+ * Both would have stopped blocking the four-eyes close, stopped escalating to an E1 break, and
+ * stopped raising the IG §10.13 window alarm — the charge would simply become accepted when the
+ * 30-day window shut. Measured, not reasoned: both returned `material: false` before this fix.
+ *
+ * Units are counted facts, so ANY difference is real — `UNIT_TOLERANCE` is 0 for that reason, and a
+ * quantity break is material whenever the counts disagree, whatever it is worth. Judging it on money
+ * would reintroduce the same defect one level down.
+ *
+ * `wrong_recipient` is material at ZERO variance: paying exactly the right amount to the wrong
+ * counterparty is not a rounding difference, it is money sent to someone who was not owed it. The
+ * spec's own `TppCostDiffLine.material` description says so verbatim.
+ */
+export function isPayableBreakMaterial(
+  entry: PayableBreakMagnitudes,
+  materialityMilliFils: number = DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS
+): boolean {
+  switch (entry.breakType) {
+    case 'wrong_recipient':
+      return true
+    case 'quantity_variance':
+      return entry.actualUnits !== entry.expectedUnits
+        || Math.abs(entry.varianceMilliFils) > materialityMilliFils
+    case 'vat_variance':
+      return Math.abs(entry.actualVatMilliFils - entry.expectedVatMilliFils) > materialityMilliFils
+    default:
+      return Math.abs(entry.varianceMilliFils) > materialityMilliFils
+  }
+}
+
 /** Units are counted facts, so any difference is real; the constant exists to name that choice. */
 const UNIT_TOLERANCE = 0
 
@@ -166,6 +247,11 @@ export interface ReconcilePayableInput {
   /** Periods we actually paid late. Absent means none, so every penalty line is unexpected. */
   latePayments?: readonly LatePaymentRecord[]
   toleranceMilliFils?: number
+  /**
+   * The blocking threshold, distinct from `toleranceMilliFils`. Configurable because the adopting
+   * bank owns what is worth holding a month open for; it is not a second tolerance.
+   */
+  materialityMilliFils?: number
   /** BD-21: the window is the scheme default until the bank's agreement says otherwise. */
   queryWindowDays?: number
   categoryMap?: NebrasCategoryMap
@@ -378,6 +464,8 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
   }
   const tolerance = input.toleranceMilliFils ?? DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS
   if (!Number.isSafeInteger(tolerance) || tolerance < 0) throw new RangeError('toleranceMilliFils must be a non-negative integer')
+  const materiality = input.materialityMilliFils ?? DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS
+  if (!Number.isSafeInteger(materiality) || materiality < 0) throw new RangeError('materialityMilliFils must be a non-negative integer')
   const queryWindowDays = input.queryWindowDays ?? NEBRAS_QUERY_WINDOW_DAYS
   if (!Number.isSafeInteger(queryWindowDays) || queryWindowDays <= 0) throw new RangeError('queryWindowDays must be a positive integer')
   const categoryMap = input.categoryMap ?? NEBRAS_CATEGORY_MAP
@@ -428,7 +516,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
         actualVatMilliFils: vat,
         varianceMilliFils: net,
         varianceBasisPoints: basisPoints(net, 0),
-        material: true,
+        material: MATERIALITY_DECIDED_CENTRALLY,
         reasonCode: `document billed period ${document.billingPeriod}, reconciling ${expected.period}`,
         eventIds: [],
         fapiInteractionIds: []
@@ -511,7 +599,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
         actualVatMilliFils: duplicate.vatMilliFils,
         varianceMilliFils: duplicate.netMilliFils,
         varianceBasisPoints: basisPoints(duplicate.netMilliFils, 0),
-        material: true,
+        material: MATERIALITY_DECIDED_CENTRALLY,
         reasonCode: `${duplicate.feeClass} already charged on ${first!.documentReference}`,
         eventIds: [],
         fapiInteractionIds: []
@@ -571,7 +659,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
       actualVatMilliFils: claimed.vatMilliFils,
       varianceMilliFils: netVariance,
       varianceBasisPoints: basisPoints(netVariance, own.expectedNetMilliFils),
-      material: true,
+      material: MATERIALITY_DECIDED_CENTRALLY,
       reasonCode: reasonFor(breakType, own, claimed),
       eventIds: own.eventIds,
       fapiInteractionIds: own.fapiInteractionIds
@@ -615,7 +703,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
       actualVatMilliFils: partner.vatMilliFils,
       varianceMilliFils: partner.netMilliFils - own.expectedNetMilliFils,
       varianceBasisPoints: basisPoints(partner.netMilliFils - own.expectedNetMilliFils, own.expectedNetMilliFils),
-      material: true,
+      material: MATERIALITY_DECIDED_CENTRALLY,
       reasonCode: `expected ${own.costRecipientType} ${own.costRecipientId}, billed by ${partner.costRecipientType} ${partner.costRecipientId}`,
       eventIds: own.eventIds,
       fapiInteractionIds: own.fapiInteractionIds
@@ -654,7 +742,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
       actualVatMilliFils: 0,
       varianceMilliFils: -own.expectedNetMilliFils,
       varianceBasisPoints: basisPoints(-own.expectedNetMilliFils, own.expectedNetMilliFils),
-      material: true,
+      material: MATERIALITY_DECIDED_CENTRALLY,
       reasonCode: breakType === 'missing_charge'
         ? `expected ${own.feeClass} not billed for ${expected.period}`
         : `expected ${own.feeClass} has no provider category in map ${categoryMap.version}`,
@@ -686,7 +774,7 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
       actualVatMilliFils: claimed.vatMilliFils,
       varianceMilliFils: claimed.netMilliFils,
       varianceBasisPoints: basisPoints(claimed.netMilliFils, 0),
-      material: true,
+      material: MATERIALITY_DECIDED_CENTRALLY,
       reasonCode: `${claimed.sourceCategory} billed with no metered usage for ${expected.period}`,
       eventIds: [],
       fapiInteractionIds: []
@@ -709,6 +797,22 @@ export function reconcilePayable(input: ReconcilePayableInput): PayableReconcili
   const ingest = Math.max(...documents.map((document) => Date.parse(document.receivedAt)))
   const deadline = new Date(anchor + queryWindowDays * DAY_MILLISECONDS)
   const daysRemainingAtIngest = Math.ceil((deadline.getTime() - ingest) / DAY_MILLISECONDS)
+
+  // --- Materiality -----------------------------------------------------------------------------
+  //
+  // Applied ONCE here rather than at each of the seven construction sites. Those sites know the
+  // variance but not the policy, and seven inline copies of a judgement is how the previous
+  // hardcoded `true` survived: every site looked locally reasonable. Doing it centrally also means
+  // `perDocument` and the returned totals below all observe the same decision.
+  //
+  // What this changes, stated precisely: at the DEFAULTS materiality equals the matching tolerance,
+  // so every break that exists is still material and no default behaviour moves. What moves is that
+  // `openPayableBreaks`'s `AND d.material` now filters on a DERIVED judgement rather than on a
+  // literal `true` that filtered nothing — and a bank that sets a higher threshold can now have a
+  // break stay real, recorded and queryable without holding the month open.
+  for (const entry of breaks) {
+    entry.material = isPayableBreakMaterial(entry, materiality)
+  }
 
   // --- Per-document rollup ---------------------------------------------------------------------
   //
@@ -904,7 +1008,7 @@ function documentOnlyBreak(
     actualVatMilliFils: line.vatMilliFils,
     varianceMilliFils: line.actualNetMilliFils,
     varianceBasisPoints: basisPoints(line.actualNetMilliFils, 0),
-    material: true,
+    material: MATERIALITY_DECIDED_CENTRALLY,
     reasonCode,
     eventIds: [],
     fapiInteractionIds: []

@@ -28,6 +28,9 @@ import {
   PgBillingAccountingStore,
   PgBillingRevenueAssuranceStore,
   PgBillingTppCostStore,
+  PgPayableCloseStore,
+  PgPayableDispatchStore,
+  PgPayablePeriodStore,
   PgBillingProfitabilityStore,
   PgTenantBillingServiceStore,
   PgInvoiceRunStore,
@@ -274,6 +277,16 @@ export default {
     const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
     // ADR 0022 — persist public readiness-wizard profiles (non-regulated, no PII)
     const readinessProfileStore = url ? new PgReadinessProfileStore(url, tenancy) : undefined
+    // BILL-14/15/16 — the TPP Cost Management ledger, finally reachable over HTTP.
+    //
+    // The document and reconcile routes shipped without these, so every deployed call landed on the
+    // fail-closed default and threw a plain Error the route's catch could not type — an unhandled
+    // 500 rather than the contract's error envelope. Passing the stores is what makes those two
+    // routes work at all, alongside the three BILL-16 adds.
+    const tppCostLedgerStore = url ? new PgBillingTppCostStore(url, tenancy, lineage) : undefined
+    const payableCloseStore = url ? new PgPayableCloseStore(url, tenancy, lineage) : undefined
+    const payableDispatchStore = url ? new PgPayableDispatchStore(url, tenancy, lineage) : undefined
+    const payablePeriodStore = url ? new PgPayablePeriodStore(url, tenancy, lineage) : undefined
 
     const app = createApp({
       idp,
@@ -316,12 +329,16 @@ export default {
       ...(lineageReaderStore ? { lineageReader: lineageReaderStore } : {}),
       ...(auditReader ? { auditEventReader: auditReader } : {}),
       ...(readinessProfileStore ? { readinessProfileStore } : {}),
+      ...(tppCostLedgerStore ? { tppCostDocumentStore: tppCostLedgerStore, tppCostReconcileStore: tppCostLedgerStore } : {}),
+      ...(payableCloseStore ? { payableCloseStore } : {}),
+      ...(payableDispatchStore ? { payableDispatchStore } : {}),
+      ...(payablePeriodStore ? { payablePeriodStore } : {}),
       ...(url ? { retentionReader: { retentionStatus: () => retentionStatus(url) } } : {})
     })
     try {
       return await app.fetch(request)
     } finally {
-      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, billingCollectionsStore, billingAccountingStore, billingRevenueAssuranceStore, billingProfitabilityStore, tenantBillingStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore]) {
+      for (const closable of [audit, lineage, approvalStore, idempotency, riskSignals, consentEvents, disputeStore, respondentDisputeStore, fraudIncidentStore, agentStore, schemeNotificationStore, trustFrameworkStore, serviceDeskStore, strDraftStore, complianceReportStore, reconciliationLogStore, reconciliationBreakStore, tppCounterpartyStore, billingRecordStore, invoiceRunStore, billingCollectionsStore, billingAccountingStore, billingRevenueAssuranceStore, billingProfitabilityStore, tenantBillingStore, nebrasAggregateStore, nebrasSnapshotStore, certificationStore, outageStore, complianceMetricsStore, riskMetricsStore, queryPurposeRegistrar, lineageReaderStore, auditReader, readinessProfileStore, tppCostLedgerStore, payableCloseStore, payableDispatchStore, payablePeriodStore]) {
         if (closable) ctx.waitUntil(closable.close())
       }
     }

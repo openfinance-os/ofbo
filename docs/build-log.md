@@ -4741,3 +4741,300 @@ Mutation-proved four ways, workflow restored byte-for-byte after each:
 Evidence: harness suite 127/127; `ai-review.yml` parses with a single `with:` block carrying
 exactly three keys (an intermediate edit left a duplicate `with:` — caught by parsing the step back
 out rather than by eye).
+
+## 2026-08-25 — BILL-16 done, BILL-15 closed, BILL-17 console shipped (the payable side works end to end)
+
+BILL-16 had domain, service and port layers and no store, so not one of its criteria was
+deliverable end to end. This closes that, closes the BILL-15 criterion that was waiting on it,
+and ships the console that makes the whole payable side demonstrable.
+
+**The store, and the three obligations the schema could not carry.** Migration 0043 adds
+`billing_tpp_cost_period_close` — a table rather than a status column, because a close is evidence
+of a four-eyes act (two named principals, an approval, a moment) and this family has no UPDATE
+grant a flag could be set through. `UNIQUE (bank_id, billing_period)` makes a retry idempotent and
+a divergent second close unrepresentable rather than merely unusual. Three store classes, not one:
+folding `recordDispatch` into `PgBillingTppCostStore` would have destroyed the property the dispatch
+service's own comment claims — that its store surface cannot reach the evidence tables — while
+leaving the comment behind to assert it.
+
+Criterion 5 is discharged by reading `approval_request` inside the SAME tenant transaction as the
+INSERT rather than accepting operator-shaped arguments: the cited approval must be approved, for
+this period, granted in time; both principals are stamped from the approval RECORD and normalised,
+and a mismatch against the caller's own view is refused; the P9 response is redacted before the
+first INSERT and re-checked at the write boundary, with the caller-supplied Idempotency-Key stored
+as a digest because an inbound header's content is whatever an operator typed into it. Transition
+ORDER — which 0039 states the UNIQUE constraint does not carry — is refused too.
+
+Migration 0043 also grants `bank_internal_view` the read on `billing_tpp_cost_ap_dispatch` that
+0039 withheld and 0040 deferred to this story. The condition was redaction proven against a
+persisted row; that control now exists, and the two integration assertions that tracked the
+condition flipped deliberately.
+
+**Two findings the tests produced rather than review.** Migration 0042 already CHECKs
+`approved_at <= expires_at`, so a late approval cannot EXIST to be cited — the criterion is met one
+level stronger than the write path needs, and the test now asserts the INSERT is refused instead of
+seeding an impossible row. And nothing in production set `reconciliationBreakId`, so every diff line
+persisted with a null id — which `openPayableBreaks` reads as "raised and not yet worked". The first
+break of any period would have blocked its close FOREVER, with no workflow anywhere able to clear
+it: the gate could only ever say no. `TppCostReconcileService` now escalates material payable breaks
+into real E1 breaks and stamps the ids before persisting, idempotent on the run.
+
+That escalation is what lets **BILL-15 criterion 3** be walked end to end — an open break refuses
+the close request, refuses the close EXECUTION when it lands inside the approval window, and leaves
+the payable unapproved so dispatch refuses; resolving it lets the same period close. Each leg is
+asserted in its own right rather than relying on the first to protect the rest.
+
+**IG §10.16 netting** is REPORTED, not applied: ADR 0007 keeps both role ledgers gross, so each
+position stays on the wire as its own signed line and `nettedMilliFils` states how much cancelled.
+An adjustment citing no approval is refused — otherwise a desk could make a residue disappear by
+asserting it away. Residue posts to suspense AND raises an E1 break, derived exactly as the ledger
+derives it.
+
+**Also fixed, because it made the surface unreachable:** the BILL-14/15 document and reconcile routes
+were never wired into `worker.ts` or `serve.ts`, so every deployed call hit a fail-closed default
+that threw a plain `Error` the route could not type — an unhandled 500 rather than the contract's
+envelope.
+
+**BILL-17 (partial).** A TPP Cost Management section on the existing billing console rather than a
+new module, plus the one IA pass (`/billing` → "Billing & TPP Cost", `/tpp-billing` → "LFI Revenue &
+TPP Registry"; hrefs and API paths unchanged). Deterministic demo scenarios seed a CLOSED period
+with a dispatched-then-accepted payable and a BLOCKED period with an escalated VAT-variance break —
+two periods, because one cannot demonstrate the gate in both directions. Hosted smoke asserts the
+totals tie out and that a close is never 200.
+
+Still owed on BILL-17, recorded on the item: a dedicated Stitch screen (no Stitch tooling was
+reachable from the session that built this, so the console was built token-only against the existing
+UIF-01 primitives and passes design-conformance, no-raw-style and axe); a TPP-cost-specific governed
+export; most of the named scenario list as seeded demos rather than tests; and browser E2E.
+
+Spec-first: 95 → 98 paths. `TppCostDispatchState` mirrors the 0039 CHECK value for value — the
+BILL-17 obligation not to let those vocabularies drift.
+
+Evidence: unit 1654/1654 across 229 files; integration 210/210 across 80 files on a pristine
+PostgreSQL 16.13; Q4.5 lineage PASSED with both new tables covered and allowed gaps none; coverage
+94.78% lines; typecheck 11/11 packages; ESLint clean; `verify:contract` 33 conformant / 0 drift
+against a live BFF; docs:check, discovery:link and pii-literal-check clean. The full four-eyes close
+was walked against the running BFF: request → 202 + approval_request → second principal approves →
+the close row lands with both principals normalised from the approval record.
+
+## 2026-08-25 — addendum: the two reviewers on the BILL-16/17 branch (1 hard stop, 4 drifts)
+
+Both reviewers ran before the PR left draft. Every finding was real; all are fixed on the branch.
+
+**HARD STOP — the cross-tenant grant rested on a claim broader than the control.** Migration 0043
+granted `bank_internal_view` SELECT on `billing_tpp_cost_ap_dispatch` asserting "no unredacted
+provider text reachable in this table". True for `response_payload`, which the store screens at the
+write boundary — and NOT true for `financial_system_ref` beside it. 0039 enumerated three free-form
+columns and missed that one; the only control on it was `redactText`, which masks exactly three
+SHAPES (Emirates ID, IBAN, e-mail) and passes everything else through. A P9 reference reading
+`DD/2026-07/NEBRAS - mandate held by A. Rahman, acct ending 4412` matches nothing, and lands
+permanently in a table with no deletion path.
+
+Fixed by constraining the SHAPE rather than trying to mask harder: a dispatch reference is an
+opaque vendor identifier, so anything that is not one is REFUSED. That is total in the way masking
+is not — prose cannot get in at all, rather than getting in unrecognised. It fails closed (an
+unrecordable reference stops the dispatch being recorded, which is the right direction when the
+alternative is a permanent name), and it admits the `[REDACTED:*]` markers the service may have
+substituted, so it is not a denial of service on correct data — the failure mode BILL-14 already hit
+once when a generic digit rule ate the required TRNs.
+
+The reviewer also noted the evidence gap: 0040's bar was redaction "proven by a test against a
+persisted row", and the discharge proved a REFUSAL (`count == 0`). There is now a test that writes a
+dispatch, reads the row back, and asserts no IBAN, Emirates-ID or e-mail shape survives in either
+provider-fed column or the idempotency key.
+
+**DRIFT 1 — store refusals were untyped 500s.** `PayableWriteError` was mapped nowhere in the BFF,
+so an unknown payable, an illegal dispatch transition and every write-time approval check escaped to
+`app.onError`. The contract declares 404 and 409 for exactly those, which made both branches
+unreachable on the deployed path — `serve.ts` and `worker.ts` both wire the real Pg store. The error
+now carries its own status and remediation (the status belongs with the code that decides which
+refusal occurred, not in a route-side lookup that drifts when a refusal is added).
+
+**DRIFT 2 — an already-closed period answered 202.** The request path checked only breaks, so
+re-closing minted a second approval and sent a second principal to approve an act that had already
+happened. The store refused a divergent close at EXECUTION, but that is a different endpoint hours
+later. `closeForPeriod` now refuses at request time, BEFORE the break query — a closed period is a
+settled fact, and reporting it as break-blocked would send an operator to resolve breaks that cannot
+unblock anything.
+
+**DRIFT 3 — a real money bug.** `net`, `vat` and `gross` were each rounded independently from
+milli-fils, which breaks the source row's own CHECK on the wire: 2500 → 3, 1500 → 2, 4000 → 4, and
+3 + 2 is not 4. The repo has `toWireMoneyTriple` for exactly this and the sibling BILL-14 route
+already used it; this one did not. Now pinned by a test asserting the wire publishes 5.
+
+**DRIFT 4 — `replayed` on an HTTP replay.** Retrying with the same Idempotency-Key returns the
+original body verbatim, so `replayed` carries whatever it said first time. The flag reports what
+happened DOWNSTREAM (P9 or our ledger matched an existing instruction), not at the HTTP layer. The
+spec now says so precisely rather than implying the cache re-stamps it.
+
+Advisories also taken: `billing.tpp_cost.period_close` gains a non-PII `operation_summary`
+(approving it authorises money movement, so a blank summary was the worst case for one, not a
+cosmetic gap), and the 202 now carries `expires_at` so a client can show the two-hour window.
+
+One more found by `verify:contract` against a live BFF rather than by either reviewer: the demo seed
+used a readable `demo-approval-...` id where `ApprovalRequest.approval_request_id` is declared
+`format: uuid`, so `GET /approvals/pending` drifted. The seed now derives a deterministic v4-shaped
+id by hash — idempotent AND conformant.
+
+Left open, and recorded rather than fixed: the `app.tenant_group IS NULL` fail-open fallback that
+0043 replicates into two more policies is a known weakness owned by HOST-04; this diff widens its
+blast radius rather than introducing it. `ApprovalRequest` declares no `required` list, which is why
+a thin four-eyes body validates — that affects every gated path, not this one, and belongs in its
+own spec-change.
+
+Re-verified after the fixes: unit 1659/1659, integration 214/214, Q4.5 PASSED allowed gaps none,
+coverage 94.87% lines, typecheck 11/11, ESLint clean, `verify:contract` 33 conformant / 0 drift.
+
+## 2026-08-25 — BILL-17 second pass: governed evidence export, real materiality, browser E2E
+
+Four of the five gaps the first BILL-17 pass left open are closed. The Stitch obligation is not, and
+is still recorded as owed rather than worked around.
+
+**Governed TPP cost evidence export.** `GET /back-office/billing/tpp-cost-export` (spec-first,
+98 → 99 paths, `billing:read`) issues one period's payable evidence as a single pack — documents
+with their parsed lines nested, reconciliations, diff lines, the four-eyes close, the append-only AP
+dispatch log. Distinct from `GET /back-office/billing/export`, which is the tenant *portability*
+artifact: that one answers "give me my data if I leave", this one answers "show me the evidence
+behind this month's payable".
+
+Three decisions worth recording. The five collections are read in **one transaction**, because
+across five a dispatch landing between two of them would make the pack attest to a period that
+never existed at any instant. Rows come from `to_jsonb(t)` rather than an enumerated projection —
+a hand-written column list silently stops exporting whatever a later migration adds, and this is
+evidence. And the digest covers the body **excluding itself**: a digest that covered itself could
+never be recomputed, because the recipient would need the answer to check the answer.
+
+Audited on every call, since reading a period's whole evidence base is a disclosure event whatever
+it contains. The audit row carries the digest and the counts, never the pack — copying it in would
+duplicate the ledger into a second INSERT-only store on every download. The service **refuses (503)
+when no audit sink is configured** rather than exporting ungoverned; an unaudited governed export is
+a contradiction, and degrading silently is how it would become one.
+
+Amounts inside the pack stay in the ledger's milli-fils rather than wire `Money`, stated in the
+schema so it reads as a decision: the digest must attest to what the ledger holds, not to a rounded
+restatement. The console reads its own figures from the cost-period endpoint, which does emit Money.
+
+Verified end to end against a live BFF, with the digest recomputed by an independent Python
+implementation — `39acbcaa…` published, `39acbcaa…` recomputed.
+
+**Materiality — the one the last pass listed as deliberately unchanged.** `PayableBreak.material`
+was hardcoded `true` at seven construction sites, so `openPayableBreaks`'s `AND d.material` filtered
+nothing. It is now derived **once, centrally**, over the whole break array before anything reads it.
+Seven inline copies of a judgement is exactly how the hardcoded value survived — every site looked
+locally reasonable, and nobody noticed that no site had decided anything. The seven literals are now
+a named `MATERIALITY_DECIDED_CENTRALLY` placeholder, so a reader cannot mistake them for verdicts.
+
+Stated precisely, because it is less than it sounds: **at the defaults, materiality equals the
+matching tolerance**, so every break that exists is still material and no default behaviour moves.
+What moves is that the judgement is derived and configurable. A test pins that equality rather than
+implying a gap that the defaults do not open. `wrong_recipient` is material at zero variance — the
+spec's own `TppCostDiffLine.material` description says so — and the constant documents that payables
+count milli-fils while the E1 `BreakThreshold` counts fils, a factor of a thousand apart.
+
+**Browser E2E, and a CI gap it uncovered.** Eight Playwright specs cover the new section. Writing
+them surfaced something the first pass had not: the `q3-e2e` job ran only `pnpm db:seed`, which
+creates **zero** TPP cost evidence — `seedTppCostEvidence` lives behind `db:seed:demo`, which only
+`deploy.yml` ran. The console therefore rendered empty in CI, and any spec asserting seeded data
+would have failed. The job now runs the demo seed too, matching the hosted demo it is meant to
+mirror. Measured on a clean database: `db:seed` alone → 0 closes, 0 dispatches, 0 documents;
+with `db:seed:demo` → the closed period 2026-06 with a `dispatched`→`accepted` log, and 2026-07
+blocked by a material VAT variance linked to a real E1 break.
+
+One thing deliberately **not** asserted in the browser: the read-only branch (`billing:read` without
+`finance:reconciliation:write`). No demo persona holds that combination — `finance-analyst` has
+both and every other persona lacks `billing:read` entirely — so a browser test for it would assert a
+fiction. It is covered at component level, where the input can actually be constructed.
+
+**Still owed: Stitch.** Re-checked this session. The toolset has `DesignSync` (claude.ai
+design-system projects) and the connector registry has no Stitch entry, so the project CLAUDE.md
+binds to (`8050269076066130289`) is unreachable from here. Citing a screen id that was never
+generated would be worse than leaving this open.
+
+Evidence: unit 1677/1677 · integration 215/215 on a pristine PostgreSQL 16.13 · Q4.5 PASSED, allowed
+gaps none · typecheck 11/11 · ESLint clean · `verify:contract` 34 conformant / 0 drift against a
+live BFF · docs:check, pii-literal-check, design-conformance, no-raw-style, design-tokens and axe
+all clean.
+
+## 2026-08-25 — addendum: both reviewers on the BILL-17 second pass (1 hard stop, 1 regression, 4 drifts)
+
+The hard-stop reviewer returned **FAIL (2)** and the conformance reviewer **DRIFT (2) + 3 spec defects**.
+Every finding was real. The most serious was a regression I had introduced in the same pass.
+
+**FAIL 5 — the materiality change silently disabled the close gate for two break types.**
+`classifyVariance` reaches `vat_variance` only after `Math.abs(netVariance) <= tolerance`, so a VAT
+break's net variance is **~0 by construction**. My rule judged every type on net variance, and the
+default materiality equals the default tolerance — so `|0| > 1 fil` is false and **every VAT break
+became immaterial at any magnitude of VAT error**. `quantity_variance` failed the same way whenever
+the counts differed but the money did not (100 units at 10 fils vs 200 at 5 fils nets to zero).
+
+Measured, not argued: both returned `material: false`, and both were `true` before the change.
+Downstream, `material` is the *only* filter on all three payable controls — the four-eyes close
+refusal, the E1 escalation, and the IG §10.13 window alarm. A disputed VAT line would have reached
+an approved payable, been dispatched to P9, and become an accepted charge when the 30-day window
+shut. That is precisely the hard stop the gate exists to enforce, and my commit message had claimed
+"no default behaviour moves." It moved.
+
+Fixed by judging each break on **the dimension it is about**: a VAT break on its VAT variance, a
+quantity break on its counts (units are counted facts — `UNIT_TOLERANCE` is 0), the rest on net.
+`isPayableBreakMaterial` now takes the break rather than a loose `(type, number)` pair, so passing
+the wrong magnitude is no longer expressible. Two regression tests pin exactly the zero-net shapes.
+
+Why my own test missed it: it exercised only `rate_variance`, the one type for which net *is* the
+right measure. A test that covers the case the rule was written around proves very little.
+
+**FAIL 3 — the export published provider-fed columns onto a new download surface.**
+`to_jsonb(d)` and `to_jsonb(a)` carried `parsed_payload`, `raw_document_ref` and `response_payload`
+into a downloadable file. Migration 0039:22-29 names those three specifically as the columns the
+schema *cannot* constrain, and 0039:426-436 withholds even the read-only cross-tenant grant from
+their tables pending a redaction control. This endpoint inherited all three from a projection.
+
+Worst of the three was `raw_document_ref`: it is the **address of the raw-artifact archive**, which
+holds unredacted provider originals by design, and whose own comment says it is "deliberately NOT one
+of the cost tables for that reason — an unredacted artifact does not belong behind the
+governed-aggregate seam." The pack was handing out the route to it.
+
+Fixed three ways. `- 'raw_document_ref'` is now the one deliberate subtraction from the projection —
+the evidence of what was charged is the parsed lines, not a pointer to the scan. The store scrubs the
+whole pack through the provider redactor at the **read** boundary, symmetric with the write boundary
+that already exists precisely because that redactor is heuristic; it scrubs rather than refuses,
+because denying an auditor a whole period over one legacy row is the wrong failure for a read, and
+the count of anything removed rides the audit row so a leak is investigable. And the spec's claim
+("Contains no PSU identifiers … redacted at ingest") is narrowed to what the controls actually
+enforce, since it was stronger than the schema's own.
+
+The reviewer also noted the tests that appeared to prove PSU-freedom could not fail — they regex only
+the Emirates ID shape against demo rows containing neither. Recorded; the new integration test
+asserts on the serialised artefact a human receives.
+
+**The demo seeded a break the engine cannot produce.** The blocked period wrote `vat_variance` with
+225,000 milli-fils of *net* variance — impossible, since that classifies as `rate_variance`. The E2E
+was asserting against a fiction, which is worse than thin coverage because it reads as the real
+thing. Reseeded as `rate_variance` with the same money, which is what `reconcilePayable` would
+actually emit.
+
+That exposed a genuine limitation now recorded rather than papered over: `billing_tpp_cost_diff_line`
+has no VAT columns and persists `variance_milli_fils` as the **net** variance for every type, so a
+stored `vat_variance` shows a variance of ~0 and the console understates a VAT dispute to zero. The
+close gate is unaffected — materiality is judged in memory, where the VAT figures still exist — but
+the reporting weakness is real and belongs to whoever picks up the diff-line schema next.
+
+**Conformance drifts, all fixed.** `TppCostDiffLine.material` said "Exceeds the tolerance" when it
+now means materiality, and the description records the vat/net trap so the next reader does not
+reintroduce it. `TppCostReconciliation` asserted milli-fils "never reaches the wire as an amount"
+while the evidence pack does exactly that — the claim now names its one exception instead of
+contradicting itself 170 lines later. `sha256` gained `pattern: '^[0-9a-f]{64}$'`, because the bare
+form is deliberate and the repo's dominant convention is the `sha256:`-prefixed one, so nothing
+stopped a later "harmonisation" from breaking every recipient's recomputation. The portal proxy's
+401/403/502 branches emitted two-field error bodies, copying a deviation from the sibling proxies;
+this one carries the full four-field envelope.
+
+**Not fixed, recorded:** the pack's five collections are `additionalProperties: true` with no declared
+properties, so a future migration can widen the disclosure surface with no contract signal — the
+flip side of the deliberate `to_jsonb` choice. And the exported records carry no ISO 4217 currency,
+because four of the five source tables have no currency column. Both belong in a spec-change with the
+diff-line schema work, not in a code fix here.
+
+Evidence after the fixes: unit 1681/1681 · integration 216/216 on a pristine PostgreSQL 16.13 ·
+Q4.5 PASSED, allowed gaps none · typecheck 11/11 · ESLint clean · docs:check clean · the governed
+export re-verified against a live BFF with `raw_document_ref` and the `s3://` locator absent and the
+digest still recomputing.

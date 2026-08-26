@@ -255,3 +255,5 @@ export {
   type GovernedAggregateContext,
   type GovernedReadContext
 } from './governed-aggregate.js'
+
+export * from './billing-payable-store.js'

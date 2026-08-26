@@ -274,6 +274,26 @@ export async function getPortableBillingExport(
   return (await body<BillingArtifact>(res)).data
 }
 
+/**
+ * GET /back-office/billing/tpp-cost-export — the BILL-17 governed evidence pack for one period.
+ *
+ * Distinct from `getPortableBillingExport`, which is the tenant PORTABILITY artifact. This one is
+ * the payable evidence base: documents, reconciliations, diff lines, the close and the AP dispatch
+ * log, with a digest the recipient can recompute.
+ */
+export async function getTppCostEvidenceExport(
+  token: string,
+  period: string,
+  deps: BillingConsoleApiDeps = {}
+): Promise<BillingArtifact> {
+  const { base, f, trace } = resolve(deps)
+  const res = await f(
+    `${base}/back-office/billing/tpp-cost-export?period=${encodeURIComponent(period)}`,
+    { headers: authHeaders(token, trace) }
+  )
+  return (await body<BillingArtifact>(res)).data
+}
+
 /** Billing facts use integer milli-fils (100,000 per AED), not API minor units. */
 export function formatMilliFils(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'

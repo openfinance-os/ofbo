@@ -96,6 +96,36 @@ export interface TppCostReconcileDeps {
   /** BD-21: the scheme default until the bank's agreement says otherwise. */
   queryWindowDays?: number
   toleranceMilliFils?: number
+  /**
+   * BILL-15 criterion 6(a), finally reachable — escalate payable breaks into the E1 queue.
+   *
+   * Optional so a caller that only wants the comparison (a dry run, a test of the pure matcher)
+   * does not have to supply one. It is NOT optional in deployment: without it every diff line is
+   * written with a null `reconciliation_break_id`, and `openPayableBreaks` treats a null id as
+   * "raised and not yet worked" — so the first break of a period would block its close FOREVER,
+   * with no workflow anywhere able to clear it. The gate would only ever be able to say no.
+   *
+   * The E1 break is the thing that carries a status, an owner and an SLA clock; the diff line is
+   * INSERT-only evidence and can carry none of them. Escalation is what connects the two.
+   */
+  breakEscalation?: PayableBreakEscalationStore
+}
+
+/** The narrow slice of the E1 break store escalation needs: count for idempotency, create, nothing else. */
+export interface PayableBreakEscalationStore {
+  countForRun(runId: string): Promise<number>
+  createMany(
+    inputs: Array<{
+      run_id: string
+      client_id?: string | null
+      line_type: string
+      variance_amount?: MinorUnitMoney | null
+      source_a_ref: string
+      source_b_ref: string
+      source_c_ref?: string | null
+    }>,
+    traceId: string
+  ): Promise<Array<{ id: string }>>
 }
 
 export interface TppCostReconcileResult {
@@ -153,8 +183,14 @@ export class TppCostReconcileService {
     // The run id keys idempotency, so it must be derived from the request rather than generated: a
     // retried scheduled job would otherwise write a second copy into an INSERT-only ledger.
     const reconciliationRunId = `recon:${period}:${idempotencyKey || traceId}`
+
+    // Escalate BEFORE persisting, because the diff line stores the E1 break id and the ledger is
+    // INSERT-only — there is no second chance to attach it afterwards.
+    const escalated = await this.escalateBreaks(reconciliationRunId, result, traceId)
+
     const saved = await this.deps.store.saveReconciliation(
-      { statementId: statement.id, reconciliationRunId, result }, traceId
+      { statementId: statement.id, reconciliationRunId, result: { ...result, breaks: escalated } },
+      traceId
     )
 
     await this.deps.audit.emit({
@@ -176,6 +212,55 @@ export class TppCostReconcileService {
     })
 
     return { reconciliationIds: saved.reconciliationIds, created: saved.created, reconciliation: result }
+  }
+
+  /**
+   * Raise one E1 `reconciliation_break` per material payable break and hand the ids back.
+   *
+   * IDEMPOTENT ON THE RUN, using the same `countForRun` guard the receivable engine uses: the run id
+   * is derived from the caller's Idempotency-Key, so a replayed reconcile finds its breaks already
+   * raised and re-reads them rather than raising a second set. Without this a retried scheduled job
+   * would double the desk's queue.
+   *
+   * SOURCE REFS. E1's three sources are A = the counterparty's figures, B = our own
+   * metering-of-record, C = the fintech re-bill. On the payable side there is no C — nobody is
+   * re-billing us — so it is null rather than padded with a duplicate of A, which would make the
+   * three-way diff render two identical columns and read as corroboration.
+   *
+   * Only MATERIAL breaks are escalated. An immaterial difference is recorded as evidence on the diff
+   * line and does not need an owner, an SLA clock or a place in the queue.
+   */
+  private async escalateBreaks(
+    reconciliationRunId: string,
+    result: PayableReconciliation,
+    traceId: string
+  ): Promise<PayableBreak[]> {
+    const escalation = this.deps.breakEscalation
+    const material = result.breaks.filter((entry) => entry.material)
+    if (!escalation || material.length === 0) return [...result.breaks]
+
+    // Already raised for this run — a replay. Leave the ids as the first run set them; re-reading
+    // them here would need a query this narrow store deliberately does not expose, and the persisted
+    // diff lines from that first run already carry them.
+    if ((await escalation.countForRun(reconciliationRunId)) > 0) return [...result.breaks]
+
+    const created = await escalation.createMany(material.map((entry) => ({
+      run_id: reconciliationRunId,
+      client_id: entry.costRecipientId,
+      line_type: entry.lineType,
+      // Money, per the binding convention — the diff line keeps the finer milli-fils behind the
+      // storage boundary, but an E1 break is read beside receivable breaks and must be the same unit.
+      variance_amount: toMinorUnitMoney(entry.varianceMilliFils, 'AED'),
+      source_a_ref: `${entry.documentReference}|${entry.lineRef}`,
+      source_b_ref: entry.eventIds.length > 0 ? entry.eventIds.join(',') : `${entry.lineRef}|no-metering-evidence`,
+      source_c_ref: null
+    })), traceId)
+
+    const byIndex = new Map(material.map((entry, index) => [entry.lineRef, created[index]?.id]))
+    return result.breaks.map((entry) => {
+      const id = byIndex.get(entry.lineRef)
+      return id ? { ...entry, reconciliationBreakId: id } : entry
+    })
   }
 
   private async periodFor(documentId: string): Promise<string> {

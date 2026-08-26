@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
@@ -18,6 +19,23 @@ import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
  * Synthetic-only, idempotent (natural-key guards), and emits BCBS 239 lineage for every
  * table it touches (Q4.5 stays green). No PSU PII — class/party/ref data only.
  */
+/**
+ * A deterministic, UUID-v4-SHAPED id derived from a stable key.
+ *
+ * The seed has to be idempotent, which rules out `randomUUID()` — a fresh id every run would insert
+ * a second approval on every re-seed. But `approval_request_id` is declared `format: uuid` on the
+ * contract's ApprovalRequest, and a readable id like `demo-approval-...` fails live response
+ * validation on GET /approvals/pending. `verify:contract` caught exactly that.
+ *
+ * Hashing the key gives both: same key, same id, and a well-formed v4 shape (version nibble 4,
+ * variant nibble 8..b) that AJV's uuid format accepts.
+ */
+function deterministicUuid(key: string): string {
+  const h = createHash('sha256').update(key).digest('hex')
+  const variant = ((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
 const CH = 'internal_retail'
 const DEFAULT_DEMO_TENANT = DEMO_TENANTS.find((tenant) => tenant.bank_id === DEMO_BANK_ID)!
 
@@ -101,10 +119,236 @@ async function seedBillingConsoleEvidence(pool: pg.Pool): Promise<void> {
   }
 }
 
+/**
+ * BILL-17 demo scenario — the TPP Cost Management (payable) side, deterministic and idempotent.
+ *
+ * Two periods, chosen so the console demonstrates the gate in BOTH directions, which one period
+ * cannot do:
+ *
+ *   - the month before last is CLOSED under a real four-eyes approval, with its Nebras payable
+ *     dispatched and accepted — the "authorised and settled" end state;
+ *   - last month is BLOCKED by an unresolved material VAT-variance break, escalated to a real E1
+ *     break so the "Investigate →" link resolves — the refusal an operator has to clear.
+ *
+ * Synthetic only, and PSU-free by construction: the payable ledger references event ids, never a
+ * psu_id, so there is nothing here that could carry customer detail. Amounts are milli-fils in
+ * storage (the console converts to Money at the wire boundary).
+ */
+async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
+  const now = new Date()
+  const month = (back: number) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1))
+    return d.toISOString().slice(0, 7)
+  }
+  const closedPeriod = month(2)
+  const blockedPeriod = month(1)
+
+  // Hub fees are VAT-EXCLUSIVE per ADR 0007 D4: VAT is 5% ON TOP of the stated net.
+  const NET = 4_500_000            // AED 45.00 in milli-fils
+  const VAT = Math.round(NET * 0.05)
+  const LFI_NET = 1_200_000        // AED 12.00
+  const LFI_VAT = Math.round(LFI_NET * 0.05)
+
+  async function seedPeriod(period: string, opts: { withLfi: boolean }): Promise<{
+    statementId: string
+    nebrasReconciliationId: string
+  }> {
+    const meter = await pool.query(
+      `WITH inserted AS (
+         INSERT INTO billing_meter_run
+           (bank_id,channel,period,rate_card_version,input_hash,event_count,stats,evidence)
+         VALUES ($1,$2,$3,'2026.06.02',$4,12,$5::jsonb,$6::jsonb)
+         ON CONFLICT (bank_id,period,rate_card_version,input_hash) DO NOTHING
+         RETURNING id
+       )
+       SELECT id FROM inserted
+       UNION ALL
+       SELECT id FROM billing_meter_run
+        WHERE bank_id=$1 AND period=$3 AND rate_card_version='2026.06.02' AND input_hash=$4
+       LIMIT 1`,
+      [DEMO_BANK_ID, CH, period, `sha256:demo-tpp-cost:${period}`,
+        JSON.stringify({ demo: true, payable_lines: 1 }),
+        JSON.stringify({ source: 'seed-demo-tpp-cost', period })]
+    )
+    const meterRunId = meter.rows[0].id as string
+    const lfiPayment = opts.withLfi ? LFI_NET : 0
+    const totalNet = NET + lfiPayment
+    const totalVat = VAT + (opts.withLfi ? LFI_VAT : 0)
+
+    const statement = await pool.query(
+      `WITH inserted AS (
+         INSERT INTO billing_tpp_cost_statement
+           (bank_id,channel,meter_run_id,period,currency,rate_card_version,rate_snapshot_hash,
+            pricing_effective_from,generated_at,rating_run_at,nebras_hub_net_milli_fils,
+            underlying_lfi_payment_net_milli_fils,underlying_lfi_data_net_milli_fils,
+            total_net_milli_fils,total_vat_milli_fils,total_gross_milli_fils,statement_payload,evidence_hash)
+         VALUES ($1,$2,$3,$4,'AED','2026.06.02',$5,'2026-06-02',now(),now(),$6,$7,0,$8,$9,$10,
+                 jsonb_build_object('period',$4::text,'demo',true),$11)
+         ON CONFLICT (bank_id, meter_run_id, rate_card_version, rate_snapshot_hash) DO NOTHING
+         RETURNING id
+       )
+       SELECT id FROM inserted
+       UNION ALL
+       SELECT id FROM billing_tpp_cost_statement WHERE bank_id=$1::uuid AND meter_run_id=$3::uuid LIMIT 1`,
+      [DEMO_BANK_ID, CH, meterRunId, period, `sha256:demo-rate-snapshot:${period}`,
+        NET, lfiPayment, totalNet, totalVat, totalNet + totalVat, `sha256:demo-statement:${period}`]
+    )
+    const statementId = statement.rows[0].id as string
+
+    async function seedDocument(
+      reference: string, type: string, issuer: string, net: number, vat: number
+    ): Promise<string> {
+      const doc = await pool.query(
+        `WITH inserted AS (
+           INSERT INTO billing_tpp_cost_document
+             (bank_id,channel,document_type,issuer_id,recipient_id,document_reference,billing_period,
+              currency,gross_milli_fils,vat_milli_fils,net_milli_fils,document_sha256,raw_document_ref,
+              issued_at,received_at,verified_by,verified_at,idempotency_key,parsed_payload,evidence_hash)
+           VALUES ($1,$2,$3,$4,'bank-as-tpp',$5,$6,'AED',$7,$8,$9,$10,$11,
+                   now() - interval '20 days', now() - interval '19 days','demo.verifier',
+                   now() - interval '19 days',$12,
+                   jsonb_build_object('reference',$5::text,'demo',true),$13)
+           ON CONFLICT (bank_id, issuer_id, document_reference) DO NOTHING
+           RETURNING id
+         )
+         SELECT id FROM inserted
+         UNION ALL
+         SELECT id FROM billing_tpp_cost_document
+          WHERE bank_id=$1::uuid AND issuer_id=$4::text AND document_reference=$5::text LIMIT 1`,
+        [DEMO_BANK_ID, CH, type, issuer, reference, period, net + vat, vat, net,
+          `sha256:demo-doc:${reference}`, `s3://demo-retained/${reference}`,
+          `demo-idem:${reference}`, `sha256:demo-doc-evidence:${reference}`]
+      )
+      return doc.rows[0].id as string
+    }
+
+    async function seedReconciliation(
+      documentId: string, expectedNet: number, actualNet: number, breakCount: number
+    ): Promise<string> {
+      const runId = `demo-tpp-cost-recon:${period}:${documentId.slice(0, 8)}`
+      const variance = actualNet - expectedNet
+      const recon = await pool.query(
+        `WITH inserted AS (
+           INSERT INTO billing_tpp_cost_reconciliation
+             (bank_id,channel,statement_id,document_id,billing_period,tolerance_milli_fils,
+              query_deadline,query_window_status,reconciliation_run_id,matched_line_count,break_count,
+              expected_total_net_milli_fils,actual_total_net_milli_fils,net_variance_milli_fils,
+              gross_variance_milli_fils,evidence_hash)
+           VALUES ($1,$2,$3,$4,$5,1000, now() + interval '10 days','open',$6,1,$7,$8,$9,$10,$11,$12)
+           ON CONFLICT (bank_id, statement_id, document_id, reconciliation_run_id) DO NOTHING
+           RETURNING id
+         )
+         SELECT id FROM inserted
+         UNION ALL
+         SELECT id FROM billing_tpp_cost_reconciliation
+          WHERE bank_id=$1::uuid AND reconciliation_run_id=$6::text LIMIT 1`,
+        [DEMO_BANK_ID, CH, statementId, documentId, period, runId, breakCount,
+          expectedNet, actualNet, variance, Math.abs(variance), `sha256:demo-recon:${runId}`]
+      )
+      return recon.rows[0].id as string
+    }
+
+    const nebrasDoc = await seedDocument(`NEB-INV-${period}`, 'nebras_tax_invoice', 'NEBRAS', NET, VAT)
+    const nebrasRecon = await seedReconciliation(nebrasDoc, NET, NET, 0)
+    if (opts.withLfi) {
+      const lfiDoc = await seedDocument(`LFI-SELF-${period}`, 'lfi_self_invoice', 'LFI-ALPHA', LFI_NET, LFI_VAT)
+      await seedReconciliation(lfiDoc, LFI_NET, LFI_NET, 0)
+    }
+    return { statementId, nebrasReconciliationId: nebrasRecon }
+  }
+
+  // ── The CLOSED period: a real four-eyes approval, a close row citing it, and a dispatch.
+  const closed = await seedPeriod(closedPeriod, { withLfi: true })
+  const closeApprovalId = deterministicUuid(`demo-approval-tpp-cost-close:${closedPeriod}`)
+  await pool.query(
+    `INSERT INTO approval_request
+       (bank_id, channel, approval_request_id, operation_type, operation_payload, state, initiator,
+        approver, approver_required_scope, expires_at, approved_at)
+     SELECT $1,$2,$3,'billing.tpp_cost.period_close',jsonb_build_object('period',$4::text),'approved',
+            'demo:finance-analyst@bank','demo:platform-super-admin@bank','finance:reconciliation:write',
+            now() - interval '13 days', now() - interval '14 days'
+      WHERE NOT EXISTS (SELECT 1 FROM approval_request WHERE approval_request_id = $3)`,
+    [DEMO_BANK_ID, CH, closeApprovalId, closedPeriod]
+  )
+  await pool.query(
+    `INSERT INTO billing_tpp_cost_period_close
+       (bank_id,channel,billing_period,initiated_by,approved_by,approval_request_id,
+        feeds_monthly_signoff,closed_at,evidence_hash)
+     SELECT $1,$2,$3,'demo:finance-analyst@bank','demo:platform-super-admin@bank',$4,true,
+            now() - interval '13 days', $5
+      WHERE NOT EXISTS (
+        SELECT 1 FROM billing_tpp_cost_period_close WHERE bank_id=$1 AND billing_period=$3)`,
+    [DEMO_BANK_ID, CH, closedPeriod, closeApprovalId, `sha256:demo-close:${closedPeriod}`]
+  )
+  // Dispatched, then accepted — two rows, because the table is an append-only state log.
+  for (const [state, ago] of [['dispatched', '12 days'], ['accepted', '3 days']] as const) {
+    await pool.query(
+      `INSERT INTO billing_tpp_cost_ap_dispatch
+         (bank_id,channel,statement_id,reconciliation_id,approval_request_id,initiated_by,approved_by,
+          approved_at,dispatch_state,financial_system_ref,idempotency_key,dispatched_at,
+          payable_net_milli_fils,response_payload,evidence_hash)
+       SELECT $1,$2,$3,$4,$5,'demo:finance-analyst@bank','demo:platform-super-admin@bank',
+              now() - interval '14 days', $6, $7, $8, now() - interval '${ago}', $9,
+              jsonb_build_object('payable_status',$6::text,'demo',true), $10
+        WHERE NOT EXISTS (
+          SELECT 1 FROM billing_tpp_cost_ap_dispatch
+           WHERE bank_id=$1 AND idempotency_key=$8 AND dispatch_state=$6)`,
+      [DEMO_BANK_ID, CH, closed.statementId, closed.nebrasReconciliationId, closeApprovalId,
+        state, `P9-DEMO-${closedPeriod}`, `demo-idem-dispatch:${closedPeriod}`, NET,
+        `sha256:demo-dispatch:${closedPeriod}:${state}`]
+    )
+  }
+
+  // ── The BLOCKED period: a material RATE-variance break, escalated so "Investigate →" resolves.
+  //
+  // Seeded as `rate_variance`, not `vat_variance`, and the distinction is the point. A review found
+  // the earlier version wrote a row `reconcilePayable` can NEVER produce: classifyVariance only
+  // returns `vat_variance` once the NET variance is inside tolerance, so a genuine VAT break carries
+  // a net variance of ~0 — while this row carried 225,000 milli-fils of it. The demo was asserting
+  // against a shape the engine does not emit, which is worse than a thin demo because it looks like
+  // coverage. A 225,000 milli-fil net overcharge IS a rate_variance, so this is now the same money
+  // with the classification the engine would actually give it.
+  //
+  // Known limitation this exposed, recorded rather than papered over: billing_tpp_cost_diff_line has
+  // no VAT columns and persists `variance_milli_fils` as the NET variance for every break type
+  // (tpp-cost-reconciliation.ts:660), so a persisted vat_variance shows a variance of ~0 and the
+  // console understates a VAT dispute to zero. The close GATE is unaffected — materiality is judged
+  // in memory, where the VAT figures still exist — but the reporting weakness is real.
+  const blocked = await seedPeriod(blockedPeriod, { withLfi: false })
+  const breakRunId = `demo-tpp-cost-break-${blockedPeriod}`
+  const e1 = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO reconciliation_break
+         (bank_id,channel,run_id,client_id,line_type,status,variance_amount,variance_currency,
+          source_a_ref,source_b_ref)
+       VALUES ($1,$2,$3,NULL,'nebras_fees','flagged',225,'AED',$4,$5)
+       ON CONFLICT DO NOTHING
+       RETURNING id
+     )
+     SELECT id FROM inserted
+     UNION ALL
+     SELECT id FROM reconciliation_break WHERE bank_id=$1::uuid AND run_id=$3::text LIMIT 1`,
+    [DEMO_BANK_ID, CH, breakRunId, `NEB-INV-${blockedPeriod}|SI-CORP-PAY`, 'evt-demo-corp-pay-1']
+  )
+  await pool.query(
+    `INSERT INTO billing_tpp_cost_diff_line
+       (bank_id,channel,reconciliation_id,line_ref,break_type,cost_recipient_type,cost_recipient_id,
+        fee_class,expected_milli_fils,actual_milli_fils,variance_milli_fils,variance_basis_points,
+        material,presence,reason_code,reconciliation_break_id)
+     SELECT $1,$2,$3,$4,'rate_variance','nebras','NEBRAS','hub.standard',$5,$6,$7,50,true,'both',
+            'applied_rate_above_schedule',$8
+      WHERE NOT EXISTS (
+        SELECT 1 FROM billing_tpp_cost_diff_line WHERE bank_id=$1 AND reconciliation_id=$3 AND line_ref=$4)`,
+    [DEMO_BANK_ID, CH, blocked.nebrasReconciliationId, `NEB-INV-${blockedPeriod}|SI-CORP-PAY`,
+      NET, NET + 225_000, 225_000, e1.rows[0].id]
+  )
+}
+
 export async function seedDemoScenario(databaseUrl: string): Promise<void> {
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     await seedBillingConsoleEvidence(pool)
+    await seedTppCostEvidence(pool)
 
     // ── 1. 30-day reconciliation history → the SLO dashboard shows a trend, not one row.
     await pool.query(
@@ -612,7 +856,13 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       ['tenant_configuration', ['bank_id', 'year_anchor_date', 'retail_overage_milli_fils', 'invoice_template_ref', 'invoice_brand_key', 'asp_route_profile', 'collection_rail_policy']],
       ['billing_meter_run', ['bank_id', 'channel', 'period', 'rate_card_version', 'input_hash']],
       ['billing_expected_memo', ['bank_id', 'channel', 'meter_run_id', 'period', 'rate_card_version', 'total_milli_fils']],
-      ['billing_expected_memo_line', ['bank_id', 'channel', 'expected_memo_id', 'line_ref', 'tpp_id', 'fee_class', 'amount_milli_fils']]
+      ['billing_expected_memo_line', ['bank_id', 'channel', 'expected_memo_id', 'line_ref', 'tpp_id', 'fee_class', 'amount_milli_fils']],
+      ['billing_tpp_cost_statement', ['bank_id', 'channel', 'meter_run_id', 'period', 'rate_card_version', 'total_net_milli_fils']],
+      ['billing_tpp_cost_document', ['bank_id', 'channel', 'document_type', 'issuer_id', 'document_reference', 'net_milli_fils']],
+      ['billing_tpp_cost_reconciliation', ['bank_id', 'channel', 'statement_id', 'document_id', 'billing_period', 'net_variance_milli_fils']],
+      ['billing_tpp_cost_diff_line', ['bank_id', 'channel', 'reconciliation_id', 'line_ref', 'break_type', 'variance_milli_fils']],
+      ['billing_tpp_cost_period_close', ['bank_id', 'channel', 'billing_period', 'initiated_by', 'approved_by', 'approval_request_id']],
+      ['billing_tpp_cost_ap_dispatch', ['bank_id', 'channel', 'reconciliation_id', 'approval_request_id', 'dispatch_state', 'payable_net_milli_fils']]
     ]
     for (const [table, columns] of lineage) {
       await pool.query(

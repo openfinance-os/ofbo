@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS,
   DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS,
+  isPayableBreakMaterial,
   NEBRAS_QUERY_WINDOW_DAYS,
   fils,
   payableBreakToLineType,
@@ -385,5 +387,69 @@ describe('BILL-15 payable break_type → contract LineType (criterion 6a)', () =
     // A Hub fee variance is nebras_fees; the same variance against an underlying LFI is not.
     expect(payableBreakToLineType('rate_variance', 'nebras')).toBe('nebras_fees')
     expect(payableBreakToLineType('rate_variance', 'underlying_lfi')).not.toBe('nebras_fees')
+  })
+})
+
+describe('BILL-15/16 payable-break materiality', () => {
+  /** A break of the given type whose NET variance is zero — the shape that exposed the defect. */
+  const mag = (breakType: string, over: Record<string, number> = {}) => ({
+    breakType: breakType as never,
+    varianceMilliFils: 0,
+    expectedUnits: 100,
+    actualUnits: 100,
+    expectedVatMilliFils: 0,
+    actualVatMilliFils: 0,
+    ...over
+  })
+
+  it('REGRESSION: a VAT break blocks the close even though its NET variance is zero', () => {
+    // classifyVariance only reaches vat_variance after the net test fails, so a VAT break's net
+    // variance is ~0 BY CONSTRUCTION. Judging materiality on net made every VAT error immaterial at
+    // any magnitude — it stopped blocking the four-eyes close, stopped escalating to an E1 break,
+    // and stopped raising the IG 10.13 window alarm, so the charge would just become accepted.
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(400) }))).toBe(true)
+    // A sub-threshold VAT difference is still a rounding artefact.
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: 500 }))).toBe(false)
+  })
+
+  it('REGRESSION: a quantity break blocks the close when only the COUNTS disagree', () => {
+    // 100 units at 10 fils vs 200 units at 5 fils is a real quantity dispute worth exactly nothing
+    // in net terms. Units are counted facts (UNIT_TOLERANCE is 0), so any difference is real.
+    expect(isPayableBreakMaterial(mag('quantity_variance', { actualUnits: 200 }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('quantity_variance'))).toBe(false)
+  })
+
+  it('judges a rate break on its net variance', () => {
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(2) }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(1) }))).toBe(false)
+  })
+
+  it('treats the threshold as exclusive, so a variance exactly at it is immaterial', () => {
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(1) }))).toBe(false)
+  })
+
+  it('judges on absolute variance — an undercharge is as material as an overcharge', () => {
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: -fils(5) }))).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: fils(5) }))).toBe(true)
+  })
+
+  it('holds a wrong recipient material at ZERO variance', () => {
+    // Paying exactly the right amount to the wrong counterparty is not a rounding difference.
+    expect(isPayableBreakMaterial(mag('wrong_recipient'))).toBe(true)
+  })
+
+  it('honours a bank-configured threshold rather than only the default', () => {
+    const configured = fils(100)
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(50) }), configured)).toBe(false)
+    expect(isPayableBreakMaterial(mag('vat_variance', { actualVatMilliFils: fils(150) }), configured)).toBe(true)
+  })
+
+  it('does not confuse the milli-fils and fils vocabularies', () => {
+    // The E1 threshold for nebras_fees is `1` under unit 'aed' — one FIL. Passing that straight
+    // through as milli-fils would be a thousand times too sensitive.
+    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(1000)
+    expect(DEFAULT_PAYABLE_MATERIALITY_MILLI_FILS).toBe(DEFAULT_PAYABLE_TOLERANCE_MILLI_FILS)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: 2 }), 1)).toBe(true)
+    expect(isPayableBreakMaterial(mag('rate_variance', { varianceMilliFils: 2 }))).toBe(false)
   })
 })

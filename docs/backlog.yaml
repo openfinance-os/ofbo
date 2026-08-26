@@ -1369,7 +1369,7 @@ milestones:
           resolves the four unmapped categories.
       - id: BILL-15
         title: Three-way payable reconciliation + dispute-window management
-        status: in_progress
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-14]
@@ -1451,15 +1451,32 @@ milestones:
           than adding a second redaction path). Three self-found defects fixed with tests: an
           off-period document anchored the query deadline a month early; a duplicated charge
           reported netVariance 0; the wrong_recipient pairing guessed among candidates.
-          STILL OPEN - criterion 3 (a disputed line cannot reach an APPROVED payable) is
-          half-built: openPayableBreaks() is the gate query and is tested tenant-scoped, but
-          the refusal it feeds lives in BILL-16, so the end-to-end blocked path cannot be
-          tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the money-unit
-          decision (BILL-17); diff lines still store variance_milli_fils bare and no
-          Money-shaped variance is written.
+          CLOSED 2026-08-25 alongside BILL-16. Criterion 3 now walks end to end
+          (services/bff/test/billing-payable-blocked-path.spec.ts): an unresolved material break
+          refuses the close REQUEST, refuses the close EXECUTION when it lands inside the approval
+          window, and leaves the payable with no approval so dispatch refuses too - each asserted
+          in its own right rather than relying on the first to protect the rest.
+          Criterion 6(c) is closed by the CODE-03 ruling (Option A, PR #325): milli-fils is a rating
+          and storage precision, and the wire carries Money. billing_tpp_cost_diff_line keeps
+          variance_milli_fils in storage - correct, that is behind the boundary - and the new
+          TppCostPeriodBlocker.variance is emitted as Money, so the two shapes reconcile at the seam.
+          A DEFECT this story shipped, found while building BILL-16's gate and fixed here: nothing in
+          production set reconciliationBreakId, so every diff line persisted with a null id - which
+          openPayableBreaks reads as "raised and not yet worked". The first break of any period would
+          have blocked its close FOREVER, with no workflow anywhere able to clear it; the gate could
+          only ever say no. TppCostReconcileService now escalates material payable breaks into real
+          E1 reconciliation_break rows (via the same store the receivable engine writes to) and
+          stamps the ids onto the breaks BEFORE saveReconciliation persists them, idempotent on the
+          run via countForRun. On the payable side there is no source C - nobody re-bills us - so it
+          is null rather than padded with a duplicate of A.
+          NOT changed, and stated so it is not mistaken for done: PayableBreak.material is still a
+          hardcoded true at every construction site. That is CONSERVATIVE for this criterion (every
+          break blocks) and the escalation path means breaks can now clear, so the gate works - but a
+          real materiality computation is still owed, and the two vocabularies it would have to
+          reconcile (payable tolerance in milli-fils, E1 threshold in fils) are not interchangeable.
       - id: BILL-16
         title: Payable accounting + four-eyes close + P9 AP dispatch + net settlement
-        status: in_progress
+        status: done
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-15]
@@ -1553,15 +1570,43 @@ milestones:
           NOT agree with the ledger, which derives residue as a difference of separately
           rounded totals (-1500 milli-fils rounds to -2 while the ledger posts -1), so the
           break is now derived exactly as the ledger derives it.
-          NOT DONE: the store + migration (close table, AP dispatch table writes), the
-          OpenAPI endpoints and app wiring, IG 10.16 netting, and ALL of criterion 5 - the
-          three write-path obligations (approval state/expiry check, initiated_by and
-          approved_by stamped from one normalised P2 claim AND equal to the cited approval's
-          own principals, and P9 response_payload redaction before the first INSERT) live in
-          the store write path that does not exist yet.
+          COMPLETED 2026-08-25. Migration 0043 adds billing_tpp_cost_period_close - a table, not a
+          status column, because a close is evidence of a four-eyes act and this family has no UPDATE
+          grant a flag could be set through. UNIQUE (bank_id, billing_period) makes a retry idempotent
+          and a divergent second close unrepresentable. It also grants bank_internal_view the read on
+          billing_tpp_cost_ap_dispatch that 0039 withheld and 0040 deferred here, the condition being
+          response_payload redaction proven against a persisted row.
+          Three store classes, not one: PgPayableCloseStore, PgPayableDispatchStore and the read-only
+          PgPayablePeriodStore. Folding recordDispatch into PgBillingTppCostStore would have destroyed
+          the property the dispatch service's own comment claims - that its store surface cannot reach
+          the evidence tables - while leaving the comment behind.
+          Criterion 5 fully discharged, by reading approval_request inside the SAME tenant transaction
+          as the INSERT rather than accepting operator-shaped arguments: 5(a) state + window; 5(b)
+          both principals stamped from the approval RECORD and normalised, with a mismatch against the
+          caller's own view refused; 5(c) the P9 response redacted before the first INSERT and
+          re-checked at the write boundary, plus the caller-supplied Idempotency-Key stored as a
+          digest. Illegal transition order - which 0039 states the UNIQUE constraint does not carry -
+          is refused too: accepted cannot follow rejected.
+          A finding the integration tests produced rather than review: migration 0042 already CHECKs
+          approved_at <= expires_at, so a LATE approval cannot exist to be cited at all. The criterion
+          is met one level stronger than the write path needs, and the test now asserts the INSERT is
+          refused rather than seeding an impossible row.
+          decomposeNetSettlement implements IG v5.0 10.16. Netting is REPORTED, not applied - ADR 0007
+          keeps both role ledgers gross, so each position stays on the wire as its own signed line and
+          nettedMilliFils states how much cancelled. An adjustment citing no approval is refused,
+          because otherwise a desk could make a residue disappear by asserting it away. Residue posts
+          to suspense AND raises an E1 break, derived exactly as the ledger derives it.
+          Also fixed here because it made the whole surface unreachable: the BILL-14/15 document and
+          reconcile routes were never wired into worker.ts or serve.ts, so every deployed call hit a
+          fail-closed default that threw a plain Error the route could not type - an unhandled 500
+          instead of the contract's envelope.
+          Evidence: unit 1654/1654 across 229 files, integration 210/210 across 80 files on a pristine
+          PostgreSQL 16.13, Q4.5 PASSED with both new tables covered and allowed gaps none, coverage
+          94.78 percent lines, typecheck 11/11, ESLint clean, verify:contract 33 conformant 0 drift
+          against a live BFF, docs:check and pii-literal-check clean.
       - id: BILL-17
         title: TPP Cost Management console + governed exports + demo scenarios + hosted smoke
-        status: pending
+        status: in_progress
         research: docs/research/lfi-billing-system-tier2.md
         adr: docs/adrs/0007-tpp-of-record-payables-net-settlement.md
         depends_on: [BILL-16]
@@ -1586,6 +1631,104 @@ milestones:
           dual-role settlement with residue break, RLS denial, lineage gate, recomputable
           export digest. Hosted smoke asserts the TPP cost totals and independently
           recomputes the exported evidence digest.
+        progress: >-
+          PARTIAL, 2026-08-25. The console, the IA pass, the demo scenarios and the hosted smoke are
+          built and green; the Stitch obligation and most of the scenario list are not.
+          DONE. A TppCostConsole section on the EXISTING billing console rather than a new module -
+          receivables and payables are two halves of one monthly commercial position, and splitting
+          them would make "what is our net position with the scheme" a question you answer by opening
+          two screens and doing arithmetic. KPIs: total TPP cost, Nebras Hub and underlying-LFI kept
+          SEPARATE per ADR 0007, amount in dispute, AP settled/in-flight/outstanding. A blockers table
+          linking each unresolved break to its E1 record, and a payables table with per-row dispatch.
+          Both write paths are useActionState islands surfacing the typed BFF error in place, because
+          the refusals here ARE the controls speaking and a redirect would replace a specific message
+          with a page that appeared to do nothing. Four-eyes is 202 + approval_request with a
+          deep-link to the queue, never inline. Read-only personas see no write control; the BFF
+          re-enforces. Server-side only - the httpOnly Bearer never reaches the browser.
+          The ONE IA pass shipped in the same change: /billing is now "Billing & TPP Cost" and
+          /tpp-billing is "LFI Revenue & TPP Registry" - the old label was ambiguous once a TPP COST
+          section existed one entry above it. Hrefs and every API path underneath are unchanged.
+          Deterministic demo scenarios (seedTppCostEvidence, idempotent, PSU-free): the month before
+          last CLOSED under a real four-eyes approval with its Nebras payable dispatched then
+          accepted (two rows - the table is an append-only state log), and last month BLOCKED by a
+          material VAT-variance break escalated to a real E1 break so "Investigate" resolves. Two
+          periods deliberately, because one cannot demonstrate the gate in both directions.
+          Hosted smoke asserts the TOTALS tie out (gross = net + VAT per payable, every amount an
+          INTEGER minor unit so a milli-fils leak is caught at the boundary) and that a close is
+          NEVER 200 - only 202 with an approval or a refusal carrying a remediation.
+          The first BLOCKING criterion below is partly discharged: TppCostDispatchState mirrors the
+          0039 CHECK value for value. The four vocabularies this story exposes now (dispatch_state,
+          cost_recipient_type, break_type, presence) match; fee_stream, customer_segment and
+          vat_treatment are still unexposed and inherit the obligation. The second BLOCKING criterion
+          is CLOSED by the CODE-03 ruling - Money at the wire, milli-fils behind the boundary.
+          SECOND PASS, 2026-08-25. Four of the five gaps below are now closed; the Stitch one is not.
+          (2) GOVERNED EXPORT — DONE. GET /back-office/billing/tpp-cost-export (billing:read,
+          spec-first, 98 -> 99 paths) issues one period's payable evidence as a single pack:
+          documents with their parsed lines nested, reconciliations, diff lines, the four-eyes close
+          and the append-only AP dispatch log. Read in ONE transaction so the five collections are a
+          consistent snapshot - across five transactions a dispatch landing between two of them
+          would make the pack attest to a period that never existed at any instant. Rows come from
+          to_jsonb(t) rather than an enumerated projection, because a hand-written column list
+          silently stops exporting whatever a later migration adds, and this is evidence. sha256 is
+          a canonical digest over the body EXCLUDING itself, so a recipient can recompute it; a
+          digest covering itself could never be checked. Audited on every call - reading a period's
+          whole evidence base is a disclosure event whatever it contains - and the audit row carries
+          the digest and counts, never the pack, so the ledger is not duplicated into a second
+          INSERT-only store per download. The service REFUSES (503) when no audit sink is wired
+          rather than exporting ungoverned. Downloaded through the portal's own server-only proxy
+          (apps/portal/src/app/api/billing/tpp-cost-export), so the httpOnly Bearer stays in the
+          Worker and no export payload reaches browser storage; the period is re-validated there
+          because it lands in a Content-Disposition filename. Amounts inside the pack stay in the
+          ledger's milli-fils rather than wire Money, deliberately and stated in the schema: the
+          digest must attest to what the ledger holds, not to a rounded restatement. The console
+          link is NOT gated on canWrite - handing evidence to an auditor is a read capability, and
+          its main audience is often the persona without write.
+          (5) BROWSER E2E — DONE. Eight Playwright specs over the new section: the closed period
+          reports closed with its four-eyes evidence, the blocked period names its blockers and
+          disables the close control with a stated reason, a blocker link resolves to its real E1
+          break, the payables table shows the latest state from the append-only log, the export
+          downloads with a recomputable digest and refuses a malformed period, and the IA rename is
+          present. Not asserted there: the read-only branch (billing:read WITHOUT
+          finance:reconciliation:write). NO demo persona holds that combination - finance-analyst
+          has both, every other persona lacks billing:read - so a browser test for it would assert a
+          fiction; it is covered at component level instead, where the input can be constructed.
+          CI FIX this uncovered: the q3-e2e job ran only `pnpm db:seed`, which creates ZERO TPP cost
+          evidence - seedTppCostEvidence lives behind `db:seed:demo`, which only deploy.yml ran. So
+          the console rendered empty in CI and any spec asserting seeded data would have failed.
+          The job now runs the demo seed too, matching the hosted demo it is meant to mirror.
+          MATERIALITY — DONE, and it was listed as deliberately unchanged. PayableBreak.material was
+          hardcoded true at seven construction sites, so openPayableBreaks's `AND d.material`
+          filtered nothing. It is now DERIVED once, centrally, over the whole break array before
+          anything reads it - seven inline copies of a judgement is how the hardcoded value survived,
+          since every site looked locally reasonable. isPayableBreakMaterial holds wrong_recipient
+          material at ZERO variance (paying the right amount to the wrong counterparty is not a
+          rounding difference, and the spec's own TppCostDiffLine.material description says so) and
+          judges everything else on absolute variance. Stated precisely, because it is less than it
+          sounds: at the DEFAULTS materiality equals the matching tolerance, so every break that
+          exists is still material and no default behaviour moves. What moves is that the judgement
+          is derived and configurable, so a bank can now have a break stay real, recorded and
+          queryable inside the IG 10.13 window without holding the month open. The two vocabularies
+          are NOT interchangeable and the constant says so - payables count milli-fils, the E1
+          BreakThreshold counts fils under unit 'aed', and passing one for the other is wrong by a
+          factor of a thousand.
+          STILL NOT DONE.
+          (1) STITCH — unchanged and still OWED. Re-checked this session: the toolset has DesignSync
+          (claude.ai design-system projects) and the connector registry has no Stitch entry, so the
+          project CLAUDE.md binds to (8050269076066130289) remains unreachable. Citing a screen id
+          that was never generated would be worse than leaving this open, so it stays open. The
+          console remains token-only against the UIF-01 primitives - themselves derived from the
+          pinned Stitch references - and passes design-conformance, no-raw-style, design-tokens and
+          axe. The audit doc's reference map still needs the new route pinned.
+          (3) SCENARIO LIST — partly. The seeded demo covers VAT mismatch, the dual-role period, the
+          close gate in both directions and a dispatched-then-accepted payable. The metering and
+          rating scenarios (paired discount limited to one Balance and one CoP, corporate 40
+          fils/page with no free tier, per-LFI effective-dated overage, insurance producing no
+          payable_lfi, chargeable refund GET, exactly-once duplicates, credit note, absence alarm,
+          dispute-deadline alert, RLS denial) remain covered by BILL-12..16 unit and integration
+          tests rather than as clickable demos.
+          (4) The longer workflow chain (upload, parse review, investigate, assign, dispute
+          evidence, variance approve/reject) still reuses existing screens and endpoints; only the
+          close, AP approval and dispatch legs are wired into this console.
         acceptance:
           - Stitch screen ids cited in the PR; screens are token-only with the DEMO banner
             and scope gating; the nav rename ships in the same pass.
