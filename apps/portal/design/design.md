@@ -1,7 +1,7 @@
 # OFBO Portal Design System — "Institutional Blue"
 
 Human-readable mirror of `tokens.ts`. **`tokens.ts` is the source**, not this file and not
-an external tool — ADR 0026 retired the Stitch project as the appearance authority.
+an external tool — ADR 0033 retired the Stitch project as the appearance authority.
 
 > **Division of truth**
 > `apps/portal/design/tokens.ts` — design tokens (source)
@@ -34,7 +34,7 @@ wholesale while 96% of 1,809 call sites stayed untouched. *Never name a token fo
 
 - **Accent** `secondary #2c5fc4` — institutional blue.
 - **Shell** `ext.nav` `#141b2d` / `#1e2740` / `#6ba1f5` — the navy sidebar and sign-in panel.
-  Kept from the live portal rather than reinvented (ADR 0026).
+  Kept from the live portal rather than reinvented (ADR 0033).
 - **Ground** `surface #f4f6fa`, cards `surface-container-lowest #ffffff`.
 - **Ink** `on-surface #121826`, secondary text `on-surface-variant #55607a`.
 - **Company mark** `ext.demo #e65c2d` — MiddleLeap orange. Provenance bar only: the mark and

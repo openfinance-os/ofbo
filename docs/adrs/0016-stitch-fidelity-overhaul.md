@@ -1,6 +1,6 @@
 # ADR 0016 — Stitch-fidelity overhaul: typed analytics panels + a charting library
 
-- Status: **Accepted** (user decision 2026-06-21; supersedes ADR 0012 Option 1) — **appearance-authority premise superseded by ADR 0026** (2026-08-26). The substantive decision below (typed analytics panels over a generic renderer) STANDS and is unaffected. What lapses is only "Stitch 'Refined' screens are canonical": Stitch was retired as the appearance authority, and `apps/portal/design/tokens.ts` is now the source. Read the panel decisions as current; read the Stitch screen references as historical.
+- Status: **Accepted** (user decision 2026-06-21; supersedes ADR 0012 Option 1) — **appearance-authority premise superseded by ADR 0033** (2026-08-26). The substantive decision below (typed analytics panels over a generic renderer) STANDS and is unaffected. What lapses is only "Stitch 'Refined' screens are canonical": Stitch was retired as the appearance authority, and `apps/portal/design/tokens.ts` is now the source. Read the panel decisions as current; read the Stitch screen references as historical.
 - Date: 2026-06-21
 - Supersedes: **ADR 0012** (Analytics generic renderer vs bespoke panels — was "Accepted Option 1")
 - Related: `docs/design-conformance-audit.md`, `docs/ui-ux-review.md`, UX-11 (reopened),

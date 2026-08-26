@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * Portal base styles on the Institutional Blue tokens (apps/portal/design — ADR 0026).
+ * Portal base styles on the Institutional Blue tokens (apps/portal/design — ADR 0033).
  * The ad-hoc --ofbo-* palette is retired; all colour comes from token utilities
  * (no raw hex). Geometry stays rem-based. UI-01 refactors this into the design-system
  * app shell; this keeps the M1 shell rendering on tokens in the meantime.
