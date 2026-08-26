@@ -78,6 +78,12 @@ describe('OFBO design tokens — Institutional Blue', () => {
     expect(set.size).toBe(4)
   })
 
+  /** Carried over from the pre-ADR-0026 spec: breach and the error role are one colour.
+   *  A screen that renders an error and a screen that renders a breach must not disagree. */
+  it('breach reuses the error role rather than duplicating it', () => {
+    expect(ext.status.breach).toBe(color.error)
+  })
+
   it('keeps `break` as a deprecated alias of `aging` for one minor release', () => {
     expect(ext.status.break).toBe(ext.status.aging)
   })
@@ -133,6 +139,16 @@ describe('OFBO design tokens — Institutional Blue', () => {
     const AA_TEXT = 4.5
     const AA_UI = 3.0
 
+    /**
+     * Status colours and the DEMO marker are TEXT here — status-badge.tsx and
+     * demo-banner.tsx render `text-<token>` at text-xs — so they belong in this list.
+     * Leaving them out is how the first cut of this gate passed a palette in which the
+     * mandated DEMO marker had dropped to 3.27:1. A gate scoped around the values that
+     * regressed is not a gate.
+     *
+     * The ground is asserted rather than the white card because it is the harder of the
+     * two, and because the badge tint (`bg-<token>/10`) sits at roughly ground lightness.
+     */
     const textPairs: [string, string, string][] = [
       ['body text on ground', color['on-surface'], color.surface],
       ['body text on card', color['on-surface'], color['surface-container-lowest']],
@@ -141,7 +157,13 @@ describe('OFBO design tokens — Institutional Blue', () => {
       ['accent on card', color.secondary, color['surface-container-lowest']],
       ['on-primary over accent', color['on-secondary'], color.secondary],
       ['nav text on shell', ext.nav.on, ext.nav.surface],
-      ['nav active on shell', ext.nav.active, ext.nav.surface]
+      ['nav active on shell', ext.nav.active, ext.nav.surface],
+      ['breach text on ground', ext.status.breach, color.surface],
+      ['aging text on ground', ext.status.aging, color.surface],
+      ['awaiting text on ground', ext.status.awaiting, color.surface],
+      ['reconciled text on ground', ext.status.reconciled, color.surface],
+      ['DEMO marker on ground', ext.demo, color.surface],
+      ['TRAINING marker on ground', ext.training, color.surface]
     ]
 
     it.each(textPairs)('%s meets 4.5:1', (_label, fg, bg) => {

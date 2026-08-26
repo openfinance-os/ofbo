@@ -78,24 +78,45 @@ pattern** they implement instead of a screen id.
 was the *verification basis* for `design-conformance-audit.md`. Removing it without a
 replacement would mean nobody ever looks at a screen again.
 
-Three gates replace one human comparison, and all three are machine-checkable:
+Gates replace one human comparison, and they are machine-checkable:
 
-| Gate | What it enforces | Status |
+| Gate | What it enforces | Status **as shipped in BACKOFFICE-81** |
 |---|---|---|
 | `design-conformance.spec.ts` | Token-only usage: no raw hex, arbitrary px, inline styles | exists, unchanged |
-| `checks/contrast.mjs` | WCAG 2.1 AA on all 24 fg/bg pairs, both themes | **new** |
-| tokens drift check | `tokens.json` regenerated from source; CI fails if stale | **new** |
+| AA contrast block in `design-tokens.spec.ts` | WCAG 2.1 AA on 14 enumerated light-theme pairs — body/secondary text, accent, nav chrome, all four status colours as text, DEMO and TRAINING markers | **shipped** |
+| Status semantics in `design-tokens.spec.ts` | Four distinct states; no status may collide with the accent in hue or chroma | **shipped** |
+| Dark-theme contrast | — | **NOT SHIPPED.** `tokens.ts` has no dark theme; the design system defines one, the portal does not yet consume it |
+| `tokens.json` drift check | Machine-readable token export regenerated from source; CI fails if stale | **NOT SHIPPED.** Exists in the design-system project, not in this repo |
+
+**Be precise about what this means.** The external control was removed in full; the replacement
+shipped in part. Two of the five rows above are outstanding, and this ADR's condition is not
+fully discharged until they land. They are tracked as follow-ups to BACKOFFICE-81, not as
+optional polish.
+
+What *is* discharged is the part that matters most immediately: the contrast gate is real, it
+runs in Q1, and it enumerates the pairs the portal actually renders — including the ones the
+first cut of it missed.
 
 Plus one that is *not* automatable and must not be dropped: a **rendered visual review**. Each
 UI story attaches a screenshot of the built screen, reviewed against the design-system cards.
 The repo already produces these (`live-*.png` at root); this makes it a required step rather
 than an occasional one.
 
-The contrast gate is not theoretical. The design system's own v0.1 palette shipped **seven
-contrast failures** — captions at 3.42:1 against a 4.5:1 requirement, placeholders at 2.79:1
-against 3.0:1 — and they survived review because the accessibility rule lived in a document
-instead of a build step. `design-conformance.spec.ts` checks that we *use* tokens; nothing
-checked whether the tokens are *readable*.
+The contrast gate is not theoretical, and it has now failed twice in its own authoring.
+
+The design system's v0.1 palette shipped **seven contrast failures** — captions at 3.42:1
+against a 4.5:1 requirement, placeholders at 2.79:1 against 3.0:1 — because the accessibility
+rule lived in a document instead of a build step.
+
+Then the *first cut of the gate itself* was scoped too narrowly: it omitted the status colours
+and `ext.demo`, which were exactly the values the migration had regressed. The mandated DEMO
+marker had fallen from 5.43:1 to **3.27:1** — the least readable element on a screen whose whole
+job is to say "this is not production" — and the new gate could not see it. Caught in hard-stop
+review before merge; the tokens were re-solved and the pair list widened to 14.
+
+`design-conformance.spec.ts` checks that we *use* tokens; nothing checked whether the tokens are
+*readable*. The lesson of both failures is the same: a gate scoped around what you already
+believe is fine will confirm it.
 
 ## Consequences
 

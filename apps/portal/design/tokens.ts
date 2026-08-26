@@ -97,21 +97,36 @@ export const color = {
  * `demo` is the mandatory persistent DEMO marker (regulatory hard-stop).
  */
 export const ext = {
+  /**
+   * These are TEXT colours, not just dot fills: status-badge.tsx renders
+   * `text-<status>` at text-xs on a 10% tint of the same hue. So every value below is
+   * solved to >= 4.5:1 against `surface` (the page ground — the harder of ground vs
+   * white card), and the AA block in design-tokens.spec.ts asserts it on every build.
+   */
   status: {
     breach: '#c4342f', // red — SLA missed, liability threshold crossed
-    aging: '#b0740e', // amber — open, approaching its clock
+    aging: '#98640c', // amber — open, approaching its clock
     // Near-neutral slate. It sits on the accent's own hue, so its CHROMA is what keeps
     // it distinguishable — saturation is held at/below the "reads as grey" threshold so
     // a parked break can never be mistaken for the blue that means "act here".
-    awaiting: '#77808f',
-    reconciled: '#1f8a5b', // green — matched / settled
+    awaiting: '#68707e',
+    reconciled: '#1d7f54', // green — matched / settled
     /** @deprecated ADR 0026 — renamed to `aging`. Kept one minor release; remove next major. */
-    break: '#b0740e'
+    break: '#98640c'
   },
-  // The MiddleLeap company mark + DEMO flag. Provenance bar ONLY — never the application body.
-  demo: '#e65c2d',
+  /**
+   * The persistent DEMO marker (regulatory hard-stop, CLAUDE.md). demo-banner.tsx renders
+   * it as `text-demo` at text-xs, so it must be legible as TEXT.
+   *
+   * MiddleLeap's mark orange is #e65c2d; at 3.27:1 on the ground it failed AA and made the
+   * mandated non-prod marker the least readable thing on the page. This token is the
+   * darkened text-safe form (4.61:1). The brand orange stays the MARK colour in the design
+   * system — if the banner ever becomes a filled pill (ink on orange, as designed), this
+   * token can go back to #e65c2d.
+   */
+  demo: '#c54418',
   // BACKOFFICE-59 — the persistent TRAINING-environment marker colour. A distinct violet,
-  // deliberately apart from the orange `demo`, amber `break`, red `breach` and navy nav, so a
+  // deliberately apart from the orange `demo`, amber `aging`, red `breach` and navy nav, so a
   // trainee can tell a training session from production/demo at a glance.
   training: '#6d28d9',
   /**
