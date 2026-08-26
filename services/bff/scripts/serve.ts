@@ -1,4 +1,6 @@
 import { serve } from '@hono/node-server'
+import { BillingProfitabilityService } from '../src/billing/profitability.js'
+import { BillingTenantService } from '../src/billing/tenant-service.js'
 import {
   PgApprovalStore,
   PgAuditEmitter,
@@ -27,6 +29,8 @@ import {
   PgPayableCloseStore,
   PgPayableDispatchStore,
   PgPayablePeriodStore,
+  PgTenantBillingServiceStore,
+  PgBillingProfitabilityStore,
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
   PgCertificationStore,
@@ -89,6 +93,19 @@ const tppCostLedgerStore = url ? new PgBillingTppCostStore(url, tenancy, lineage
 const payableCloseStore = url ? new PgPayableCloseStore(url, tenancy, lineage) : undefined
 const payableDispatchStore = url ? new PgPayableDispatchStore(url, tenancy, lineage) : undefined
 const payablePeriodStore = url ? new PgPayablePeriodStore(url, tenancy, lineage) : undefined
+// BILL-09/10 — the LFI RECEIVABLES half of the Billing Control Plane, matching worker.ts.
+// Without these the local dev server threw "billing tenant store is not configured" from the
+// fail-closed default and the console answered 500, so the receivables side could not be
+// demonstrated locally at all — while the deployed worker, which does wire them, worked. That
+// divergence is exactly what the local entrypoint exists to avoid.
+const tenantBillingStore = url ? new PgTenantBillingServiceStore(url) : undefined
+const billingProfitabilityStore = url ? new PgBillingProfitabilityStore(url, tenancy) : undefined
+const billingTenantService = tenantBillingStore
+  ? new BillingTenantService({ configurations: tenantBillingStore, data: tenantBillingStore })
+  : undefined
+const billingProfitabilityService = billingProfitabilityStore && audit
+  ? new BillingProfitabilityService({ source: billingProfitabilityStore, audit })
+  : undefined
 
 const app = createApp({
   ...(audit ? { audit } : {}),
@@ -112,6 +129,8 @@ const app = createApp({
   ...(payableCloseStore ? { payableCloseStore } : {}),
   ...(payableDispatchStore ? { payableDispatchStore } : {}),
   ...(payablePeriodStore ? { payablePeriodStore } : {}),
+  ...(billingTenantService ? { billingTenant: billingTenantService } : {}),
+  ...(billingProfitabilityService ? { billingProfitability: billingProfitabilityService } : {}),
   ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
   ...(billingRecordStore ? { billingRecordStore } : {}),
   ...(invoiceRunStore ? { invoiceRunStore } : {}),
