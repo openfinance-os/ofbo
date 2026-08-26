@@ -56,6 +56,20 @@ describe('status vocabulary (single source of truth)', () => {
     expect(statusTone('reconciled')).toContain('text-reconciled')
   })
 
+  /**
+   * ADR 0033's fourth state has to REACH a screen to exist. The token, the Tailwind colour and
+   * the contrast assertion were all in place while this map still pointed `awaiting` at the
+   * amber `aging` — so the shipped UI had three states, and because nothing referenced the
+   * utilities Tailwind's JIT never emitted `.text-awaiting` at all. The value is guarded in
+   * design-tokens.spec; this guards that a screen can actually reach it.
+   */
+  it('gives awaiting its own tone rather than the amber it was split from', () => {
+    expect(statusTone('awaiting')).toContain('text-awaiting')
+    expect(statusTone('Awaiting Authorization')).toContain('text-awaiting')
+    expect(statusTone('awaiting_authorization')).toContain('text-awaiting')
+    expect(statusTone('awaiting')).not.toContain('text-aging')
+  })
+
   it('resolves the cross-screen drift case (suspended is amber, not red)', () => {
     // The review found `suspended` rendered red on analytics but amber on care.
     expect(statusTone('suspended')).toContain('text-aging')
