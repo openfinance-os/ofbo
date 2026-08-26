@@ -8,12 +8,12 @@ import { dirname, join, relative } from 'node:path'
  *
  * Operationalises the binding UI-00b rule ("token-only: no raw hex/px in
  * components — CI enforces") and the PRD acceptance "no critical design findings":
- * every portal screen must use the design-system token utilities (from the Stitch
- * Material 3 preset, apps/portal/design/tokens.ts) — never raw hex, Tailwind
+ * every portal screen must use the design-system token utilities (from
+ * apps/portal/design/tokens.ts) — never raw hex, Tailwind
  * arbitrary px/rem/em or #hex values, inline style props, or the retired M1
  * `--ofbo-*` palette. This test IS the enforcing gate, run in the Q1 unit suite.
  *
- * The token VALUES (Al Tareq/M3 roles, status triad, DEMO banner) are guarded
+ * The token VALUES (colour roles, the four status states, DEMO marker) are guarded
  * separately by design-tokens.spec.ts; this guards their USE across the consoles.
  */
 
