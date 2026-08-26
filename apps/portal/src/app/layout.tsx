@@ -19,12 +19,20 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" data-tenant={tenant?.slug}>
       <head>
-        {/* Stitch design-system fonts: Inter (UI), JetBrains Mono (ids/amounts),
-            Material Symbols Outlined (icons). Without these the `font-symbols`
-            nav/icon glyphs fall back to raw ligature text. Mirrors the Stitch screens. */}
+        {/* The Institutional Blue typefaces (ADR 0033 / design/tokens.ts): DM Sans (UI +
+            summary figures), Instrument Serif (display titles), JetBrains Mono (ids, exact
+            amounts, trace ids), Material Symbols Outlined (icons — without it the
+            `font-symbols` glyphs fall back to raw ligature text).
+
+            This list and `fontFamily` in the tokens are ONE decision in two files, and
+            nothing in the type system ties them together: the palette change moved the
+            tokens to DM Sans while this link still fetched Inter, so every screen rendered
+            in the viewer's OS sans and Inter was downloaded for nothing. design-tokens.spec
+            now fails when the two drift apart — add a family here whenever you add one
+            there, and never the reverse. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
       </head>
       <body>
