@@ -41,27 +41,6 @@ export interface QueryPurposeRegistrar {
   register(input: RegisterPurposeInput): Promise<void>
 }
 
-export class QueryPurposeRegistrarError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-    this.name = 'QueryPurposeRegistrarError'
-  }
-}
-
-export class InMemoryQueryPurposeRegistrar implements QueryPurposeRegistrar {
-  readonly registered: RegisterPurposeInput[] = []
-  async register(input: RegisterPurposeInput): Promise<void> {
-    if (this.registered.some((r) => r.purpose_code === input.purpose_code)) {
-      throw new QueryPurposeRegistrarError(409, 'BACKOFFICE.PURPOSE_ALREADY_REGISTERED', `query purpose '${input.purpose_code}' is already registered for this bank`)
-    }
-    this.registered.push(input)
-  }
-}
-
 /**
  * The gated executor: runs only on the SECOND principal's approval. `ctx.approver` is the
  * approving principal (the four-eyes second pair of eyes) — recorded as approved_by, the value
@@ -189,3 +168,9 @@ export function registerQueryPurposeRoutes(service: RegisterQueryPurposeService,
 
   return { 'post /back-office/governance/query-purposes': withIdempotency }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/governance-query-purposes.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryQueryPurposeRegistrar
+} from '../../memory/governance-query-purposes.js'

@@ -3,13 +3,15 @@ import type {
   CareSurfacePort,
   CoreBankingPort,
   FinancialSystemPort,
+  EInvoicingAspPort,
   IdentityProviderPort,
   ItsmPort,
   LineagePort,
   NebrasEgressPort,
   OnboardingCase,
   OnboardingHandoverPort,
-  PortMap
+  PortMap,
+  StrWorkflowPort
 } from '../interfaces.js'
 
 /**
@@ -33,6 +35,12 @@ const PERSONAS = [
   ['platform-admin', 'OF Platform Administrator'],
   ['platform-super-admin', 'Platform Super Administrator']
 ] as const
+
+const DEMO_TENANT_BANK_IDS: Readonly<Record<string, string>> = Object.freeze({
+  'alpha-bank': '11111111-1111-4111-8111-111111111111',
+  'beta-bank': '22222222-2222-4222-8222-222222222222',
+  'gamma-takaful': '33333333-3333-4333-8333-333333333333'
+})
 
 const simCareSurface: CareSurfacePort = {
   async mintCareToken({ agent_id, psu_id }) {
@@ -75,6 +83,7 @@ interface AgentSessionClaims {
   scopes: string[]
   allow_mutations: boolean
   spend_budget: number
+  bank_id?: string
   /** Absolute expiry (epoch ms). Short TTL; registry revoke denylists earlier (BACKOFFICE-60). */
   exp: number
 }
@@ -124,16 +133,21 @@ const simIdentityProvider: IdentityProviderPort = {
     }))
   },
   async verifyToken(token) {
-    const persona = token.replace(/^demo-token:/, '')
+    const match = /^demo-token:([^@]+)(?:@([a-z0-9-]+))?$/.exec(token)
+    if (!match) throw new Error('unknown demo token')
+    const persona = match[1]!
+    const tenantSlug = match[2]
     if (!PERSONAS.some(([p]) => p === persona)) throw new Error('unknown demo token')
-    return { subject: `demo:${persona}`, persona, mfa: true }
+    const bank_id = tenantSlug ? DEMO_TENANT_BANK_IDS[tenantSlug] : undefined
+    if (tenantSlug && !bank_id) throw new Error('unknown demo tenant claim')
+    return { subject: `demo:${persona}${tenantSlug ? `@${tenantSlug}` : ''}`, persona, mfa: true, ...(bank_id ? { bank_id } : {}) }
   },
   // Token minting is non-deterministic by nature (fresh session_id + expiry per mint) — like
   // mintCareToken above. The signature makes the token unforgeable; the claims are verifiable.
-  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget }) {
+  async mintAgentSession({ agent_id, persona, scopes, allow_mutations, spend_budget, bank_id }) {
     const session_id = crypto.randomUUID()
     const exp = Date.now() + AGENT_SESSION_TTL_MS
-    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, exp })
+    const token = await signAgentSession({ agent_id, persona, session_id, scopes: [...scopes], allow_mutations, spend_budget, ...(bank_id ? { bank_id } : {}), exp })
     return { token, session_id, expires_at: new Date(exp).toISOString() }
   },
   async verifyAgentSession(token) {
@@ -146,6 +160,7 @@ const simIdentityProvider: IdentityProviderPort = {
       scopes: claims.scopes,
       allow_mutations: claims.allow_mutations,
       spend_budget: claims.spend_budget,
+      ...(claims.bank_id ? { bank_id: claims.bank_id } : {}),
       expires_at: new Date(claims.exp).toISOString()
     }
   }
@@ -176,9 +191,9 @@ const simApm: ApmPort = {
 }
 
 const DIRECTORY = [
-  { organisation_id: 'org-fictional-fintech-01', legal_name: 'Fictional Fintech One FZ-LLC' },
-  { organisation_id: 'org-fictional-fintech-02', legal_name: 'Fictional Fintech Two Ltd' },
-  { organisation_id: 'org-fictional-fintech-03', legal_name: 'Fictional Payments Co PSC' }
+  { organisation_id: 'org-tarabut-gateway', legal_name: 'Tarabut Gateway Ltd' },
+  { organisation_id: 'org-lean-technologies', legal_name: 'Lean Technologies FZ-LLC' },
+  { organisation_id: 'org-tabby', legal_name: 'Tabby FZ-LLC' }
 ]
 
 /** Thrown when the Nebras sim returns a non-2xx (e.g. 429 rate limit). The
@@ -327,6 +342,75 @@ const simFinancialSystem: FinancialSystemPort = {
   },
   async getSettlementStatus() {
     return { invoice_status: 'instructed' }
+  },
+  async postJournalInstructions(batch) {
+    const balanced = batch.journals.every((journal) => {
+      const debit = journal.lines.filter((line) => line.side === 'debit').reduce((sum, line) => sum + line.amount_fils, 0)
+      const credit = journal.lines.filter((line) => line.side === 'credit').reduce((sum, line) => sum + line.amount_fils, 0)
+      return debit === credit
+    })
+    if (!balanced) throw new Error(`financial-system simulator rejected unbalanced batch ${batch.batch_id}`)
+    return { accepted: true, journal_batch_ref: `fms-${batch.batch_id}` }
+  },
+  async dispatchPayableInstruction(instruction) {
+    // Idempotent on the caller's key: a retried dispatch must not authorise the debit twice. The
+    // simulator keeps the same guarantee the enterprise adapter is held to, since the contract suite
+    // asserts it against both.
+    const existing = simPayableDispatches.get(instruction.idempotency_key)
+    if (existing) return { ...existing, replayed: true }
+    if (!Number.isSafeInteger(instruction.amount_fils) || instruction.amount_fils <= 0) {
+      throw new Error(`financial-system simulator rejected payable ${instruction.payable_id}: amount must be positive minor units`)
+    }
+    if (!instruction.approval_request_id.trim()) {
+      // Fail closed. An unapproved payable reaching the financial system is the four-eyes gate being
+      // bypassed downstream of the place that enforces it.
+      throw new Error(`financial-system simulator rejected payable ${instruction.payable_id}: no approval reference`)
+    }
+    const result = {
+      accepted: true,
+      dispatch_ref: `fms-pay-${instruction.payable_id}`,
+      payable_status: 'dispatched' as const,
+      replayed: false
+    }
+    simPayableDispatches.set(instruction.idempotency_key, result)
+    return result
+  },
+  async getPayableStatus(dispatch_ref) {
+    for (const entry of simPayableDispatches.values()) {
+      if (entry.dispatch_ref === dispatch_ref) return { payable_status: entry.payable_status }
+    }
+    // Deterministic for an unknown ref rather than inventing a lifecycle position.
+    throw new Error(`financial-system simulator has no payable dispatch ${dispatch_ref}`)
+  }
+}
+
+/** Keyed by idempotency key — the replay contract both adapters are held to. */
+const simPayableDispatches = new Map<string, {
+  accepted: boolean
+  dispatch_ref: string
+  payable_status: 'dispatched' | 'mandate_active' | 'presented' | 'collected' | 'rejected'
+  replayed: boolean
+}>()
+
+// P10 — the bank's STR workflow. Records the handoff and returns a deterministic workflow
+// reference; it NEVER calls the CBUAE AML GO portal (there is no AML GO client in the sim).
+const simStrWorkflow: StrWorkflowPort = {
+  async handoffStrDraft({ str_draft_id }) {
+    return { workflow_ref: `str-wf-${str_draft_id}`, accepted_at: new Date().toISOString() }
+  }
+}
+
+const simEInvoicingAsp: EInvoicingAspPort = {
+  async submitDocument(document) {
+    const valid = document.xml.includes(`<cbc:CustomizationID>${document.customization_id}</cbc:CustomizationID>`)
+      && document.xml.includes(document.document_type === '380' ? '<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>' : '<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>')
+      && new TextDecoder().decode(document.pdf.slice(0, 8)).startsWith('%PDF-1.')
+    return {
+      accepted: valid,
+      submission_ref: `asp-sim-${document.document_id}`,
+      document_status: valid ? 'accepted' : 'rejected',
+      tdd_status: valid ? 'reported' : 'rejected'
+    }
   }
 }
 
@@ -339,5 +423,7 @@ export const SIM_ADAPTERS: PortMap = {
   'p6-nebras-egress': simNebrasEgress,
   'p7-lineage': simLineage,
   'p8-onboarding-handover': simOnboardingHandover,
-  'p9-financial-system': simFinancialSystem
+  'p9-financial-system': simFinancialSystem,
+  'p10-str-workflow': simStrWorkflow,
+  'p11-einvoicing-asp': simEInvoicingAsp
 }

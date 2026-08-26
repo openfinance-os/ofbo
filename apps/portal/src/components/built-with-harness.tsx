@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 
 /**
  * "Built with" colophon — a discreet trigger on the sign-in screen that explains how OFBO
- * was produced and embeds the interactive harness map (docs/harness-map.html, served from
+ * was produced and embeds the interactive harness map (docs/the-loom-ways-of-working.html, served from
  * /public). OFBO wasn't hand-built screen by screen: it was assembled by an autonomous
  * AI software-delivery harness run as a regulated Double Diamond (Discover ▸ Define ▸
  * Develop ▸ Deliver) with humans holding the gates. This surfaces that provenance one click
@@ -107,7 +107,7 @@ export function BuiltWithHarness() {
                 </p>
               </div>
               <iframe
-                src="/harness-map.html"
+                src="/the-loom-ways-of-working.html"
                 title="OFBO harness map — interactive Double Diamond visualization"
                 data-testid="harness-map-frame"
                 loading="lazy"
@@ -133,7 +133,7 @@ export function BuiltWithHarness() {
                   </span>
                 </a>
                 <a
-                  href="/harness-map.html"
+                  href="/the-loom-ways-of-working.html"
                   target="_blank"
                   rel="noreferrer"
                   data-testid="built-with-full-link"

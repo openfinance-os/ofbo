@@ -1,6 +1,7 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
+import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
 
 /**
  * BACKOFFICE-20 — dispute_case persistence. Writes run as ofbo_app with the
@@ -138,16 +139,6 @@ function toCrossScheme(r: Record<string, unknown>): CrossSchemeContext | null {
   }
 }
 
-const encodeCursor = (createdAt: string, id: string) =>
-  Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeCursor(cursor: string): { createdAt: string; id: string } | null {
-  try {
-    const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
-    return createdAt && id ? { createdAt, id } : null
-  } catch {
-    return null
-  }
-}
 
 export class PgDisputeStore {
   private readonly pool: pg.Pool
@@ -322,8 +313,7 @@ export class PgDisputeStore {
         where.push(`psu_identifier = $${params.length}`)
       }
       if (after) {
-        params.push(after.createdAt, after.id)
-        where.push(`(date_trunc('milliseconds', created_at), id) > ($${params.length - 1}::timestamptz, $${params.length}::uuid)`)
+        where.push(keysetClause(params, after))
       }
       const res = await c.query(
         `SELECT ${SELECT_COLUMNS} FROM dispute_case
@@ -337,7 +327,7 @@ export class PgDisputeStore {
     const hasMore = rows.length > limit
     const page = (hasMore ? rows.slice(0, limit) : rows).map(toRecord)
     const last = page[page.length - 1]
-    return { rows: page, next_cursor: hasMore && last ? encodeCursor(last.created_at, last.id) : null }
+    return { rows: page, next_cursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null }
   }
 
   async close(): Promise<void> {

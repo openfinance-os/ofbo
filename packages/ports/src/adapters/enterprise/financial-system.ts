@@ -3,7 +3,7 @@ import type { FinancialSystemPort } from '../../interfaces.js'
 /**
  * P9 — Financial management system enterprise adapter (pre-staged per ADR 0024, rung ③).
  *
- * BOUNDARY (ADR 0024 Decision B): this adapter is invoice-EXECUTION transport only. It hands
+ * BOUNDARY (ADR 0024 Decision B): this adapter is financial-EXECUTION transport only. It hands
  * the bank's ERP/AR system counterparty registrations + ALREADY-RECONCILED invoice
  * instructions and reads settlement status back. The regulated reconcile-before-invoice
  * pipeline — variance breaks, the 30-day Nebras dispute window, four-eyes invoice runs,
@@ -11,7 +11,7 @@ import type { FinancialSystemPort } from '../../interfaces.js'
  * here. (This is exactly why Kong Konnect billing must not replace P9.)
  *
  * Implements EXACTLY the P9 port contract (`registerCounterparty`, `issueInvoiceInstructions`,
- * `getSettlementStatus`) — nothing more. Transport injectable; fail-closed when unconfigured — tests inject a fake transport, exercising
+ * `getSettlementStatus`, `postJournalInstructions`) — nothing more. Transport injectable; fail-closed when unconfigured — tests inject a fake transport, exercising
  * the real call→parse path with no backend
  * (guardrail 4 / rung ②).
  */
@@ -38,6 +38,9 @@ export class FinancialSystemError extends Error {
 
 const SETTLEMENT_STATUSES = ['instructed', 'issued', 'settled', 'overdue', 'credit_noted'] as const
 type SettlementStatus = (typeof SETTLEMENT_STATUSES)[number]
+/** BILL-16 — validated on the way in, so an unknown vendor status fails rather than being trusted. */
+const PAYABLE_STATUSES = ['dispatched', 'mandate_active', 'presented', 'collected', 'rejected'] as const
+type PayableDispatchStatus = (typeof PAYABLE_STATUSES)[number]
 
 export function createFinancialSystemAdapter(config: FinancialSystemConfig = {}): FinancialSystemPort {
   // FAIL-CLOSED: no silent fake under the enterprise profile — base URL + token are mandatory.
@@ -74,9 +77,90 @@ export function createFinancialSystemAdapter(config: FinancialSystemConfig = {})
       const body = (await res.json()) as { invoice_status?: string }
       const status = body.invoice_status
       if (!status || !SETTLEMENT_STATUSES.includes(status as SettlementStatus)) {
-        throw new FinancialSystemError(0, false, `financial-system returned an unknown invoice_status: ${String(status)}`)
+        // Same rule as the two payable methods below, and this is the sibling that was left on the
+        // old side of it: a vendor value interpolated into a thrown message can reach
+        // audit_high_sensitivity, which is INSERT-only with a five-year floor and no deletion path.
+        // No caller routes this method's error to the audit sink TODAY — the exposure is latent,
+        // not live — but a control that holds only while nobody wires up the obvious caller is not
+        // a control. The ref is ours and correlates the failure without quoting the vendor.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned an invoice_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message can reach an INSERT-only audit trail'
+        )
       }
       return { invoice_status: status as SettlementStatus }
+    },
+    async postJournalInstructions(batch, trace) {
+      const res = await call('/journal-batches', trace, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(batch)
+      })
+      const body = (await res.json()) as { accepted?: unknown; journal_batch_ref?: unknown }
+      if (body.accepted !== true || typeof body.journal_batch_ref !== 'string' || !body.journal_batch_ref.trim()) {
+        throw new FinancialSystemError(0, false, 'financial-system returned an invalid journal-batch acknowledgement')
+      }
+      return { accepted: true, journal_batch_ref: body.journal_batch_ref }
+    },
+    async dispatchPayableInstruction(instruction, trace) {
+      if (!instruction.approval_request_id?.trim()) {
+        // Fail closed BEFORE the network call. An unapproved payable reaching the financial system is
+        // the four-eyes gate being bypassed downstream of where it is enforced, and a request that
+        // never leaves is the only way to be sure it was not honoured.
+        throw new FinancialSystemError(0, false, `payable ${instruction.payable_id} carries no approval reference`)
+      }
+      const res = await call('/payables', trace, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          // The vendor dedupes on this, which is what makes a retried dispatch safe: without it a
+          // transport retry would authorise the same direct debit twice.
+          'idempotency-key': instruction.idempotency_key
+        },
+        body: JSON.stringify(instruction)
+      })
+      const body = (await res.json()) as {
+        accepted?: unknown; dispatch_ref?: unknown; payable_status?: unknown; replayed?: unknown
+      }
+      if (body.accepted !== true || typeof body.dispatch_ref !== 'string' || !body.dispatch_ref.trim()) {
+        throw new FinancialSystemError(0, false, 'financial-system returned an invalid payable acknowledgement')
+      }
+      const status = body.payable_status
+      if (typeof status !== 'string' || !PAYABLE_STATUSES.includes(status as PayableDispatchStatus)) {
+        // The value is NOT echoed. This message is what payable-dispatch writes into
+        // audit_high_sensitivity — INSERT-only, five-year retention, no deletion path — so an
+        // unmodelled vendor response body would land there permanently and unredacted. The
+        // dispatch_ref is ours and correlates the row to the vendor's record without quoting it.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned a payable_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message reaches an INSERT-only audit trail'
+        )
+      }
+      return {
+        accepted: true,
+        dispatch_ref: body.dispatch_ref,
+        payable_status: status as PayableDispatchStatus,
+        replayed: body.replayed === true
+      }
+    },
+    async getPayableStatus(dispatch_ref, trace) {
+      const res = await call(`/payables/${encodeURIComponent(dispatch_ref)}/status`, trace)
+      const body = (await res.json()) as { payable_status?: unknown }
+      const status = body.payable_status
+      if (typeof status !== 'string' || !PAYABLE_STATUSES.includes(status as PayableDispatchStatus)) {
+        // The value is NOT echoed. This message is what payable-dispatch writes into
+        // audit_high_sensitivity — INSERT-only, five-year retention, no deletion path — so an
+        // unmodelled vendor response body would land there permanently and unredacted. The
+        // dispatch_ref is ours and correlates the row to the vendor's record without quoting it.
+        throw new FinancialSystemError(
+          0, false,
+          'financial-system returned a payable_status outside the modelled set; the vendor value is '
+          + 'deliberately not echoed because this message reaches an INSERT-only audit trail'
+        )
+      }
+      return { payable_status: status as PayableDispatchStatus }
     }
   }
 }

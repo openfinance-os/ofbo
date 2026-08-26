@@ -3,6 +3,7 @@ import type { StoredTppCounterparty, TppCounterpartyListQuery, TppCounterpartyPa
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
 import type { HighClassAuditSink } from '../high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BACKOFFICE-71 — consuming-TPP registry + Trust Framework Directory sync. The
@@ -127,10 +128,10 @@ export class TppRegistryService {
         event_type: 'tpp_unbilled_traffic_alert',
         acting_principal: 'system:tpp-traffic-monitor',
         acting_persona: 'system',
-        scope_used: 'billing:read',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: { unbilled_count: unbilled.length, organisation_ids: unbilled },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
     return { unbilled }
@@ -138,77 +139,9 @@ export class TppRegistryService {
 }
 
 /** No-database default (tests / local dev). Mirrors the store's sync classification. */
-export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
-  private readonly rows = new Map<string, StoredTppCounterparty>()
-  async syncDirectory(
-    participants: { organisation_id: string; legal_name: string; registration_number?: string | null; directory_contacts?: unknown[] }[],
-    _traceId: string
-  ): Promise<DirectorySyncResult> {
-    const added: string[] = []
-    const changed: string[] = []
-    const present = new Set(participants.map((p) => p.organisation_id))
-    for (const p of participants) {
-      const existing = this.rows.get(p.organisation_id)
-      if (!existing) {
-        added.push(p.organisation_id)
-        this.rows.set(p.organisation_id, {
-          organisation_id: p.organisation_id,
-          legal_name: p.legal_name,
-          registration_number: p.registration_number ?? null,
-          directory_contacts: p.directory_contacts ?? [],
-          directory_synced_at: new Date().toISOString(),
-          production_status: 'directory_only',
-          first_traffic_at: null,
-          registration_state: 'unregistered',
-          financial_system_ref: null,
-          unbilled_traffic: false,
-          mtd_fee_accrual: null,
-          channel: 'external_tpp_aas',
-          created_at: new Date().toISOString()
-        })
-      } else {
-        if (existing.legal_name !== p.legal_name) changed.push(p.organisation_id)
-        existing.legal_name = p.legal_name
-        existing.registration_number = p.registration_number ?? null
-        existing.directory_contacts = p.directory_contacts ?? []
-        existing.directory_synced_at = new Date().toISOString()
-        if (existing.production_status === 'decommissioned') existing.production_status = 'directory_only'
-      }
-    }
-    const decommissioned: string[] = []
-    for (const row of this.rows.values()) {
-      if (!present.has(row.organisation_id) && row.production_status !== 'decommissioned') {
-        row.production_status = 'decommissioned'
-        decommissioned.push(row.organisation_id)
-      }
-    }
-    return { synced: participants.length, added, changed, decommissioned }
-  }
-  async registerFinancialSystem(organisationId: string, financialSystemRef: string): Promise<StoredTppCounterparty | null> {
-    const row = this.rows.get(organisationId)
-    if (!row) return null
-    row.registration_state = 'registered'
-    row.financial_system_ref = financialSystemRef
-    row.unbilled_traffic = false
-    return row
-  }
-  async observeTraffic(organisationId: string): Promise<StoredTppCounterparty | null> {
-    const row = this.rows.get(organisationId)
-    if (!row) return null
-    row.production_status = 'active_traffic'
-    row.first_traffic_at = row.first_traffic_at ?? new Date().toISOString()
-    row.unbilled_traffic = row.registration_state !== 'registered'
-    return row
-  }
-  async get(organisationId: string): Promise<StoredTppCounterparty | null> {
-    return this.rows.get(organisationId) ?? null
-  }
-  async list(query: TppCounterpartyListQuery = {}): Promise<TppCounterpartyPage> {
-    let rows = [...this.rows.values()]
-    if (query.production_status) rows = rows.filter((r) => r.production_status === query.production_status)
-    if (query.registration_state) rows = rows.filter((r) => r.registration_state === query.registration_state)
-    if (query.unbilled_traffic !== undefined) rows = rows.filter((r) => r.unbilled_traffic === query.unbilled_traffic)
-    rows.sort((a, b) => a.organisation_id.localeCompare(b.organisation_id))
-    return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
-  }
-}
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/tpp-billing.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryTppCounterpartyStore
+} from '../../memory/tpp-billing.js'

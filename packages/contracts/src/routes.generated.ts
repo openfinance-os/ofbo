@@ -347,6 +347,27 @@ export const ROUTES: readonly Route[] = [
   },
   {
     "method": "get",
+    "path": "/back-office/str-drafts",
+    "tag": "reports",
+    "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/str-drafts/{str_draft_id}",
+    "tag": "reports",
+    "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/str-drafts/{str_draft_id}:submit-to-workflow",
+    "tag": "reports",
+    "scope": "compliance:reports:generate",
+    "fourEyes": true
+  },
+  {
+    "method": "get",
     "path": "/back-office/lfi-reports",
     "tag": "reports",
     "scope": "compliance:reports:read",
@@ -476,6 +497,76 @@ export const ROUTES: readonly Route[] = [
     "path": "/back-office/lineage/{table_name}",
     "tag": "audit",
     "scope": "compliance:reports:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/billing/console",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/profitability:simulate",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/exports:cbuae-fee-review",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/billing/export",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/tpp-cost-documents",
+    "tag": "tpp-billing",
+    "scope": "billing:write",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/tpp-cost-documents/{document_id}:reconcile",
+    "tag": "tpp-billing",
+    "scope": "finance:reconciliation:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/billing/cost-periods/{period}",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
+    "fourEyes": false
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/cost-periods/{period}:close",
+    "tag": "tpp-billing",
+    "scope": "finance:reconciliation:write",
+    "fourEyes": true
+  },
+  {
+    "method": "post",
+    "path": "/back-office/billing/payables/{payable_id}:dispatch",
+    "tag": "tpp-billing",
+    "scope": "finance:reconciliation:write",
+    "fourEyes": false
+  },
+  {
+    "method": "get",
+    "path": "/back-office/billing/tpp-cost-export",
+    "tag": "tpp-billing",
+    "scope": "billing:read",
     "fourEyes": false
   },
   {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAdapter } from '@ofbo/ports'
-import { InMemoryAuthAuditSink } from '../src/auth.js'
+import { InMemoryAuthAuditSink, type Principal } from '../src/auth.js'
 import { mintScopes } from '../src/auth.js'
 import { ApprovalsService, InMemoryApprovalStore } from '../src/approvals/service.js'
 import { addBusinessHours } from '../src/business-hours.js'
@@ -248,6 +248,60 @@ describe('BACKOFFICE-44 — review-driven hardening', () => {
   })
 })
 
+describe('four-eyes: the initiator ≠ approver check compares IDENTITIES, not strings', () => {
+  /**
+   * The gap this closes: payable-close.ts and tpp-cost-document.ts each normalised principals
+   * before comparing, on the stated grounds that a raw `===` is the cheapest way to defeat
+   * four-eyes — while ApprovalsService, the primitive EVERY gated operation inherits, still
+   * compared raw. The control was asserted in two features and absent from the thing they extend.
+   *
+   * Driven against the service rather than the HTTP route on purpose: over HTTP the subject comes
+   * from the verified token, so a route test cannot vary its spelling and would pass either way.
+   */
+  const SAME_HUMAN = ['Finance.Analyst@bank', '  finance.analyst@BANK  ', 'FINANCE.ANALYST@bank']
+
+  const asSubject = (subject: string) =>
+    ({ subject, persona: 'finance-analyst', scopes: ['finance:reconciliation:write'] }) as Principal
+
+  const svcWith = (executed: unknown[]) =>
+    new ApprovalsService(new InMemoryAuthAuditSink(), {
+      operations: {
+        demo_echo: {
+          initiatorScope: 'finance:reconciliation:write',
+          approverScope: 'finance:reconciliation:write',
+          execute: async (payload) => { executed.push(payload); return {} }
+        }
+      }
+    })
+
+  for (const respelling of SAME_HUMAN.slice(1)) {
+    it(`refuses self-approval when the approver re-spells their subject as ${JSON.stringify(respelling)}`, async () => {
+      const executed: unknown[] = []
+      const svc = svcWith(executed)
+      const r = await svc.requestApproval(
+        asSubject(SAME_HUMAN[0]!), { operation_type: 'demo_echo', operation_payload: {} }, 'trace-1'
+      )
+
+      await expect(svc.approve(asSubject(respelling), r.approval_request_id, 'trace-2'))
+        .rejects.toMatchObject({ code: 'BACKOFFICE.SELF_APPROVAL' })
+
+      // A refused four-eyes check that still runs the operation is no check at all.
+      expect(executed).toHaveLength(0)
+    })
+  }
+
+  it('still admits a genuinely different second principal — the check must not refuse everyone', async () => {
+    const executed: unknown[] = []
+    const svc = svcWith(executed)
+    const r = await svc.requestApproval(
+      asSubject(SAME_HUMAN[0]!), { operation_type: 'demo_echo', operation_payload: {} }, 'trace-1'
+    )
+    const approved = await svc.approve(asSubject('other.analyst@bank'), r.approval_request_id, 'trace-2')
+    expect(approved.state).toBe('approved')
+    expect(executed).toHaveLength(1)
+  })
+})
+
 describe('business-hours clock (adopting-bank default: clocks pause weekends)', () => {
   it('adds plain hours within a weekday', () => {
     const wed = new Date('2026-06-10T08:00:00Z')
@@ -257,5 +311,79 @@ describe('business-hours clock (adopting-bank default: clocks pause weekends)', 
     const friEvening = new Date('2026-06-12T23:30:00Z') // Friday
     const out = addBusinessHours(friEvening, 2)
     expect([1].includes(out.getUTCDay())).toBe(true) // lands on Monday
+  })
+})
+
+/**
+ * Raised as FAIL 5 by the hard-stop reviewer on PR #323, against `service.ts:241`.
+ *
+ * `approve()` read the record, checked it was `pending`, ran the gated operation, and only THEN
+ * persisted `approved` — with `store.update` setting `state` unconditionally rather than
+ * conditioning on the row still being pending. Two approvers acting on one pending request can
+ * both pass every check before either write lands, so both execute.
+ *
+ * That is the four-eyes gate failing to gate. For `billing.tpp_cost.period_close` it closes a
+ * period twice; for any money-moving gated operation it moves the money twice. The reviewer was
+ * right that the ordering predates BILL-16 — it is fixed here because migration 0042 made it
+ * load-bearing and because this PR is where it was found.
+ */
+describe('BILL-16 — the approval gate holds under concurrency', () => {
+  it('executes a gated operation ONCE when two approvers race on one pending request', async () => {
+    let executions = 0
+    // Held open so BOTH approvers get past every check before either finishes. Without a
+    // compare-and-swap that is precisely the window in which both execute.
+    let releaseExecute: () => void = () => {}
+    const executeGate = new Promise<void>((resolve) => { releaseExecute = resolve })
+
+    const store = new InMemoryApprovalStore()
+    const service = new ApprovalsService({ record: async () => {} } as never, {
+      store,
+      operations: {
+        demo_race: {
+          initiatorScope: 'finance:reconciliation:write',
+          approverScope: 'platform:operations:write',
+          execute: async () => {
+            executions += 1
+            await executeGate
+            return { ok: true }
+          }
+        }
+      }
+    })
+
+    const initiator = {
+      subject: 'demo:initiator@bank', persona: 'finance-analyst',
+      scopes: ['finance:reconciliation:write'], bankId: '11111111-1111-4111-8111-111111111111'
+    } as Principal
+    const approverOf = (subject: string) => ({
+      subject, persona: 'platform-operations',
+      scopes: ['platform:operations:write'], bankId: initiator.bankId
+    }) as Principal
+
+    const created = await service.requestApproval(
+      initiator,
+      { operation_type: 'demo_race', operation_payload: { period: '2026-06' } },
+      'trace-race'
+    )
+
+    const both = Promise.allSettled([
+      service.approve(approverOf('demo:approver-one@bank'), created.approval_request_id, 'trace-a'),
+      service.approve(approverOf('demo:approver-two@bank'), created.approval_request_id, 'trace-b')
+    ])
+    // Both approvals are now past their checks; let the operation finish for whoever claimed it.
+    await new Promise((r) => setTimeout(r, 10))
+    releaseExecute()
+    const results = await both
+
+    expect(executions).toBe(1)
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    const loser = results.find((r) => r.status === 'rejected') as PromiseRejectedResult
+    expect(loser).toBeDefined()
+    expect(String(loser.reason?.code ?? loser.reason)).toContain('APPROVAL_NOT_PENDING')
+
+    // And the row is approved exactly once, by the approver that actually won.
+    const stored = await store.get(created.approval_request_id)
+    expect(stored?.state).toBe('approved')
+    expect(['demo:approver-one@bank', 'demo:approver-two@bank']).toContain(stored?.approver)
   })
 })

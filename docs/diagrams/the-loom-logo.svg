@@ -1,0 +1,40 @@
+<svg id="svg-logo" viewBox="0 0 620 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t-logo d-logo" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t-logo">The Loom — logo</title>
+<desc id="d-logo">A logo for The Loom: a rounded tile containing four dark vertical warp threads with a single violet weft thread woven over and under them, paired with the wordmark The Loom and a tagline. Shown at large size, at small sizes, and reversed on a dark tile.</desc>
+<defs>
+  <g id="loommark">
+    <rect x="3" y="3" width="90" height="90" rx="20" fill="#ffffff" stroke="#e2e0d8" stroke-width="2"/>
+    <g stroke-linecap="round" fill="none">
+      <line x1="30" y1="22" x2="30" y2="74" stroke="#2c2c2a" stroke-width="5"/>
+      <line x1="64" y1="22" x2="64" y2="74" stroke="#2c2c2a" stroke-width="5"/>
+      <path d="M14 48 C24 32 40 32 48 48 C56 64 72 64 82 48" stroke="#7F77DD" stroke-width="5"/>
+      <line x1="47" y1="22" x2="47" y2="74" stroke="#2c2c2a" stroke-width="5"/>
+      <line x1="81" y1="22" x2="81" y2="74" stroke="#2c2c2a" stroke-width="5"/>
+    </g>
+  </g>
+  <g id="loommark-rev">
+    <rect x="3" y="3" width="90" height="90" rx="20" fill="#2c2c2a"/>
+    <g stroke-linecap="round" fill="none">
+      <line x1="30" y1="22" x2="30" y2="74" stroke="#f4f2ec" stroke-width="5"/>
+      <line x1="64" y1="22" x2="64" y2="74" stroke="#f4f2ec" stroke-width="5"/>
+      <path d="M14 48 C24 32 40 32 48 48 C56 64 72 64 82 48" stroke="#a79ef0" stroke-width="5"/>
+      <line x1="47" y1="22" x2="47" y2="74" stroke="#f4f2ec" stroke-width="5"/>
+      <line x1="81" y1="22" x2="81" y2="74" stroke="#f4f2ec" stroke-width="5"/>
+    </g>
+  </g>
+</defs>
+<use href="#loommark" x="0" y="0" transform="translate(28,28)"/>
+<text x="150" y="78" fill="#2c2c2a" font-size="40"><tspan fill="#8a8881" font-weight="400">The </tspan><tspan font-weight="700">Loom</tspan></text>
+<text x="152" y="104" fill="#5f5e5a" font-size="12.5">build, woven for the regulated entity</text>
+<text x="152" y="122" fill="#9a988f" font-size="10" font-family="ui-monospace,monospace">discovery + delivery harnesses · always-on controls · the entity's pattern</text>
+<line x1="28" y1="168" x2="592" y2="168" stroke="#ece9e0"/>
+<text x="28" y="192" fill="#5f5e5a" font-size="10" font-weight="700">THE MARK — holds up small</text>
+<use href="#loommark" transform="translate(40,206) scale(0.52)"/>
+<use href="#loommark" transform="translate(120,210) scale(0.36)"/>
+<use href="#loommark" transform="translate(180,214) scale(0.24)"/>
+<text x="40" y="284" fill="#9a988f" font-size="9" font-family="ui-monospace,monospace">50px · 34px · 22px</text>
+<text x="360" y="192" fill="#5f5e5a" font-size="10" font-weight="700">REVERSED</text>
+<rect x="360" y="200" width="232" height="76" rx="12" fill="#2c2c2a"/>
+<use href="#loommark-rev" transform="translate(376,212) scale(0.56)"/>
+<text x="430" y="246" fill="#f4f2ec" font-size="24"><tspan fill="#b9b3e8" font-weight="400">The </tspan><tspan font-weight="700">Loom</tspan></text>
+</svg>

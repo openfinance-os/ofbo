@@ -40,7 +40,8 @@ const PAYLOADS: Record<string, Record<string, unknown>> = {
   'disputes.initiate_refund': { dispute_id: PII.disputeId, refund_amount: { amount: 145000, currency: 'AED' }, originating_consent_id: PII.originatingConsentId, initiated_by: PII.initiatedBy },
   'consents.bulk_revoke': { psu_identifier_type: 'bank_customer_id', psu_identifier: PII.psuId, reason_code: 'CLIENT_INSTRUCTION', initiated_by: PII.initiatedBy, emirates_id: PII.emiratesId, iban: PII.iban },
   'consents.fraud_revoke': { consent_id: PII.consentId, case_context: PII.caseContext, initiated_by: PII.initiatedBy },
-  'reconciliation.break_reopen': { break_id: PII.breakId, justification: PII.justification, initiated_by: PII.initiatedBy }
+  'reconciliation.break_reopen': { break_id: PII.breakId, justification: PII.justification, initiated_by: PII.initiatedBy },
+  'compliance.str_handoff': { str_draft_id: 'str-LEAK', source_consent_id: PII.consentId, case_context: PII.caseContext, initiated_by: PII.initiatedBy, trace_id: 't' }
 }
 
 describe('summariseOperation — per-type PII redaction (ADR 0014)', () => {

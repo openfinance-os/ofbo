@@ -12,6 +12,7 @@ import type {
 } from '@ofbo/db'
 import { createHash } from 'node:crypto'
 import type { ApmPort, ItsmPort, NebrasEgressPort, OtelSpan } from '@ofbo/ports'
+import type { AccountingClosePack } from '@ofbo/billing'
 import { redactPii, redactText } from '@ofbo/redaction'
 import type { Principal } from '../auth.js'
 import { assertScope, hasScope, ScopeDeniedError } from '../rbac.js'
@@ -23,6 +24,7 @@ import { computeTppAasMargin, emptyMargin, mergeMargin, type MarginSummary } fro
 import { applyFeeScheduleV1, AED } from './fee-schedule.js'
 import { detectBreaks, type DetectedBreak } from './breaks.js'
 import { DEFAULT_THRESHOLDS, type BreakThreshold } from './thresholds.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../high-class-audit.js'
 
 /**
  * BACKOFFICE-01 — reconciliation run orchestration + read surface. Executes the
@@ -61,6 +63,11 @@ export interface ReconciliationBreakStore {
 /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (create + lineage). */
 export interface MonthlyReportStore {
   create(input: ComplianceReportCreateInput, traceId: string): Promise<StoredComplianceReport>
+}
+
+/** BILL-07 — immutable, balanced banking accounting evidence for the signed month close. */
+export interface MonthlyAccountingClosePackReader {
+  accountingClosePack(period: string): Promise<AccountingClosePack | null>
 }
 
 export const RECON_WRITE_SCOPE = 'finance:reconciliation:write'
@@ -185,6 +192,8 @@ export interface ReconciliationDeps {
   apm?: Pick<ApmPort, 'exportSpans'>
   /** BACKOFFICE-06 — compliance_report sink for the monthly sign-off (omit to disable). */
   reports?: MonthlyReportStore
+  /** BILL-07 — banking journal/VAT/settlement close evidence (insurance is out of scope). */
+  accountingClose?: MonthlyAccountingClosePackReader
   now?: () => Date
 }
 
@@ -218,6 +227,7 @@ export class ReconciliationService {
   private readonly egress?: Pick<NebrasEgressPort, 'createDisputeCase'>
   private readonly apm?: Pick<ApmPort, 'exportSpans'>
   private readonly reports?: MonthlyReportStore
+  private readonly accountingClose?: MonthlyAccountingClosePackReader
   private readonly now: () => Date
 
   constructor(deps: ReconciliationDeps) {
@@ -232,6 +242,7 @@ export class ReconciliationService {
     this.egress = deps.egress
     this.apm = deps.apm
     this.reports = deps.reports
+    this.accountingClose = deps.accountingClose
     this.now = deps.now ?? (() => new Date())
   }
 
@@ -275,7 +286,7 @@ export class ReconciliationService {
         event_type: 'reconciliation_run_completed',
         acting_principal: RUN_PRINCIPAL,
         acting_persona: 'system',
-        scope_used: 'reconciliation:run',
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: {
           run_id: runId,
@@ -287,7 +298,7 @@ export class ReconciliationService {
           line_count_disputed: result.line_count_disputed,
           tpp_aas_margin: margin.total_margin
         },
-        response_status: 200
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
     }
 
@@ -299,6 +310,59 @@ export class ReconciliationService {
     if (created) this.emitRunSpans(runId, runType, result, traceId, spanStart, margin.total_margin)
 
     return { run, created, result, breaks, margin }
+  }
+
+  /**
+   * Record a deterministic result prepared by another independently-rated source.
+   * BILL-03 uses this seam for Collection Memo diffs so those fee variances enter
+   * the same E1 run log, thresholding, break queue, ITSM routing, audit and OTel
+   * workflow as the daily three-way engine without re-pricing the billing facts.
+   */
+  async recordPreparedResult(
+    traceId: string,
+    input: { runId: string; runType: string; window: ReconWindow; result: ReconResult }
+  ): Promise<ReconRunResult> {
+    const spanStart = this.now().getTime()
+    const margin = emptyMargin()
+    const { run, created } = await this.store.create(
+      {
+        run_id: input.runId,
+        run_type: input.runType,
+        status: 'completed',
+        window_start: input.window.start,
+        window_end: input.window.end,
+        line_count_total: input.result.line_count_total,
+        line_count_matched: input.result.line_count_matched,
+        line_count_unmatched: input.result.line_count_unmatched,
+        line_count_disputed: input.result.line_count_disputed
+      },
+      traceId
+    )
+
+    if (created) {
+      await this.audit.emit({
+        event_type: 'reconciliation_run_completed',
+        acting_principal: RUN_PRINCIPAL,
+        acting_persona: 'system',
+        scope_used: SYSTEM_ACTOR_SCOPE,
+        request_trace_id: traceId,
+        request_body: {
+          run_id: input.runId,
+          run_type: input.runType,
+          window: input.window,
+          line_count_total: input.result.line_count_total,
+          line_count_matched: input.result.line_count_matched,
+          line_count_unmatched: input.result.line_count_unmatched,
+          line_count_disputed: input.result.line_count_disputed,
+          prepared_result: true
+        },
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
+      })
+    }
+
+    const breaks = created ? await this.detectAndRecordBreaks(input.runId, input.result, traceId) : []
+    if (created) this.emitRunSpans(input.runId, input.runType, input.result, traceId, spanStart, 0)
+    return { run, created, result: input.result, breaks, margin }
   }
 
   /**
@@ -438,7 +502,7 @@ export class ReconciliationService {
       event_type: 'reconciliation_breaks_detected',
       acting_principal: RUN_PRINCIPAL,
       acting_persona: 'system',
-      scope_used: 'reconciliation:run',
+      scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
       request_body: {
         run_id: runId,
@@ -446,7 +510,7 @@ export class ReconciliationService {
         finance_breaks: byTeam.get('finance') ?? 0,
         operations_breaks: byTeam.get('operations') ?? 0
       },
-      response_status: 200
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS
     })
     return stored
   }
@@ -789,7 +853,17 @@ export class ReconciliationService {
   async executeMonthlySignoff(period: string, attestedBy: string, attestedByPersona: string, traceId: string): Promise<StoredComplianceReport> {
     if (!this.reports || !this.breakStore) throw new BreakWorkflowError('BACKOFFICE.SIGNOFF_UNAVAILABLE', 'Monthly sign-off is not configured.', 404)
     const prefix = `recon-${period}-`
-    const [runs, byStatus] = await Promise.all([this.store.listForPrefix(prefix), this.breakStore.summarizeByStatus(prefix)])
+    const [runs, byStatus, accountingClose] = await Promise.all([
+      this.store.listForPrefix(prefix),
+      this.breakStore.summarizeByStatus(prefix),
+      this.accountingClose?.accountingClosePack(period) ?? Promise.resolve(null)
+    ])
+    if (this.accountingClose && !accountingClose) {
+      throw new BreakWorkflowError('BACKOFFICE.ACCOUNTING_CLOSE_NOT_READY', `No accounting close pack is available for ${period}.`, 409)
+    }
+    if (accountingClose && (accountingClose.period !== period || !accountingClose.balanced || accountingClose.debitFils !== accountingClose.creditFils)) {
+      throw new BreakWorkflowError('BACKOFFICE.ACCOUNTING_CLOSE_INVALID', `The accounting close pack for ${period} is not balanced and signable.`, 409)
+    }
     const sum = (keys: string[]) => keys.reduce((n, k) => n + (byStatus[k] ?? 0), 0)
     // BACKOFFICE-07 — TPP-aaS margin for the month: re-derive each run's sources
     // (deterministic) and accumulate the per-fintech / per-product-family margin.
@@ -809,7 +883,8 @@ export class ReconciliationService {
         by_status: byStatus
       },
       open_nebras_disputes: byStatus['escalated_nebras_dispute'] ?? 0,
-      tpp_aas_margin: margin
+      tpp_aas_margin: margin,
+      accounting_close: accountingClose
     }
     const start = `${period}-01T00:00:00.000Z`
     const end = this.now().toISOString()
@@ -838,7 +913,7 @@ export class ReconciliationService {
       acting_persona: attestedByPersona,
       scope_used: RECON_WRITE_SCOPE,
       request_trace_id: traceId,
-      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, integrity_hash, four_eyes_approved: true },
+      request_body: { report_id: report.id, period, run_count: runs.length, break_total: summary.breaks.total, accounting_batch_id: accountingClose?.batchId ?? null, integrity_hash, four_eyes_approved: true },
       response_status: 200
     })
     return report
@@ -918,151 +993,12 @@ export class ReconciliationService {
   }
 }
 
-/** No-database default (tests / local dev). */
-export class InMemoryReconciliationLogStore implements ReconciliationLogStore {
-  private readonly rows: StoredReconciliationRun[] = []
-  async create(input: ReconciliationRunCreateInput): Promise<{ run: StoredReconciliationRun; created: boolean }> {
-    const existing = this.rows.find((r) => r.run_id === input.run_id)
-    if (existing) return { run: existing, created: false }
-    const run: StoredReconciliationRun = {
-      id: crypto.randomUUID(),
-      run_id: input.run_id,
-      run_type: input.run_type,
-      status: input.status,
-      window_start: input.window_start,
-      window_end: input.window_end,
-      line_count_total: input.line_count_total ?? null,
-      line_count_matched: input.line_count_matched ?? null,
-      line_count_unmatched: input.line_count_unmatched ?? null,
-      line_count_disputed: input.line_count_disputed ?? null,
-      failure_reason: input.failure_reason ?? null,
-      created_at: new Date().toISOString()
-    }
-    this.rows.unshift(run)
-    return { run, created: true }
-  }
-  async get(runId: string): Promise<StoredReconciliationRun | null> {
-    return this.rows.find((r) => r.run_id === runId) ?? null
-  }
-  async countForPrefix(runIdPrefix: string): Promise<number> {
-    return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).length
-  }
-  async listForPrefix(runIdPrefix: string): Promise<StoredReconciliationRun[]> {
-    return this.rows.filter((r) => r.run_id.startsWith(runIdPrefix)).sort((a, b) => a.window_start.localeCompare(b.window_start))
-  }
-  async listForRange(start: string, end: string): Promise<StoredReconciliationRun[]> {
-    return this.rows.filter((r) => r.created_at >= start && r.created_at < end).sort((a, b) => a.created_at.localeCompare(b.created_at))
-  }
-  async list(query: ReconciliationRunListQuery = {}): Promise<ReconciliationRunPage> {
-    let rows = this.rows
-    if (query.run_type) rows = rows.filter((r) => r.run_type === query.run_type)
-    if (query.status) rows = rows.filter((r) => r.status === query.status)
-    return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
-  }
-}
-
-/** No-database default (tests / local dev). */
-export class InMemoryReconciliationBreakStore implements ReconciliationBreakStore {
-  private readonly rows: StoredReconciliationBreak[] = []
-  async createMany(inputs: ReconciliationBreakCreateInput[]): Promise<StoredReconciliationBreak[]> {
-    const now = new Date().toISOString()
-    const created = inputs.map((input) => ({
-      id: crypto.randomUUID(),
-      run_id: input.run_id,
-      client_id: input.client_id ?? null,
-      channel: 'internal_retail',
-      line_type: input.line_type,
-      status: 'flagged',
-      variance_amount: input.variance_amount ?? null,
-      variance_count: input.variance_count ?? null,
-      source_a_ref: input.source_a_ref,
-      source_b_ref: input.source_b_ref,
-      source_c_ref: input.source_c_ref ?? null,
-      assigned_to: null,
-      sla_clock_started_at: now,
-      resolution_outcome: null,
-      resolution_note: null,
-      nebras_dispute_case_id: null,
-      reopened_count: 0,
-      resolved_at: null,
-      created_at: now
-    }))
-    this.rows.unshift(...created)
-    return created
-  }
-  async countForRun(runId: string): Promise<number> {
-    return this.rows.filter((r) => r.run_id === runId).length
-  }
-  async get(id: string): Promise<StoredReconciliationBreak | null> {
-    return this.rows.find((r) => r.id === id) ?? null
-  }
-  async claim(id: string, assignedTo: string): Promise<StoredReconciliationBreak | null> {
-    const row = this.rows.find((r) => r.id === id)
-    if (!row || row.status !== 'flagged') return null
-    row.status = 'assigned'
-    row.assigned_to = assignedTo
-    row.sla_clock_started_at = new Date().toISOString()
-    return row
-  }
-  async resolve(id: string, outcome: string, note: string): Promise<StoredReconciliationBreak | null> {
-    const row = this.rows.find((r) => r.id === id)
-    if (!row || !(row.status === 'flagged' || row.status === 'assigned')) return null
-    row.status = outcome
-    row.resolution_outcome = outcome
-    row.resolution_note = note
-    row.resolved_at = new Date().toISOString()
-    return row
-  }
-  async reopen(id: string): Promise<StoredReconciliationBreak | null> {
-    const row = this.rows.find((r) => r.id === id)
-    const terminal = new Set(['resolved_matched', 'resolved_internal_correction', 'escalated_nebras_dispute', 'escalated_fintech_billing'])
-    if (!row || !terminal.has(row.status)) return null
-    row.status = 'flagged'
-    row.assigned_to = null
-    row.resolution_outcome = null
-    row.resolution_note = null
-    row.sla_clock_started_at = null
-    row.resolved_at = null
-    row.reopened_count += 1
-    return row
-  }
-  async escalateNebras(id: string, nebrasCaseId: string): Promise<StoredReconciliationBreak | null> {
-    const row = this.rows.find((r) => r.id === id)
-    if (!row || !(row.status === 'flagged' || row.status === 'assigned')) return null
-    row.status = 'escalated_nebras_dispute'
-    row.nebras_dispute_case_id = nebrasCaseId
-    return row
-  }
-  async summarizeByStatus(runIdPrefix: string): Promise<Record<string, number>> {
-    const out: Record<string, number> = {}
-    for (const r of this.rows) if (r.run_id.startsWith(runIdPrefix)) out[r.status] = (out[r.status] ?? 0) + 1
-    return out
-  }
-  async listForRange(start: string, end: string): Promise<StoredReconciliationBreak[]> {
-    return this.rows.filter((r) => r.created_at >= start && r.created_at < end).sort((a, b) => a.created_at.localeCompare(b.created_at))
-  }
-  async list(query: ReconciliationBreakListQuery = {}): Promise<ReconciliationBreakPage> {
-    let rows = this.rows
-    if (query.run_id) rows = rows.filter((r) => r.run_id === query.run_id)
-    if (query.status) rows = rows.filter((r) => r.status === query.status)
-    if (query.line_type) rows = rows.filter((r) => r.line_type === query.line_type)
-    if (query.client_id) rows = rows.filter((r) => r.client_id === query.client_id)
-    return { rows: rows.slice(0, Math.min(Math.max(query.limit ?? 50, 1), 200)), next_cursor: null }
-  }
-}
-
-/**
- * BACKOFFICE-12 — in-memory thresholds for the demo default + tests. Mirrors the
- * Pg store: upsert per fee class, list returns the current overrides (the service
- * overlays them on the engine defaults).
- */
-export class InMemoryReconciliationThresholdStore implements ThresholdStore {
-  private readonly byClass = new Map<string, BreakThreshold>()
-  async list(): Promise<BreakThreshold[]> {
-    return [...this.byClass.values()]
-  }
-  async replaceAll(thresholds: BreakThreshold[], _updatedBy: string, _traceId: string): Promise<BreakThreshold[]> {
-    for (const t of thresholds) this.byClass.set(t.fee_class, { fee_class: t.fee_class, threshold_value: t.threshold_value, unit: t.unit })
-    return [...this.byClass.values()]
-  }
-}
+// CODE-02 — the three in-memory stores that used to live here now sit in
+// services/bff/memory/reconciliation.ts (they are demo-profile production defaults, not test
+// fixtures; see that directory's README). Re-exported so every existing import — including the
+// ~55 test files that pull a service and its store from the same module — is unchanged.
+export {
+  InMemoryReconciliationLogStore,
+  InMemoryReconciliationBreakStore,
+  InMemoryReconciliationThresholdStore
+} from '../../memory/reconciliation.js'

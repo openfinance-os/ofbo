@@ -1,0 +1,58 @@
+<svg id="svg-trace" viewBox="0 0 980 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t-trace d-trace" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t-trace">How the Open Finance Back Office was built — every part traces to a step in the model</title>
+<desc id="d-trace">A mapping from the model to the back office it produced. The discovery harness defined the PRD and OpenAPI contract. The delivery harness built the 20 BFF modules and portal, spec-first, four-eyes, auto-deployed. The regulated-entity brain shaped the conventions, the P1 to P9 ports, the design system and the persona and scope matrix. Continuous assurance keeps it compliant through INSERT-only audit, BCBS 239 lineage, headless monitors and release evidence.</desc>
+<defs><marker id="trace-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#7F77DD"/></marker></defs>
+<style>
+  #svg-trace .ink{fill:#2c2c2a;} #svg-trace .ink2{fill:#5f5e5a;}
+  #svg-trace .mdl{fill:rgba(127,119,221,0.10);stroke:#7F77DD;}
+  #svg-trace .art{fill:#faf9f5;stroke:#d3d1c7;}
+  #svg-trace .e{stroke:#7F77DD;fill:none;stroke-width:1.6;}
+  #svg-trace .lbl{font-weight:700;} #svg-trace .mono{font-family:ui-monospace,monospace;}
+  #svg-trace .h{font-size:8.5px;} #svg-trace .ttl{font-size:10px;font-weight:700;}
+</style>
+<text x="24" y="26" class="ink lbl" font-size="15">How the Open Finance Back Office was built</text>
+<text x="24" y="44" class="ink2" font-size="11">Every part of the architecture traces back to a step in the model — it is the proof, not a separate artifact.</text>
+<text x="24" y="74" class="ink2 lbl mono" font-size="9.5">THE MODEL — how we built it</text>
+<text x="560" y="74" class="ink2 lbl mono" font-size="9.5">THE BACK OFFICE — what it produced</text>
+<g><rect x="24" y="84" width="300" height="78" rx="8" class="mdl"/>
+  <text x="40" y="112" class="ink ttl">① Discovery harness</text>
+  <text x="40" y="130" class="ink2 h">find &amp; frame the problem · Diamond 1</text>
+  <text x="40" y="148" class="ink2 h">→ the agreed problem statement</text></g>
+<g><rect x="560" y="84" width="396" height="78" rx="8" class="art"/>
+  <text x="576" y="112" class="ink ttl mono">PRD + OpenAPI contract</text>
+  <text x="576" y="130" class="ink2 h">BACKOFFICE-01..80 — the spec every line is built to</text>
+  <text x="576" y="148" class="ink2 h">ground truth for behaviour &amp; data</text></g>
+<line class="e" marker-end="url(#trace-ar)" x1="326" y1="123" x2="556" y2="123"/>
+<text x="441" y="117" text-anchor="middle" class="ink2" font-size="8.5">defined →</text>
+<g><rect x="24" y="176" width="300" height="78" rx="8" class="mdl"/>
+  <text x="40" y="204" class="ink ttl">② Delivery harness</text>
+  <text x="40" y="222" class="ink2 h">build it under control · Diamond 2</text>
+  <text x="40" y="240" class="ink2 h">spec-first → gates → deploy</text></g>
+<g><rect x="560" y="176" width="396" height="78" rx="8" class="art"/>
+  <text x="576" y="204" class="ink ttl mono">20 BFF modules + the portal</text>
+  <text x="576" y="222" class="ink2 h">spec-first · four-eyes · auto-deployed to a live demo</text>
+  <text x="576" y="240" class="ink2 h">the running system (apps/ · services/ · packages/)</text></g>
+<line class="e" marker-end="url(#trace-ar)" x1="326" y1="215" x2="556" y2="215"/>
+<text x="441" y="209" text-anchor="middle" class="ink2" font-size="8.5">built →</text>
+<g><rect x="24" y="268" width="300" height="78" rx="8" class="mdl"/>
+  <text x="40" y="296" class="ink ttl">③ Regulated-entity brain</text>
+  <text x="40" y="314" class="ink2 h">conventions &amp; context</text>
+  <text x="40" y="332" class="ink2 h">how this entity builds</text></g>
+<g><rect x="560" y="268" width="396" height="78" rx="8" class="art"/>
+  <text x="576" y="296" class="ink ttl mono">conventions · ports P1–P9 · design system</text>
+  <text x="576" y="314" class="ink2 h">CLAUDE.md · vendor-neutral seams · Stitch · scope matrix</text>
+  <text x="576" y="332" class="ink2 h">the architecture's shape &amp; standards</text></g>
+<line class="e" marker-end="url(#trace-ar)" x1="326" y1="307" x2="556" y2="307"/>
+<text x="441" y="301" text-anchor="middle" class="ink2" font-size="8.5">shaped →</text>
+<g><rect x="24" y="360" width="300" height="78" rx="8" class="mdl"/>
+  <text x="40" y="388" class="ink ttl">④ Continuous assurance</text>
+  <text x="40" y="406" class="ink2 h">agents, on an ongoing basis</text>
+  <text x="40" y="424" class="ink2 h">managed · reviewed · confirmed</text></g>
+<g><rect x="560" y="360" width="396" height="78" rx="8" class="art"/>
+  <text x="576" y="388" class="ink ttl mono">audit · lineage · monitors · evidence</text>
+  <text x="576" y="406" class="ink2 h">INSERT-only audit · BCBS 239 lineage · headless monitors</text>
+  <text x="576" y="424" class="ink2 h">release-evidence bundle — always audit-ready</text></g>
+<line class="e" marker-end="url(#trace-ar)" x1="326" y1="399" x2="556" y2="399"/>
+<text x="441" y="393" text-anchor="middle" class="ink2" font-size="8.5">keeps compliant →</text>
+<text x="24" y="460" class="ink2 mono" font-size="9">Same model, this architecture. Expand the panel below to walk it in full.</text>
+</svg>

@@ -29,7 +29,10 @@ export default {
         nav: ext.nav.surface,
         'on-nav': ext.nav.on,
         'nav-elevated': ext.nav.elevated,
-        'nav-active': ext.nav.active
+        'nav-active': ext.nav.active,
+        // HOST-01 scaffold (ADR 0028) — per-tenant brand accent. The value is a CSS variable set
+        // per `data-tenant` in globals.css, so no raw hex lives in any component (token-only).
+        brand: 'var(--brand-accent)'
       },
       borderRadius: { ...borderRadius },
       spacing: { ...spacing },

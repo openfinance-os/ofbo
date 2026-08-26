@@ -12,9 +12,11 @@
     "seed": "tsx src/seed.ts",
     "lineage:gate": "tsx src/lineage-gate.ts",
     "reset": "tsx src/reset.ts",
-    "seed:demo": "tsx src/seed-demo.ts"
+    "seed:demo": "tsx src/seed-demo.ts",
+    "seed:tenants": "tsx src/seed-tenants.ts"
   },
   "dependencies": {
+    "@ofbo/billing": "workspace:*",
     "pg": "^8.13.1",
     "@ofbo/synthetic-data": "workspace:*",
     "@ofbo/redaction": "workspace:*"

@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from './audit.js'
 import { beginAppTx, beginInternalViewTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 
@@ -61,6 +62,30 @@ export type GovernedReadContext = Pick<GovernedAggregateContext, 'actingPrincipa
   purposeCode?: string
 }
 
+/**
+ * HOST-02 (ADR 0028) — resolve the tenant group a bank belongs to, read as `ofbo_app` under RLS
+ * (a bank sees only its own membership row). Returns `undefined` when the bank is not enrolled in
+ * any group (single-tenant default / legacy) — the caller then runs the bypass unpinned and the
+ * re-scoped policy falls back to the pre-HOST-02 behaviour. When a group IS returned, the governed
+ * bypass is pinned to it so it can never read across a customer boundary.
+ */
+export async function resolveTenantGroup(pool: pg.Pool, bankId: string): Promise<string | undefined> {
+  const c = await pool.connect()
+  try {
+    await c.query(beginAppTx(bankId))
+    const res = await c.query(`SELECT tenant_group_id FROM tenant_group_member WHERE bank_id = $1 LIMIT 1`, [bankId])
+    await c.query('COMMIT')
+    return res.rows[0]?.tenant_group_id as string | undefined
+  } catch {
+    await c.query('ROLLBACK').catch(() => undefined)
+    // The mapping table only exists once migration 0030 is applied; a caller running against an
+    // older schema (or where the read is denied) degrades to the unpinned/legacy path.
+    return undefined
+  } finally {
+    c.release()
+  }
+}
+
 /** True iff `purposeCode` is registered AND approved for this bank (checked as ofbo_app under RLS). */
 export async function isPurposeApproved(pool: pg.Pool, bankId: string, purposeCode: string): Promise<boolean> {
   const c = await pool.connect()
@@ -96,10 +121,14 @@ export async function runGovernedAggregate<T>(
     )
   }
 
+  // HOST-02 (ADR 0028): pin the caller's tenant group so the RLS bypass is scoped to ONE
+  // customer. `undefined` (bank not enrolled in a group) keeps the legacy single-tenant path.
+  const tenantGroupId = await resolveTenantGroup(ctx.pool, ctx.bankId)
+
   const c = await ctx.pool.connect()
   let out: { result: T; rowCount: number }
   try {
-    await c.query(beginInternalViewTx())
+    await c.query(beginInternalViewTx(tenantGroupId))
     out = await queryFn(c)
     await c.query('COMMIT')
   } catch (e) {
@@ -114,10 +143,17 @@ export async function runGovernedAggregate<T>(
     event_type: 'cross_fintech_query',
     acting_principal: ctx.actingPrincipal,
     acting_persona: ctx.actingPersona ?? 'system',
-    scope_used: ctx.scopeUsed ?? ctx.purposeCode,
+    // Falls back to the sentinel, not to the purpose code: a purpose is not a scope, and the
+    // purpose is already carried in request_body below, so the old fallback duplicated it into a
+    // column an auditor resolves against the declared scope inventory.
+    scope_used: ctx.scopeUsed ?? SYSTEM_ACTOR_SCOPE,
     request_trace_id: ctx.traceId,
     request_body: { purpose_code: ctx.purposeCode, row_count: out.rowCount },
-    response_status: 200
+    // Both halves move together. A caller-supplied scope means an HTTP request really was served, so
+    // 200 is a fact; without one there is no response to report, and a hardcoded 200 would fabricate
+    // one next to a scope column that has just admitted there was no principal. Applying the scope
+    // sentinel and leaving the status literal was the convention half-landed in a single file.
+    response_status: ctx.scopeUsed ? 200 : SYSTEM_ACTOR_RESPONSE_STATUS
   })
 
   return out.result
@@ -133,7 +169,8 @@ export const SEED_QUERY_PURPOSES: { purpose_code: string; description: string }[
   { purpose_code: 'risk_monitoring', description: 'Platform-wide risk signals + liability monitor — BACKOFFICE-30' },
   { purpose_code: 'operations_monitoring', description: 'Platform health, certification pipeline, outages, recon SLO — BACKOFFICE-28' },
   { purpose_code: 'compliance_reporting', description: 'Consent volumes, retention posture, dispute/risk backlogs — BACKOFFICE-29' },
-  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' }
+  { purpose_code: 'regulatory_periodic_report', description: 'CBUAE periodic cross-fintech regulatory report generation — BACKOFFICE-23/-35' },
+  { purpose_code: 'billing_cross_tenant_benchmark', description: 'Aggregate-only multi-tenant billing profitability and assurance benchmark — BILL-10' }
 ]
 
 /** Columns written when seeding/registering a query purpose — for BCBS 239 lineage (Q4.5). */

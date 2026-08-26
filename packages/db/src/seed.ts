@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { generateDemoDataset, DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
+import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 
 /**
@@ -15,11 +16,16 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
   try {
     const tpps = [...new Set(ds.billing_lines.map((l) => l.tpp_organisation_id))]
     for (const org of tpps) {
+      // These three carry Alpha Bank's live consent + billing traffic, so they are active,
+      // registered counterparties (not directory-only). Names are real UAE OF providers.
       await pool.query(
-        `INSERT INTO tpp_counterparty (bank_id, channel, organisation_id, legal_name, directory_synced_at)
-         VALUES ($1, 'external_tpp_aas', $2, $3, now())
+        `INSERT INTO tpp_counterparty
+           (bank_id, channel, organisation_id, legal_name, directory_synced_at,
+            production_status, registration_state, first_traffic_at, financial_system_ref)
+         VALUES ($1, 'external_tpp_aas', $2, $3, now(),
+                 'active_traffic', 'registered', now() - interval '90 days', 'fms-' || $2)
          ON CONFLICT (bank_id, organisation_id) DO NOTHING`,
-        [DEMO_BANK_ID, org, `Fictional ${org.replace('org-fictional-', '').replace(/-/g, ' ')}`]
+        [DEMO_BANK_ID, org, tppDisplayName(org)]
       )
     }
     // BACKOFFICE-71: the consuming-TPP registry's write path emits BCBS 239 lineage.
@@ -36,9 +42,9 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
     // (the verbatim scheme tracks) + a resolved historical outage (zero active =
     // "all operational"). Idempotent; the seed emits BCBS 239 lineage for both.
     const certifications: [string, string, string, string, number, number, string][] = [
-      ['LFI', 'Demo Bank (LFI)', 'Sandbox -> Pre-Prod CX -> Prod -> Live-Proving', 'Live-Proving (>=2 TPPs)', 4, 3, 'live_proving'],
-      ['TPP', 'org-fictional-fintech-01', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Live (>=1 LFI)', 4, 4, 'live'],
-      ['TPP', 'org-fictional-fintech-02', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Functional', 4, 2, 'in_progress']
+      ['LFI', 'Alpha Bank (LFI)', 'Sandbox -> Pre-Prod CX -> Prod -> Live-Proving', 'Live-Proving (>=2 TPPs)', 4, 3, 'live_proving'],
+      ['TPP', 'Tarabut Gateway', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Live (>=1 LFI)', 4, 4, 'live'],
+      ['TPP', 'Lean Technologies', 'FAPI RP cert -> Functional -> CX -> Live-Proving', 'Functional', 4, 2, 'in_progress']
     ]
     for (const [role, subject, track, stage, total, done, status] of certifications) {
       await pool.query(
@@ -77,10 +83,15 @@ export async function seedDemoDataset(databaseUrl: string): Promise<void> {
           `INSERT INTO audit_high_sensitivity
              (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
               target_psu_identifier, target_consent_id, request_trace_id, request_body_redacted, response_status)
-           SELECT $1, 'internal_retail', $2, 'seed', 'system', 'seed',
-                  $3, $4, $5, '{}'::jsonb, 200
+           SELECT $1, 'internal_retail', $2, 'seed', 'system', $6,
+                  $3, $4, $5, '{}'::jsonb, $7
            WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $5)`,
-          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId]
+          // The status sentinel as well as the scope one. This row is a raw-SQL seed insert that
+          // issues no HTTP response, so a literal 200 was exactly the fabrication
+          // SYSTEM_ACTOR_RESPONSE_STATUS exists to remove — and CODE-03 applied the scope half here
+          // while leaving the status half untouched immediately beside it.
+          [DEMO_BANK_ID, eventType, psu.bank_customer_id, consent.consent_id, traceId,
+            SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS]
         )
       }
     }

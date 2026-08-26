@@ -34,6 +34,23 @@ export const SCOPE_MATRIX = {
   'platform-super-admin': ['platform:superadmin']
 } as const satisfies Record<string, readonly string[]>
 
+/**
+ * Compare two principal identifiers as IDENTITIES, not as strings.
+ *
+ * One human must not pass as two on a spelling difference. A raw `===` treats `Finance.Analyst`
+ * and `finance.analyst ` as different principals, which is the cheapest possible way to defeat a
+ * four-eyes check — and four-eyes is the control the whole approval primitive exists to provide.
+ *
+ * It lives HERE, beside Principal, rather than in whichever feature first needed it. BILL-14 wrote
+ * a copy for uploader-vs-verifier and BILL-16 wrote another for payable close; the shared
+ * ApprovalsService, which every gated operation depends on, had neither and still compared raw.
+ * Three copies and one gap is how a control ends up asserted in new code while the primitive it
+ * extends does not hold it.
+ */
+export function normalisePrincipal(value: string): string {
+  return value.trim().toLowerCase()
+}
+
 export type Persona = keyof typeof SCOPE_MATRIX
 export const ALL_PERSONAS = Object.keys(SCOPE_MATRIX) as Persona[]
 
@@ -52,6 +69,8 @@ export interface Principal {
    *  the known-persona autocomplete while admitting agent persona ids. */
   persona: Persona | (string & {})
   scopes: string[]
+  /** HOST-01: verified P2 tenant claim. Undefined only in legacy single-tenant deployments. */
+  bankId?: string
   /** ADR 0018 — set when the caller is a registered automation agent (a verified agent
    *  session token, NOT a human OIDC token). Carries the server-verified identity + the
    *  registration's policy so the BFF can re-assert per-(agent_id, session_id) spend-control
@@ -105,12 +124,6 @@ export interface AuthAuditSink {
   record(event: AuthAuditEvent): Promise<void>
 }
 
-export class InMemoryAuthAuditSink implements AuthAuditSink {
-  readonly events: AuthAuditEvent[] = []
-  async record(event: AuthAuditEvent): Promise<void> {
-    this.events.push(event)
-  }
-}
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -207,7 +220,8 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
           session_id: agentClaims.session_id,
           allow_mutations: agentClaims.allow_mutations,
           spend_budget: agentClaims.spend_budget
-        }
+        },
+        ...(agentClaims.bank_id ? { bankId: agentClaims.bank_id } : {})
       })
       await next()
       return
@@ -256,10 +270,16 @@ export function createAuthMiddleware(idp: IdentityProviderPort, audit: AuthAudit
       trace_id: traceId,
       superadmin_marker: scopes.includes('platform:superadmin')
     })
-    c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes })
+    c.set('principal', { subject: claims.subject, persona: claims.persona as Persona, scopes, ...(claims.bank_id ? { bankId: claims.bank_id } : {}) })
     if (scopes.includes('platform:superadmin') && hooks.onSuperAdminSession) {
       await hooks.onSuperAdminSession(claims.subject, token, traceId)
     }
     await next()
   }
 }
+
+// CODE-02 — in-memory store(s) moved to services/bff/memory/auth.ts (demo-profile production
+// defaults, not test fixtures). Re-exported so every existing import is unchanged.
+export {
+  InMemoryAuthAuditSink
+} from '../memory/auth.js'

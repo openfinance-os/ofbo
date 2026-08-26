@@ -12,6 +12,11 @@ data.** Verdicts judge *appearance/layout only* — data binding and behaviour a
 >
 > The prior revision (2026-06-22, UIF-10 gate) is preserved in git history. Its substantive finding
 > stands: **no MAJOR-DRIFT remained**, and the three root causes it tracked were closed or reduced.
+>
+> It also carried a DOCS-01 staleness banner noting that UIF-07b and UIF-09b were marked `done` in
+> `docs/backlog.yaml` while this document still described them as blocked. That is resolved here:
+> both are closed, and the table below says so. The banner is dropped because the condition it
+> warned about no longer holds — not because it was wrong.
 
 ## What replaces the Stitch comparison
 
@@ -45,7 +50,7 @@ each is audited against the design-system components and patterns it composes.
 | Route / component | Composed from | Status | Note |
 |---|---|---|---|
 | `/care` · care-console.tsx | attention rows, event timeline, status pills | **CONFORMANT** | Connected 24-month timeline (UIF-09); investigation module present |
-| `/reconciliation` · recon-console.tsx | stat tiles, register table, outcome panel | **CONFORMANT** | Bespoke outcome panel (UIF-07). Three-source comparison + margin split tracked in UIF-07b |
+| `/reconciliation` · recon-console.tsx | stat tiles, register table, outcome panel | **CONFORMANT** | Bespoke outcome panel (UIF-07); three-source totals + margin-by-fintech + sign-off landed in UIF-07b |
 | `/reconciliation/breaks/[id]` · investigation-detail.tsx | drawer, three-source diff | **AUDITABLE** | Previously `MISSING REF` — un-auditable for want of an external screen. That blocker is gone; audit against the drawer + table patterns |
 | `/approvals` · approvals-portal.tsx | four-eyes pattern, queue rows | **CONFORMANT** | Dual initiator/approver block; `202` + `approval_request`, never inline |
 | `/analytics` · analytics-dashboard.tsx | typed section renderer, gauge, contribution bars, KPI strip | **CONFORMANT** | ADR 0016 typed panels — unaffected by ADR 0026 |

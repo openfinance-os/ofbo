@@ -2,10 +2,11 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono'
 import { matchRoute, ROUTES } from '@ofbo/contracts'
 import type { ApmPort, CareSurfacePort, IdentityProviderPort, NebrasEgressPort, OnboardingHandoverPort } from '@ofbo/ports'
 import { getAdapter, profileFromConfig } from '@ofbo/ports'
+import { HTTPException } from 'hono/http-exception'
 import { errorEnvelope, DOCS_BASE } from './envelope.js'
 import { createAuthMiddleware, InMemoryAuthAuditSink, type AuthAuditSink } from './auth.js'
 import { assertScope, createScopeMiddleware, isDynamicScope, scopeDenialEnvelope, ScopeDeniedError } from './rbac.js'
-import { ApprovalsService, type ApprovalsDeps } from './approvals/service.js'
+import { ApprovalsService, InMemoryApprovalStore, type ApprovalsDeps } from './approvals/service.js'
 import {
   createJustificationMiddleware,
   isServiceAccountSubject,
@@ -98,7 +99,41 @@ import {
 import { reconciliationRoutes } from './reconciliation/routes.js'
 import { TppRegistryService, InMemoryTppCounterpartyStore, type TppCounterpartyStore } from './tpp-billing/service.js'
 import { tppBillingRoutes, tppInvoicingRoutes } from './tpp-billing/routes.js'
-import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader } from './analytics/finance-view.js'
+import {
+  TppCostDocumentIngestService,
+  tppCostDocumentRoutes,
+  type RawDocumentArchive,
+  type TppCostDocumentStore
+} from './billing/tpp-cost-document.js'
+import {
+  TppCostReconcileService,
+  tppCostReconcileRoutes,
+  type LatePaymentSource,
+  type TppCostReconcileStore
+} from './billing/tpp-cost-reconcile.js'
+import {
+  PayableCloseService,
+  makePayableCloseOperation,
+  PAYABLE_CLOSE_OPERATION,
+  type PayableCloseStore
+} from './billing/payable-close.js'
+import { PayableDispatchService, type PayableDispatchStore } from './billing/payable-dispatch.js'
+import { PayablePeriodService, type PayablePeriodStore } from './billing/payable-period.js'
+import { payableRoutes } from './billing/payable-routes.js'
+import { StrDraftService, InMemoryStrDraftStore, makeStrHandoffOperation, STR_HANDOFF_OPERATION, type StrDraftStore } from './str/service.js'
+import { strDraftRoutes } from './str/routes.js'
+import { FinanceViewService, financeViewRoutes, type FinanceFeeAccrualReader, type FinanceProfitabilityReader, type FinanceRevenueAssuranceReader } from './analytics/finance-view.js'
+import {
+  BillingCollectionsService,
+  InMemoryBillingCollectionsStore,
+  type BillingCollectionsStore
+} from './billing/collections.js'
+import {
+  BillingConsoleService,
+  billingConsoleRoutes,
+  type BillingConsoleProfitabilityPort,
+  type BillingConsoleTenantPort
+} from './billing/console.js'
 import {
   OperationsConsoleService,
   operationsConsoleRoutes,
@@ -149,7 +184,7 @@ import { trustFrameworkRoutes } from './trust-framework/routes.js'
 import { ServiceDeskService, InMemoryServiceDeskCaseStore, type ServiceDeskCaseStore } from './service-desk/service.js'
 import { serviceDeskRoutes } from './service-desk/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
-import { createTelemetryMiddleware } from './telemetry.js'
+import { createTelemetryMiddleware, redactingLog } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
@@ -216,6 +251,16 @@ export const IMPLEMENTED_ROUTES = new Set([
   'get /back-office/invoice-runs',
   'post /back-office/invoice-runs',
   'get /back-office/invoice-runs/{invoice_run_id}',
+  'get /back-office/billing/console',
+  'post /back-office/billing/profitability:simulate',
+  'post /back-office/billing/exports:cbuae-fee-review',
+  'get /back-office/billing/export',
+  'post /back-office/billing/tpp-cost-documents',
+  'post /back-office/billing/tpp-cost-documents/{document_id}:reconcile',
+  'get /back-office/billing/cost-periods/{period}',
+  'get /back-office/billing/tpp-cost-export',
+  'post /back-office/billing/cost-periods/{period}:close',
+  'post /back-office/billing/payables/{payable_id}:dispatch',
   'get /back-office/analytics/finance-view',
   'get /back-office/analytics/operations-console',
   'get /back-office/analytics/compliance-view',
@@ -238,6 +283,9 @@ export const IMPLEMENTED_ROUTES = new Set([
   'post /back-office/service-desk-cases',
   'get /back-office/service-desk-cases/{case_id}',
   'post /back-office/service-desk-cases/{case_id}:update',
+  'get /back-office/str-drafts',
+  'get /back-office/str-drafts/{str_draft_id}',
+  'post /back-office/str-drafts/{str_draft_id}:submit-to-workflow',
   'post /back-office/reports:generate',
   'get /back-office/reports',
   'get /back-office/reports/{report_id}',
@@ -284,11 +332,35 @@ export interface AppDeps {
   reconciliationLogStore?: ReconciliationLogStore
   reconciliationBreakStore?: ReconciliationBreakStore
   reconciliationThresholdStore?: ThresholdStore
+  /** BILL-07 — immutable balanced banking accounting pack included in month-close sign-off. */
+  accountingClosePackReader?: import('./reconciliation/service.js').MonthlyAccountingClosePackReader
   tppCounterpartyStore?: TppCounterpartyStore
   /** BACKOFFICE-71 — P6 Trust Framework Directory source (defaults to the P6 adapter). */
   tppDirectoryEgress?: Pick<NebrasEgressPort, 'syncDirectory'>
   billingRecordStore?: BillingRecordStore
   invoiceRunStore?: InvoiceRunStore
+  /** BILL-14 — provider cost-document ledger writer. */
+  tppCostDocumentStore?: TppCostDocumentStore
+  tppCostReconcileStore?: TppCostReconcileStore
+  tppCostLatePayments?: LatePaymentSource
+  /** BILL-16 — the four-eyes cost-period close ledger. */
+  payableCloseStore?: PayableCloseStore
+  /** BILL-16 — the append-only AP dispatch log. Two methods; it cannot reach billing evidence. */
+  payableDispatchStore?: PayableDispatchStore
+  /** BILL-16 — read model behind GET /back-office/billing/cost-periods/{period}. */
+  payablePeriodStore?: PayablePeriodStore
+  /** BILL-14 — retention of the raw provider artifact, outside the ledger. */
+  rawDocumentArchive?: RawDocumentArchive
+  /** BILL-05 — append-only settlement decomposition and direct-collection action store. */
+  billingCollectionsStore?: BillingCollectionsStore
+  /** BILL-08 — latest immutable revenue-assurance report for Finance View/VAL-01 composition. */
+  revenueAssuranceReader?: FinanceRevenueAssuranceReader
+  /** BILL-09 — deterministic P&L by TPP/product family for the Finance View. */
+  profitabilityReader?: FinanceProfitabilityReader
+  /** BILL-09 — pure scenario + audited CBUAE export operations for the billing console. */
+  billingProfitability?: BillingConsoleProfitabilityPort
+  /** BILL-10 — verified-tenant profile and outsourcing portability surface. */
+  billingTenant?: BillingConsoleTenantPort
   /** BACKOFFICE-35 — report-generation store (defaults in-memory; worker wires the Pg
    *  compliance_report store, shared with the inquiry bundle). */
   /** BACKOFFICE-75 — respondent-side Nebras dispute store (defaults in-memory; the
@@ -309,6 +381,9 @@ export interface AppDeps {
   /** BACKOFFICE-79 — Nebras service-desk case store (defaults in-memory; the worker
    *  wires the durable PgServiceDeskCaseStore). */
   serviceDeskStore?: ServiceDeskCaseStore
+  /** BACKOFFICE-63 — STR draft store (defaults in-memory; the worker wires the durable
+   *  PgStrDraftStore). */
+  strDraftStore?: StrDraftStore
   reportStore?: ReportStore
   /** BACKOFFICE-42 — audit-trail drill-down reader (defaults in-memory; worker wires PgAuditReader). */
   auditEventReader?: AuditEventReader
@@ -409,9 +484,19 @@ export function createApp(deps: AppDeps = {}) {
   const reconciliationBreakStore = deps.reconciliationBreakStore ?? new InMemoryReconciliationBreakStore()
   const invoiceRunStore = deps.invoiceRunStore ?? new InMemoryInvoiceRunStore()
   const reportStore = deps.reportStore ?? new InMemoryReportStore()
+  // BACKOFFICE-63 — STR drafts are persisted here (default in-memory; worker wires PgStrDraftStore).
+  // Built before the fraud-revoke op so an approved fraud-revoke can record its STR draft.
+  const strDraftStore = deps.strDraftStore ?? new InMemoryStrDraftStore()
   const reportGenerationOperation = makeReportGenerationOperation({ store: reportStore })
   const refundOperation = makeRefundOperation({ store: disputeStore, egress: nebrasEgress, audit: highClassAudit })
-  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory })
+  const fraudRevokeOperation = makeFraudRevokeOperation({ egress: nebrasEgress, audit: highClassAudit, directory: consentDirectory, strDrafts: strDraftStore })
+  // BACKOFFICE-63 — the four-eyes executor hands an approved STR draft to the bank's STR
+  // workflow (P10) and records the workflow ref. The Back Office never submits to AML GO directly.
+  const strHandoffOperation = makeStrHandoffOperation({
+    store: strDraftStore,
+    strWorkflow: getAdapter('p10-str-workflow', profileFromConfig(process.env)),
+    audit: highClassAudit
+  })
   const queryPurposeRegistrar = deps.queryPurposeRegistrar ?? new InMemoryQueryPurposeRegistrar()
   const registerQueryPurposeOperation = makeRegisterQueryPurposeOperation({ registrar: queryPurposeRegistrar, audit: highClassAudit })
   const bulkRevokeOperation = makeBulkRevokeOperation({ directory: consentDirectory, egress: nebrasEgress, audit: highClassAudit })
@@ -428,8 +513,40 @@ export function createApp(deps: AppDeps = {}) {
   // the second principal's approval (makeAgentRegisterOperation.execute).
   const agentStore = deps.agentStore ?? new InMemoryAgentStore()
   const agentRegisterOperation = makeAgentRegisterOperation({ store: agentStore, audit: highClassAudit })
-  const approvals = new ApprovalsService(audit, {
+  // BILL-16 — the four-eyes cost-period close.
+  //
+  // Constructed BEFORE the ApprovalsService so its gated operation can be registered in the same
+  // map as every other one. The request↔execute cycle is broken by the lazy arrow below rather than
+  // by a holder object: `approvals` is a const declared just after this, and the closure only runs
+  // when a close is actually requested, long after assignment.
+  //
+  // It fails closed without a store, and throws rather than answering: an unconfigured close store
+  // that reported "no open breaks" would close a period over evidence it never looked at.
+  // Explicitly annotated, all three. The cycle here is real — the service closes over `approvals`,
+  // whose operations map holds an operation built from the service — and TypeScript cannot infer a
+  // type through it. Annotating breaks the inference cycle without introducing a holder object.
+  const payableCloseService: PayableCloseService = new PayableCloseService({
+    store: deps.payableCloseStore ?? {
+      openPayableBreaks: async () => { throw new Error('payable close store is not configured') },
+      closeForPeriod: async () => { throw new Error('payable close store is not configured') },
+      saveClose: async () => { throw new Error('payable close store is not configured') }
+    },
+    approvals: {
+      request: async (
+        principal, operationType, payload, traceId
+      ): Promise<{ approval_request_id: string; state: string }> =>
+        approvals.requestApproval(principal, { operation_type: operationType, operation_payload: payload }, traceId)
+    },
+    audit: highClassAudit
+  })
+  // One store instance, shared. The dispatch service needs to READ an approval without a
+  // principal (it is verifying evidence, not acting on someone's behalf), and `getFor` is
+  // deliberately principal-scoped. Passing the store to both beats adding an unscoped read
+  // method to the shared primitive, which every caller would then inherit.
+  const approvalStore = deps.approvals?.store ?? new InMemoryApprovalStore()
+  const approvals: ApprovalsService = new ApprovalsService(audit, {
     ...deps.approvals,
+    store: approvalStore,
     operations: {
       ...deps.approvals?.operations,
       [REFUND_OPERATION]: refundOperation,
@@ -440,11 +557,15 @@ export function createApp(deps: AppDeps = {}) {
       [MONTHLY_SIGNOFF_OPERATION]: monthlySignoffOperation,
       [INVOICE_RUN_OPERATION]: invoiceRunOperation,
       [REPORT_GENERATION_OPERATION]: reportGenerationOperation,
-      [AGENT_REGISTER_OPERATION]: agentRegisterOperation
+      [AGENT_REGISTER_OPERATION]: agentRegisterOperation,
+      [STR_HANDOFF_OPERATION]: strHandoffOperation,
+      [PAYABLE_CLOSE_OPERATION]: makePayableCloseOperation(payableCloseService)
     }
   })
   const agentRegistryService = new AgentRegistryService(approvals, agentStore, highClassAudit, idp)
   const fraudRevokeService = new ConsentFraudRevokeService(approvals)
+  // BACKOFFICE-63 — STR draft list/get (compliance:reports:read) + four-eyes handoff.
+  const strDraftService = new StrDraftService(approvals, strDraftStore, highClassAudit)
   const registerQueryPurposeService = new RegisterQueryPurposeService(approvals)
   const bulkRevokeService = new ConsentBulkRevokeService(approvals, consentDirectory)
   const paymentSource = deps.paymentSource ?? (training ? trainingPaymentSource() : sharedDemoPaymentDirectory())
@@ -492,6 +613,7 @@ export function createApp(deps: AppDeps = {}) {
     egress: nebrasEgress,
     apm,
     reports: complianceReportStore,
+    accountingClose: deps.accountingClosePackReader,
     audit: highClassAudit
   })
   reconHolder.svc = reconciliationService // BACKOFFICE-06 — bind the monthly-signoff executor
@@ -510,6 +632,73 @@ export function createApp(deps: AppDeps = {}) {
     approvals,
     audit: highClassAudit
   })
+  const billingCollectionsService = new BillingCollectionsService({
+    store: deps.billingCollectionsStore ?? new InMemoryBillingCollectionsStore(),
+    audit: highClassAudit
+  })
+  // BILL-14 — provider cost-document ingestion. Fails closed when no store is configured: an
+  // unconfigured ingest must refuse rather than accept an upload it cannot persist.
+  const tppCostDocumentService = new TppCostDocumentIngestService({
+    store: deps.tppCostDocumentStore ?? {
+      saveDocument: async () => { throw new Error('TPP cost document store is not configured') },
+      documentsForPeriod: async () => []
+    },
+    archive: deps.rawDocumentArchive ?? {
+      put: async () => { throw new Error('raw document archive is not configured') }
+    },
+    audit: highClassAudit
+  })
+  // BILL-15 — payable reconciliation. Fails closed the same way: with no store there is no evidence
+  // to compare, and a reconciliation over nothing would report a clean period.
+  const tppCostReconcileService = new TppCostReconcileService({
+    store: deps.tppCostReconcileStore ?? {
+      documentPeriod: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      reconcilableDocumentsForPeriod: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      latestStatement: async () => { throw new Error('TPP cost reconciliation store is not configured') },
+      saveReconciliation: async () => { throw new Error('TPP cost reconciliation store is not configured') }
+    },
+    ...(deps.tppCostLatePayments ? { latePayments: deps.tppCostLatePayments } : {}),
+    // BILL-15 criterion 6(a) — payable breaks join the E1 queue on the SAME store the receivable
+    // engine writes to. Without this the diff lines persist with a null break id, and
+    // `openPayableBreaks` reads a null as "raised and not yet worked" — so the first break of a
+    // period would block its close permanently, with no workflow able to clear it.
+    breakEscalation: reconciliationBreakStore,
+    audit: highClassAudit
+  })
+  // BILL-16 — AP dispatch and the period read model. Both fail closed without a store: an
+  // unconfigured dispatch store would authorise a debit it could not record, and a missing store is
+  // a deployment fault whose only safe reading is a refusal.
+  const payableDispatchService = new PayableDispatchService({
+    store: deps.payableDispatchStore ?? {
+      approvedPayable: async () => { throw new Error('payable dispatch store is not configured') },
+      recordDispatch: async () => { throw new Error('payable dispatch store is not configured') }
+    },
+    financialSystem: getAdapter('p9-financial-system', profileFromConfig(process.env)),
+    // The narrowest possible view: one read, no mutation. Dispatch verifies the four-eyes evidence
+    // it acts on without gaining any power to create or alter it.
+    approvals: { get: async (id: string) => approvalStore.get(id) },
+    audit: highClassAudit
+  })
+  const payablePeriodService = new PayablePeriodService({
+    store: deps.payablePeriodStore ?? {
+      periodClose: async () => { throw new Error('payable period store is not configured') },
+      payablesForPeriod: async () => { throw new Error('payable period store is not configured') },
+      openPayableBreaks: async () => { throw new Error('payable period store is not configured') },
+      evidencePack: async () => { throw new Error('payable period store is not configured') }
+    },
+    audit: highClassAudit
+  })
+  const billingConsoleService = new BillingConsoleService({
+    tenant: deps.billingTenant ?? {
+      profile: async () => { throw new Error('billing tenant store is not configured') },
+      portableExport: async () => { throw new Error('billing tenant store is not configured') }
+    },
+    collections: billingCollectionsService,
+    accounting: deps.accountingClosePackReader,
+    assurance: deps.revenueAssuranceReader,
+    profitability: deps.billingProfitability,
+    audit: highClassAudit
+  })
   // BACKOFFICE-31 — Finance View composes persisted data under one read scope:
   // fee accrual (BACKOFFICE-32 aggregates), margin (BACKOFFICE-07), the open Nebras
   // dispute queue, and the unbilled-traffic signal (BACKOFFICE-72, aggregate count).
@@ -517,7 +706,10 @@ export function createApp(deps: AppDeps = {}) {
     feeAccrual: deps.nebrasAggregateReader ?? { feeAccrualForPeriod: async () => null },
     margin: reconciliationService,
     disputes: reconciliationService,
-    unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length }
+    unbilled: { unbilledTrafficCount: async () => (await tppCounterpartyStore.list({ unbilled_traffic: true, limit: 200 })).rows.length },
+    collections: billingCollectionsService,
+    assurance: deps.revenueAssuranceReader,
+    profitability: deps.profitabilityReader
   })
   // Shared analytics readers (BACKOFFICE-28/-29/-30/-27): the TPP onboarding pipeline
   // (registration-state counts), certification per role, the P8 onboarding-handover
@@ -656,6 +848,14 @@ export function createApp(deps: AppDeps = {}) {
     ...reconciliationRoutes(reconciliationService, idempotencyStore),
     ...tppBillingRoutes(tppRegistryService, idempotencyStore),
     ...tppInvoicingRoutes(invoicingService, idempotencyStore),
+    ...billingConsoleRoutes(billingConsoleService, idempotencyStore),
+    ...tppCostDocumentRoutes(tppCostDocumentService, idempotencyStore),
+    ...tppCostReconcileRoutes(tppCostReconcileService, idempotencyStore),
+    ...payableRoutes({
+      close: payableCloseService,
+      dispatch: payableDispatchService,
+      period: payablePeriodService
+    }, idempotencyStore),
     ...financeViewRoutes(financeViewService),
     ...operationsConsoleRoutes(operationsConsoleService),
     ...complianceViewRoutes(complianceViewService),
@@ -671,6 +871,7 @@ export function createApp(deps: AppDeps = {}) {
     ...lfiReportRoutes(lfiReportService, idempotencyStore),
     ...trustFrameworkRoutes(trustFrameworkService, idempotencyStore),
     ...serviceDeskRoutes(serviceDeskService, idempotencyStore),
+    ...strDraftRoutes(strDraftService, idempotencyStore),
     ...auditEventsRoutes(auditEventsService),
     // ADR 0022 — public, pre-login readiness wizard (no scope; auth middlewares skip /public/*)
     ...readinessRoutes(new ReadinessService(deps.readinessProfileStore ?? new InMemoryReadinessProfileStore()))
@@ -769,6 +970,49 @@ export function createApp(deps: AppDeps = {}) {
         DOCS_BASE
       ),
       501
+    )
+  })
+
+  /**
+   * The last envelope. Every path here answers the contract's shape, including the ones nobody wrote.
+   *
+   * `default: { $ref: '#/components/responses/Error' }` is declared on every operation, but with no
+   * handler an unhandled throw fell through to Hono's default: `500 text/plain` with the body
+   * `Internal Server Error`. That is a contract violation on EVERY endpoint at once, and it is the
+   * response a client gets from precisely the situations it can least afford to guess about — an
+   * unconfigured store, a `22P02` from a malformed UUID reaching a `uuid` column, a `RangeError` from
+   * a domain invariant.
+   *
+   * The thrown message is deliberately NOT surfaced. A driver error quotes the offending SQL
+   * parameter and a domain error can quote its input, so echoing it here would reintroduce, at every
+   * endpoint simultaneously, the leak the document parser closes one refusal at a time. The trace id
+   * is the correlation handle instead: it is already on the request, already in the audit trail, and
+   * carries nothing about the payload.
+   */
+  const unhandledErrorLog = redactingLog()
+  app.onError((error, c) => {
+    const traceId = c.req.header('x-fapi-interaction-id') ?? 'unknown'
+    // An HTTPException already names the status it meant; only its BODY is wrong for us, so keep the
+    // status and re-shape the body. Everything else is genuinely unhandled and is a 500.
+    const status = error instanceof HTTPException ? error.status : 500
+    // redactingLog is the sanctioned operational sink — it masks by key and by shape, so an error
+    // NAME cannot smuggle a value into the log the way the message could.
+    unhandledErrorLog('unhandled_request_error', {
+      trace_id: traceId,
+      path: c.req.path,
+      method: c.req.method,
+      error_name: error.name
+    })
+    return c.json(
+      errorEnvelope(
+        'BACKOFFICE.INTERNAL_ERROR',
+        'The request could not be completed. The underlying error is deliberately not echoed: it can '
+        + 'quote the offending input, and this handler runs before any redaction.',
+        `Quote the x-fapi-interaction-id ${traceId} to support; it correlates to the server-side log `
+        + 'and the audit trail without carrying request content.',
+        DOCS_BASE
+      ),
+      status
     )
   })
 

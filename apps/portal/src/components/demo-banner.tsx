@@ -8,7 +8,7 @@
  * The short visible label keeps it unobtrusive; the full regulatory statement is carried in
  * aria-label so assistive tech still announces it (the hard-stop "must say so on every page").
  */
-export function DemoPill() {
+export function DemoPill({ tenantLabel }: { tenantLabel?: string } = {}) {
   return (
     <div
       role="note"
@@ -18,6 +18,7 @@ export function DemoPill() {
     >
       <span className="w-1.5 h-1.5 rounded-full bg-demo" aria-hidden />
       DEMO · non-prod
+      {tenantLabel ? <span className="text-demo/80" data-testid="demo-banner-tenant">· {tenantLabel}</span> : null}
     </div>
   )
 }

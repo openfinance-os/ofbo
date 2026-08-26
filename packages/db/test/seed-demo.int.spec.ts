@@ -30,7 +30,7 @@ describe('demo scenario seed', () => {
   })
 
   it('seeds 4 pending four-eyes approvals', async () => {
-    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE approval_request_id LIKE 'demo-appr-%' AND state = 'pending'`)
+    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' LIKE 'demo-appr-%' AND state = 'pending'`)
     expect(r.rows[0].n).toBe(4)
   })
 
@@ -56,11 +56,75 @@ describe('demo scenario seed', () => {
     const dispute = await admin.query(`SELECT count(*)::int AS n FROM dispute_case WHERE care_case_id = 'dispute-INC-2026-0042'`)
     const brk = await admin.query(`SELECT count(*)::int AS n FROM reconciliation_break WHERE source_a_ref = 'NBR-INC-2026-0042'`)
     const sig = await admin.query(`SELECT count(*)::int AS n FROM risk_signal WHERE signal_data->>'incident' = 'INC-2026-0042'`)
-    const appr = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE approval_request_id = 'demo-appr-incident-refund'`)
+    const appr = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' = 'demo-appr-incident-refund'`)
     expect(dispute.rows[0].n).toBe(1)
     expect(brk.rows[0].n).toBe(1)
     expect(sig.rows[0].n).toBe(1)
     expect(appr.rows[0].n).toBe(1)
+  })
+
+  it('seeds 4 STR drafts across the lifecycle (incl. the INC-2026-0042 draft)', async () => {
+    const all = await admin.query(`SELECT count(*)::int AS n FROM str_draft WHERE created_by = 'demo:risk-analyst'`)
+    expect(all.rows[0].n).toBeGreaterThanOrEqual(4)
+    const states = await admin.query(`SELECT count(DISTINCT status)::int AS n FROM str_draft WHERE created_by = 'demo:risk-analyst'`)
+    expect(states.rows[0].n).toBe(3) // draft, awaiting_handoff, handed_off
+    const inc = await admin.query(`SELECT count(*)::int AS n FROM str_draft WHERE source_consent_id = 'consent-INC-2026-0042'`)
+    expect(inc.rows[0].n).toBe(1)
+  })
+
+  it('seeds the named TPP counterparties with a spread of status (incl. one unbilled)', async () => {
+    // The 6 net-new fictional institutions (org-fictional-fintech-01 already exists from the base
+    // dataset, so its row is skipped by the natural-key guard — that dedup is correct).
+    const named = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE registration_number LIKE 'CN-100%'`)
+    expect(named.rows[0].n).toBeGreaterThanOrEqual(6)
+    const statuses = await admin.query(`SELECT count(DISTINCT production_status)::int AS n FROM tpp_counterparty WHERE registration_number LIKE 'CN-100%'`)
+    expect(statuses.rows[0].n).toBeGreaterThanOrEqual(3) // active_traffic, directory_only, dormant
+    const unbilled = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE unbilled_traffic = true`)
+    expect(unbilled.rows[0].n).toBeGreaterThanOrEqual(1)
+  })
+
+  it('seeds 3 invoice runs and 3 scheme notifications', async () => {
+    const inv = await admin.query(`SELECT count(*)::int AS n FROM invoice_run WHERE billing_period IN ('2026-03','2026-04','2026-05')`)
+    expect(inv.rows[0].n).toBe(3)
+    const notif = await admin.query(`SELECT count(DISTINCT notification_type)::int AS n FROM scheme_notification WHERE created_by = 'demo:operations-analyst'`)
+    expect(notif.rows[0].n).toBe(3)
+    const breaking = await admin.query(`SELECT dual_running_required FROM scheme_notification WHERE notification_type = 'breaking_change' LIMIT 1`)
+    expect(breaking.rows[0].dual_running_required).toBe(true)
+  })
+
+  it('provisions the default billing tenant with current-period profitability evidence', async () => {
+    const period = new Date().toISOString().slice(0, 7)
+    const config = await admin.query(`SELECT bank_id FROM tenant_configuration WHERE bank_id = $1`, ['11111111-1111-4111-8111-111111111111'])
+    expect(config.rows).toHaveLength(1)
+    const memo = await admin.query(
+      `SELECT m.total_milli_fils, count(l.id)::int AS line_count
+         FROM billing_expected_memo m
+         JOIN billing_expected_memo_line l ON l.bank_id=m.bank_id AND l.expected_memo_id=m.id
+        WHERE m.bank_id=$1 AND m.period=$2 AND m.meter_input_hash=$3
+        GROUP BY m.total_milli_fils`,
+      ['11111111-1111-4111-8111-111111111111', period, `sha256:demo-billing-console:${period}`]
+    )
+    expect(memo.rows).toEqual([{ total_milli_fils: '20000000', line_count: 2 }])
+  })
+
+  it('seeds the four previously-empty consoles (reports, trust-framework, respondent, agents)', async () => {
+    const rpt = await admin.query(`SELECT count(*)::int AS n FROM compliance_report WHERE requested_by = 'demo:compliance-officer'`)
+    expect(rpt.rows[0].n).toBeGreaterThanOrEqual(5)
+    const tf = await admin.query(`SELECT count(*)::int AS n FROM trust_framework_participant WHERE holder_ref LIKE 'holder-%'`)
+    expect(tf.rows[0].n).toBe(5)
+    const tfTurnover = await admin.query(`SELECT count(*)::int AS n FROM trust_framework_participant WHERE status IN ('departing','vacant')`)
+    expect(tfTurnover.rows[0].n).toBe(2) // a turnover in flight
+    const rd = await admin.query(`SELECT count(*)::int AS n FROM respondent_dispute WHERE nebras_dispute_ref LIKE 'NBR-RD-%'`)
+    expect(rd.rows[0].n).toBe(4)
+    const ag = await admin.query(`SELECT count(*)::int AS n FROM agent_registry WHERE client_id LIKE 'agent-%'`)
+    expect(ag.rows[0].n).toBe(4)
+    const agRevoked = await admin.query(`SELECT count(*)::int AS n FROM agent_registry WHERE status = 'revoked' AND client_id LIKE 'agent-%'`)
+    expect(agRevoked.rows[0].n).toBe(1)
+  })
+
+  it('seeds approval_request_ids as UUIDs (contract requires uuid format)', async () => {
+    const r = await admin.query(`SELECT count(*)::int AS n FROM approval_request WHERE operation_payload->>'demo_marker' LIKE 'demo-appr-%' AND approval_request_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'`)
+    expect(r.rows[0].n).toBe(4) // all four scenario approvals carry uuid-shaped ids
   })
 
   it('is idempotent — re-running the scenario does not duplicate', async () => {

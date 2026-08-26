@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createFinancialSystemAdapter, financialSystemFromEnv, FinancialSystemError } from '../src/adapters/enterprise/financial-system.js'
+import type { FinancialJournalBatch } from '../src/interfaces.js'
 
 const trace = { trace_id: '4d2c2e2a-0000-4000-8000-000000000000' }
 const BASE = 'https://erp.bank.example'
@@ -17,6 +18,39 @@ function fakeTransport(routes: Record<string, { status?: number; body?: unknown 
 }
 
 describe('P9 financial-system adapter (invoice EXECUTION transport only)', () => {
+  it('never echoes the vendor payable_status into the refusal message', async () => {
+    // This message is not just a message. payable-dispatch writes it into audit_high_sensitivity —
+    // INSERT-only, five-year retention, no deletion path — so anything quoted here lands there
+    // permanently, and it lands ahead of the service's own redaction rather than behind it.
+    //
+    // The offending value is synthetic and identifier-SHAPED on purpose: if the adapter ever quotes
+    // the field again, this fails on a value that looks exactly like the thing that must not escape.
+    const leak = 'AE070001234567890123456'
+    for (const [route, call] of [
+      ['/payables', (a: ReturnType<typeof createFinancialSystemAdapter>) =>
+        a.dispatchPayableInstruction(
+          {
+            idempotency_key: 'idem-1', payable_id: 'PAY-1', amount_fils: 2625, currency: 'AED',
+            approval_request_id: 'apr-0000-4000-8000-000000000001'
+          } as never,
+          trace
+        )],
+      ['/status', (a: ReturnType<typeof createFinancialSystemAdapter>) =>
+        a.getPayableStatus('fms-pay-1', trace)]
+    ] as const) {
+      const { fetchImpl } = fakeTransport({
+        [route]: { body: { accepted: true, dispatch_ref: 'fms-pay-1', payable_status: leak } }
+      })
+      const adapter = createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl })
+
+      await expect(call(adapter), route).rejects.toThrow(FinancialSystemError)
+      await call(adapter).catch((error: Error) => {
+        expect(error.message, route).not.toContain(leak)
+        expect(error.message, route).toMatch(/deliberately not echoed/i)
+      })
+    }
+  })
+
   it('registers a counterparty and returns its financial_system_ref', async () => {
     const { calls, fetchImpl } = fakeTransport({ '/counterparties': { body: { financial_system_ref: 'fms-org-001' } } })
     const adapter = createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 'tok', fetchImpl })
@@ -32,6 +66,21 @@ describe('P9 financial-system adapter (invoice EXECUTION transport only)', () =>
     const r = await adapter.issueInvoiceInstructions({ invoice_run_id: 'run-1', instructions: [{ line: 1 }] }, trace)
     expect(r.accepted).toBe(true)
     expect(calls[0]!.url).toBe(`${BASE}/invoice-runs`)
+  })
+
+  it('posts an already-balanced journal batch and returns the P9 batch reference', async () => {
+    const { calls, fetchImpl } = fakeTransport({ '/journal-batches': { body: { accepted: true, journal_batch_ref: 'erp-gl-001' } } })
+    const adapter = createFinancialSystemAdapter({ baseUrl: BASE, getToken: async () => 't', fetchImpl })
+    const batch = {
+      batch_id: 'GL-2026-06', period: '2026-06', posting_date: '2026-07-31', account_profile_ref: 'BANK-COA-1',
+      journals: [{ journal_id: 'JRN-1', source_type: 'pint_ae_invoice', source_id: 'INV-1', lines: [
+        { account: 'AR', side: 'debit', amount_fils: 105 }, { account: 'REV', side: 'credit', amount_fils: 100 },
+        { account: 'VAT', side: 'credit', amount_fils: 5 }
+      ] }]
+    } satisfies FinancialJournalBatch
+    await expect(adapter.postJournalInstructions(batch, trace)).resolves.toEqual({ accepted: true, journal_batch_ref: 'erp-gl-001' })
+    expect(calls[0]!.url).toBe(`${BASE}/journal-batches`)
+    expect(JSON.parse(String(calls[0]!.init.body))).toEqual(batch)
   })
 
   it('reads settlement status and validates it against the allowed set', async () => {

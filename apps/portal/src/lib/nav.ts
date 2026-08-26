@@ -28,7 +28,13 @@ export const NAV_MODULES: NavModule[] = [
   // Analytics & Insights binds the Executive Dashboard (platform:analytics:read) + the
   // Finance View (reconciliation:read); visible to either audience (UI-06, any-of).
   { key: 'analytics', label: 'Analytics', href: '/analytics', icon: 'insights', scope: [SCOPES.analyticsRead, SCOPES.reconciliationRead] },
-  { key: 'billing', label: 'TPP Billing', href: '/tpp-billing', icon: 'receipt_long', scope: SCOPES.billingRead },
+  // BILL-17 — the billing console now carries BOTH sides of the monthly position: LFI receivables
+  // (BILL-09/10) and TPP-of-record payables (TPP Cost Management). Labelled for what it holds.
+  { key: 'billing-console', label: 'Billing & TPP Cost', href: '/billing', icon: 'payments', scope: SCOPES.billingRead },
+  // Renamed in the same IA pass. "TPP Billing" was ambiguous once a TPP COST section existed one
+  // entry above it — this screen is the LFI-role revenue and consuming-TPP registry. The href and
+  // every API path underneath are unchanged; only the label moves.
+  { key: 'billing', label: 'LFI Revenue & TPP Registry', href: '/tpp-billing', icon: 'receipt_long', scope: SCOPES.billingRead },
   { key: 'compliance', label: 'Compliance', href: '/compliance', icon: 'gavel', scope: SCOPES.complianceRead },
   { key: 'risk', label: 'Risk', href: '/risk', icon: 'shield', scope: SCOPES.riskRead },
   { key: 'operations', label: 'Operations', href: '/operations', icon: 'monitoring', scope: SCOPES.operationsRead },

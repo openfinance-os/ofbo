@@ -1,0 +1,41 @@
+<svg id="svg-curve" viewBox="0 0 780 420" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="t-curve d-curve" font-family="ui-sans-serif, system-ui, sans-serif">
+<title id="t-curve">The moat compounds — the widening gap between us and a cold-start competitor</title>
+<desc id="d-curve">Two cost-per-solution lines across five successive solutions. Ours falls steeply after the first build because each new solution reuses the model and the accumulated context brain. A competitor starting cold, with generic tools but no context, stays high. The shaded wedge between the two lines is the moat, and it widens with every solution. At solution one (Open Finance) both pay full cost, but we also seed the brain; from then on the gap opens.</desc>
+<style>
+  #svg-curve .ink{fill:#2c2c2a;} #svg-curve .ink2{fill:#5f5e5a;}
+  #svg-curve .ax{stroke:#cdcabf;stroke-width:1;}
+  #svg-curve .grid{stroke:#ece9e0;stroke-width:1;}
+  #svg-curve .us{stroke:#7F77DD;stroke-width:3;fill:none;}
+  #svg-curve .comp{stroke:#9a988f;stroke-width:2;fill:none;stroke-dasharray:6 4;}
+  #svg-curve .moat{fill:rgba(127,119,221,0.13);stroke:none;}
+  #svg-curve .pt{fill:#7F77DD;stroke:#fff;stroke-width:1.5;}
+  #svg-curve .lbl{font-weight:700;} #svg-curve .mono{font-family:ui-monospace,monospace;}
+</style>
+<text x="24" y="26" class="ink lbl" font-size="16">The moat compounds</text>
+<text x="24" y="46" class="ink2" font-size="11">Our cost per solution falls as the brain deepens; a competitor's stays flat.</text>
+<line x1="486" y1="22" x2="514" y2="22" class="us"/><text x="520" y="26" class="ink2" font-size="9.5">us — the Loom + compounding brain</text>
+<line x1="486" y1="40" x2="514" y2="40" class="comp"/><text x="520" y="44" class="ink2" font-size="9.5">competitor — cold start, generic tools</text>
+<line class="grid" x1="80" y1="130" x2="744" y2="130"/>
+<line class="grid" x1="80" y1="200" x2="744" y2="200"/>
+<line class="grid" x1="80" y1="270" x2="744" y2="270"/>
+<line class="ax" x1="80" y1="72" x2="80" y2="338"/>
+<line class="ax" x1="80" y1="338" x2="744" y2="338"/>
+<text transform="rotate(-90)" x="-210" y="42" class="ink2" font-size="10">cost &amp; time per solution →</text>
+<text x="744" y="356" text-anchor="end" class="ink2" font-size="10">successive solutions over time →</text>
+<path class="moat" d="M140 120 L700 131 L700 293 C660 289 620 283 560 271 C520 266 480 256 420 236 C380 226 340 205 280 186 C240 182 200 168 140 120 Z"/>
+<path class="comp" d="M140 120 C300 122 500 126 700 131"/>
+<path class="us" d="M140 120 C200 168 240 182 280 186 C340 205 380 226 420 236 C480 256 520 266 560 271 C620 283 660 289 700 293"/>
+<g class="pt"><circle cx="140" cy="120" r="5"/><circle cx="280" cy="186" r="5"/><circle cx="420" cy="236" r="5"/><circle cx="560" cy="271" r="5"/><circle cx="700" cy="293" r="5"/></g>
+<text x="450" y="188" class="lbl" fill="#5b53b8" font-size="15">THE MOAT</text>
+<text x="450" y="205" fill="#6a62c9" font-size="10">compounding advantage — the gap widens each solution</text>
+<text x="430" y="118" class="ink2" font-size="9.5">competitor: every build starts cold</text>
+<text x="120" y="104" class="ink2" font-size="9.5">Solution 1 — both pay full; we also seed the brain</text>
+<g class="ink2" font-size="9" text-anchor="middle">
+  <text x="140" y="356">1 · Open Finance</text>
+  <text x="280" y="356">2 · Payments</text>
+  <text x="420" y="356">3 · Lending</text>
+  <text x="560" y="356">4 · Onboarding</text>
+  <text x="700" y="356">5 · next…</text>
+</g>
+<text x="24" y="398" class="ink2 mono" font-size="9.5">The same tools can be bought — a competitor still starts at solution 1. The accumulated, governed brain cannot be bought, only built.</text>
+</svg>

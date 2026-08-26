@@ -51,6 +51,20 @@ export function summariseOperation(operationType: string, payload: Record<string
       const period = safeMatch(payload.billing_period, BILLING_PERIOD)
       return { descriptor: period ? `Invoice run · period ${period}` : 'Invoice run' }
     }
+    case 'billing.tpp_cost.period_close': {
+      // BILL-16/17. The second approver of this one is authorising money movement — a closed cost
+      // period is what lets a payable be dispatched — so approving it with no context at all was
+      // the worst case for a blank summary, not a cosmetic gap.
+      //
+      // safe: billing period, and ONLY as a format-validated YYYY-MM. NOT: initiated_by (a principal
+      // identifier, and the queue already shows the initiator from the record) and NOT trace_id.
+      const period = safeMatch(payload.period, BILLING_PERIOD)
+      return {
+        descriptor: period
+          ? `Close TPP cost period ${period} · authorises payable dispatch`
+          : 'Close TPP cost period'
+      }
+    }
     case 'compliance.report_generation':
       // safe: nothing PSU-linked to surface; report_id is an internal id.
       return { descriptor: 'Compliance report submission' }
@@ -68,6 +82,9 @@ export function summariseOperation(operationType: string, payload: Record<string
     case 'consents.fraud_revoke':
       // NEVER: consent_id, case_context (operator free text). Label only.
       return { descriptor: 'Fraud-suspected consent revoke' }
+    case 'compliance.str_handoff':
+      // BACKOFFICE-63 — NEVER: source_consent_id, case_context (operator free text). Label only.
+      return { descriptor: 'STR draft handoff to the bank STR workflow' }
     case 'reconciliation.break_reopen':
       // NEVER: break_id, justification (operator free text). Label only.
       return { descriptor: 'Reopen reconciliation break' }

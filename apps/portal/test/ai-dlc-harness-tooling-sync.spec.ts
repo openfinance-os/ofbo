@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
  * (docs/research/ai-dlc-harness-tooling.html). One source of truth, two homes — a repo
  * reader opens the doc, the running portal serves the public copy. If they drift, the
  * colophon would link a stale page; this fails CI before that can ship (same spirit as the
- * harness-map sync guard and the Q2b doc-integrity gate).
+ * the-loom-ways-of-working sync guard and the Q2b doc-integrity gate).
  */
 const docs = fileURLToPath(
   new URL('../../../docs/research/ai-dlc-harness-tooling.html', import.meta.url),

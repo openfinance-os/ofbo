@@ -1105,6 +1105,80 @@ paths:
         '200': { $ref: '#/components/responses/Report' }
         default: { $ref: '#/components/responses/Error' }
 
+  /back-office/str-drafts:
+    get:
+      tags: [reports]
+      summary: List Suspicious Transaction Report (STR) drafts (BACKOFFICE-63)
+      description: >
+        STR drafts are auto-created when a fraud-suspected revocation is approved
+        (BACKOFFICE-22) and held by the Back Office. Compliance reviews them before they are
+        handed to the bank's STR workflow. No PII — a draft carries an internal consent ref +
+        case context, never PSU identifiers.
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+        - { name: status, in: query, schema: { type: string, enum: [draft, awaiting_handoff, handed_off] } }
+      responses:
+        '200':
+          description: Paginated STR drafts (cursor in meta.next_cursor).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/StrDraft' } }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/str-drafts/{str_draft_id}:
+    get:
+      tags: [reports]
+      summary: Get an STR draft (BACKOFFICE-63)
+      x-rate-limit-per-min: 100
+      x-required-scope: compliance:reports:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - { name: str_draft_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: A single STR draft.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/StrDraft' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/str-drafts/{str_draft_id}:submit-to-workflow:
+    post:
+      tags: [reports]
+      summary: Hand an approved STR draft to the bank's STR workflow — four-eyes (BACKOFFICE-63)
+      description: >
+        Submits an STR draft to the bank's existing STR workflow (P10), which is the system of
+        record that files with the CBUAE AML GO portal. The Back Office NEVER submits to AML GO
+        directly — it only hands off. Four-eyes-gated: a Compliance officer
+        (compliance:reports:generate) initiates → 202 + approval_request; a Risk second-line
+        (risk:read, the persona that owns STR triggers) approves via the approvals path. Only on
+        that approval does the handoff to P10 run, recording the workflow reference. High-class
+        audited; no PII.
+      x-rate-limit-per-min: 10
+      x-required-scope: compliance:reports:generate
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - { name: str_draft_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        default: { $ref: '#/components/responses/Error' }
+
   /back-office/lfi-reports:
     get:
       tags: [reports]
@@ -1659,6 +1733,503 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Envelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+  # ---------- LFI billing operations (BILL-01..10) ----------
+  /back-office/billing/console:
+    get:
+      tags: [tpp-billing]
+      summary: Tenant-scoped LFI billing operations read model (BILL-01..10)
+      description: >
+        Composes the resolved rate card, collections, accounting close pack, revenue
+        assurance and profitability outputs for the internal billing console. This is
+        a read surface only; metering, reconciliation, rating, dunning progression and
+        journal posting remain headless scheduled jobs. Insurance commissions remain
+        absent until an approved insurance commercial model exists (BILL-06).
+      x-rate-limit-per-min: 100
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: period
+          in: query
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+          description: Calendar month; defaults to the current UTC month.
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/profitability:simulate:
+    post:
+      tags: [tpp-billing]
+      summary: Run a non-persisted billing profitability scenario (BILL-09)
+      description: Pure what-if calculation over persisted tenant evidence; it writes no billing facts.
+      x-pure: true
+      x-rate-limit-per-min: 60
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingProfitabilityScenarioRequest'
+      responses:
+        '200': { $ref: '#/components/responses/AnalyticsView' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/exports:cbuae-fee-review:
+    post:
+      tags: [tpp-billing]
+      summary: Generate an integrity-hashed CBUAE annual fee-review export (BILL-09)
+      x-rate-limit-per-min: 20
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period, scenarios]
+              additionalProperties: false
+              properties:
+                period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+                scenarios:
+                  type: array
+                  maxItems: 20
+                  items: { $ref: '#/components/schemas/BillingProfitabilityScenario' }
+      responses:
+        '200':
+          description: Deterministic annual fee-review artifact
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/export:
+    get:
+      tags: [tpp-billing]
+      summary: Export all portable billing records for the authenticated tenant (BILL-10)
+      description: >
+        Outsourcing exit/portability export. The tenant is derived only from the verified
+        identity-provider claim; callers cannot select another bank by header or query.
+      x-rate-limit-per-min: 5
+      x-required-scope: billing:read
+      parameters: [ { $ref: '#/components/parameters/fapiInteractionId' } ]
+      responses:
+        '200':
+          description: Integrity-hashed tenant billing export
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/tpp-cost-documents:
+    post:
+      tags: [tpp-billing]
+      summary: Ingest a provider cost document — Nebras invoice primary (verified manual upload, BILL-14)
+      description: >
+        The payable-side twin of the billing-records ingest (BACKOFFICE-73), for what the bank owes
+        as TPP-of-record rather than what it is owed as an LFI (ADR 0007). Same verified-manual-upload
+        posture as BACKOFFICE-67: integrity SHA-256 computed and stored, BCBS 239 lineage emitted,
+        second-person verification recorded.
+
+
+        Read `verified_by` for exactly what it is. The UPLOADER is taken from the caller's verified
+        identity-provider claim and is never accepted from the request body. The VERIFIER is
+        operator-attested: `verified_by` is a request field naming the second person, checked against
+        the uploader's own subject and refused when equal. That establishes DISTINCTNESS between the
+        two names — it does not establish that the verifier authenticated, and an uploader can name a
+        colleague who never saw the document.
+
+
+        This paragraph previously asserted that neither name came from the request body, which
+        contradicted this operation's own `verified_by` form field twenty-four lines below and
+        described a control the service does not implement. Ratified as operator attestation rather
+        than silently corrected: a real second-person authenticated step belongs on the existing
+        four-eyes primitive (`202` + `approval_request`, initiator ≠ approver, 2-hour expiry), not on
+        a second mechanism invented here. Raise a story if the bank wants that stronger posture.
+
+
+        Provider payloads are redacted at parse time, before the first INSERT: the cost tables are
+        INSERT-only with no deletion path, so any customer detail a provider line carries would be
+        unremovable. Lines whose provider category has no fee-class mapping are stored flagged
+        `mapped: false` rather than dropped.
+
+
+        Replay of the same `Idempotency-Key` returns the stored result. The same issuer and document
+        reference carrying different content is a conflict, not a second document.
+      x-rate-limit-per-min: 20
+      x-required-scope: billing:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, document_type, billing_period, verified_by]
+              properties:
+                file: { type: string, format: binary }
+                document_type:
+                  allOf: [{ $ref: '#/components/schemas/TppCostDocumentType' }]
+                  description: >
+                    The taxonomy is declared in full, but a type is only ingestible once a transport is
+                    wired behind the parser adapter. Today that is `nebras_tax_invoice` only — the
+                    Nebras invoice is primary (IG §10.2). The other five are accepted vocabulary for
+                    the ledger and are refused at ingest with
+                    `BACKOFFICE.UNSUPPORTED_DOCUMENT_TYPE` until their transport lands.
+                billing_period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+                verified_by:
+                  type: string
+                  description: >
+                    The second person who verified this upload. Checked against the caller's own
+                    verified subject claim and refused when equal — it selects the verifier, it does
+                    not assert one.
+                source_note: { type: string, description: e.g. email received date / sender }
+      responses:
+        '201':
+          description: Document ingested with its parsed lines; reconciliation NOT yet run (BILL-15)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostDocument' }
+        '200':
+          description: >
+            The document was already ingested, so nothing new was written. Reached when the same
+            issuer and document reference arrive again with identical content — including under a new
+            `Idempotency-Key`. A replay of the SAME key returns the original cached response, status
+            included, so a repeated first-ingest replays its `201`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostDocument' }
+        '409':
+          description: >
+            Rejected for one of three reasons: the same issuer and document reference already exists
+            carrying different content (a provider restatement, not a replay); the nominated verifier
+            is the uploader; or the supplied `Idempotency-Key` was already used for a DIFFERENT
+            document, in which case answering with either one would be wrong.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/tpp-cost-documents/{document_id}:reconcile:
+    post:
+      tags: [tpp-billing]
+      summary: Three-way reconcile a provider cost document against own metering (BILL-15)
+      description: >
+        The payable twin of `/back-office/billing-records/{record_set_id}:reconcile`, and it carries
+        the same scope for the same reason: judging a counterparty's figures against our own is one
+        capability regardless of which direction the money flows.
+
+
+        Matches own metering against the expected statement and the provider document at the invoice
+        category grain, under a configurable tolerance — expected values are milli-fils and documents
+        state fils, so exact equality is never the test. Every difference becomes exactly one break:
+        an expectation and a document line disagreeing on the counterparty produce a single
+        `wrong_recipient` rather than a missing plus an unexpected charge, and a charge appearing on
+        both the Nebras invoice and an LFI self-invoice is a `duplicate_charge` rather than a second
+        cost. IG §10.17 late-payment penalties are accepted only against a recorded late payment for
+        the same period.
+
+
+        Runs synchronously and returns the result, unlike the billing-records twin: this compares
+        stored evidence rather than fetching from the Hub, so there is nothing to wait on. The
+        response carries the IG §10.13 query deadline and the Nebras response clocks, because a break
+        found outside the window is not actionable and the caller must see that with the finding.
+
+
+        Reconciling is not approving. Unresolved breaks withhold the period from payable approval
+        (BILL-16); this endpoint records what was found and never settles it.
+      x-rate-limit-per-min: 20
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - name: document_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: >
+            Reconciliation complete. Returned for both a first run and a replay of the same
+            reconciliation run, which writes nothing further — the ledger is INSERT-only with no
+            deletion path, so a retried scheduled job must not double it.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostReconciliation' }
+        '404':
+          description: No such cost document for this tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >
+            No expected cost statement exists for the document's billing period, so there is nothing
+            to reconcile against. Refused rather than reported as an all-unexpected-charges result,
+            which would look like a provider fault when it is a missing projection on our side.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+
+  /back-office/billing/cost-periods/{period}:
+    get:
+      tags: [tpp-billing]
+      summary: TPP cost-period state — close, payables and what is blocking them (BILL-16)
+      description: >
+        The payable side of a billing period in one read: whether the period has closed, which
+        four-eyes approval closed it, the payables it authorises, and the unresolved breaks that
+        are holding it open.
+
+
+        `close_state` is DERIVED, never stored as a workflow column. `closed` means a second finance
+        principal approved the close and the row exists; `blocked` means no close exists and
+        `open_break_count` is above zero, so a close would be refused; `open` means neither.
+
+
+        `closed` takes PRECEDENCE over `blocked`: a break raised after a period closed is real and
+        stays visible in `blockers`, but it cannot un-close the period, and reporting `blocked` there
+        would present history as a live refusal. What stops a break raised BEFORE approval slipping
+        through is the re-check at close execution, not this field. There is no `pending_approval` value because a requested close
+        lives on the approvals queue, not here — a period with an outstanding request is still
+        `open`, and `GET /back-office/approvals/pending` is where that request is visible.
+      x-rate-limit-per-min: 60
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: period
+          in: path
+          required: true
+          description: Cost period as YYYY-MM.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: "2026-07" }
+      responses:
+        '200':
+          description: Cost-period state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostPeriod' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/cost-periods/{period}:close:
+    post:
+      tags: [tpp-billing]
+      summary: Request the four-eyes close of a TPP cost period (BILL-16)
+      description: >
+        Never closes inline. Returns `202` with an `approval_request`, and the close executes only
+        when a SECOND finance principal approves it — the binding four-eyes rule, on the existing
+        approvals primitive rather than a second close mechanism.
+
+
+        Refused with `409` while the period carries unresolved material payable breaks. That refusal
+        is what makes BILL-15's reconciliation load-bearing rather than advisory: without it a
+        disputed line reaches an approved payable and gets paid. The check runs again at execution,
+        because approval is a separate act up to two business hours later and a break raised in
+        between must still stop the close.
+
+
+        The close is a gated PRECONDITION feeding the existing BACKOFFICE-06 monthly sign-off. It is
+        not a sign-off of its own, and it does not dispatch anything — honouring the scheme direct
+        debit is a separate, separately-authorised act.
+      x-rate-limit-per-min: 10
+      x-required-scope: finance:reconciliation:write
+      x-four-eyes: true
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - name: period
+          in: path
+          required: true
+          description: Cost period as YYYY-MM.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: "2026-07" }
+      responses:
+        '202': { $ref: '#/components/responses/ApprovalPending' }
+        '409':
+          description: >
+            The period carries unresolved material payable breaks, or it is already closed. Both are
+            refusals rather than no-ops: closing over an open break would approve a disputed line,
+            and re-closing a closed period would mint a second four-eyes record for one act.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+  /back-office/billing/payables/{payable_id}:dispatch:
+    post:
+      tags: [tpp-billing]
+      summary: Hand an approved payable to the financial system (BILL-16)
+      description: >
+        Authorises HONOURING a scheme direct debit; it does not push a payment. IG v5.0 §10.14–10.15
+        makes collection a scheme-operated pull — the DDA is presented to the Nebras sponsoring bank
+        on the 10th and collected by the 30th — so P9's role is mandate management plus matching the
+        pulled debit to the approved payable.
+
+
+        The four-eyes period close is a hard precondition, and the cited approval is re-verified here
+        rather than trusted: it must be `approved`, for THIS payable's own period, granted inside its
+        two-business-hour window, and by two distinct principals. The caller must be one of those two
+        — an approval authorises the people who made it, not everyone who can read its id.
+
+
+        `Idempotency-Key` is required and is never generated server-side: a generated key would make
+        every retry a new dispatch, which is exactly how one debit gets authorised twice. The key is
+        stored as a digest, not in the clear.
+      x-rate-limit-per-min: 10
+      x-required-scope: finance:reconciliation:write
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - $ref: '#/components/parameters/idempotencyKey'
+        - $ref: '#/components/parameters/superAdminJustification'
+        - name: payable_id
+          in: path
+          required: true
+          description: The reconciliation whose accepted payable is being dispatched.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: >
+            Dispatched, or replayed. Either way no second debit is authorised.
+
+
+            `replayed` reports what happened DOWNSTREAM — that the financial system matched an
+            existing instruction, or that our own append-only ledger already held this dispatch. It
+            is not an HTTP-level flag: retrying with the SAME `Idempotency-Key` replays the original
+            response body verbatim, per the idempotency convention, so `replayed` on that response
+            carries whatever it said the first time. To observe the downstream flag flip, the caller
+            must send a fresh key for the same payable — which is exactly the case where the ledger
+            or P9 recognises the instruction and refuses to double it.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostPayableDispatch' }
+        '403':
+          description: >
+            The caller took no part in the four-eyes approval being cited, so it does not authorise
+            them to honour this debit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: No such payable for this tenant
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >
+            The payable has no live four-eyes approval — absent, expired, approved late, rejected,
+            for another period, or evidencing one principal twice — or the dispatch state being
+            recorded does not legally follow the one already on file.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        default: { $ref: '#/components/responses/Error' }
+
+
+  /back-office/billing/tpp-cost-export:
+    get:
+      tags: [tpp-billing]
+      summary: Governed TPP cost evidence pack for one period (BILL-17)
+      description: >
+        Every payable artefact for one cost period as ONE downloadable pack: the provider documents
+        and their parsed lines, the reconciliations, the diff lines, the four-eyes period close, and
+        the AP dispatch log. Separate from `GET /back-office/billing/export`, which is the TENANT
+        portability export (statements, statement lines, re-ratings) — that one answers "give me my
+        data if I leave", this one answers "show me the evidence behind this month's payable".
+
+
+        `sha256` is a canonical digest over the pack's own body, so a recipient can recompute it and
+        prove the file was not edited after issue. The digest covers the body only, never itself.
+
+
+        Audited as a governed export on every call, because reading the whole evidence base for a
+        period is a disclosure event whether or not anything is wrong with it. Tenant-scoped by row
+        level security; the pack can only ever contain the caller's own bank.
+
+
+        PSU-free by construction for every schema-constrained column: the payable ledger references
+        metering event ids rather than customers. The provider-fed free-form columns
+        (`parsed_payload`, `response_payload`) are a narrower claim and are stated as one — they are
+        redacted at ingest by a redactor keyed on field names and identifier shapes, and scrubbed
+        AGAIN at this read boundary, because that redactor is heuristic and its own documentation
+        records the residual risk of a bare account number under an unrecognised key. Two heuristic
+        passes are not a proof; the count of anything the second pass removed is written to the audit
+        trail so a leak is investigable rather than invisible.
+
+
+        `raw_document_ref` is deliberately EXCLUDED from the pack. It addresses the raw-artifact
+        archive, which holds unredacted provider originals by design, and the evidence of what was
+        charged is the parsed lines — not a pointer to the scan.
+      x-rate-limit-per-min: 10
+      x-required-scope: billing:read
+      parameters:
+        - $ref: '#/components/parameters/fapiInteractionId'
+        - name: period
+          in: query
+          required: true
+          description: Cost period as YYYY-MM.
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$', example: "2026-07" }
+      responses:
+        '200':
+          description: The evidence pack. Empty collections where the period produced no such artefact.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/TppCostEvidenceExport' }
+        '400':
+          description: The period is absent or not YYYY-MM.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         default: { $ref: '#/components/responses/Error' }
 
   # ---------- 7.6 TPP Billing (E6 — BACKOFFICE-71..73) ----------
@@ -2731,6 +3302,29 @@ components:
                   freshness: { $ref: '#/components/schemas/Freshness' }
 
   schemas:
+    BillingProfitabilityScenario:
+      type: object
+      additionalProperties: false
+      required: [scenario_id, effective_date, receivable_multiplier_basis_points, retail_overage]
+      properties:
+        scenario_id: { type: string, minLength: 1, maxLength: 100 }
+        effective_date: { type: string, format: date }
+        receivable_multiplier_basis_points: { type: integer, minimum: 0, maximum: 100000 }
+        retail_overage:
+          type: object
+          additionalProperties: false
+          required: [overage_units, current_rate_milli_fils, proposed_rate_milli_fils]
+          properties:
+            overage_units: { type: integer, minimum: 0 }
+            current_rate_milli_fils: { type: integer, minimum: 0 }
+            proposed_rate_milli_fils: { type: integer, minimum: 0 }
+    BillingProfitabilityScenarioRequest:
+      type: object
+      additionalProperties: false
+      required: [period, scenario]
+      properties:
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        scenario: { $ref: '#/components/schemas/BillingProfitabilityScenario' }
     Envelope:
       type: object
       properties:
@@ -2805,6 +3399,25 @@ components:
         allow_mutations: { type: boolean, description: Mirrors the registration; mutating tools stay disabled when false. }
         spend_budget: { type: integer, minimum: 0, description: Per-session consequential-operation budget re-asserted BFF-side (BACKOFFICE-53); 0 = read-only. }
         expires_at: { type: string, format: date-time, description: Short TTL; revoking the agent denylists the session before it expires. }
+    StrDraft:
+      type: object
+      description: >
+        A Suspicious Transaction Report draft (BACKOFFICE-63). Auto-created on a
+        fraud-suspected revocation (BACKOFFICE-22); handed to the bank's STR workflow (P10) on
+        four-eyes approval, which submits to AML GO — the Back Office never submits directly.
+        No PII — an internal consent ref + case context only, never PSU identifiers.
+      required: [str_draft_id, source_consent_id, case_context, status, created_by, created_at]
+      properties:
+        str_draft_id: { type: string, format: uuid }
+        source_consent_id: { type: string, description: Internal ref to the consent whose fraud-revoke raised this draft. No PII. }
+        case_context: { type: string, description: Free-text investigator context carried into the STR. Synthetic in non-prod; no PII. }
+        status: { type: string, enum: [draft, awaiting_handoff, handed_off], description: draft → awaiting_handoff (four-eyes initiated) → handed_off (accepted by the STR workflow). }
+        created_by: { type: string, description: IdP subject that raised the draft (the fraud-revoke initiator). }
+        approval_id: { type: string, nullable: true, description: The four-eyes approval request gating the handoff. }
+        workflow_ref: { type: string, nullable: true, description: The bank STR workflow's own reference once it accepts the handoff. }
+        approved_by: { type: string, nullable: true, description: IdP subject of the Risk second-line approver (different principal). }
+        handed_off_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
     Money:
       type: object
       required: [amount, currency]
@@ -3304,14 +3917,51 @@ components:
         event_type: { type: string, example: psu_lookup }
         acting_principal: { type: string }
         acting_persona: { type: string }
-        scope_used: { type: string }
+        scope_used:
+          type: string
+          description: >
+            The declared scope that authorised the action, or one of exactly three declared
+            non-scope literals. Scheduled jobs previously stamped invented tokens (`billing:rate`,
+            `reconciliation:run`, …) that named scopes an auditor could not resolve against this
+            contract — permanently, since the trail is INSERT-only with a five-year retention and no
+            deletion path. Identity is carried by `acting_principal` and `event_type`, so nothing is
+            lost by recording that no scope was involved (CODE-03).
+
+
+            The three, kept distinct because collapsing them is the blurring the trail exists to
+            prevent — an auditor must be able to tell a headless job from a person whose action no
+            scope mediated:
+
+
+            - `system` — a scheduled actor that no principal authorised.
+
+            - `none` — an auth-lifecycle event (signin failure, signout) where a HUMAN acted and no
+            scope was in play. Filing these under `system` would attribute a person's failed signin
+            to a machine.
+
+            - `seed` — demo-profile seed provenance, written by the seed scripts. Never an
+            authorisation; the demo environment is permanently non-prod.
+
+
+            This list is the contract half of a closed loop: the three literals are declared once in
+            `packages/db/src/audit.ts`, the CODE-03 resolvability check builds its allow-list from
+            those same constants, and a test asserts every declared constant appears here. An earlier
+            version of this description named only `system` while the code wrote all three, which
+            reproduced CODE-03's own defect — a value an auditor cannot resolve against the contract —
+            inside the change that was supposed to close it.
         target_psu_identifier: { type: string, nullable: true }
         target_consent_id: { type: string, format: uuid, nullable: true }
         target_dispute_id: { type: string, format: uuid, nullable: true }
         request_trace_id: { type: string, description: x-fapi-interaction-id }
         superadmin_marker: { type: boolean, description: 'BACKOFFICE-80: stamped true on every record produced under platform:superadmin' }
         request_body_redacted: { type: object }
-        response_status: { type: integer }
+        response_status:
+          type: integer
+          description: >
+            The HTTP status returned to the caller, or `0` for an actor that issues no HTTP response
+            at all. Zero is not a status code, which is why it can carry that meaning without
+            colliding with one. Scheduled jobs previously stamped 200/201/202/502 for responses
+            nobody received, including one path that recorded 200 on a SKIP (CODE-03).
         created_at: { type: string, format: date-time }
     Freshness:
       type: object
@@ -3352,6 +4002,355 @@ components:
         status: { type: string, enum: [ingested, reconciling, reconciled_clean, reconciled_with_breaks] }
         open_break_count: { type: integer }
         nebras_billing_query_refs: { type: array, items: { type: string }, description: Nebras case references for disputed lines (30-day window) }
+    TppCostDocumentType:
+      type: string
+      description: Provider cost-document taxonomy (ADR 0007 D9, IG v5.0 §10). Nebras tax invoice is primary.
+      enum:
+        - nebras_tax_invoice
+        - nebras_settlement_statement
+        - lfi_self_invoice
+        - credit_note
+        - debit_note
+        - manual_adjustment
+    TppCostDocumentLine:
+      type: object
+      required:
+        [line_ref, source_category, mapped, cost_recipient_type, cost_recipient_id, units,
+         unit_price_milli_fils, actual_net, vat, actual_gross]
+      description: >
+        One provider line. `source_category` is the provider's own category, kept verbatim as
+        evidence; `fee_class` is our mapping of it and is null exactly when `mapped` is false.
+      properties:
+        line_ref: { type: string }
+        source_category: { type: string }
+        fee_class: { type: string, nullable: true }
+        mapped:
+          type: boolean
+          description: False when the provider category resolves to no known fee class. Such a line is flagged, never dropped.
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        units: { type: integer }
+        unit_price_milli_fils:
+          type: integer
+          description: >
+            A unit RATE in integer milli-fils (thousandths of a fil), NOT a money amount. The binding
+            money convention governs amounts; a scheme tariff of 2.5 fils per call cannot be expressed
+            in minor units without rounding the price itself away, so rates keep sub-minor resolution.
+        actual_net: { $ref: '#/components/schemas/Money' }
+        vat: { $ref: '#/components/schemas/Money' }
+        actual_gross:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Always equals actual_net + vat; derived from the rounded parts so the triple ties.
+    TppCostDocument:
+      type: object
+      required:
+        [document_id, document_type, issuer_id, recipient_id, document_reference, billing_period,
+         currency, net, vat, gross, document_sha256, issued_at,
+         received_at, verified_by, verified_at, unmapped_line_count, redacted_field_count, lines]
+      properties:
+        document_id: { type: string, format: uuid }
+        document_type: { $ref: '#/components/schemas/TppCostDocumentType' }
+        issuer_id: { type: string }
+        recipient_id: { type: string }
+        document_reference: { type: string }
+        billing_period: { type: string, description: 'YYYY-MM' }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        net: { $ref: '#/components/schemas/Money' }
+        vat: { $ref: '#/components/schemas/Money' }
+        gross:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Always equals net + vat; derived from the rounded parts so the triple ties.
+        document_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        issued_at: { type: string, format: date-time }
+        received_at: { type: string, format: date-time }
+        verified_by: { type: string, description: The second person who verified the upload; never equal to the uploader }
+        verified_at: { type: string, format: date-time }
+        unmapped_line_count:
+          type: integer
+          description: Lines stored with mapped=false, awaiting a category mapping. Non-zero is a signal, not a failure.
+        redacted_field_count:
+          type: integer
+          description: >
+            How many provider fields were redacted at parse time. Key paths are audited; the removed
+            values are never stored or logged.
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostDocumentLine' }
+    PayableBreakType:
+      type: string
+      enum:
+        [quantity_variance, rate_variance, unexpected_charge, missing_charge, wrong_recipient,
+         duplicate_charge, vat_variance, period_variance, unmatched_document_line,
+         unmatched_expected_line]
+      description: >
+        Payable break taxonomy (BILL-13 migration 0039). Narrower than the reconciliation `LineType`,
+        which classifies WHICH STREAM a break belongs to rather than what went wrong; every value here
+        maps onto a LineType via the cost recipient — Hub fees to nebras_fees, underlying-LFI API
+        access to lfi_access_log.
+    TppCostDiffLine:
+      type: object
+      required:
+        [line_ref, break_type, line_type, presence, cost_recipient_type, cost_recipient_id,
+         expected_net, actual_net, variance, variance_basis_points,
+         material, reason_code]
+      properties:
+        line_ref: { type: string }
+        break_type: { $ref: '#/components/schemas/PayableBreakType' }
+        line_type:
+          allOf: [{ $ref: '#/components/schemas/LineType' }]
+          description: The contract class this break is shown as on GET /back-office/reconciliation/breaks.
+        presence: { type: string, enum: [both, expected_only, document_only] }
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        fee_class: { type: string, nullable: true }
+        source_category:
+          type: string
+          nullable: true
+          description: The provider's own wording, retained because a billing query cites it back to them.
+        expected_net: { $ref: '#/components/schemas/Money' }
+        actual_net: { $ref: '#/components/schemas/Money' }
+        variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: >
+            Signed — negative where the provider undercharged. Rounded symmetrically, so a credit is
+            not biased against the bank.
+        variance_basis_points: { type: integer }
+        material:
+          type: boolean
+          description: >
+            Exceeds the MATERIALITY threshold — big enough to hold the period open — which is
+            configurable independently of the matching tolerance that decides whether a break exists
+            at all. The two are equal at the shipped defaults. Judged on the dimension the break is
+            about: a VAT break on its VAT variance, a quantity break on its counts, the rest on net
+            variance. Judging every type on net would make a VAT break permanently immaterial, since
+            classification only reaches `vat_variance` once the net variance is inside tolerance. A
+            wrong recipient is material at zero variance.
+        reason_code: { type: string }
+        reconciliation_break_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The E1 break this was escalated as; null until it is escalated.
+    TppCostReconciliation:
+      type: object
+      description: >
+        Money amounts are `Money` (integer minor units + ISO 4217), per the binding convention.
+        Milli-fils — thousandths of a fil — is a RATING AND STORAGE precision only, needed because
+        ADR 0007 prices scheme tariffs at 2.5 and 0.5 fils; it never reaches the wire as an amount on THIS schema or its siblings. One deliberate exception exists and is named here so the two statements do not contradict each other: `TppCostEvidenceExport` (BILL-17) ships the ledger's stored rows verbatim, milli-fils included, because its digest must attest to what the ledger HOLDS rather than to a rounded restatement of it. That pack is an evidence artefact, not a read model — the console reads its figures from these schemas, which do emit `Money`.
+        The two integer fields that remain in milli-fils are a matching threshold and a unit rate,
+        neither of which is an amount.
+      required:
+        [period, currency, tolerance_milli_fils, query_window_days, query_deadline,
+         query_window_status, days_remaining_at_ingest, response_clocks, matched_line_count,
+         break_count, expected_total_net, actual_total_net,
+         net_variance, gross_variance, penalty_lines_accepted, breaks]
+      properties:
+        period: { type: string, description: 'YYYY-MM' }
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: >
+            ISO 4217 for this reconciliation. Every AMOUNT here is a Money carrying its own
+            currency; this field governs the object and the only bare-integer field left on it,
+            `tolerance_milli_fils`, which is a threshold rather than an amount. The previous
+            wording ("for every milli-fils amount in this object") described the pre-CODE-03
+            shape and survived the sweep that removed those amounts.
+        tolerance_milli_fils:
+          type: integer
+          description: >
+            A matching THRESHOLD in integer milli-fils, not a money amount. Expectations are milli-fils
+            and documents state fils, so a sub-fil difference is a unit artefact rather than a dispute —
+            sub-fil resolution is the entire point of the field, and minor units would round it away.
+            Configurable; defaults to one fil.
+        query_window_days:
+          type: integer
+          description: IG v5.0 §10.13 window in calendar days. Config, not a constant (BD-21).
+        query_deadline: { type: string, format: date-time }
+        query_window_status: { type: string, enum: [open, expired] }
+        days_remaining_at_ingest:
+          type: integer
+          description: Negative once the window closed. Measured at ingest, not at read time, so it is reproducible.
+        response_clocks:
+          type: object
+          description: IG v5.0 §10.13 obligations Nebras owes on an open query.
+          required: [first_response_minutes, final_response_days, escalation_review_days]
+          properties:
+            first_response_minutes: { type: integer }
+            final_response_days: { type: integer }
+            escalation_review_days: { type: integer }
+        matched_line_count: { type: integer }
+        break_count: { type: integer }
+        expected_total_net: { $ref: '#/components/schemas/Money' }
+        actual_total_net:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: >
+            What the provider claims for THIS period. Off-period documents are excluded — they carry
+            their own period_variance break — so this is not the sum of the documents' own totals
+            whenever one is present.
+        net_variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Signed, so opposing errors net. The headline exposure.
+        gross_variance:
+          allOf: [{ $ref: '#/components/schemas/Money' }]
+          description: Absolute, so opposing errors do NOT net away. The amount actually in dispute.
+        penalty_lines_accepted:
+          type: integer
+          description: IG §10.17 penalties matched to a recorded late payment for this period.
+        breaks:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostDiffLine' }
+    TppCostDispatchState:
+      type: string
+      description: >
+        Coarse lifecycle of an AP dispatch. Mirrors the `dispatch_state` CHECK on
+        `billing_tpp_cost_ap_dispatch` (migration 0039) value for value — the column is in an
+        INSERT-only family with no deletion path, so the two vocabularies cannot be allowed to
+        drift. The P9 port's own finer status (`mandate_active`, `presented`, `collected`) is
+        reported separately as `payable_status`; several of those map onto `dispatched` here,
+        because what this value bounds is "one dispatch per instruction", not the debit's progress.
+      enum: [pending, dispatched, accepted, rejected, failed]
+    TppCostCloseState:
+      type: string
+      description: >
+        Derived, never stored. `closed` = a second finance principal approved the close (and takes
+        precedence — a break raised afterwards cannot un-close a period); `blocked` = not closed and
+        unresolved material payable breaks exist; `open` = neither.
+      enum: [open, blocked, closed]
+    TppCostPayable:
+      type: object
+      required:
+        [payable_id, period, cost_recipient_type, cost_recipient_id, document_reference,
+         gross_amount, net_amount, vat_amount, approval_request_id, dispatch_state]
+      description: >
+        One accepted payable, keyed by the reconciliation that established it. `gross_amount` is
+        what the scheme debit collects; `net_amount` is what accrues as cost. Both are Money —
+        integer minor units — even though the ledger stores the finer milli-fils behind the
+        boundary.
+      properties:
+        payable_id: { type: string, format: uuid, description: The reconciliation this payable was established by }
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        document_reference: { type: string, description: The provider tax invoice the payable was accepted against }
+        gross_amount: { $ref: '#/components/schemas/Money' }
+        net_amount: { $ref: '#/components/schemas/Money' }
+        vat_amount: { $ref: '#/components/schemas/Money' }
+        approval_request_id:
+          type: string
+          nullable: true
+          description: The four-eyes close that authorises honouring this debit; null until the period closes.
+        dispatch_state:
+          nullable: true
+          description: Latest recorded dispatch state; null when never dispatched.
+          allOf: [ { $ref: '#/components/schemas/TppCostDispatchState' } ]
+        dispatched_at: { type: string, format: date-time, nullable: true }
+        netted_against:
+          nullable: true
+          description: IG §10.16 offset applied where this counterparty also operates as a TPP.
+          allOf: [ { $ref: '#/components/schemas/Money' } ]
+    TppCostPeriodBlocker:
+      type: object
+      required: [line_ref, break_type, cost_recipient_type, cost_recipient_id, variance, reconciliation_break_id]
+      description: One unresolved material payable break holding the period open.
+      properties:
+        line_ref: { type: string }
+        break_type: { $ref: '#/components/schemas/PayableBreakType' }
+        cost_recipient_type: { type: string, enum: [nebras, underlying_lfi] }
+        cost_recipient_id: { type: string }
+        variance: { $ref: '#/components/schemas/Money' }
+        reconciliation_break_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The E1 break this was escalated as; null means raised but not yet worked.
+    TppCostPeriod:
+      type: object
+      required: [period, close_state, open_break_count, blockers, payables, feeds_monthly_signoff]
+      description: >
+        The payable state of one cost period — close, payables, and blockers — as one read.
+      properties:
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        close_state: { $ref: '#/components/schemas/TppCostCloseState' }
+        closed_at: { type: string, format: date-time, nullable: true }
+        initiated_by: { type: string, nullable: true, description: Principal who requested the close; normalised. }
+        approved_by: { type: string, nullable: true, description: The second principal who approved it; normalised. }
+        approval_request_id: { type: string, nullable: true }
+        feeds_monthly_signoff:
+          type: boolean
+          description: >
+            Always true. Recorded as data rather than convention so the relationship to the
+            BACKOFFICE-06 monthly sign-off is readable from the row.
+        open_break_count: { type: integer, minimum: 0 }
+        blockers:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostPeriodBlocker' }
+        payables:
+          type: array
+          items: { $ref: '#/components/schemas/TppCostPayable' }
+    TppCostPayableDispatch:
+      type: object
+      required: [payable_id, dispatch_ref, dispatch_state, payable_status, replayed, approval_request_id]
+      description: >
+        The outcome of handing one approved payable to P9. `dispatch_ref` is the financial system's
+        own reference, redacted before it is persisted.
+      properties:
+        payable_id: { type: string, format: uuid }
+        dispatch_ref: { type: string }
+        dispatch_state: { $ref: '#/components/schemas/TppCostDispatchState' }
+        payable_status:
+          type: string
+          enum: [dispatched, mandate_active, presented, collected, rejected]
+          description: The P9 port's own finer status for the debit.
+        replayed: { type: boolean, description: True when the call matched an existing dispatch rather than authorising a new one }
+        approval_request_id: { type: string }
+        dispatched_at: { type: string, format: date-time }
+    TppCostEvidenceExport:
+      type: object
+      required:
+        [schema_version, period, generated_at, record_counts, documents, reconciliations,
+         diff_lines, closes, dispatches, sha256]
+      description: >
+        One period's payable evidence, as issued. Amounts inside the collections are the ledger's
+        own stored values in milli-fils rather than wire Money, deliberately: this is an EVIDENCE
+        pack whose purpose is to reproduce what the ledger holds, and rounding it to fils here would
+        make the digest attest to a rounded restatement rather than to the records themselves. The
+        console reads its figures from `GET /back-office/billing/cost-periods/{period}`, which does
+        emit Money.
+      properties:
+        schema_version: { type: string, example: "1" }
+        period: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        generated_at: { type: string, format: date-time }
+        record_counts:
+          type: object
+          description: Row count per collection, so a truncated file is detectable without parsing it.
+          additionalProperties: { type: integer, minimum: 0 }
+        documents:
+          type: array
+          description: Provider cost documents with their parsed lines. Provider-fed text is redacted at ingest.
+          items: { type: object, additionalProperties: true }
+        reconciliations:
+          type: array
+          items: { type: object, additionalProperties: true }
+        diff_lines:
+          type: array
+          items: { type: object, additionalProperties: true }
+        closes:
+          type: array
+          description: The four-eyes period close, when the period has closed. At most one per period.
+          items: { type: object, additionalProperties: true }
+        dispatches:
+          type: array
+          description: The append-only AP dispatch state log. One row per state per instruction.
+          items: { type: object, additionalProperties: true }
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: >
+            Canonical SHA-256 over this pack's body, excluding this field. BARE hex, deliberately
+            unlike the `sha256:`-prefixed form used by `TppCostDocument.document_sha256` and the
+            other billing artefacts; pinned by pattern so it cannot be silently "harmonised" to the
+            prefixed convention, which would break every recipient's recomputation. Recomputable by the
+            recipient — that is what makes the pack evidence rather than a report.
     InvoiceRun:
       type: object
       properties:

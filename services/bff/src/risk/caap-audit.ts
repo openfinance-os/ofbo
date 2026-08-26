@@ -1,3 +1,4 @@
+import { SYSTEM_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from '@ofbo/db'
 import type { HighClassAuditSink } from '../high-class-audit.js'
 
 /**
@@ -39,10 +40,17 @@ export class CaapRegistrationRecorder {
         event_type,
         acting_principal: e.device_ref,
         acting_persona: 'caap',
-        scope_used: 'platform:operations:read',
+        // A CAAP device is not a human and holds no persona scope. It previously recorded
+        // `platform:operations:read` — a scope the §2 matrix grants to human operations and
+        // compliance personas, which nothing on this path ever asserted — so the trail read as
+        // though an operations analyst had authorised a device's registration. That is the
+        // borrowing half of CODE-03, and it is worse than an invented token: an invented token
+        // looks wrong to an auditor, a borrowed one looks authorised.
+        scope_used: SYSTEM_ACTOR_SCOPE,
         request_trace_id: traceId,
         request_body: { device_ref: e.device_ref, caap_user_ref: e.caap_user_ref, action: e.action },
-        response_status: 200
+        // Scheme-driven event, not an HTTP request/response cycle — 200 was a fabricated status.
+        response_status: SYSTEM_ACTOR_RESPONSE_STATUS
       })
       out.push({ device_ref: e.device_ref, action: e.action, event_type })
     }

@@ -28,8 +28,8 @@ describe('BuiltWithHarness', () => {
     expect(dialog).toHaveTextContent(/double diamond/i)
     expect(dialog).toHaveTextContent(/human merges it/i)
     // embeds the map served from /public, and links to it full-screen
-    expect(screen.getByTestId('harness-map-frame')).toHaveAttribute('src', '/harness-map.html')
-    expect(screen.getByTestId('built-with-full-link')).toHaveAttribute('href', '/harness-map.html')
+    expect(screen.getByTestId('harness-map-frame')).toHaveAttribute('src', '/the-loom-ways-of-working.html')
+    expect(screen.getByTestId('built-with-full-link')).toHaveAttribute('href', '/the-loom-ways-of-working.html')
     // and a companion link to the AI-DLC tooling page, served from /public
     expect(screen.getByTestId('built-with-aidlc-link')).toHaveAttribute(
       'href',

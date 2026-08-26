@@ -8,9 +8,11 @@ import {
   PgDisputeStore,
   PgRespondentDisputeStore,
   PgFraudIncidentStore,
+  PgAgentStore,
   PgSchemeNotificationStore,
   PgTrustFrameworkParticipantStore,
   PgServiceDeskCaseStore,
+  PgStrDraftStore,
   PgIdempotencyStore,
   PgLineageEmitter,
   PgLineageReader,
@@ -21,6 +23,10 @@ import {
   PgTppCounterpartyStore,
   PgBillingRecordStore,
   PgInvoiceRunStore,
+  PgBillingTppCostStore,
+  PgPayableCloseStore,
+  PgPayableDispatchStore,
+  PgPayablePeriodStore,
   PgNebrasSnapshotStore,
   PgNebrasAggregateStore,
   PgCertificationStore,
@@ -54,9 +60,11 @@ const consentEvents = url ? new PgConsentEventReader(url, tenancy) : undefined
 const disputeStore = url ? new PgDisputeStore(url, tenancy, lineage) : undefined
 const respondentDisputeStore = url ? new PgRespondentDisputeStore(url, tenancy, lineage) : undefined
 const fraudIncidentStore = url ? new PgFraudIncidentStore(url, tenancy, lineage) : undefined
+const agentStore = url ? new PgAgentStore(url, tenancy, lineage) : undefined
 const schemeNotificationStore = url ? new PgSchemeNotificationStore(url, tenancy, lineage) : undefined
 const trustFrameworkStore = url ? new PgTrustFrameworkParticipantStore(url, tenancy, lineage) : undefined
 const serviceDeskStore = url ? new PgServiceDeskCaseStore(url, tenancy, lineage) : undefined
+const strDraftStore = url ? new PgStrDraftStore(url, tenancy, lineage) : undefined
 const complianceReportStore = url ? new PgComplianceReportStore(url, tenancy, lineage) : undefined
 const reconciliationLogStore = url ? new PgReconciliationLogStore(url, tenancy, lineage) : undefined
 const reconciliationBreakStore = url ? new PgReconciliationBreakStore(url, tenancy, lineage) : undefined
@@ -74,6 +82,13 @@ const complianceMetricsStore = url && audit ? new PgComplianceMetricsStore(url, 
 const riskMetricsStore = url && audit ? new PgRiskMetricsStore(url, tenancy, audit) : undefined
 const lineageReaderStore = url ? new PgLineageReader(url, tenancy) : undefined
 const auditReader = url ? new PgAuditReader(url, tenancy) : undefined
+// BILL-14/15/16 — the TPP Cost Management ledger, matching worker.ts. Without these the local dev
+// server hits the fail-closed defaults and the whole payable surface answers 500 instead of the
+// contract's error envelope, which is exactly the state the deployed worker was in.
+const tppCostLedgerStore = url ? new PgBillingTppCostStore(url, tenancy, lineage) : undefined
+const payableCloseStore = url ? new PgPayableCloseStore(url, tenancy, lineage) : undefined
+const payableDispatchStore = url ? new PgPayableDispatchStore(url, tenancy, lineage) : undefined
+const payablePeriodStore = url ? new PgPayablePeriodStore(url, tenancy, lineage) : undefined
 
 const app = createApp({
   ...(audit ? { audit } : {}),
@@ -84,13 +99,19 @@ const app = createApp({
   ...(disputeStore ? { disputeStore } : {}),
   ...(respondentDisputeStore ? { respondentDisputeStore } : {}),
   ...(fraudIncidentStore ? { fraudIncidentStore } : {}),
+  ...(agentStore ? { agentStore } : {}),
   ...(schemeNotificationStore ? { schemeNotificationStore } : {}),
   ...(trustFrameworkStore ? { trustFrameworkStore } : {}),
   ...(serviceDeskStore ? { serviceDeskStore } : {}),
+  ...(strDraftStore ? { strDraftStore } : {}),
   ...(complianceReportStore ? { complianceReportStore, reportStore: complianceReportStore } : {}),
   ...(reconciliationLogStore ? { reconciliationLogStore } : {}),
   ...(reconciliationBreakStore ? { reconciliationBreakStore } : {}),
   ...(reconciliationThresholdStore ? { reconciliationThresholdStore } : {}),
+  ...(tppCostLedgerStore ? { tppCostDocumentStore: tppCostLedgerStore, tppCostReconcileStore: tppCostLedgerStore } : {}),
+  ...(payableCloseStore ? { payableCloseStore } : {}),
+  ...(payableDispatchStore ? { payableDispatchStore } : {}),
+  ...(payablePeriodStore ? { payablePeriodStore } : {}),
   ...(tppCounterpartyStore ? { tppCounterpartyStore } : {}),
   ...(billingRecordStore ? { billingRecordStore } : {}),
   ...(invoiceRunStore ? { invoiceRunStore } : {}),

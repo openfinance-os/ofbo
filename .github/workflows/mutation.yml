@@ -1,10 +1,25 @@
 # HARNESS-04 — mutation testing of the security-critical BFF core (rbac / auth / four-eyes /
 # high-class audit / Idempotency-Key window).
 # Q1b proves tests aren't WEAKENED; this proves they aren't HOLLOW — a surviving mutant is a
-# behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run is
-# ~8 min, so it would tax every unrelated PR. Instead it runs on a schedule, on demand, and on
-# PRs that actually touch the security core. `break` (stryker.config.json) sits below the
-# measured baseline so a real regression fails without flaking on the mutation-score noise floor.
+# behaviour change no test caught. Deliberately NOT a universal per-PR gate: a full run is slow
+# enough to tax every unrelated PR. Instead it runs on a schedule, on demand, and on PRs that
+# actually touch the security core. `break` (stryker.config.json) sits below the measured
+# baseline so a real regression fails without flaking on the mutation-score noise floor.
+#
+# Runtime, measured 2026-08-18 rather than estimated: 23m44s and 24m47s on consecutive green runs,
+# then a 25m02s run that hit the old `timeout-minutes: 25` and was reported as CANCELLED — which
+# reads as neither pass nor fail. The header used to claim "~8 min"; that number was stale by a
+# factor of three and the cap sat about one minute above the real runtime, so the job was a flake
+# waiting to happen independently of any change to it. The cap below is now 45 minutes, so the job
+# is no longer pinned against its own ceiling — which is what made it the job most likely to start
+# failing spuriously.
+#
+# That growth — ~8 min at creation to ~25 min by Aug 2026 — is UNEXPLAINED and worth its own
+# investigation. Raising the cap buys headroom; it does not answer why the run got three times
+# slower, and nothing here should be read as having closed that question.
+#
+# The cap is the schedule, NOT the control. `break: 70` in stryker.config.json is the control and
+# is untouched — never raise this timeout as a way to avoid a threshold failure.
 name: mutation
 
 on:
@@ -12,7 +27,41 @@ on:
   schedule:
     # Weekly, Monday 03:17 UTC (off-peak, off-minute so the fleet doesn't stampede the runner pool).
     - cron: '17 3 * * 1'
+  # HARNESS-20 — `synchronize` is BACK, and cost is controlled by the `changes` job below
+  # instead of by trigger breadth. This CORRECTS HARNESS-18, which removed `synchronize` and in
+  # doing so opened a real coverage hole. The hole, found by the hard-stop reviewer on PR #329:
+  #
+  #   1. PR opened NON-DRAFT, diff touches no security-core path → `opened` fires, `paths:`
+  #      does not match, no run. Correct.
+  #   2. A later push adds `approvals/service.ts` or `high-class-audit.ts` → under HARNESS-18
+  #      `synchronize` was gone, so NOTHING fired.
+  #   3. `ready_for_review` cannot fire — the PR was never a draft.
+  #   4. The PR merged with its four-eyes / high-class-audit changes mutation-tested ZERO times,
+  #      caught only by the weekly schedule, on the Monday AFTER it was already on main.
+  #
+  # The whole-diff `paths:` semantics that caused HARNESS-18's cost problem were also what made
+  # that case safe. Removing `synchronize` removed the cost and the safety together, and the
+  # header then claimed "a cost change, not a coverage change", which was false.
+  #
+  # THE FIX SEPARATES TWO QUESTIONS, because they are different questions:
+  #   `paths:` (below)  — "is this BRANCH relevant to the security core at all?" Evaluated by
+  #                       GitHub against the cumulative PR diff. A branch that never touches the
+  #                       security core starts nothing and costs literally zero.
+  #   `changes` (job)   — "did THIS PUSH touch it?" Evaluated against the pushed range
+  #                       (`before`..`after`), which is what `paths:` cannot express.
+  #
+  # So a docs-only push to a branch that touched auth.ts last week starts a ~1-minute classifier
+  # and stops. A push that actually edits auth.ts runs the full ~25-minute gate. Against the
+  # 18-19 Aug window that motivated HARNESS-18: 30 runs × ~25 min becomes ~30 × ~1 min plus the
+  # handful that genuinely touched the security core — and case 2 above now runs the gate.
+  #
+  # THE CLASSIFIER FAILS OPEN, deliberately: if it cannot resolve the pushed range (force-push,
+  # shallow history, a missing `before`), it RUNS the gate rather than guessing. A cost control
+  # that skips a security gate on uncertainty is not a cost control, it is a hole.
+  #
+  # ESCAPE HATCH: `workflow_dispatch` above accepts any ref. Deliberately NOT a label trigger.
   pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
     paths:
       - 'services/bff/src/rbac.ts'
       - 'services/bff/src/auth.ts'
@@ -28,10 +77,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # =====================================================================================
+  # HARNESS-20. Decides whether the ~25-minute gate below needs to run for THIS event.
+  # Always runs, always reports — a gate that does not run must say so and say why, never
+  # be silently absent (HARNESS-07 doctrine, and the q1b "NOT RUN" handling in ci.yml).
+  #
+  # FAILS OPEN. Every path that cannot positively establish "this push did not touch the
+  # security core" sets run=true. Uncertainty runs the gate.
+  # =====================================================================================
+  changes:
+    name: Did this push touch the security core?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: the pushed range's base may be many commits back.
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      # Dependency-free pure Node, like the discovery gates — no install step needed. The
+      # decision lives in scripts/mutation-scope-check.mjs so it is unit-testable in
+      # isolation; scripts/test/mutation-scope-check.test.mjs exercises every branch,
+      # including the three that FAIL OPEN.
+      - id: decide
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_AFTER: ${{ github.event.after }}
+        run: node scripts/mutation-scope-check.mjs
+
   mutation:
     name: Mutation testing — security core (rbac/auth/four-eyes)
+    needs: changes
+    if: ${{ needs.changes.outputs.run == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

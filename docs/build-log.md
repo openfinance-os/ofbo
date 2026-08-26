@@ -5,6 +5,70 @@ Each entry: what was built, the evidence, and anything parked for a human decisi
 
 ---
 
+## 2026-08-22 — ADR 0032: deleting an accepted ADR requires a record (supersedes ADR 0031)
+
+User decision, closing the question ADR 0031 left open. The build agent deliberately did NOT
+recommend on this one when ADR 0031 shipped - it recorded the question as an open control-plane
+matter under HG-0002 and stopped, which is the rule for a governance call. Asked for a
+recommendation later, the agent gave one (close the exemption) and the owner agreed.
+
+THE EXEMPTION WAS RESTING ON A CONTROL THAT DOES NOT EXIST. ADR 0031 carved outright deletion out
+of scope on two grounds. One holds: the delete-plus-re-add pairing catches a "deletion" that is
+really a rewrite, renumbered or not. The other was false, and the hard-stop AI reviewer found it by
+CHECKING rather than accepting: doc-link-check resolves FILE-PATH references, and no ADR is
+referenced by path anywhere in the set it scans - ADRs are cited by NUMBER, which it cannot
+resolve. Every real docs/adrs/NNNN-*.md path reference lives outside that set (backlog.yaml,
+docs/research/, docs/reviews/, mcp-gateway, ai-review.yml). So deleting an accepted ADR was green
+on both gates and silent, which is exactly what the exemption claimed was impossible.
+
+BOTH HALVES OF ADR 0031'S OWN RULE WERE EXERCISED BY ONE FINDING, which is the neatest thing about
+this change. The false claim was a statement of FACT, so it was corrected IN PLACE with a dated
+amendment row. Bringing deletion into scope changes the DECISION's scope, so it required a
+SUPERSEDING ADR - the convention applying to itself, in both directions, on the same defect.
+
+THE RULE: an accepted ADR may not be removed from the tree. There is deliberately NO satisfying
+route for a deletion - not a row, not a status flip - because neither can be written to a file that
+no longer exists. The remedy is to not delete it: supersede it and leave the document in place.
+ADR 0012 was superseded on 2026-06-21 and is still in the tree, still readable, still explaining
+why the generic analytics renderer was chosen and then reversed. That is the value at stake. A
+deleted record takes its reasoning with it, and git log is not a substitute for the same reason
+ADR 0031 gave about amendments in the first place: NOBODY READS GIT LOG BEFORE RELYING ON A
+DECISION. ADR 0031 itself is now Superseded and kept in place, which is the rule demonstrating
+itself on the first document it applies to.
+
+COST MEASURED BEFORE ADOPTING, not assumed: no ADR has ever been deleted in this repository -
+0001..0032 with no gaps, and no deletion in the history of docs/adrs/*.md. The rule constrains
+something that has never happened, at the price of one status line if it ever does. That asymmetry
+is what made closing the exemption cheap, and it is why the agent recommended closing it.
+
+A LIVE PROBE ON THIS BRANCH THEN KILLED A CONTROL I HAD JUST DEFENDED. Round 3 closed the
+"rewrite AND renumber" escape by pairing a leftover deletion with a leftover addition ACROSS
+numbers, and I documented the false-red that costs (a PR deleting one ADR and adding an unrelated
+one gets flagged) as an accepted trade. Probing ADR 0032's new deletion rule showed the trade was
+worse than documented: deleting accepted ADR 0007 in a PR that also ADDS ADR 0032 paired the two,
+and the gate reported "0032 - an EXISTING amendment row was rewritten or removed" instead of
+"0007 - DELETED". Wrong file, wrong reason, wrong remedy printed. The false red was the smaller
+half of the problem; MISREPORTING was the larger.
+
+The pairing is now RETIRED, and ADR 0032 is what makes that safe: an unpaired deletion of an
+accepted ADR is a violation on its own, so the renumbered rewrite is caught as the deletion it
+contains, with no invented rewrite relationship between two unrelated files. Same-number D+A
+pairing stays - that pair really is one record rewritten, and the record still exists. Net effect:
+the new rule closed a bypass AND removed the false-red its predecessor had introduced.
+
+ONE TEST ASSERTION INVERTED, and its own comment had predicted this: it asserted a lone deletion
+was "still the documented carve-out, still exempt", because banning it "would be a decision change
+this script may not make". The owner has since made that decision, so the script may now make it.
+Strictly stronger - a case that was silently exempt is now surfaced. Recorded because a test edit
+accompanying a green run must always justify its direction.
+
+Two self-inflicted breakages en route, both caught before commit and both the same shape: text
+inserted into a delimited context without checking the delimiters. Double quotes inside a
+double-quoted YAML scalar broke backlog.yaml; backticks inside a JS template literal broke the
+gate script twice. Parse checks caught all three.
+
+---
+
 ## 2026-06-11 — M0-FOUNDATION (PR #2, pre-loop)
 
 - Workspace, `@ofbo/contracts` (57 paths / 61 routes generated), `@ofbo/bff` 501-stub service with red-by-design `[contract-pending]` suite, `@ofbo/ports` P1–P9 (sim + enterprise stubs + shared contract harness), `@ofbo/db` (9 tables + matview, RLS, INSERT-only audit), `@ofbo/synthetic-data`, CI gates Q1–Q3.
@@ -1757,3 +1821,3220 @@ StrykerJS (`@stryker-mutator/vitest-runner`) scoped to the security core — `rb
 Honest baseline, not a vanity number. The 101 survivors are the hardening backlog — `StringLiteral` (audit/error text), `Regex` (code-format validation), and the highest-value `ConditionalExpression` flips in the four-eyes guards. Killing those + raising `break` is the intended ongoing ratchet.
 
 Adds two devDeps (`@stryker-mutator/core`, `@stryker-mutator/vitest-runner`); `test:mutation` script; `.stryker-tmp/` + `reports/mutation/` gitignored. Reviewers: pending PR. ADR 0021; backlog HARNESS-04 → done.
+
+---
+
+## 2026-07-26 — REPO HEALTH: main red since 22 Jul — duplicate ADR number (Q2b) + high advisories in shipped deps (Q4)
+
+Not a story. `main` had been failing CI since the 22 Jul merge burst (`e276091`); both failures were merge-blocking, so nothing could land on top of them. Two independent gates, two independent causes.
+
+**Q2b — documentation integrity: duplicate ADR 0027.** PRs **#294** (multi-tenant tenancy model) and **#295** (Ozone-as-channel + SI-delivery) were open concurrently and each numbered its ADR 0027 — a collision git cannot see, because the filenames differ. #295 merged first (07:54:51), #294 46s later (07:55:37), so #294's record is the one that took an occupied number: `0027-multi-tenant-tenancy-model.md` → **`0028-multi-tenant-tenancy-model.md`**, with a `Numbering:` line in the header recording why. This is the exact collision class ADR 0020's duplicate-number check was written for, and the second time it has fired (ADR 0018 → 0019 while PR #250 was open) — the gate worked, it just fired post-merge because both PRs were green when they were each last built.
+
+Reference split verified before and after: the three prose "ADR 0027" citations in `docs/proposals/ozone-*` all point at the **Ozone** record and are untouched; all 15 code/spec citations (`packages/db` tenant-tx, governed-aggregate, seed-tenants, migration `0030_tenant_group.sql`, `services/bff/src/worker.ts`, the portal tenant scaffold) point at the **tenancy** record and moved to 0028. Migration comment edits are inert — there is no migration checksum mechanism. Also corrected `architecture-overview.md`'s stale migration range (0001 → 0027) to 0030, drift the path-existence check cannot catch.
+
+**Q4 — dependency scan: 5 HIGH advisories in production deps.** `next` was one minor behind the DoS fix; `sharp`, `postcss` and `fast-uri` were each pinned *by a parent* below their patched version, so `pnpm update` alone could not lift them.
+
+- `next` 15.5.19 → **15.5.22** (GHSA App-Router Server Actions DoS, patched 15.5.21). The declared range hardened `^15.1.6` → `^15.5.22` so a lockfile rebuild cannot resolve back below the floor.
+- New **`pnpm.overrides`** floors for the three parent-pinned transitives: `sharp` ^0.35.0 (libvips CVE-2026-33327/33328/35590/35591; next pins `^0.34.3`), `postcss` ^8.5.18 (two sourceMappingURL path-traversal/disclosure advisories; next pins an exact 8.4.31), `fast-uri` ^3.1.4 (host confusion via literal backslash authority delimiter; reached through `ajv` under `@modelcontextprotocol/sdk` in `services/mcp-gateway`). Resolved: sharp 0.35.3, postcss 8.5.23, fast-uri 3.1.4. An `overridesNote` next to the block states the rule — overrides are for parent-pinned deps only, a direct dependency is bumped in its own manifest, and an entry is dropped once the parent ships the fix.
+
+`pnpm audit --prod --audit-level=high` now exits 0 (1 low / 4 moderate remain, below the gate's threshold and unchanged in kind).
+
+**Evidence.** doc-link-check 58 docs / 28 ADRs clean · audit exit 0 · lint clean · typecheck clean across all 7 projects · full build incl. the Next portal (the real test of the sharp/postcss bumps — both sit in its build pipeline) · unit **1209 passing** (182 files) · integration **136 passing** (68 files, real Postgres 16) · Q4.5 lineage PASSED, no gaps · discovery waist gate OK · gen-drift none · Q1b clean. **Not verified locally: Q4's semgrep secrets scan** — `semgrep.dev` is blocked by this environment's egress policy, so the ruleset cannot be fetched. It runs in CI, and note it has *not* run on current `main` either: it is sequenced after the dependency scan in the same job and was skipped when that step failed. This diff introduces no secrets (manifest, lockfile, ADR rename, comment text).
+
+---
+
+## 2026-07-26 — HARNESS-07: un-shadow independent CI checks — a skipped security scan must not look like a passing one
+
+Second follow-up to the red-main fix. Found while confirming what had actually run on `main`: Q4's semgrep **secrets scan had not executed at all** between 22 and 26 Jul. Not because it was broken — because it never got the chance.
+
+**The defect.** Steps in a job are sequential under `bash -e`, so a failing step skips every step after it. Q4 runs `pnpm audit` then the secrets scan; while the audit was red, the secrets scan was skipped on every single run. The checks tab showed one red Q4 — indistinguishable from "the dependency scan is red and the secrets scan is fine". A security control that is *absent* looked exactly like one that *passed*, for four days, and nothing in the system said otherwise. Q2 has the identical shape: a lint error skips both `typecheck` and the semgrep **SAST**.
+
+The two scans are independent — a vulnerable transitive dependency tells you nothing about whether a credential was committed. Sequencing them was an artefact of sharing a runner, not a real dependency.
+
+**The fix.** Independent checks carry `if: ${{ !cancelled() && steps.install.outcome == 'success' }}`, so an earlier *check* failing no longer suppresses them (the job still goes red — nothing is being downgraded). Applied to Q4's secrets scan, Q2's typecheck + SAST, and the Discovery job's run-validation + waist gate.
+
+Two deliberate choices:
+
+- **Gated on setup, not a bare `!cancelled()`.** If `pnpm install` itself fails there is no `node_modules`, and running the scans anyway would produce a screenful of noise failures that obscure the one real cause. `steps.install.outcome == 'success'` draws the line where it belongs: a failed *check* must not suppress its peers; a failed *prerequisite* legitimately does. The Discovery job is dependency-free, so plain `!cancelled()` is correct there.
+- **In-job guards, not new jobs.** Splitting Q4 into two jobs gives each its own check-run, which is nicer to read — but it retires the name `Q4 — security review + dependency scan`, and any branch-protection rule pinned to that name would then wait forever on a check that never reports. The guard achieves the substance (neither scan can be silently skipped) with no rename. Splitting is still available later if the required-check names are updated in the same change.
+
+**Honest limit on the evidence.** The guard only *changes* behaviour on a run where something fails, so a green CI run cannot demonstrate it. Verified statically instead: the workflow parses, and the conditions attach to exactly the five intended steps and nothing else (the pre-existing `if: always()` on the Playwright artifact upload is untouched). Proving it live would mean deliberately failing a step in a throwaway PR — worth doing on request, not worth the noise unprompted.
+
+---
+
+## 2026-07-26 — HARNESS-06: ADR number reservation — the cross-PR half of the numbering gate (Q2c)
+
+Follow-up to the red-main fix earlier today. That PR renumbered the colliding ADR; this one stops the collision being *creatable*.
+
+**The hole.** HARNESS-05's duplicate-number check (ADR 0020, Q2b) is **intra-tree** — it fails when the checked-out tree holds two ADRs sharing a `NNNN` prefix. A collision, though, is made by two branches that are each individually clean: #294 adds `0027-multi-tenant-tenancy-model.md`, #295 adds `0027-ozone-channel-si-distribution.md`, both trees hold exactly one 0027, both go green, both merge, and `main` is red after the fact. The number is contended *across* branches, so the check has to look across branches too. This is the second occurrence of the shape (ADR 0018 while PR #250 was open), which is what makes it structural rather than bad luck — concurrent build loops each pick "the next free number" against a snapshot that is already stale.
+
+**`scripts/adr-number-check.mjs` + CI gate Q2c.** Two checks, increasing reach:
+
+1. **BASE** (offline, no token) — a number this branch *adds* must not already exist on the base ref. Catches the stale-branch case: `main` took your number while your PR sat open. This alone would have failed #294 on any rebuild after #295 merged, which is the cheap 90% of the fix.
+2. **PEER** (GitHub API) — that number must also not be claimed by an **open** PR opened *earlier*. Catches the collision while both are still in flight, the only point at which renumbering is nearly free.
+
+Tie-break is **first-opened-keeps-it** (lower PR number holds the claim), so exactly **one** side of a collision fails — deterministic, and it matches how both real collisions were actually resolved. Both-fail would have been a worse design: two red PRs racing to renumber.
+
+**Failure posture, chosen deliberately.** A real collision is a hard, merge-blocking fail. An API that is unreachable, rate-limited or unauthorized is a **soft skip** with a printed reason — a merge gate that flakes on GitHub availability trains people to ignore it, and check (1) still runs offline regardless. `GITHUB_TOKEN` is read-only here (list open PRs + their changed files).
+
+**Own job, not a Q2b step.** Deliberate, and the same reasoning as HARNESS-07: a step appended to Q2b would be silently skipped whenever `doc-link-check` failed first — a gate you cannot trust to be red when it matters is not a gate. `fetch-depth: 0` on that job's checkout, since the base diff needs real history.
+
+**Evidence.** 11 unit tests (`scripts/test/adr-number-check.test.mjs`, `node --test`). Seven cover the pure collision rule — the real 2026-07-22 case, the free-number pass, the same-file-both-sides non-collision (a rename must not self-trip), and multi-holder reporting. Four cover the **peer plumbing** against an injected fake GitHub: URL construction, the earlier-PR filter (a newer PR's files are never even fetched), removed-file and wrong-directory exclusions, and error propagation. That second group was added after the gate's first CI run reported `no ADR added — peer check SKIPPED`: correct behaviour for a PR that amends an ADR rather than adding one, but it meant the API path would have shipped never having executed. Since that path **soft-skips** on error, a bug in it degrades to "never catches anything" rather than anything visible — precisely the failure mode HARNESS-07 is about, so it should not be the one path taken on trust. Negative test against the live repo: adding a `0027-*.md` while `main` still holds two 0027s fails with both holders named and exit 1; removing it returns exit 0. The harness-test step now also globs `scripts/test/*.test.mjs`, so these run in CI alongside the discovery gate tests. ADR 0020 amended in place (decision unchanged, reach extended); backlog HARNESS-06 → done.
+
+---
+
+## 2026-07-26 — HARNESS-08: ESLint ignores nested worktree checkouts
+
+Found during the post-merge smoke test of the #296/#297/#298 stack: `pnpm lint` from the repo root reported **32 errors, every one of them inside `.claude/worktrees/`** — the isolated checkout CLAUDE.md rule 0 requires build work to happen in.
+
+**Why it happens.** A worktree under `.claude/worktrees/` is a full second checkout nested inside the first. `.gitignore` covers it (added in `89104f8`), but **ESLint flat config does not read `.gitignore`** — `ignores` is its own list. So a root lint walks into every parallel branch's checkout and reports that branch's findings against paths in the current tree.
+
+**Why it mattered more than cosmetics.** The loudest phantom was the `no-restricted-syntax` rule on `DEPLOY_PROFILE` — the guard that makes profile-branching outside `packages/ports` a lint error precisely because PRD §3.1 makes it a review FAIL. Seeing it fire against a file that is not in your tree is the wrong kind of alarm in a repo where that rule is load-bearing: it trains you to dismiss the one error you must never dismiss.
+
+**Why nobody noticed.** CI checks out fresh and has no `.claude/worktrees/`, so Q2 was green on every PR while local lint was noisy. The gate and the developer's terminal disagreed, and only the terminal was wrong — the failure mode a build loop is least likely to report, because the loop reads CI.
+
+**Fix.** `'.claude/worktrees/**'` added to the `ignores` list in `eslint.config.mjs`, alongside the existing `.remember/**` scratch-dir precedent. Each worktree still lints itself — the isolation is what makes that correct.
+
+**Evidence.** Reproduced first, not assumed: a probe checkout at `.claude/worktrees/probe-checkout/` containing a `DEPLOY_PROFILE` read made a root lint fail with exactly the misleading §3.1 error. After the fix, the same probe still on disk, lint exits 0. Negative control run alongside it — a deliberate `no-explicit-any` in `packages/db/src` — still fails, confirming the ignore did not over-broaden and silence real code. Probe removed after verification.
+
+## 2026-08-06 — HARNESS-09: the coverage gate becomes a gate
+
+**The gap.** `vitest.config.ts` has carried 80% thresholds (statements/branches/functions/lines, scoped to `services/bff/src`) since the substrate landed — and no CI job ever ran them. Q1 executed bare `pnpm test`; `grep -rn coverage .github/workflows/` returned nothing. CLAUDE.md's "coverage ≥80%" was a local convention wearing a gate's clothes: the same absent-control-looks-like-a-passing-one class as HARNESS-07, found by the 2026-08 improvement-plan audit (`docs/reviews/improvement-plan-2026-08.md` §2.1, priority 1 of 7).
+
+**The fix.** Q1's unit step is now `pnpm test:coverage` — one line, because the machinery already existed end to end; only the invocation was missing. Verified before flipping: 1209/1209 unit tests green with coverage at **95.5% statements / 81.7% branches / 97.5% functions / 95.5% lines**, comfortably above the floor, so the gate went live with no ratchet, no threshold edits, no test changes.
+
+**Self-guarding.** `scripts/test/coverage-gate-check.test.mjs` (picked up by the discovery-gates job's `scripts/test/*.test.mjs` glob) asserts both halves of the control: the Q1 job text invokes `test:coverage` (and does NOT run the unit suite bare), and the config's four thresholds remain ≥80. A quiet workflow revert or threshold lowering now reds CI instead of silently reopening the gap — the lesson HARNESS-06/07 keep teaching: a control that isn't asserted somewhere CI runs is one edit away from being a story we tell ourselves.
+
+## 2026-08-06 — HARNESS-11: the Q4.5 lineage gate learns its own scope
+
+**The gap.** `validateLineageCoverage` walked a **hardcoded 17-table literal** (`packages/db/src/lineage.ts`). The `ofbo_app` role can INSERT into **26** tables. Every table added since that literal was written — `str_draft`, `service_desk_case`, `trust_framework_participant`, `respondent_dispute`, `fraud_incident`, `scheme_notification` — was outside the BCBS 239 gate entirely, and the gate printed `Q4.5 PASSED` the whole time. Not a wrong answer: an answer to a smaller question than the one we thought we were asking. Found by the 2026-08 improvement-plan audit (§2.3).
+
+**The fix.** The surface is now **derived** from `information_schema.role_table_grants` — the identical pattern `registry-coverage.int.spec.ts` already uses to enrol tables in retention/classification, so the repo now derives its regulated surface the same way twice instead of hand-maintaining it once. A migration that adds a regulated table is covered by Q4.5 the moment its store can write to it, with no list to remember.
+
+**Exclusions are typed differently from gaps — deliberately.** `KNOWN_LINEAGE_GAPS` means "a real gap, mapped to the story that closes it" and stays **empty**. The three tables that legitimately carry no lineage go in a new `NON_REGULATED_TABLES` with a standing reason each: `lineage_events` (the sink itself — lineage about lineage is not a figure), `idempotency_key` (the schema's sole deletion path, already retention-exempt), `readiness_profile` (ADR 0022's public wizard — system metadata, explicitly non-regulated and PII-free, as its store has always documented). Collapsing those two ideas into one allowlist would have quietly converted "permanently out of scope" into "we owe a story", and vice versa.
+
+**Measured, not asserted.** One CI-equivalent run against a fresh Postgres (`db:apply` → `db:seed` → `test:integration` → gate): **covered 9 → 23 tables, allowed gaps none, unexpected none, Q4.5 PASSED.** The widening cost nothing because the write paths were already emitting lineage — the gate simply had not been looking at them.
+
+**Proving the wider gate can still fail.** A widened gate that can no longer go red would be the same bug in a better costume. The new anti-vacuous-pass test grants `ofbo_app` INSERT on a synthetic table, writes one row, and asserts the derivation picks it up, `validateLineageCoverage` reports it as a gap, and `evaluateLineageGate(...).ok` is `false` — then drops it. Plus set-equality against the live privilege catalogue, a justified-reason check per exclusion, and a strict-superset assertion against the retired literal so no previously-checked table can be silently dropped.
+
+## 2026-08-06 — DOCS-01: the ground-truth docs stop lying, and one of them starts parsing
+
+**What was wrong.** The README sized the project for a reader with two numbers, both stale: the spec had **89 paths / 12 tags**, not "76 paths, 10 tags"; the backlog was **140 of 150** done, not "127 of the 135". `CLAUDE.md` listed ports **P1–P9** while `packages/ports/src/interfaces.ts` has carried a tenth (`p10-str-workflow`, ADR 0022) since BACKOFFICE-63, and described an adapter layout — `adapters/<port>/sim/`, `adapters/<port>/enterprise/` — that has never existed on disk. `docs/architecture-overview.md` still labelled the enterprise adapters "M6 stub" though all ten are ADR-0024 rung ③ and fail-closed. None of this was visible to Q2b, which checks that references *resolve*, not that claims are *true*.
+
+**The backlog did not parse.** `docs/backlog.yaml` is described in the README as the "machine-readable work queue (drives the autonomous build loop)". It has not been loadable YAML: one acceptance line in BACKOFFICE-59 begins `- Training actions NEVER write to the production audit (audit_high_sensitivity): the …`, and an unquoted `: ` inside a plain sequence item makes YAML read the whole thing as a mapping key. Pre-existing, not introduced here — every tool that touches the file works by regex, so nothing ever complained. Fixed by quoting the scalar, text unchanged. **The file now parses**, and the counts above are derived from it rather than from a grep that also matched a `BACKOFFICE-NN` placeholder inside a comment.
+
+**Six items had no status at all.** The entire COMMERCIAL milestone (`VAL-01`, `HOST-01/02/03`, `INS-01/02`) carried no `status:` field while HOST scaffold code was merged. Each now carries a status *and the evidence for it*: **HOST-02 → done** (migration `0030_tenant_group.sql` plus four tests in `tenant-isolation.int.spec.ts` covering all four of its acceptance criteria); **HOST-01 → in-progress**, because `seed-tenants.ts` says in its own header that it "deliberately does NOT re-parameterise the rich single-tenant seed (that is HOST-01 proper)" and the PRD §10 per-tenant config criterion is unmet (`approvals/service.ts` still takes `expiryBusinessHours ?? 2`); **VAL-01 → pending** (no liability-schedule constants exist anywhere); **HOST-03/INS-01/INS-02 → blocked**, all three being ADR- or spec-first decisions that CLAUDE.md rule 6 reserves for a human. The waist gate only matches `BACKOFFICE-\d+`, so none of these trip HG-0007.
+
+**ADR 0028 is flagged, not resolved.** Its tenancy scaffold is merged on `main` while the record is still **Proposed** — rule 6 says raise an ADR *and stop*, which did not happen. The honest move is not to quietly stamp it Accepted to make the tree consistent: a header warning now states that implementation landed ahead of acceptance and that a human must Accept, amend, or reject, noting that rejection means unwinding merged code. The status is left untouched.
+
+**Made durable.** Correcting numbers once just resets the clock. `scripts/doc-link-check.mjs` (Q2b) gains a third check: derive the spec's path/tag counts and the backlog's done-count from the artefacts and compare them to the README's prose. Verified by reintroducing the exact original drift — the gate names both errors and exits 1, then passes again once restored. Two stale point-in-time reviews (`ui-ux-review.md`, `design-conformance-audit.md`) got dated "superseded in part" banners rather than edits, since rewriting a review to match today destroys the record of what it found — the UX one now says outright that its DEMO-banner description (`sticky`, `role="alert"`) no longer matches the component (a bottom-right pill, `role="note"`).
+
+## 2026-08-06 — HARNESS-10: the port-swap acceptance gate becomes executable
+
+**The gap.** CLAUDE.md states the M6 rule plainly: "an enterprise adapter must pass exactly the tests the simulator passes (that is the port-swap acceptance gate, M6)". The gate did not exist. `describePortContract` was literally typed `profile: 'demo'`, was only ever invoked as `describePortContract('demo')`, and closed with a comment inviting a future reader to "re-enable per port by calling `describePortContract('enterprise')`" — which would not have worked: the enterprise adapters need configuration and a transport, and three of the assertions are demo-profile facts. All ten enterprise adapters existed and were fail-closed, but were proved only by their own specs. The acceptance criterion M6 depends on was carried by prose.
+
+**What it is now.** `describePortContract(profile, get)` takes an adapter **resolver**, so one set of assertions drives both profiles. `test/fixtures/enterprise-harness.ts` constructs all ten enterprise adapters from Bank-Profile-shaped config with a routed fake vendor transport. The canned vendor payloads are lifted from each adapter's own spec, so the bench cannot drift into asserting a shape the adapter does not actually parse. **44 passing / 1 skipped**, with 16 contract assertions now binding the enterprise adapters through their real request-build → transport → response-parse → map path.
+
+**The boundary is stated, not blurred.** This is ADR 0024 rung ②: no live tenant. Auth, residency, rate limits and real payload drift remain the rung-④ M6 mile, and the fixture says so in its header. A bench that quietly implied more than it tests would be the same failure class this work exists to close.
+
+**The demo-only expectation is skipped, then replaced.** One assertion — P2 exposing nine seeded personas with demo tokens — is a fact about the demo profile, not about the port. A real Entra tenant does not expose them, and faking it would be a fake gate. It is skipped under enterprise **and** replaced by an explicit enterprise-side assertion: personas derive from the configured Bank-Profile mapping, and `demo_token` is empty for every one. The difference between the profiles is now auditable rather than implied.
+
+**Two guards on the gate itself.** First, the bench must cover every entry in `PORT_NAMES` — add a P11 without a bench entry and this fails, so a new port cannot silently escape the gate. Second, the anti-vacuous-pass check: injecting a 6000 ms revoke acknowledgement (against the scheme's 5 s SLA) and a bogus `ipp_status` turns the enterprise run **red on exactly those two tests**, then green again when reverted. A gate that cannot fail is not a gate.
+
+One incidental finding worth recording: writing the bench immediately caught a route-ordering bug in my own fake (`/invoice-runs` shadowing `/invoice-runs/{ref}/status`). That is the bench doing its job on day one — the mapping paths are genuinely being executed, not stubbed past.
+
+## 2026-08-06 — HARNESS-13: the mutation floor stops leaving five points of slack, and CI can be asked to run in full
+
+**Ratchet.** `stryker.config.json` carried `break: 65` against a baseline recorded as 70.3%. That is five points of slack: the security core (rbac / auth / approvals / high-class audit / idempotency) could lose real coverage and the weekly gate would still be green. Re-measured over 493 mutants: **71.20%** (351 killed / 116 survived) on vitest 2, and **70.99%** (350 / 117) on vitest 3 after the HARNESS-12 bump — a **one-mutant** difference across a major test-runner version, which makes ~0.2pp the observed run-to-run noise floor. `break` is now **70**: roughly one point, about five mutants, of headroom. Enough to absorb the noise, not enough to hide decay. Confirmed by a full local run that the gate exits 0 at the new floor rather than assuming it.
+
+**Dispatch.** The audit asked for one deliberate full-matrix run to close out the eleven stories that carry "Merged on local gates" from the July Actions billing outage. That could not be done: `ci.yml` had `push` and `pull_request` triggers and no `workflow_dispatch`. Added.
+
+**The interesting part is the gate that cannot run.** Q1b (test-integrity) diffs a PR against its merge base; a manual dispatch has no merge base. Its `if:` was `github.event_name == 'pull_request'`, so on a dispatch the job would simply not appear — and a "full matrix" run missing a gate, with nothing to show for it, is precisely the bug HARNESS-07 was about. The job now **runs** on a dispatch and reports itself: a `::notice`, a step-summary block, and the words "This is not a pass." The check-run exists and tells the truth about what it did.
+
+**Guarded.** `scripts/test/mutation-ratchet-check.test.mjs` (picked up by the discovery-gates harness glob) asserts the floor stays within 1.5pp of the measured baseline *and* never above it (a floor above the baseline would red a clean tree), that `workflow_dispatch` survives, and that Q1b both still executes on pull requests and still announces itself on a dispatch. Verified it bites: dropping `break` to 60 fails the test with the baseline quoted back — because lowering the floor to turn a red mutation run green is the one move ADR 0019 exists to prevent, and nothing else in CI would have noticed.
+
+## 2026-08-06 — CODE-01: one keyset implementation, and the bug that made it worth doing carefully
+
+**The premise was wrong in an interesting way.** The audit called this "~25 copies of security-and-correctness-sensitive code" to deduplicate. Reading all sixteen showed they were not copies of one thing. Three genuine divergences:
+
+1. **Direction** — nine stores page ascending (`>`), seven descending (`<` with `ORDER BY … DESC`).
+2. **Tie-break column** — `tpp_counterparty` keys on `organisation_id`, which is **TEXT**, and must *not* take the `::uuid` cast every other store applies. A helper that hardcoded the cast would have broken that store at runtime.
+3. **Parameter indexing** — fifteen stores push the two binds first and reference `$${params.length - 1}` / `$${params.length}`. `consent-events.ts` builds its clause *before* pushing, over a variable-length prefix of event-type placeholders, and references `$${params.length + 1}` / `$${params.length + 2}`.
+
+The third is the whole story. Both conventions are correct where they stand, and **neither survives being pasted into the other**. A mechanical dedup that picked one and applied it everywhere would emit SQL that still parses, still runs, and silently binds the wrong parameters — in a regulated read path, which is about the worst place for a bug that does not announce itself.
+
+**So the helper exposes no convention.** `keysetClause(params, after, opts)` takes the array the caller will hand to `query()`, appends the two binds itself, and derives the placeholder numbers from the push it just made. Callers cannot get the arithmetic wrong because callers no longer do arithmetic. `keysetOrderBy` lives beside it so a store cannot page one way and sort the other — an error that returns rows in an order the cursor does not follow, skipping or repeating at page edges. Net **−141 lines** across 16 files; zero hand-rolled keyset arithmetic left in `packages/db`.
+
+**The coverage was the actual risk.** Before this, exactly two integration specs so much as mentioned a cursor, and none walked a multi-page sequence. Sixteen hand-rolled implementations of a silent-failure read path, under a net that thin, is the finding — more than the duplication was. Added 15 unit tests (both parameter conventions, the text-key no-cast path, DESC applied to *both* key parts) and 4 live integration tests that page `consent-events` ascending over its variable-length prefix and `tpp_counterparty` over its TEXT key, asserting every row is served exactly once and that paging terminates.
+
+**Proved the net catches what it is for.** Injecting an off-by-one into the shared parameter index — precisely the bug a naive dedup would have introduced — turns both paging tests red, and green again on revert. A refactor of a silent read path verified only by "the suite still passes" would have been faith, not evidence.
+
+Verified: integration **140/140** on a pristine database (69 files), unit **1224/1224** (coverage 95.5%), `lint` + `typecheck` clean, Q4.5 lineage gate **PASSED**.
+
+## 2026-08-06 — HARNESS-12: dependencies stop being watched by nobody
+
+**The gap.** Twice now, `main` has gone red without a commit doing anything: 22–26 Jul (five HIGH advisories, the four-day outage recorded above) and again on 2026-08-04, when a docs-only PR failed Q4 because `fast-uri` and `ip-address` advisories had been published in the interim. Both times the code was fine and the world moved. There was no Renovate or Dependabot config — dependency currency was a thing someone noticed, which is not a control.
+
+**Half one — clear the backlog.** GitHub reported **41 advisories on the default branch (1 critical, 17 high)**. Now **11 (3 low, 8 moderate) — zero high, zero critical.**
+
+- **vitest 2.1.9 → 3.2.7** clears the critical (GHSA-5xrq-8626-4rwp — the UI server can read and execute arbitrary files). Stryker's vitest-runner declares `vitest: >=2.0.0`, so the mutation harness rides along unchanged. **3.2.7, not 4.x**: the minimum that closes the vulnerability, since 4 removes workspace files and changes more surface than a security fix should.
+- **jsdom ^25 → ^30 in BOTH `package.json` and `apps/portal/package.json`.** The portal carried its own pin, which is why `ws` survived the first pass and still showed `apps/portal > jsdom@25.0.1 > ws@8.20.1` after the root bump. A workspace-wide claim about a dependency is worth exactly as much as the number of `package.json` files you actually checked.
+- **Dev-tree override floors** for `brace-expansion`, `js-yaml`, `undici`, `vite`, `ws` — all advisories whose parent pins below the patch, so `pnpm update` cannot lift them. `brace-expansion` is **ranged per major** (`@1`/`@2`/`@5`) because minimatch 3, 9 and 10 put three mutually incompatible lines in one tree; a single floor would have forced one of them and broken the others.
+- `overridesNote` now separates **production** floors (what Q4's `--prod` audit actually gates) from **dev-tree** floors (not gated — but these tools run in CI holding a token, so the risk is real, and pretending otherwise because the gate is silent would be the same self-deception HARNESS-07 was about).
+- Aligned the `@hono/node-server` skew: `nebras-sim` `^1.13.7` → `^2.0.4`, matching the BFF.
+- Since vitest 3.2 deprecates workspace files (removed in 4), projects moved from `vitest.workspace.ts` into `test.projects` in `vitest.config.ts` — which also retires the split that forced the coverage gate to live in a different file from the projects it gates.
+
+**Half two — stop doing this by hand.** `renovate.json`: weekly window; security PRs immediate and exempt from the major-approval gate (an advisory is not a scheduled chore); majors and the gate-running toolchain (pnpm/node/typescript/stryker) behind `dependencyDashboardApproval`; `pnpm.overrides` explicitly unmanaged, because those are justified floors to be *removed by hand* once upstream ships a patched range, not churned.
+
+**No automerge, anywhere — deliberately.** The obvious convenience is letting Renovate self-merge green patch bumps. HG-0001 makes non-self-merge a governance control, and a bot merging its own PR is precisely the hole that control exists to close. Renovate opens, CI judges, a human merges.
+
+**Verified, not assumed** — jsdom 25→30 and vite 5→6 are large jumps under 70 portal component tests: unit **1209/1209** (coverage 95.6%), integration **136/136** on a fresh database, `lint`, `typecheck` and `pnpm build` all clean, `pnpm audit --prod --audit-level=high` exit 0. vitest 3→4 left as a future chore, now trackable on the dashboard.
+
+## 2026-08-07 — HARNESS-14: the deploy gate was red for twelve days, and the reason it stayed red is the finding
+
+**Found while verifying something else.** After merging the eight-PR improvement-plan stack I checked that `main` was actually green rather than asserting it. CI was. The **deploy** workflow was not — and had not been since **2026-07-26**. Four of its five jobs (BFF, DB migrate+seed, Nebras simulator, portal) succeeded every time; the fifth, `Smoke — demo URL live`, failed every time on one assertion.
+
+**First question: did I break it?** No — and the way to know was cheap. The same failure, same test, same message, appears on the deploy for PR #300, which was **docs-only**, and on #297 twelve days earlier. A markdown file cannot change portal auth. That settled attribution before any diagnosis.
+
+**Second question — the one that mattered: is the demo leaking the dashboard to unauthenticated visitors?** The assertion was `expect(status).toBeGreaterThanOrEqual(300)` on `GET /dashboard` with no session, and the observed status was **200**. On a regulated console that reads like an access-control hole, and it could not be left as "probably fine". Egress to the demo URL is blocked from the build container (403 at the proxy), so the demo could not be probed directly — instead the portal was built and served locally on plain `next start`:
+
+- Status is **200 there too**, so this is *not* an OpenNext/Cloudflare adapter difference.
+- The body contains **zero** shell — no `app-shell`, no `sidebar`, no audit panel, no KPIs.
+- The only thing in it is `<meta id="__next-page-redirect" http-equiv="refresh" content="1;url=/">`.
+
+So `requireSession()` → `redirect('/')` is working exactly as written. Next expresses `redirect()` **two** ways depending on whether the response has begun streaming: a 3xx with a `Location` header, or — once the `<head>` has flushed on a `dynamic = 'force-dynamic'` page, which `/dashboard` is — a 200 carrying a meta-refresh. Both are the same redirect. The test pinned one form and called the other a failure. No leak.
+
+**The real defect is what that cost.** The old test asserted nothing whatsoever about the response body. It checked the *transport* and not the *property*. Which means a genuine leak — a 200 that **does** carry the shell — would have produced the same red X as twelve days of correct behaviour, in a job everyone had already learned to scroll past. The control had no signal left in it. That is the HARNESS-07 class again: an absent control that looks like a present one. The variation is that this check was *visibly* red rather than silently skipped, and got ignored just as effectively — arguably more so, because a red X that never changes teaches you to stop reading it.
+
+**Fixed by asserting the security property first and directly.** The response must not contain `data-testid="app-shell"` (nor `sidebar` / `persona-badge` / `audit-panel`), and *then* it must bounce to sign-in by **either** redirect form. This is strictly stronger than what it replaces — the old assertion made no body claim at all — which matters, because "the gate went green after I edited the test" is the shape of reward hacking and the difference has to be demonstrable, not asserted.
+
+**Proved it discriminates.** A stub server serving the three response shapes, so the proof touches no production auth code (an earlier attempt to prove it by disabling `requireSession` and rebuilding was correctly refused, and was the wrong instrument anyway):
+
+| Response shape | Expected | Result |
+|---|---|---|
+| 200 + meta-refresh, no shell (what the portal really does) | pass | **passes** |
+| 200 **with** `app-shell` — the leak the gate exists to catch | fail | **fails on `app-shell`** |
+| 307 to `/somewhere-else` — bounced, wrong target | fail | **fails on the bounce check** |
+
+Then run green against a real locally-built portal on `next start`: 2/2.
+
+**Left alone deliberately:** the `/dashboard` page still redirects post-flush rather than pre-flush. Making it emit a clean 3xx means moving the session check ahead of the streamed render, which is a portal-architecture change, not a test fix — and the security property holds either way. Worth an ADR if the 3xx form is ever wanted for its own sake.
+
+## 2026-08-07 — HARNESS-15: rehearsing the first release found a gate that could not fail
+
+The improvement plan's §2.4 asked for the first-ever release evidence bundle: `releases/` held only a README, `git tag` was empty, and `.github/workflows/release-evidence.yml` had never fired. Rather than cut `v0.1.0` and find out in public, the pipeline was dry-run locally against `main` — real postgres, all 30 migrations, seeded, `--out` pointed at a scratch dir so nothing tracked moved.
+
+**The pipeline works.** `collect-provenance.ts` (HARNESS-03, never executed until now) ran clean on the first-release path — no prior tag, so no `--prev`, so the bounded-window branch nobody had exercised. 167 commits walked, 98 carrying a model trailer, 5 distinct build agents. The bundle assembled and sealed: 14 control mappings, 6 gates, 23 lineage-covered tables, sha256. Q1 1241/1241, Q3 144/144, `pnpm audit --audit-level=high` clean at 11 advisories with zero high or critical — HARNESS-12's fix holding.
+
+**Then the interesting part.** `collect-gates.mjs` wrote Q4.5's status as a hardcoded `'pass'` — and wrote it *before* the proof existed, since the CLI collects live coverage from `DATABASE_URL` afterwards. `buildEvidenceBundle` copied `lineage_proof` through verbatim and checked only that all six gates were **present**, never that Q4.5 agreed with the evidence printed beneath it. Injecting three gaps produced this, in one sealed document:
+
+| Gate | Status | …and thirty lines below |
+| --- | --- | --- |
+| Q4.5 BCBS 239 lineage validation | **pass** | `Gaps: audit_high_sensitivity, str_draft, fraud_incident` |
+
+Today's real gap count is zero, so the first bundle would have been truthful. That is exactly what makes it worth fixing now: the guard was inert, so it would have gone on being truthful right up until a migration added an uncovered regulated table — the one event Q4.5 exists to detect. HARNESS-11 made the *gate* derive its own surface; the evidence bundle was still hardcoding the *verdict*. Third instance of the HARNESS-07 class in this plan, and the first one where the untrue statement would have been **sealed, committed, and handed to an auditor**.
+
+The proof is the only thing that knows the answer, so the proof decides. `deriveLineageGateStatus()`: gaps → `fail`, covered-with-no-gaps → `pass`, empty-with-no-gaps → `skipped`. That last case is not pedantry — `cli.ts` records `{ covered: [], gaps: [] }` when `DATABASE_URL` is unset, and "no proof was collected" must not render as "the gate passed". Every other gate is passed through untouched; CI step outcomes are the only witness those have.
+
+**A second, quieter finding.** `verifyEvidenceBundle` was exported, unit-tested, and called by nothing. The digest was computed at write time and never checked again — a tamper-evident seal with no one reading it. `scripts/verify-bundle.ts` is now the reader, and the workflow runs it *between* assembling and committing, so a bundle whose digest does not recompute never reaches git. Ordering is the load-bearing part, and it is asserted: a verification after the commit cannot stop a corrupt bundle. Being handed no bundles exits non-zero, because "verified nothing" must not look like "verified everything".
+
+**Guards, and proof they bite.** The 4 derivation tests were red before the fix. Moving the verify step after the commit reds the ordering assertion. The verifier is driven through its real exit codes rather than as a function, so the CI step cannot decay into something that always exits 0. Re-running the whole pipeline afterwards: Q4.5 reads `pass | 23 regulated tables covered, no gaps`, the same gap injection reads `fail | lineage gaps (3): …`, and the verifier confirms the seal. Unit 1251/1251, `node --test scripts/test` 19/19, lint + typecheck clean.
+
+**Deliberately not done:** cutting `v0.1.0`. Publishing a release fires the workflow and commits `releases/` to `main` — outward-facing and effectively irreversible, so it stays a human call. What this story bought is that when someone does cut it, the bundle's own claims are checked rather than asserted.
+
+**Also observed, not acted on:** `committed_at` is inside the sealed content, so re-running for the same tag+commit yields a different digest — a bundle can be verified in place but never independently re-derived. And only 20 of 167 commits carry a story trailer, so the provenance table's Story column is mostly `—`; many of those are human merge commits, so it reads as trailer coverage rather than a pipeline defect. Both are worth a decision, neither is worth blocking a release.
+
+**Postscript — Q4 went red on the PR, and not because of this story.** GHSA-2v37-7h3g-55p8 (`nanoid` <3.3.17, infinite loop on zero size) was published against a tree nothing in this branch touches: `apps/portal > next@15.5.22 > postcss@8.5.23 > nanoid@3.3.16`, with `git diff origin/main -- pnpm-lock.yaml package.json` empty. Same shape as the 22–26 Jul and 2026-08-04 episodes — an advisory lands, no commit changes, main goes red. Renovate (HARNESS-12) opens security PRs immediately but cannot fix a floor the parent pins, which is what `pnpm.overrides` is for. Added `nanoid: ^3.3.17` as a PRODUCTION floor (only the 3.x line is in the tree, so no per-major ranging needed, unlike brace-expansion). Lifted 3.3.16 → 3.3.18; `pnpm audit --prod --audit-level=high` back to exit 0 with 9 advisories and zero high. Portal build and 1251/1251 unit green after the bump. Worth noting the local/CI asymmetry that hid this during the dry-run: Q4 runs `--prod`, and a bare `pnpm audit` reports a different tree — the dry-run's "zero high" was true of the dev tree and not of the gated one.
+
+## 2026-08-09 — CODE-02: the in-memory stores leave production source, and the measurement that nearly went the other way
+
+The improvement plan's §4 asks for the 27 `InMemory*` stores to move out of production source: they sat interleaved with the service logic they back (`reconciliation/service.ts` carried three in its last 150 lines, on top of a 900-line service) and they counted against the Q1 coverage denominator, which HARNESS-09 scopes to `services/bff/src/**`.
+
+**The measurement came first, and the obvious assumption was backwards.** The expectation was that pulling well-tested store code out of the denominator would *lower* coverage. It mattered which way: branches had only **1.71pp** of headroom (2502/3062 = 81.71% against an 80% floor), and the arithmetic on `(2502−C)/(3062−B)` said at most ~262 fully-covered branches could leave before the gate went red. So the stores' own coverage was computed before anything moved — per-class line spans crossed against the v8 report:
+
+| | statements | branches | functions |
+| --- | --- | --- | --- |
+| the InMemory classes | 806/838 (96.2%) | **286/358 (79.9%)** | 117/121 |
+
+They are the **worst branch-covered code in the BFF** — below both the 80% floor and the 81.71% file-wide average. Removing them *raises* branches. Predicted 81.95%; actual after the move **82.00%** (headroom 1.71pp → 2.00pp), statements 95.61 → 95.65, functions 97.48 → 97.90, gate exit 0.
+
+**Not `testing/`, not `fixtures/`.** The plan offered both names; both would misdescribe the code. `app.ts` falls back to these stores whenever a durable store is not injected — which is whenever `DATABASE_URL` is absent, i.e. the demo profile in production. They ship and they serve real demo traffic. They live in `services/bff/memory/` with a README that says so, because in a regulated codebase a directory named for tests is a claim about what the code is for.
+
+**Zero test churn, by design.** Imports in this repo are mixed — `import { ReconciliationService, InMemoryReconciliationBreakStore } from '../src/reconciliation/service.js'` — so relocating the classes would have meant splitting import statements across ~55 test files, which is exactly where a mechanical sweep goes wrong. Instead each store is re-exported from the module declaring its interface: the public surface is unchanged and every existing import still resolves. Q1b confirms it: *no test files changed*.
+
+**No runtime cycle.** `memory/ → src/` imports are strictly type-only and erase at compile time; the only runtime edge is `src/ → memory/` at the construction sites. Five store-only *values* stood in the way (`encodeAgentCursor`, `decodeAgentCursor`, str's `encodeCursor`, `newSlug`, `QueryPurposeRegistrarError`) — each was checked across `src/`, `test/`, `apps/`, `packages/` and `scripts/`, found to have no user but its own store, and moved with it rather than exported to create a back-edge.
+
+Net: 24 production files, **−893/+146** lines; `reconciliation/service.ts` 1068 → 929; zero `InMemory` classes left under `src/`. Verified unit 1241/1241, integration 144/144, lint + typecheck + build clean.
+
+**Aside, found while verifying:** `pnpm db:seed` is not idempotent. Re-seeding an already-seeded database inflates row counts and reds five assertions in `packages/db/test/seed-demo.int.spec.ts` (7 vs 5 cases, 5 vs 3 invoice runs, 4 vs 2 consoles). It cost a diagnosis here — the failures looked like the refactor until the diff was checked against `packages/`, which it never touches, and a pristine database went 144/144. CI never sees it because every run starts fresh. Left alone; worth a story if anyone ever seeds twice deliberately.
+
+## 2026-08-09 — CODE-03: 564 KB of screenshots nobody references, and two §4 items that turned out to be already guarded
+
+Repo-weight cleanup from the improvement plan's §4, plus a finding about the rest of that section.
+
+**Deleted:** `live-0{1..6}-*.png` at the repo root — 564 KB of portal screenshots with **zero references anywhere** in the tree (grepped across every file type, not just markdown). They arrived incidentally in `40102a9` (the BACKOFFICE-60/-53 MCP gateway spike) as verification artifacts and were never linked. Q2b confirms nothing broke. They remain in git history if anyone wants them back.
+
+**Left alone, deliberately:** `docs/proposals/rendered/` (1.1 MB of PDF/PPTX) is also unreferenced, but it is a *deliverable* — a distribution proposal and an executive deck — not a stray artifact. Unreferenced is not the same as unwanted when the file is somebody's work product. That is a human call, not a cleanup.
+
+**Two §4 items examined and declined, which is the more useful outcome.**
+
+*Generating `IMPLEMENTED_ROUTES` from a per-module registration pattern* (§4, hedged as "consider") would **remove a working control**. The hand-kept set is not an unguarded list: `contract-stubs.spec.ts` runs `it.fails` over every route *not* in it, asserting `status !== 501`. A route that gets implemented without being added therefore returns non-501, the assertion succeeds, the body does not throw, and `it.fails` **goes red** — naming the route. The list is hand-kept *on purpose*: it forces each story to consciously graduate its route from stub to real contract tests, exactly as the docstring says ("BREAKS the moment a story implements it"). Deriving it from registration would make that graduation automatic and silent. The ~100 lines in `app.ts` are the cost of a tripwire that works.
+
+*Single-sourcing the duplicated `the-loom-ways-of-working.html`* (144 KB, byte-identical between `docs/` and `apps/portal/public/`) is already guarded by two sync tests plus an e2e reference. Trading a guarded duplication for a build step buys 144 KB and adds build complexity; the drift it would prevent is already caught.
+
+Both are the same shape, and worth stating plainly: §2 of the plan found controls that were *absent* — real gaps, all closed. The remaining §4 suggestions are hedged notes against things that already have controls. Reading them as a checklist would have retired two working guards.
+
+---
+
+## 2026-08-13 — BILL-09/BILL-10: profitability and hosted tenant billing completion
+
+Completed the approved non-insurance billing plan. BILL-09 adds deterministic per-TPP and
+per-product-family profitability from persisted receivables/payables evidence, side-effect-free
+fee and overage simulations, a sha256-sealed CBUAE annual-review export, and a Finance View
+profitability block. Liability and TPP-aaS margin inputs remain explicit evidence seams; the
+implementation does not invent insurance commissions or an insurance commercial model.
+
+BILL-10 adds the billing-specific HOST-01 substrate accepted in ADR 0028: idempotent tenant
+provisioning, verified P2 tenant claims, per-tenant approval/rating/invoice/ASP/collection policy,
+multi-tenant scheduled projections, tenant-scoped assurance, aggregate-only k>=3 benchmarking
+behind `query_purpose_registry` with High-class audit, and a sha256-sealed portable export of the
+complete tenant billing dataset. Migration 0038 keeps tenant application reads RLS-pinned while
+reserving provisioning and aggregate computation for the operator control plane. The broader
+HOST-01 work outside billing remains separately scoped.
+
+Evidence: monorepo typecheck and ESLint clean; full unit suite 1,305/1,305 green; dedicated
+Postgres integration test added for migrations, billing-table RLS, tenant-only export, and governed
+three-tenant benchmark. The local environment did not expose a database connection, so the real-
+Postgres suite remains a CI gate.
+
+---
+
+## 2026-08-15 — HARNESS-16: the two OFBO reviewers now run independently in CI
+
+AI review was already part of every story — but only pre-PR, inside the build agent's own
+session. `next-story/SKILL.md:35` dispatches `hard-stop-reviewer` and
+`contract-conformance-reviewer`, HG-0001 counts their verdicts toward the merge criteria,
+and this log records them per story. Nothing in GitHub ever verified that the review ran, or
+that the verdict written here matched what the reviewer actually said. That is
+self-attestation, and it was the one control not enforced outside the agent's write scope.
+Before this change CI had no model-based review at all: Q4 is named "security review" but is
+`pnpm audit` + `semgrep p/secrets`, and PRs #313 and #311 carried zero reviews and zero
+comments.
+
+`.github/workflows/ai-review.yml` runs both reviewers on every code-touching PR as two
+independent check runs, in a fresh session, and posts each verdict to the PR as a sticky
+comment. The prompt reads `.claude/agents/*.md` rather than restating the checklists — those
+files are CODEOWNERS-protected, and a copy inlined into the workflow would be a second,
+unprotected version of the canon free to drift from the one the pre-PR reviewers use.
+
+The load-bearing case is not a wrong verdict but a **missing** one. A missing review file, a
+missing `VERDICT:` line, or a malformed one all report DID NOT COMPLETE and go red: a review
+that never ran must never be indistinguishable from a passing one. The parse was verified
+against 12 cases before being wired in — a review with no verdict, `VERDICT: MAYBE`, and
+`VERDICT: PASS` appearing mid-prose all land on red; two verdict lines take the last.
+
+Advisory by design: red on FAIL/DRIFT so a finding is visible, but deliberately not a required
+status check, per HG-0001's "AI reviewers remain as *advisory* PR checks". This is explicitly
+**not** separation of duties — same model family reviewing the same agent's output, and
+HG-0001:58 already says "AI reviewing AI is not four-eyes". Human merge is untouched.
+
+**The first live run found a real defect — in the reporting, not the design.**
+`claude-code-action` withholds its GitHub App token from any run whose own workflow file
+differs from the default branch (anti-exfiltration: a PR must not be able to rewrite the
+workflow *and* get the token). On the PR that introduces this workflow that condition always
+holds, so the action skipped. The design behaved correctly under it — no review file, so the
+three-way parse refused green and reported DID NOT COMPLETE, which is the intended failure
+mode observed live rather than argued for. But the message named the *symptom* ("produced no
+review file") rather than the cause, leaving a future control-plane PR to debug it blind.
+Preflight now detects the condition by diffing this workflow against the default branch and
+says so, including that it self-resolves on merge. Verified: the guard fires on this branch
+and stays silent for an unrelated workflow file (negative control). The same pass also closed
+a second gap — structural non-runs previously left no PR comment at all, so a fork PR would
+have shown a bare green check with nothing to explain it.
+
+Consequence worth knowing: **a PR that edits `ai-review.yml` cannot exercise the reviewers on
+itself.** The first real review will be on the PR after this one merges.
+
+Evidence: workflow YAML parses and its structure verified (2 matrix legs, `fail-fast: false`,
+7 steps, guarded permissions); verdict parse 12/12 against the edge cases above;
+workflow-validation guard verified with a negative control. ADR 0029 was filed as **Proposed**
+— a control-plane change needs `control-plane-owners`, not the agent's own say-so — and was
+**Accepted by the user on 2026-08-16**. Still owed and recorded in ADR 0029: the
+injected-violation self-test proving the check goes red against a real finding, which cannot
+run until the workflow is on the default branch.
+
+Residency: this is HG-0011 Option 3 (provider proxy), permitted only while the environment is
+synthetic-only and non-prod (HG-0011:48). The M6 swap is `use_bedrock`/`use_vertex` or
+`ANTHROPIC_BASE_URL` — but the OAuth token pins the job to the first-party API, so that swap
+is two changes, not one. ADR 0029 records both.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): the review engine becomes a swappable port
+
+Follow-up to the entry above, on request: make the reviewing model swappable rather than
+hardcoded — Claude now, other engines later.
+
+PRD §3 already says institution-specific systems are ports — code against the interface, keep
+the mapping in configuration, never hardcode a vendor. That rule applies to the model
+reviewing the bank's code at least as much as to the bank's ITSM, so the engine is now a port
+rather than a vendor baked into a workflow step.
+
+The contract is fixed and engine-agnostic: read a CODEOWNERS-protected reviewer definition,
+diff the PR against its base, write a review to `$REVIEW_FILE` whose last line is the
+`VERDICT:` line. **The verdict parse is the port's contract test** — the same acceptance rule
+ADR 0024 sets for the enterprise adapters (an adapter must pass exactly the tests the
+simulator passes). Which engines run is `.github/ai-review.config.json`; one enabled engine is
+a swap, two is a cross-check at twice the cost.
+
+The failure mode worth engineering against is a HALF-ADDED engine: a registry entry with no
+adapter step would produce a matrix leg that runs, executes nothing, writes no review, and
+surfaces as the generic DID NOT COMPLETE — a real non-review wearing the costume of a
+transient failure. `scripts/ai-review-matrix.mjs` refuses to build such a matrix, so the new
+`config` job fails loudly and specifically before a single token is spent.
+
+Two engine-specific facts were moved OUT of the core into the registry, because leaving them
+in would have made "swap the engine" untrue: the comment attribution (attributing a Codex
+review to Claude Code would misstate which model produced the verdict) and
+`requires_workflow_parity` (the anti-exfiltration rule from the entry above belongs to one
+engine's tooling, not to the port — the Codex CLI adapter uses a plain secret and has no such
+constraint, so it could review workflow-editing PRs that the Claude engine cannot).
+
+No repository-variable override, deliberately: HG-0006 makes the reviewer prompts and the
+model serving them model configuration, and HG-0002 puts that under control-plane-owners. An
+admin-settable override would move part of that decision outside CODEOWNERS. Changing which
+model reviews the agent's work is a control-plane PR.
+
+Evidence: 10 new guard tests (30/30 total in `scripts/test`), covering enabled-without-adapter
+rejected, disabled-without-adapter allowed, no-enabled-engine rejected, missing agent
+definition rejected, duplicate keys, all problems reported at once, and an assertion that the
+engine-agnostic core names no provider. Proved the CLI FAILS CLOSED end to end on a scratch
+tree: enabled-with-adapter exit 0, enabled-without-adapter exit 1 with an `::error`, two
+enabled engines produce the cross product. Workflow YAML re-parsed (2 jobs, dynamic matrix,
+`fail-fast: false`, 8 steps). Claude-only output is unchanged at 2 check runs.
+
+NOT PROVEN: the Codex adapter has never executed. It is real rather than a stub — written
+against the `@openai/codex` CLI surface verified against v0.147.0 (`codex exec` with
+`--model`/`--sandbox`/`-o`) rather than an action reference that could not be confirmed to
+exist — but it ships `enabled: false` with no `CODEX_API_KEY`, and its first run must be
+treated as unproven. It fails loudly if wrong: no review file written, so the core reports
+DID NOT COMPLETE.
+
+---
+
+## 2026-08-16 — ADR 0029 accepted (control-plane approval)
+
+The user approved ADR 0029 (AI review as an advisory CI check, incl. the swappable engine
+port). Status flipped **Proposed → Accepted**.
+
+Recording the authority rather than just the outcome: this is a control-plane change under
+HG-0002, which requires approval from a human control-plane owner who is not the build agent.
+`@michartmann` is the resolvable CODEOWNER on `/docs/adrs/` and `/.github/` under the interim
+arrangement documented in `.github/CODEOWNERS`, so the approval came from the right authority.
+
+**This is not a merge.** HG-0001 keeps merge as a separate human act and the agent never
+self-merges; PR #314 stays open for the user. Accepting the ADR settles the decision record,
+not the code review of the change that implements it.
+
+Still owed, unchanged by the acceptance: the injected-violation self-test proving the check
+goes red against a real finding, which cannot run until the workflow is on the default branch;
+and the Codex adapter's first real execution, which has never happened.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): one active engine, three registered, swap by one string
+
+Requirement clarified by the user: one model reviews (cost minimum), and it must be swappable
+among several as better review models appear. That is a different shape from what shipped in
+the previous entry, which allowed N enabled engines crossed with reviewers.
+
+Replaced the per-engine `enabled` booleans with a single `active` key. **Exactly one engine
+reviews, by construction rather than by convention** — `active` is one string, so no
+combination of registry entries can produce a second review leg and double the recurring
+bill. A test asserts the invariant holds with four engines registered. Swapping the reviewing
+model is now that one string, and a test drives claude→codex end to end asserting the secret
+and model swap with it.
+
+Cross-checking two engines was dropped deliberately, not lost: it doubles cost for a check
+that is advisory anyway. Re-adding it is a change to the matrix builder, not a config flag —
+the right friction for a decision that doubles a recurring bill.
+
+THREE ENGINES REGISTERED, EVERY SURFACE PROBED RATHER THAN ASSUMED. A fabricated action
+reference or wrong auth variable produces a silently broken CI job, so none of this came from
+documentation or a research summary alone:
+- claude — anthropics/claude-code-action@v1; CLAUDE_CODE_OAUTH_TOKEN. Proven in CI.
+- codex — @openai/codex v0.147.0, `codex exec --model --sandbox --color`; CODEX_API_KEY
+  confirmed read (a dummy key reached the API rather than a "not logged in" error); exits 1 on
+  failure. An `openai/codex-action` was reported by a research pass but could NOT be verified
+  from this environment, so the adapter uses the npm CLI — which also means a `run:` step that
+  cannot break job setup the way an unresolvable `uses:` would.
+- gemini — @google/gemini-cli v0.55.1, `gemini -p --model --approval-mode yolo --skip-trust`;
+  GEMINI_API_KEY confirmed read.
+
+THE GEMINI PROBE RETIRED AN ASSUMPTION. Without `--skip-trust` the CLI reports it is "not
+running in a trusted directory", silently downgrades `--approval-mode yolo` back to `default`,
+does nothing — AND EXITS 0. It also exits 0 on a critical API error. A `set -e` adapter step
+sails past both. Only the missing review file catches it. The rule that an adapter is never
+trusted to set the job's status started as a principle in the previous entry and is now an
+observed necessity, with a named CLI behind it.
+
+Evidence: registry tests 13 (33/33 in scripts/test); eslint clean; workflow parses with 9
+steps and three adapters; CLI swap probe run against all three engines — each yields exactly 2
+check runs, never 4 — and the config restored to `active: claude` afterwards.
+
+UNCHANGED AND STILL OWED: neither CLI adapter has produced a real review. Swapping to codex or
+gemini needs its secret added first; without it preflight reports NOT RUN — explicitly not a
+pass — rather than silently reviewing nothing. And the injected-violation self-test still
+cannot run until the workflow is on the default branch.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): first real review — active flipped to codex
+
+Discovered while inspecting job logs: the Claude review legs on PR #314 have NEVER produced
+a review. Every push reports NOT RUN, with the reason
+
+    this PR modifies .github/workflows/ai-review.yml, which differs from origin/main —
+    this engine withholds its token from a run that changes its own workflow
+    (anti-exfiltration). This resolves once the PR merges
+
+That is the workflow-parity rule working exactly as designed, and it is a chicken-and-egg:
+the PR that introduces the review workflow can never be reviewed by an engine that demands
+parity with the default branch. The 7-second green check runs were preflight short-circuits,
+not reviews — which is precisely why NOT RUN is reported loudly on the check and the PR
+rather than being allowed to read as a pass.
+
+Codex and Gemini carry `requires_workflow_parity: false` — they authenticate with a plain
+repository secret rather than a GitHub App token, so the anti-exfiltration rule is not theirs
+to apply. Flipping `active` to codex therefore produces the FIRST real review this harness has
+ever emitted, on this PR, and simultaneously exercises the codex adapter end to end for the
+first time. Both keys were added by the maintainer this session.
+
+Whatever `active` holds at merge time becomes the steady state — that is a maintainer decision,
+not this session's, and it is called out on the PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): codex adapter fixed — the runner is the sandbox
+
+The first real codex run FAILED, and the harness caught it exactly as designed: two
+DID NOT COMPLETE checks, red, with "This is not a pass." on the PR. No silent green.
+
+Root cause, from the job log rather than a guess:
+
+    warning: Codex could not find bubblewrap on PATH ... using the bundled bubblewrap
+    The execution sandbox is failing before process startup
+    (`bwrap: loopback: Failed RTM_NEWADDR`), including for a plain `pwd`
+    Failed to write file .../hard-stop-codex-review.md
+
+Auth was never the problem — codex authenticated, selected gpt-5.6-sol and spent 14,443
+tokens. Its OWN sandbox is bubblewrap, which cannot create a network namespace inside the
+Actions runner. The failure is at sandbox SETUP, so it takes out every mode equally,
+read-only included: reads, writes and a plain `pwd` all failed.
+
+Candidate fix IDENTIFIED BUT DELIBERATELY NOT APPLIED: selecting the CLI's no-OS-sandbox
+mode. It is the only mode that runs, since bubblewrap cannot initialise at all — so the
+real choice is "codex runs" vs "codex does not run", not "sandboxed" vs "unsandboxed".
+
+It was not committed, because it is a security decision belonging to a human rather than to
+this session. Two things weigh against it, and the second is the larger:
+
+1. The containment layer is real. The reviewer's job is reading a PR diff — semi-untrusted
+   input — so prompt injection is the live threat. With the sandbox, an injected command is
+   confined to a workspace with no network. Without it, CODEX_API_KEY and the job's
+   GITHUB_TOKEN are reachable. Blast radius is still bounded (contents: read,
+   pull-requests: write — it can comment, it cannot push), but it is not nil.
+2. CODEX LACKS THE WORKFLOW-PARITY PROTECTION, AND THAT IS THE BIGGER HOLE. `on:
+   pull_request` hands secrets to same-repo PRs while running the workflow file FROM THE PR
+   HEAD. Claude's parity rule refuses exactly that. Codex carries
+   requires_workflow_parity: false, so a PR that edits ai-review.yml still runs it with the
+   key — sandbox or no sandbox. In a repo where autonomous agents push branches, "requires
+   write access" is a low bar.
+
+CORRECTION TO THE PREVIOUS ENTRY. It framed codex's ability to review this PR — the one
+that modifies ai-review.yml — as the reason to flip `active` to it. That was backwards:
+that ability IS the hole described above, not a feature. Parity ought to be enforced by
+this harness for EVERY engine rather than left to whichever vendor happens to implement it,
+and the correct consequence of doing so is that no engine can review the PR that changes
+its own workflow.
+
+`active` is therefore restored to claude — the last known-good state, not a verdict on the
+open question. Flipping it back is one string whenever the maintainer decides.
+
+TWO DESIGN RULES EARNED THEIR KEEP THIS RUN:
+- `Parse verdict` runs on `!cancelled()`, so the adapter's exit code was never load-bearing.
+  Whether codex exited 0 or 1 is still unknown and did not matter — the missing review file
+  is what produced the red.
+- Reporting DID NOT COMPLETE distinctly from PASS is the only reason this was visible at
+  all. A harness that treated "no findings file" as "no findings" would have shown two
+  green checks over a reviewer that read nothing.
+
+Also corrected: the Claude legs on this PR have never reviewed either. They report NOT RUN
+(workflow-parity anti-exfiltration) because the PR modifies ai-review.yml. The 7-second
+green checks earlier in this branch's history were preflight short-circuits, not reviews.
+That resolves only on merge, and is why codex — which carries requires_workflow_parity:
+false — is the only engine that can review this particular PR.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): parity enforced by the harness, for every engine
+
+Maintainer decision: stay on claude, and make workflow parity universal rather than
+per-engine. Both done.
+
+THE DEFECT. Parity was a per-engine flag, true only for claude because claude-code-action
+enforces an equivalent rule itself. `on: pull_request` hands repository secrets to SAME-REPO
+PRs while running the workflow file FROM THE PR HEAD. claude-code-action refuses that; the
+CLI adapters authenticate with a plain repository secret and have no such rule. So pointing
+`active` at a CLI engine removed a security control silently — a PR could have rewritten the
+reviewer and collected its credential in the same run. Swapping a model is meant to be a
+one-string change; it must not also swap a guard in or out.
+
+Not spotted by reasoning. Spotted because the previous entry justified flipping `active` to
+codex on the grounds that codex COULD review the workflow-modifying PR when claude could not.
+That ability was the hole, written up as a feature.
+
+THE FIX. Preflight gates on the diff alone, for every engine, over the whole review control
+plane — each of these can decide what the reviewer executes or which secret it is handed:
+  .github/workflows/ai-review.yml   arbitrary `run:` steps with the secret in scope
+  .github/ai-review.config.json     names the secret; secrets[matrix.engine.secret] indexes
+                                    by it, so editing it redirects which secret is exposed
+  scripts/ai-review-matrix.mjs      produces that registry value, so it can do the same
+`requires_workflow_parity` is deleted from the registry, the validator, the matrix output and
+the workflow. Two tests hold the line: no per-engine flag survives anywhere in the workflow
+and all three paths are guarded; neither the registry nor the built matrix reintroduces one.
+
+VERIFIED BEFORE COMMITTING, not after. The preflight decision block was simulated across all
+seven paths with a stubbed git — fork, missing credential, each control-plane file alone, two
+files together, and the clean case that must RUN. All correct, no `set -u` unbound failures.
+That simulation also caught a cosmetic bug: `paste -sd', '` treats a multi-char delimiter as a
+CYCLING list, so three changed files rendered as "a,b c". Now `paste -sd',' | sed 's/,/, /g'`.
+
+A second latent bug surfaced writing the test: `indexOf('# ADAPTERS START')` matches the
+header prose "ADAPTERS START/END markers" at offset 2196, not the real marker at 13972,
+yielding an empty slice and a test that asserts nothing. Anchored to the newline. The existing
+ADAPTERS END test was checked and is unambiguous either way.
+
+DELIBERATE CONSEQUENCE, stated plainly: no engine reviews the PR that changes how reviews run,
+this harness included. It cannot review its own control-plane changes. That is correct and
+self-resolves on merge, but it means THIS PR gets NOT RUN on both reviewers — as will any
+future PR touching those three paths, which are then reviewed by humans only.
+
+Evidence: 15 registry tests, 35/35 across scripts/test; eslint clean; preflight simulation
+7/7. Still owed, unchanged: claude has never produced a review — it cannot until this merges.
+
+---
+
+## 2026-08-16 — HARNESS-16 (cont.): a missing credential now fails the job
+
+Maintainer decision, implemented: missing credential goes RED, structural non-runs stay GREEN.
+
+The distinction is about which failures are worth a colour. A fork PR cannot have secrets and
+a control-plane PR must not be reviewed by the reviewer it edits — neither is the author's
+fault, neither is fixable in the PR, and a check that is permanently red on them is a check
+people learn to scroll past. That is the failure mode where a real finding gets missed because
+the reviewer cried wolf. A missing credential is not that: it is a repository misconfiguration
+that silently disables review on EVERY PR, and green is exactly how nobody notices reviews
+stopped happening.
+
+Implementation: preflight emits a `fatal` output, set only in the credential branch, and a new
+`Enforce preflight` step is gated on it. It sits AFTER the comment step so the PR gets the
+full explanation before the job dies, and the step summary tells the reader how to fix it
+(set the secret, or point `active` at an engine whose credential exists).
+
+ORDERING IS LOAD-BEARING, and the simulation is what made that concrete. The case worth
+naming: a fork PR that also has no credential. Because the fork test runs FIRST, it reports as
+a fork and stays green — correct, since a fork legitimately has no secret and calling that a
+misconfiguration would be wrong. Reverse the two branches and every fork PR turns red with a
+misleading reason. A test now pins the ordering rather than trusting it.
+
+Evidence: preflight simulation extended to assert the `fatal` output, 8/8 including the
+fork-without-credential case; 16 registry tests, 36/36 across scripts/test; eslint clean;
+workflow parses with 10 steps in the intended order (comment before enforcement).
+
+---
+
+## 2026-08-17 — BILL-11: TPP Cost Management decisions ratified (ADR 0006 + 0007 accepted)
+
+Docs-only decision story landing the pre-execution review of the TPP Cost Management plan
+(payable side of the billing control plane). The plan was verified two ways before acceptance:
+every reuse claim checked against main (both alleged rating defects confirmed real — outbound
+corporate data rated as retail overage in `metering.ts:316-325`; profitability counting only Hub
+cost in `profitability.ts:88`), and the scheme-facing assumptions checked against UAE OF sources
+(C&P Pricing Model v1.0, per-endpoint chargeability, per-LFI directory rates), which corrected
+three of them: per-LFI `OverLimitFees` overage rates are directory-published required work (with
+a per-call vs per-page unit check), Nebras centrally collects BOTH fee streams (so the Nebras
+settlement statement is the primary actuals document), and the 30-day query window is a house
+convention, not a published scheme rule.
+
+- **ADR 0007 → Accepted** under the product name **TPP Cost Management**, recording the full
+  decision set: OFBO/P9 boundary with an explicit P9 port extension (AP dispatch + status, both
+  adapters, port contract tests); gross ledgers with netting only at settlement; fee-schedule
+  source = versioned C&P model + per-LFI directory snapshots; VAT accrued net with an input-VAT
+  leg on acceptance (Hub posture → BD-20); Nebras-primary document taxonomy; configurable query
+  window (BD-21); cost-period close composing the BACKOFFICE-06 monthly sign-off; closed-period
+  re-rating; insurance consumption in scope / commissions deferred; PostgreSQL; CAAP reserved as
+  a future stream; no PSU identifiers in cost tables.
+- **ADR 0006 → Accepted** (Option 1, role_domain LFI|TPP|shared) with the billing-family
+  taxonomy decided now (payable family TPP-domain from day one); platform-wide taxonomy is
+  BD-22, enforcement build is SEG-01 (blocked on BD-22).
+- **PRD:** §2 Finance Analyst scopes aligned to the spec's `x-required-scope` ground truth —
+  resolves the 2026-06-11 BACKOFFICE-47 advisory (`finance:reconciliation:*`/`billing:read`
+  drift); role-domain note added; §6 reconciliation module row corrected the same way; §7.6
+  gains the payable-side product definition; BD-20..BD-22 added to §10.
+- **Backlog:** BILL-12..BILL-17 seeded pending with acceptance criteria (statement domain +
+  rate corrections → ledger + re-rating → document ingest → three-way recon → accounting/AP/
+  settlement → console/demo/smoke), plus SEG-01 blocked on BD-22.
+- **OpenAPI intentionally untouched** — the contract lands spec-first per story with failing
+  contract tests, per the workflow; PR 1 is the decision record only.
+
+Evidence: docs gates green (docs:check link check, ADR number check, discovery waist gate —
+BILL/SEG ids are not waist-gated feature items); backlog YAML parses; no source, spec, or test
+files changed.
+
+## 2026-08-17 — BILL-11 addendum: verified against Nebras Interaction Guide v5.0 (same PR)
+
+The user supplied IG v5.0 (§10 Billing and Invoicing, 74 pp) after the decision commit; the
+plan and the just-landed ADR text were re-verified against it. Two decisions confirmed, three
+corrected — all folded into ADR 0007 / PRD / backlog in this same PR before merge:
+
+- **Confirmed — Nebras-primary documents (D9/D5):** §10.2 has the TPP tax invoice carrying
+  API Hub fees AND LFI charges; §10.3.4/10.18 add summarized supporting data (more on
+  request). The §10.9 sample shows Hub sections only, so BILL-14 ingests both layouts, and
+  the invoice's own line-category taxonomy (Service Initiation / Data Sharing categories)
+  becomes the reconciliation grain via a category→fee-class mapping.
+- **Confirmed — dual-role netting (D2):** §10.16 verbatim: amounts payable to LFIs are netted
+  against fees owed to Nebras where the LFI also operates as a TPP. Settlement calendar
+  30th–5th.
+- **Corrected — query window (was "house convention"):** §10.13 publishes it — submit within
+  30 CALENDAR days of occurrence, first response 10 min, final response 10 days, respondent
+  review & escalation 15 days. BD-21 narrowed to anchor semantics; BILL-15 now also tracks
+  the Nebras response clocks and mirrors the §10.11.3 billing-query field list.
+- **Corrected — Hub-fee VAT (BD-20 default flipped):** the §10.9 sample tax invoice prices
+  lines at net scheme rates with Taxable / VAT 5% / VAT Amount / Gross columns — Hub fees are
+  VAT-EXCLUSIVE +5%, not inclusive. LFI-side amounts stay inclusive (the §10.10 collection
+  memo shows no VAT columns). BD-20 now only confirms on the first real invoice (the sample
+  carries a CoP-discounted unit anomaly, 0.25 vs 0.005, noted in the ADR).
+- **Corrected — payment mechanics (D1/D5):** §10.14 requires TPPs to pay by DIRECT DEBIT —
+  DDA presented on the 10th, collection to the 30th, §10.17 late-payment penalty fees. P9's
+  execution role is DD mandate management + debit matching, not push payment; penalties are a
+  distinct recon charge class (BILL-15/16 notes updated).
+- Also absorbed: billing calendar §10.12.3 (3rd/5th/10th/30th/30th–5th) anchors the BILL-14
+  absence alarm, which §10.12.2 makes a participant OBLIGATION; the §10.10 collection memo
+  confirms per-LFI-set retail overage ("Customer Data" at the issuing LFI's own rate) and
+  corporate data at 0.4 AED/page.
+- **Out-of-scope observation for BD-16 (noted in its row, no change here):** IG v5.0 §8
+  publishes 30/5/10/15 calendar-day dispute-stage clocks and §11 gives 15-day maintenance /
+  30-day version-release notices — to be reconciled with the BACKOFFICE-75/-78 configured
+  clocks in a follow-up story.
+
+Evidence: docs gates re-run green (docs:check, discovery waist gate, adr-number-check);
+backlog YAML parses. Still docs-only.
+
+---
+
+## 2026-08-17 — HARNESS-16 VERIFIED: both reviewers ran end to end (PR #318)
+
+The thing every prior entry listed as owed. HARNESS-16 merged (PR #314, d37c791), and PR #318
+was opened for the single purpose of exercising the reviewing path — which had never once
+executed, because every run on #314 reported NOT RUN under the control-plane parity guard.
+
+The test change had to satisfy two constraints or it would have proven nothing: touch NONE of
+the three parity paths (or NOT RUN again), and not be markdown or under docs/ (or paths-ignore
+skips the workflow entirely). A comment fix in scripts/test/ai-review-matrix.test.mjs
+satisfied both while being a real correction — the header cited "an enabled engine ..." for a
+test since renamed to "the ACTIVE engine ...", against a field that no longer exists.
+
+RESULT — both legs ran, with verdicts:
+  AI review — contract conformance · Claude   VERDICT: CONFORMANT
+  AI review — hard-stop · Claude              VERDICT: PASS
+
+The verdicts matter less than the substance, and the substance was real:
+- Each reviewer walked its full checklist recording WHY each item was unreachable by a
+  comment-only diff, rather than asserting a pass.
+- contract-conformance ran its own `git diff` against specs/ services/ apps/ packages/ to
+  verify emptiness, and distinguished the PORT contract from the OpenAPI contract it owns.
+- hard-stop independently observed that a comment-only change to a TEST file is the shape a
+  Q1b test-integrity evasion would take, verified no assertion or matcher was weakened, and
+  checked the comment's factual claims against source instead of trusting the prose.
+- contract-conformance found a genuine flaw in the diff — "a registry entry here" pointing at
+  the test file rather than .github/ai-review.config.json — declined to file it as a finding
+  (style is out of its scope) but recorded the omission so the judgement was stated, not
+  silent. Fixed in e47e7f9, which the reviewer then confirmed on re-run.
+
+INFRASTRUCTURE, NOT THE DIFF. Midway through, GitHub stopped assigning runners: jobs failed in
+~2s with runner_id 0, no steps recorded, logs 404, and 0ms billable — including jobs unrelated
+to the change (Q2c, Q2b, Q4, Discovery). Diagnosed as runner starvation rather than a workflow
+defect and recorded on the PR rather than thrashed at with commits; a rerun once capacity
+returned dispatched all ten jobs of the `ci` workflow run. (Units differ deliberately through
+this entry: the PR carries 13 CHECK RUNS across two workflows — `ci` and `ai-review` — while the
+`ci` run itself contains 10 JOBS. A check run is not one-to-one with a job.) Billing could not be
+checked from this session — the GitHub
+MCP surface exposes no billing tools and those endpoints need org-admin scope — so whether it
+was a minutes quota or an Actions incident remains for a human to confirm.
+
+That accident tested the design's central claim harder than any deliberate test: undispatched
+jobs went RED, never green. Four distinct failure modes now — workflow-validation skip, codex's
+broken sandbox, parity non-runs, runner starvation — and a review that never ran has not once
+been mistaken for a review that found nothing.
+
+ADR 0029 updated: engine table corrected (claude proven end to end; codex ran and does NOT work
+as written), the codex bubblewrap finding recorded in the decision record for the first time,
+and a verification-record section added.
+
+STILL OWED, unchanged: the injected-violation self-test. A comment-only diff cannot show a
+reviewer CATCHES a violation, only that the path runs and the reviewers reason about scope. The
+green verdicts here are weak evidence by construction, and now that the workflow is on main
+that test is finally possible.
+
+Evidence: all 13 checks green on e47e7f9; 36/36 scripts/test; eslint clean.
+
+---
+
+## 2026-08-17 — BILL-12: expected TPP cost statement + payable rate-model corrections
+
+First implementation slice of TPP Cost Management (ADR 0007, accepted in BILL-11). Tests first: the
+three new specs were staged and run RED (26 failing, 3 passing as regression guards) before any
+source change; they now stand at 34 tests green.
+
+**Shipped.** `resolveLfiOverageRate` over a `DirectoryOverageSnapshot` whose `unit` is a REQUIRED
+field — the directory publishes `OverLimitFees` per call while the house model prices per page, and
+that is unconfirmed, so it is never defaulted. Effective-dated with latest-window-wins; absent,
+expired, or explicitly-zero all resolve to "this LFI charges nothing"; snapshot id + digest travel
+with every resolution. `rateUsage` gained an optional 5th options param and now prices payable
+retail overage from the snapshot, **failing closed** when a chargeable line has no snapshot or no
+serving LFI — mirror-pricing off the bank's own receivable card is retained only for scheme-uniform
+fees (payment fees, corporate pages). `buildExpectedTppCostStatement` projects a rating run into
+Hub / LFI-payment / LFI-data streams, net of VAT with the two scheme treatments kept apart (Hub
+exclusive +5%, TPP→LFI inclusive 5/105 — ADR 0007 D4), carrying meter-run, event, FAPI, rate-card,
+snapshot and pricing-date evidence, and no PSU identifier (asserted). Both confirmed defects fixed:
+outbound corporate data now rates as `data.corporate_page` (40 fils/page, no free tier) instead of
+retail overage, and profitability carries `lfiCostMilliFils` as its own external cost, subtracted
+from profit, exposed as `lfi_cost_milli_fils` on the wire and as an "Underlying-LFI costs" stat in
+the Finance View.
+
+**Two hazards found by adversarial review and fixed in-branch — both would have passed CI silently:**
+
+1. **The corporate fix would have been a no-op on real data.** Meter runs dedupe on
+   `(bank_id, period, rate_card_version, input_hash)` and the input hash covers only the raw
+   CloudEvents, so a changed projection produces different lines from byte-identical inputs, hits
+   `ON CONFLICT DO NOTHING`, and never writes them. `METERING_PROJECTION_VERSION` is now bound into
+   the hash pre-image, so a rules change yields a NEW immutable run. Existing runs are deliberately
+   not rewritten (append-only); they carry their original projection until re-ingested.
+2. **The new fail-closed throw would have bricked three receivable-only projections.** Revenue
+   assurance, the expected collection memo and closed-period re-rating all call `rateUsage` with no
+   snapshot and consume only `side === 'receivable'`, so one chargeable payable line would have
+   failed a regulated receivable report permanently. They now rate via `receivableMeteredLines`,
+   with a regression test pinning that the payable throw survives while the receivable projection
+   does not.
+
+**One unauthorised semantic change caught and made explicit.** An earlier iteration keyed the
+outbound free-tier bucket per serving LFI, which contradicted the rate card's own declared
+`freeTier.per: 'psu_per_day'` (a value that reaches the wire and the portal) and granted MORE free
+pages — understating the payable, the exact defect class this story exists to close. The granularity
+is now rate-card data (`RetailFreeTierGranularity`) defaulting to the conservative `psu_per_day`,
+with the per-serving-LFI reading available, both tested, and the question recorded on ADR 0007.
+
+**Not closed / deferred, with reasons.** The blocking OverLimitFees unit pre-task could not be run:
+the egress policy denies `data.directory.openfinance.ae` (proxy `connect_rejected`), so no live
+snapshot was observed — hence the required-`unit` design and the fail-closed rating. No P6 directory
+producer, no seeded demo snapshot and no synthetic outbound data events, because all three would
+encode the unconfirmed unit; the statement is therefore domain-tested but not yet demonstrable at
+the demo URL, and BILL-13 (which persists statements) seeds them once the unit is known. Also
+recorded rather than changed: `tenant_billing_service` persists only `hub_cost_milli_fils`, so a
+stored benchmark row no longer reconciles from its own columns once profit is net of LFI cost — it
+is always 0 pre-BILL-16 and `publishBenchmark` has no production caller, so BILL-16 owns the column.
+
+Evidence: unit suite 1413/1413 green (34 new); monorepo typecheck clean; ESLint clean; coverage gate
+exit 0. Q1b test-integrity checked post-commit. Existing-test edits were additive only — required
+new fields on fixtures plus one `toEqual` totals literal gaining `lfiCostMilliFils: 0`; BILL-09's
+own scenario keeps `lfiCosts: []` so every figure it asserts is unchanged, and the new dimension is
+covered by its own tests rather than by renumbering BILL-09's.
+
+### BILL-12 addendum — advisory AI review (ADR 0029) outcome
+
+`hard-stop` reviewer: **PASS**, no violations. It raised one item worth recording: binding
+`METERING_PROJECTION_VERSION` into the run identity means a re-ingested period stores a second copy
+of the same metering evidence blob — which carries `psuId` on inbound free-tier rows (pre-existing,
+`metering.ts`) — in a store with no deletion path. This diff neither adds nor touches that emission,
+but it does multiply an existing PII footprint, so whether the evidence blob should redact `psuId`
+is a human call to take before BILL-13 persists more.
+
+`contract-conformance` reviewer: **DRIFT (6)**. Four were in-scope and fixed here, all on types this
+story introduces: the statement and the directory snapshot now carry an explicit `currency: 'AED'`
+(the snapshot refuses to assume it, exactly as it already refuses to assume `unit`); the statement
+validates `period` against the contract's `^\d{4}-(0[1-9]|1[0-2])$` — the one field the OpenAPI
+contract constrains and the one the builder had not checked; and its date validation now
+calendar-checks rather than shape-checks, matching what the sibling module already did.
+
+Two findings were deliberately NOT patched, agreeing with the reviewer's own reasoning. The new
+`lfi_cost_milli_fils` wire field is sub-minor-unit and currency-less — but so are the five
+pre-existing amounts beside it, and making one field inconsistent with its neighbours would be worse
+than the deviation. That, plus the absent response schemas for the billing read surfaces, is
+spec-level (the reviewer's SPEC DEFECT 1 and 2): the profitability and rate-card payloads ride
+`AnalyticsView`'s `additionalProperties: true`, so money and enum conventions are unenforceable
+there by construction. Both predate BILL-12 and belong in a spec-change story, not a serialiser
+patch. The same gap is why the widened `free_tier.per` enum has no schema to widen; the default is
+unchanged, so no client sees a new value today.
+
+Also moved rather than dropped: BILL-12's unmet acceptance criterion (confirm the OverLimitFees unit
+from a live snapshot) is now an explicit acceptance criterion on BILL-13, the story that persists
+statements — so it blocks where it is actionable instead of lapsing with a `done` status.
+
+## 2026-08-17 — BILL-13: durable payable ledger + closed-period re-rating
+
+Second slice of TPP Cost Management. Unlike BILL-12, this ran against a **local PostgreSQL 16.13
+matching CI's `postgres:16-alpine`**, so the RLS grants, CHECK constraints and lineage coverage are
+proven rather than discovered downstream — which matters for a story that is almost entirely
+database controls.
+
+**Migration 0039 — eight tables, controls mirroring 0032/0033.** RLS ENABLED and FORCED,
+SELECT+INSERT only for `ofbo_app` (no UPDATE or DELETE grant at all), group-scoped internal-view
+reads, 24/60 retention and confidential-restricted floors registered for all eight. TPP-domain data
+under ADR 0006: its own table family rather than shared with the LFI receivables, which is what makes
+the dual-role wall enforceable rather than nominal. **No PSU identifier in any table** — drill-down
+runs through `event_ids` into `billing_event`, where `psu_id` is already governed.
+
+The schema is **self-reconciling**, so unstorable states are actually unstorable: a statement's three
+streams must sum to its net total; gross must equal net + VAT on both statements and lines; every
+line must carry at least one event id; a re-rating's delta must equal corrected − previous and cannot
+reference the same statement twice; AP dispatch is unique per idempotency key so P9 cannot be
+double-paid; and a document line's `fee_class` is null exactly when `mapped` is false, so an unmapped
+provider category cannot masquerade as mapped.
+
+> **Correction (addendum 5, same PR).** The AP-dispatch clause above is wrong and is left in place only
+> because this log is append-only. The constraint that shipped is `UNIQUE (bank_id, idempotency_key,
+> dispatch_state)` — unique per (key, **state**), not per key. It bounds each state to one row per
+> instruction, so an instruction cannot be recorded as `dispatched` twice; it does **not** by itself make
+> double payment impossible, and it constrains no transition order. See addendum 5 below.
+
+**Store.** `PgBillingTppCostStore` writes the three tables this story owns and never attempts an
+update — immutability is a grant, not a convention. Idempotent on (meter run, rate card version, rate
+snapshot hash), so re-projecting unchanged inputs re-reads the existing statement while a *corrected*
+directory rate becomes a NEW immutable statement. A re-rating is refused unless both statements
+project the same meter run: a meter run is immutable, so sharing one is the proof that a correction
+re-priced unchanged facts; re-pricing a different run is a re-meter and is rejected rather than
+recorded as a rate correction. `tppCostLineRef` derives line identity from cost dimensions rather
+than generating one, which is what BILL-15 will match provider document lines against.
+
+**Generation rides the existing monthly trigger** beside the receivable expected-memo projection —
+no new scheduler, per the story note. It **skips with an audited reason rather than throwing** when a
+chargeable overage line cannot be priced: the fail-closed pricing refusal inherited from BILL-12 is
+correct, but letting it escape would take the regulated receivable projections down with the payable
+one, which is exactly the availability trap the BILL-12 review caught. A genuine defect (an
+unreachable database, say) still propagates — only the pricing refusal is a skip, and the tests pin
+both halves of that distinction. The payable dataset also now travels with the tenant portable
+export, so a tenant exit carries its payable evidence as well as its receivable evidence.
+
+**Five tables are created but unwritten** until BILL-14/15/16 own them. They stay empty, which the
+Q4.5 gate skips (it requires lineage only for tables holding rows) — so the migration header states
+the constraint explicitly: nothing may seed them ahead of their story, or they become lineage gaps
+immediately. I checked this before designing rather than assuming it; the alternative reading would
+have forced the story down to three tables.
+
+**Still not closed:** the OverLimitFees unit criterion. The egress policy still denies
+`data.directory.openfinance.ae`, so no live snapshot has been observed. It is enforced structurally
+rather than procedurally — rating fails closed, so a statement carrying chargeable overage cannot be
+produced without a snapshot that states its unit — and the criterion carries forward to BILL-14.
+Consequently no directory snapshot source is wired into the worker yet: a demo period with overage
+traffic will report `skipped` with an audited reason, which is the honest state rather than a
+statement priced on a guess.
+
+Evidence: unit 1421/1421 (14 new); integration **162/162 across 77 files on a pristine database**;
+Q4.5 lineage gate PASSED with `billing_tpp_cost_statement`, `_statement_line` and `_rerating` covered,
+allowed gaps none, unexpected none; typecheck, ESLint and the coverage gate clean. Note the
+integration suite fails on a *re-seeded* database for the pre-existing non-idempotent-seed reason
+recorded under CODE-02 — verified by re-running on a fresh database, which is how CI runs it.
+
+### BILL-13 addendum — advisory AI review (ADR 0029) outcome
+
+`hard-stop` reviewer: **FAIL (6 findings)** — the first non-PASS on this track, and it was right about
+several. Four were fixed in-branch, all defects in this story's own work:
+
+1. **Four-eyes asserted in prose, enforced nowhere.** `billing_tpp_cost_ap_dispatch` carried a comment
+   promising "never self-approved" while the table had no initiator column and no CHECK. It now carries
+   `initiated_by` and `CHECK (approved_by <> initiated_by)`, mirroring `approval_request`
+   (0002_tables.sql). Fixing it surfaced a second defect the reviewer had not: `approval_request_id`
+   was typed `uuid`, but `approval_request.approval_request_id` is TEXT — BILL-16's foreign key would
+   not have compiled. Corrected to text.
+2. **A divergent regeneration was silently swallowed.** `saveStatement` used `ON CONFLICT DO NOTHING`
+   and re-read the stored row without comparing the recomputed evidence hash, so regenerating a
+   statement with *different* content under the same key returned the old one and reported
+   `created: false`. Divergent evidence on an immutable regulated record is now raised as a conflict,
+   matching the tenant-configuration precedent; `saveRerating` got the same treatment over its replay
+   payload.
+3. **The PSU claim over-reached.** The header said no PSU identifier appears in any of the eight tables
+   "asserted by test", but the test covers the statement family only, and three provider-fed free-form
+   columns (`parsed_payload`, `raw_document_ref`, `response_payload`) cannot be constrained by schema.
+   The claim is now scoped to what is true and enforced, and redaction at parse time is written up as a
+   **requirement on BILL-14 and BILL-16**, which own those write paths.
+4. **A skip decided by regex over error text.** The generation service classified an unpriceable period
+   by matching the error message, so any future error mentioning those words would have been downgraded
+   to a skip. `UnpriceableOverageError` now carries that meaning as a type, and a test proves an
+   impostor message still propagates as a defect.
+
+Also fixed, from the reviewer's non-finding notes: the worker constructed `PgBillingTppCostStore` but
+never closed it, leaking a `pg.Pool` per tenant per monthly run. And from the contract reviewer's
+observations, `tppCostLineRef` omitted `productFamily` while the domain aggregates on it under a UNIQUE
+constraint — unreachable today because `classify()` derives productFamily from feeStream+apiFamily, but
+that is an invariant of `classify()`, not of the identity, so the ref now mirrors the aggregation key
+exactly.
+
+Deliberately **not** changed, with reasons: `scope_used: 'billing:rate'` is an undeclared scope token in
+the audit trail, but it is exact precedent already on main (`memo-reconciliation.ts`) and fixing two of
+four call sites would make the trail less consistent, not more — it wants one repo-wide pass. The
+camelCase keys inside exported jsonb payloads are a ratified byte-stability exception for the portability
+digest, pinned by an existing test on main; the reviewer's own recommendation is to write it into the
+spec description, which is a spec-change story. The ADR 0006 role-domain dimension stays with SEG-01
+(blocked on BD-22); the migration now states the family's domain explicitly so it is unambiguous when
+SEG-01 threads it, and the portable export is recorded on SEG-01 as the first call site where one read
+crosses the wall.
+
+**Milli-fils vs the CLAUDE.md minor-unit money rule has now been flagged by two consecutive contract
+reviews** (BILL-12 and BILL-13) with no ADR ratifying it. It needs a decision: either CLAUDE.md names
+milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go through spec-change.
+
+Re-verified after the fixes: unit 1422/1422; integration 164/164 across 77 files on a pristine
+database; Q4.5 PASSED, allowed gaps none; typecheck and ESLint clean.
+
+### BILL-13 addendum 2 — contract review, second round
+
+`contract-conformance` reviewer, re-run after the hard-stop fixes: **one finding, fixed in-branch.**
+
+**A `sha256:`-prefixed string that was not a digest.** `services/bff/src/billing/tpp-cost.ts` composed the
+statement's `rate_snapshot_hash` as `` `sha256:${rateCard.version}+${snapshot?.digest ?? '…'}` `` — a
+concatenation of the two pricing sources wearing a hash's prefix. On an evidence-chain identifier that is
+worse than an honest opaque string: an auditor reconstructing the pricing basis will try to recompute it,
+and cannot. There is no precedent for the shape anywhere in the repo; every other `sha256:` value on main
+is a real digest. Replaced with `rateSnapshotHash()`, an actual SHA-256 over a canonical, documented
+pre-image (`ofbo.tpp-cost.rate-snapshot.v1` \ `rate-card:<version>` \ `directory:<digest|none>`), with a
+unit test that recomputes the digest independently, asserts the `^sha256:[0-9a-f]{64}$` shape, and proves
+differing sources do not collide.
+
+Three structural fixes also landed in this round, ahead of the stories that depend on them:
+
+1. **The approval link is now a foreign key.** `billing_tpp_cost_ap_dispatch.approval_request_id` was a
+   free-text column; it now `REFERENCES approval_request(approval_request_id)`, so a dispatch cannot cite
+   an approval that does not exist. The accompanying comment states plainly what the schema still cannot
+   enforce — that the referenced approval is *for this dispatch* — rather than implying the FK covers it.
+2. **`billing_tpp_cost_ap_dispatch` is an append-only state log.** The table was INSERT-only yet modelled
+   a mutable lifecycle, so advancing a dispatch's state had no legal write path. `UNIQUE (bank_id,
+   idempotency_key, dispatch_state)` makes each transition its own immutable row — one shape that is both
+   INSERT-only and able to progress, which is what BILL-16 needs.
+3. **`EXPORT_TABLES` narrowed to what this story writes.** The tenant portable export had been widened to
+   all eight payable tables; five of them BILL-13 never writes, so the entry was a claim about future
+   stories' data. It now lists only `billing_tpp_cost_statement`, `_statement_line` and `_rerating`.
+
+Re-verified on a pristine database in CI's exact order (`db:apply` → `db:seed` → integration → gate):
+unit 1423/1423 across 211 files; integration 164/164 across 77 files; Q4.5 PASSED with the three
+row-bearing payable tables covered and allowed gaps none; typecheck 0 errors; ESLint clean; doc-link-check
+59 docs / 29 ADRs clean.
+
+Carried forward unresolved, both needing a human decision rather than more code:
+
+- **Milli-fils vs the CLAUDE.md integer-minor-units money rule** — flagged by every contract review on
+  this track that has looked at it (BILL-12, and both rounds of BILL-13) with no ADR ratifying it. Either
+  CLAUDE.md names milli-fils as the billing-domain precision, or the spec's `*_milli_fils` fields go
+  through spec-change.
+- **BILL-13's first acceptance criterion** (persist statements priced from a live directory snapshot)
+  remains unmet, because the directory host is unreachable from this environment. It is enforced
+  structurally rather than procedurally — rating fails closed, so no statement can be written from a
+  guessed rate or unit — but the criterion itself carries forward to whichever story first obtains a
+  snapshot.
+
+### BILL-13 addendum 3 — the advisory reviews caught a real availability defect I had just introduced
+
+Both ADR 0029 advisory reviews came back non-PASS on `6f87bc6` — hard-stop **FAIL (3)**, contract
+**DRIFT (5)**. Every one of those eight findings is either documented-and-deliberate or already
+escalated, and both reviewers flagged all of theirs as uncertain (see the two rounds above and the
+carried-forward items). But the hard-stop reviewer's *observations* section — the part that counts
+towards no verdict — contained the only genuine defect in the round, and it was **mine, introduced by
+addendum 2's own fix**:
+
+**A resumed monthly run would have failed the entire billing projection.** Addendum 2 added
+evidence-hash divergence detection to `saveStatement`, comparing `tppCostEvidenceHash(statement)` —
+which spans `evidence.generatedAt` and `evidence.ratingRunAt`. The worker stamps both from
+`billingRunAt`, its own run clock. So a resumed or replayed run re-derives an identical statement under
+a later clock, gets a different hash, and the new conflict check throws — surfacing as an
+`AggregateError` that takes the receivable projections down with it. `saveRerating` had the identical
+bug over its `{ previous, corrected }` replay payload, which nests two statements and so two pairs of
+clock readings.
+
+This is the *same class of defect* as the one the BILL-12 review caught (a fail-closed throw bricking
+projections that had nothing to do with the failure), reintroduced two rounds later by a fix aimed at a
+different problem. CLAUDE.md requires scheduled jobs to be resumable and idempotent; the check I added
+made them neither. The reviewer also identified precisely why the tests missed it: the BFF spec uses a
+mock store, and the int spec replayed the *identical object* — neither exercised a moved clock.
+
+Fixed by separating substance from provenance. `tppCostContentHash` digests everything except the two
+clock readings, and divergence is compared on that, recomputed from the stored `statement_payload`
+rather than read from `evidence_hash`; `tppCostReplayContentHash` does the same across a re-rating's two
+nested statements. `evidence_hash` still stores the complete digest including timestamps — it is the
+provenance record of what was written, and the first write's clock belongs in it. Different totals or
+lines remain a hard conflict; a later run time no longer is. Both new tests were confirmed to FAIL
+against the previous comparison, reproducing the exact production error, before the fix was restored.
+
+Two further fixes this round:
+
+1. **The four-eyes FK is now tenant-composite.** The hard-stop reviewer's FAIL 5 was right on its first
+   limb: `REFERENCES approval_request(approval_request_id)` against a globally-unique text key let one
+   bank cite another bank's approval. `approval_request` gains an additive
+   `UNIQUE (bank_id, approval_request_id)` (guarded, since Postgres has no
+   `ADD CONSTRAINT IF NOT EXISTS`) and the dispatch FK is now composite on `(bank_id,
+   approval_request_id)` — the same idiom as this table's other two foreign keys. Proven by a test that
+   a dispatch citing another bank's approval is refused. The reviewer's other two limbs — approved
+   state and unexpired `expires_at` — are mutable state on the referenced row and cannot be expressed
+   as a foreign key at all; they stay a stated write-time requirement on BILL-16, and the migration
+   comment now says exactly that rather than implying the FK covers more than it does.
+2. **Doc-vs-code drift corrected.** The generation service claimed an unpriceable period was "raised as
+   an operational signal"; it emits a High-class audit event and nothing else. The comment now says so,
+   and routing to P3/ITSM is named as BILL-14's, once a directory source exists that can fail.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration
+**167/167** across 77 files (three new tests); Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.
+
+The lesson worth keeping: an advisory review's non-findings are worth as much as its verdict. Both
+verdicts here were, on inspection, noise — and the one item that mattered was filed under
+"observations outside the hard-stop list".
+
+### BILL-13 addendum 4 — least privilege on the free-form payload tables, and owners for the deferrals
+
+The hard-stop review re-ran on `1b7ca20` and confirmed addendum 3 landed: the tenant-composite FK
+"correctly prevents one bank citing another bank's approval", audit immutability clean (it correctly
+judged the new `ADD CONSTRAINT` additive and non-mutating), PII clean on the statement family, egress
+clean, lineage clean. It then returned **FAIL (6)**, and named the pattern behind three of them exactly:
+*the irreversible artefact lands in this PR while the control that bounds it lands in a later story, held
+only by a SQL comment* — no schema constraint, no test, no gate. That criticism is right, and three of
+the six were worth acting on.
+
+1. **The cross-tenant grant is now withheld from the two provider-fed tables.** The controls loop granted
+   `SELECT` to `bank_internal_view` on all eight tables, including `billing_tpp_cost_document`
+   (`raw_document_ref`, `parsed_payload`) and `billing_tpp_cost_ap_dispatch` (`response_payload`) — the
+   three columns this schema cannot constrain and which a Nebras invoice line or P9 response may fill
+   with payment-level customer detail. Every *other* table under that policy is schema-constrained and
+   PSU-free by construction, which is what makes the governed-aggregate seam an acceptable bypass for
+   them; it is not established for unconstrained payloads. Those two are now excluded from both the
+   policy and the grant, asserted by a test that reads the live privilege catalogue.
+   `billing_tpp_cost_document_line` stays granted — checked, not assumed: it holds only structured
+   dimensions with no jsonb column. Withholding costs nothing today because nothing reads either table,
+   and whichever story needs the read must grant it deliberately, after redaction exists, rather than
+   inherit it from a loop.
+2. **The four-eyes CHECK now says only what it can prove, and proves a little more.** The reviewer was
+   sharp here: the migration comment claimed self-approval "is refused by the CHECK rather than only by
+   the approvals service", which is stronger than `approved_by <> initiated_by` supports — one human
+   under two identifier forms satisfies string inequality. The CHECK is now normalised
+   (`lower(btrim(...))`), so case and padding variants are refused and a test proves it; the comment
+   states the guarantee precisely and names what it cannot see. Closing the rest is a write-time
+   obligation, because it depends on what BILL-16 stamps into those columns.
+3. **The deferrals have owners now, not comments.** A SQL comment is not a gate, so the obligations moved
+   into the acceptance criteria of the stories that must satisfy them: BILL-14 gains a blocking criterion
+   for redaction-at-parse-time (with the withheld grant named as its unlock); BILL-16 gains one covering
+   all three of its inherited obligations — approved state and unexpired `expires_at` at write time, both
+   principals from one normalised P2 claim, and `response_payload` redaction — plus the transition-order
+   rule the append-only UNIQUE cannot express. **CODE-03** tickets the repo-wide `scope_used` pass; the
+   reviewer's best line was that a repo-wide decision with no owner is how drift survives, and it was
+   right that the earlier "wants one pass" reasoning had been recorded without a ticket.
+
+Not changed, with reasons. The dual-domain export finding carries the reviewer's own nuance that
+substantially weakens it: `billing_event`, `billing_meter_run` and `billing_metered_line` were **already**
+in `EXPORT_TABLES` and carry `payable_hub`/`payable_lfi` rows, so TPP-side data was in that artifact
+before this diff — this change labels the crossing rather than creating it, and SEG-01 already records the
+call site. The `billing:rate` audit label stays as-is this round now that CODE-03 owns it. And the
+free-form columns themselves stay created here: settling the ledger's shape in one reviewed migration was
+the deliberate choice, the tables are empty, and the two controls that were missing (the withheld grant
+and an owned acceptance criterion) are what this round added.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423 across 211 files; integration **169/169**
+across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; the live
+privilege catalogue confirms six of eight tables granted to `bank_internal_view`.
+
+### BILL-13 addendum 5 — corrections to my own claims, and the real size of the scope-label drift
+
+Both reviews re-ran on `c578dbe`. Hard-stop went **FAIL (6) → FAIL (4)** and now cites each addendum-4
+fix as the reason its earlier findings are mitigated: the withheld grant and its test, the BLOCKING
+acceptance criteria on BILL-14/BILL-16, and CODE-03. The cross-tenant `internal_view_select` concern
+dropped from a finding to an observation ("verbatim the ratified HOST-02 pattern … not new here, so not
+raised"). Contract returned **DRIFT (4)** — two DRIFT, two SPEC DEFECTS — all pre-existing exceptions or
+the escalated money-unit decision. The four remaining hard-stop findings are the same created-but-unwritten
+deferrals, each flagged uncertain by the reviewer and each now owned by an acceptance criterion.
+
+For the second round running, the genuinely actionable items were in the *observations*, and this time
+both were **my own claims being wrong**:
+
+1. **"P9 cannot be double-paid" overstated what the constraint carries.** When addendum 2 converted the
+   dispatch table to an append-only state log, the comment kept its old retry-safety claim. But
+   `UNIQUE (bank_id, idempotency_key, dispatch_state)` is unique per (key, **state**), not per key: it
+   bounds each state to one row per instruction — an instruction cannot be recorded as `dispatched`
+   twice — and that is all. It does not by itself make double payment impossible, and it constrains no
+   transition order. The comment now says exactly that, and names where the actual guarantee lives
+   (BILL-16 dispatching once under the key, plus P9's own idempotency).
+2. **CODE-03 understated its own surface by more than half.** I recorded "four call sites, one token".
+   Measured against the spec rather than estimated, it is **six undeclared tokens across fourteen
+   `scope_used` emissions**: `billing:rate` ×4, `billing:post` ×3, `reconciliation:run` ×3,
+   `billing:assure` ×2, `billing:reconcile` ×1, `billing:collect` ×1 — none of which appears anywhere in
+   `specs/backoffice-openapi.yaml`, against `billing:read` (10), `billing:write` (4) and
+   `platform:operations:read` (8) which do. The ticket now carries that inventory with file:line for each.
+   It also carries a scoping fact I checked so the next agent need not: `BILLING_POST_SCOPE` and
+   `BILLING_ASSURANCE_SCOPE` are exported constants, which looked like they might gate access — they do
+   not. Neither is ever passed to `assertScope` or any middleware; all fourteen are audit values only. So
+   no privilege is granted anywhere and this is an audit-trail resolvability defect, not an authorisation
+   one. That distinction is what makes it a tidy one-pass fix rather than a security incident.
+
+One further fix from the hard-stop findings themselves. Its third FAIL 5 observed that
+`initiated_by`/`approved_by` are **denormalised copies** with nothing binding them to the
+`approval_request` row they cite — so the recorded four-eyes evidence could name two people unconnected
+to the referenced approval. The reviewer rated its own confidence low (the authoritative
+`CHECK (approver IS NULL OR approver <> initiator)` on `approval_request` still blocks self-approval), but
+the point about *evidence correspondence* is sound and cannot be expressed as a foreign key. BILL-16's
+criterion (b) now requires both columns to equal the cited request's own `initiator`/`approver`.
+
+Not changed: the camelCase-inside-jsonb export exception (pre-existing, ratified in code and build log,
+and rewriting keys would break the digest the evidence chain depends on — the reviewer's own recommended
+close is a CLAUDE.md carve-out or ADR, i.e. spec-change, not code). The contract reviewer also proposed a
+concrete minimum envelope for `GET /back-office/billing/export` — `schema_version`, `bank_id`,
+`generated_at`, `record_counts`, `sha256` declared, with `tables` left opaque — which would have made this
+class of payload drift contract-detectable at all. That is a genuine spec gap and a good proposal; it is
+recorded here rather than actioned, because it is a spec-change PR and not BILL-13's.
+
+Re-verified on a pristine database in CI's order: unit 1423/1423; integration 169/169 across 77 files;
+Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 6 — the correction that was only half-applied
+
+Hard-stop re-ran on `f37f323`: **FAIL (5)**, and its own summary is the fair reading — four of the five
+are the created-but-unwritten deferrals, each now credited as "carried by a BLOCKING acceptance criterion
+rather than prose alone, which is the strongest available mitigation short of not creating the tables
+yet". It also confirmed test integrity explicitly, noting the `UnpriceableOverageError` change preserves
+existing `rejects.toThrow` assertions and that the new BFF spec guards against the type-vs-message
+shortcut.
+
+The fifth finding was a real defect and it was mine, in a way worth recording: **addendum 5 corrected the
+"P9 cannot be double-paid" overclaim in the migration comment and explained it at length here — and left
+the original false claim standing in the two places a reader reaches first.** The reviewer put it
+precisely: "the diff simultaneously ships the correction and leaves the incorrect claim standing in the
+backlog outcome, which is the artifact a reader reaches first." Correcting the code comment while the
+summary that gets read still asserts a payment-duplication control the schema does not carry is worse
+than not having noticed at all.
+
+Fixed in the two places, differently, because they are different kinds of document:
+
+- `docs/backlog.yaml` is current-state metadata, so the claim is corrected outright — uniqueness is per
+  (key, state), what that does and does not bound is stated, and the sentence notes that an earlier draft
+  overstated it.
+- `docs/build-log.md` is append-only history, so the original line stays and carries an inline correction
+  block pointing at addendum 5. Silently rewriting a historical entry to make a past claim look right is
+  not a fix; annotating it is.
+
+Also closed the loop on the reviewer's final observation: `billing_tpp_cost_document.verified_by` /
+`verified_at` are `NOT NULL` but bound to nothing — the same denormalised-evidence weakness as the
+AP-dispatch principal columns, on a table BILL-14 owns. BILL-14 now carries a criterion requiring them to
+correspond to the principal who actually performed the verified-manual-upload check, stamped from the P2
+claim, with verifier ≠ uploader refused.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+The generalisable lesson from rounds 3–6, since it recurred four times: **every actionable defect this
+track produced was in a review's "observations" or non-finding notes, never in its verdict.** The verdicts
+were dominated by documented deferrals the reviewers themselves rated uncertain. Reading only the
+FAIL/PASS line would have missed a resumability bug that would have failed the whole billing projection,
+a cross-tenant grant on unconstrained payload columns, and two false claims in the release record.
+
+Contract review on the same head returned **DRIFT (6)** — the two pre-existing exceptions (camelCase
+inside exported jsonb, `approval_request_id text` mirroring 0002), the two escalated items (`billing:rate`
+now owned by CODE-03, milli-fils), the dual-domain export already routed to SEG-01, and one genuinely new
+*forward* obligation worth acting on: nine state and reason vocabularies are hard-committed as CHECK
+constraints in an INSERT-only family with no OpenAPI counterpart. The reviewer's framing is right — those
+values are expensive to move once rows exist. **BILL-17**, which owns the endpoints that first expose them,
+now carries a blocking criterion that its schemas mirror the sets exactly or the spec-change lands first,
+never a widened CHECK.
+
+### BILL-13 addendum 7 — first hard-stop PASS, and it found a test that could not fail
+
+Hard-stop on `e582b7a`: **VERDICT PASS** — the first on this track. It recorded seven candidates and
+scored none as a violation, six being forward obligations on schema no code writes, each now carried as a
+BLOCKING acceptance criterion on the story that owns the write path. Its own summary of the two hard stops
+this change could most plausibly have broken is the fair one: audit immutability and PII are "not merely
+un-breached but affirmatively tested".
+
+Its one genuine defect (C2) was a **test of mine that could not fail for the reason it claimed**, and it is
+the sharpest finding of the whole track:
+
+> the insert supplies `gen_random_uuid()` for both `statement_id` and `reconciliation_id`, neither of which
+> exists — so it violates this table's statement and reconciliation foreign keys as well as the approval
+> FK. The assertion `rejects.toThrow(/violates foreign key constraint/i)` matches **any** of the three. The
+> test therefore passes identically whether or not the tenant-composite approval FK exists at all.
+
+Exactly right. The control was real; the evidence for it was worthless. Worse, it was the test I cited in
+addendum 4 as proving the cross-tenant fix.
+
+The obvious repair — create real parents so only the approval FK can fail — turns out to be **wrong here**,
+and the reason is worth recording: `billing_tpp_cost_reconciliation` requires a
+`billing_tpp_cost_document` row, and writing that table would make the Q4.5 lineage gate demand lineage
+BILL-13 does not emit for it, because the gate skips only *empty* tables. The behavioural route would fix
+one gate by breaking another. So the assertion now reads the constraint's own definition out of
+`pg_constraint`: that the FK is `(bank_id, approval_request_id) REFERENCES approval_request(bank_id,
+approval_request_id)`, that **no** FK references the approval by its global id alone, and that
+`approval_request` carries the matching `UNIQUE (bank_id, approval_request_id)` without which the composite
+FK could not exist.
+
+Proven to discriminate, not assumed: degrading the schema back to the pre-fix single-column FK turns the
+new test RED (1 failed / 14 passed) and it passes again on restore. The old assertion would have stayed
+green throughout.
+
+The two four-eyes CHECK tests were left as they are, having checked why they are sound where C2 was not:
+they assert `/violates check constraint/`, and Postgres evaluates CHECKs during the row insert but FKs as
+AFTER-ROW triggers, so the CHECK error is what surfaces. Crucially they fail *safe* — if that order ever
+changed, an FK error would not match the assertion and the tests would go red rather than silently pass.
+
+Also this round, from the contract review, a correction to how the money question has been escalated. I had
+been describing it as "CLAUDE.md and the spec disagree, pick one". Measured, that is wrong: the spec's own
+`Money` schema (`specs/backoffice-openapi.yaml:3028`) states the rule verbatim and cites CLAUDE.md —
+"integer minor units", "fils for AED" — so **the spec and CLAUDE.md agree**, and the outliers are two bare
+`*_milli_fils` fields at spec:2926-2927 plus the columns migration 0039 adds. A second measured fact
+sharpens it further: only `billing_tpp_cost_statement` and `_document` carry a `currency` column at all
+(0039:69,156), so the line-level tables hold amounts with no currency and a conformant per-line `Money`
+requires joining the parent. Both facts, and the two viable resolutions — convert at the wire boundary and
+keep the finer precision in storage only, or ratify milli-fils by amending *both* CLAUDE.md and the `Money`
+description — are now recorded on BILL-17, which is the story that cannot ship without the answer.
+
+Re-verified: unit 1423/1423; integration 169/169 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 8 — the same defect class, caught a second time
+
+Contract review on `82956de`: **DRIFT (7)**. Six are previously assessed — the `billing:rate` sites now
+owned by CODE-03, the camelCase jsonb exception, `approval_request_id text` mirroring 0002, the frozen
+vocabularies owned by BILL-17, and the money-unit question. Its finding 7 was new, and it is the **same
+class of defect the hard-stop review caught in C2, on the same PR**:
+
+> `packages/db/test/tenant-billing-service-store.int.spec.ts:196` asserts only
+> `recordCounts.billing_event >= 1` … Dropping any of the three new names from `EXPORT_TABLES` would not
+> turn a test red.
+
+Correct, and worth stating plainly: BILL-13 claimed a portability guarantee — "a tenant that cannot take
+its payable evidence has not been exported" — added three tables to `EXPORT_TABLES` to deliver it, and
+asserted it nowhere. Twice on this PR now I added a control, cited it in this log as proof, and left it
+without a test that could fail. C2 was the tenant-composite FK; this is the export. The pattern is mine,
+not the reviewers': **claiming a control and evidencing a control are separate steps, and I was treating
+the first as if it discharged the second.**
+
+Fixed with a behavioural test that persists a statement and asserts it actually appears in
+`portableExport` — by `recordCounts` for the statement and line tables, and by finding the specific
+statement id in the payload rather than trusting a count. It also asserts the two withheld provider-payload
+tables stay *out* of the export, so the narrowing from addendum 4 is evidenced too. Proven to discriminate:
+removing the payable tables from `EXPORT_TABLES` turns it red (1 failed / 15 passed), green on restore.
+
+Also from this review, its finding 3, which it verified rather than assumed: `CHECK (currency = 'AED')` is
+narrower than the contract's `Money.currency` (`^[A-Z]{3}$`), and 0039 is the **first** place in the schema
+where a currency *value* is pinned — every earlier migration constrains only null-coupling. The reviewer's
+ask was that the narrowing be "a decision rather than an inheritance", which is fair, so the migration now
+records the reasoning: every UAE Open Finance fee is AED-denominated, a non-AED payable row would mean a
+parsing or mapping defect, and in an INSERT-only family with no deletion path it is far better refused at
+write time than stored unremovably. Relaxing the CHECK later is an additive migration; un-storing a
+mis-denominated row is not.
+
+Re-verified on a pristine database: unit 1423/1423; integration **170/170** across 77 files; Q4.5 PASSED,
+allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 9 — two precise details, both handed to the story that will hit them
+
+Contract review on `bad2946`: **DRIFT (7)**, confirming addendum 8's export test and the AED reasoning
+landed. Five findings are previously assessed and unchanged in disposition. Two carried detail worth
+recording, neither a code defect:
+
+1. **On `_rerating`, "join the parent for currency" has no single answer.** Addendum 7 recorded that four
+   tables hold amounts with no `currency` column, so a conformant per-line `Money` needs a parent join.
+   The reviewer noticed what that recording missed: `billing_tpp_cost_rerating` carries **two** statement
+   foreign keys (`previous_statement_id`, `corrected_statement_id`, 0039:371-372), so "the parent" is not
+   singular there and BILL-17 must decide which denominates a delta rather than assume one exists. Added
+   to its criterion.
+2. **`response_status` is the same defect class as `scope_used`, and gets the same treatment.** The two
+   emissions stamp `response_status: 200` from a scheduled monthly job that issues no HTTP response, and
+   the reviewer is right that `:122` is wrong on its own terms — it stamps 200 on the path that reports a
+   *skip*. Checked before deciding: 20 `response_status` occurrences exist across
+   `services/bff/src/billing` with mixed values, so this is a repo-wide pattern, and
+   `AuditEvent.response_status` is an unconstrained integer with no description — the contract does not
+   say what a non-HTTP actor should record. Fixing only these two would recreate exactly the
+   inconsistency that made half-fixing `billing:rate` the wrong call. So CODE-03 now owns both fields, to
+   be settled in one pass with the options named (omit, sentinel, or an explicit outcome field).
+
+Not changed, and stated once so it is not re-litigated: the nine frozen vocabularies, the camelCase jsonb
+exception, the milli-fils unit, and the AED narrowing all keep the dispositions recorded in addenda 4–8.
+The reviewer agrees with each framing and reports them, correctly, so the pre-commitment is on the record
+at the point it happened rather than discovered at BILL-17.
+
+Verified: unit 1423/1423; integration 170/170 across 77 files on a pristine database; Q4.5 PASSED;
+typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 10 — the PII guard did not guard, which is the third of these
+
+Hard-stop on `bad2946`: FAIL (6), five of them the documented deferrals with unchanged dispositions. The
+sixth is the important one, and it is the **third vacuous-assertion defect this PR has produced**:
+
+> The test carrying the "zero PSU data in the cost ledger" claim asserts it with
+> `expect(serialised).not.toMatch(/psu/i)` against a fixture whose PSU identifier is literally
+> `psu-<uuid>`, so the assertion passes on the substring the fixture was named with rather than on the
+> property.
+
+Right, and it is the worst-placed of the three: the PSU claim is a **regulatory hard stop**, and the
+migration header (`:19-22`) leans on "asserted by test" as its mitigation. A production-shaped identifier —
+an opaque uuid, an IBAN, an Emirates ID — would have satisfied `/psu/i` while sitting in
+`statement_payload`. The reviewer also did the right thing before reporting: it verified the underlying
+claim structurally (no PSU field on `ExpectedTppCostStatement`, `psuId` dropped rather than spread at
+aggregation, no PSU column in any of the eight tables) and reported only the guard, not the property.
+
+Fixed by making the fixture's identifier an **opaque uuid with no `psu` substring** and asserting the
+absence of that specific VALUE, so the test depends on the property rather than on the naming. The
+`/psu/i` check is kept alongside it — it still catches the distinct failure of leaking the field *name* —
+and the assertion that event ids ARE present is kept too, so the absence is a real exclusion rather than
+an empty payload. Proven to discriminate by injecting the exact regression it exists to catch (leaking the
+identifier into the persisted payload): the PSU test turns red, and green again once reverted.
+
+**Three for three, and the pattern is the finding.** C2 was the tenant-composite FK, addendum 8 was the
+portable export, this is the PSU guard. In each case the control was real and the *evidence* was not, and
+in each case I had cited the test in this log as proof the control worked. Writing a control and evidencing
+a control are separate steps; on this story I repeatedly treated the first as discharging the second, and
+only an adversarial reader caught it — three times, on three different controls. The lesson for the next
+ledger story is procedural, not technical: for every control claimed in a build-log entry, break it
+deliberately and watch the test fail before writing the claim down.
+
+Two details from the contract review on the same head were also recorded (addendum 9): the `_rerating`
+two-parent ambiguity for per-line currency, and `response_status` folded into CODE-03 as the same class of
+HTTP-shaped-field-on-a-headless-emitter defect as `scope_used`.
+
+Verified on a pristine database: unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed
+gaps none; typecheck 0; ESLint clean; doc-link-check clean.
+
+### BILL-13 addendum 11 — the third home of the double-paid claim, and the most-read one
+
+Gating CI is green on `9fb2db1` and on every prior head of this branch. Both advisory reviews report
+failure, which is non-gating (ADR 0029); their check-runs endpoint returned 403 and issue comments 404 on
+this attempt, so their bodies were not retrievable — not guessed at either.
+
+While confirming the PR state, the **PR description** turned out to still assert "AP dispatch is unique per
+idempotency key so P9 cannot be double-paid". Addendum 6 corrected that claim in `docs/backlog.yaml` and
+annotated it in this log, because the review named those two locations. Nobody named the third, and it is
+the one a reviewer reads first. Its evidence block was also stale — 1421 unit / 162 integration, from
+before six rounds of fixes.
+
+Fourth instance of the same pattern, and the cleanest illustration of it: a correction is not applied until
+it is applied *everywhere the claim appears*, and searching for the claim beats waiting to be told where it
+lives. The description now states what the constraint actually carries, records what the review rounds
+changed and why, carries the current evidence (unit 1423/1423, integration 170/170, Q4.5 PASSED), and names
+the two decisions that need a human rather than implying they are settled.
+
+No code changed in this addendum.
+
+### BILL-13 addendum 12 — one reviewer claim corrected, one gap the reviewer missed
+
+Contract review on the docs-only head: **DRIFT (12)**. Ten are dispositioned in addenda 4–11. Two were
+new, and checking them produced a correction in each direction.
+
+**DRIFT 10, partly wrong, and the code says so.** It reported `fee_class`, `product_family` and
+`api_family` as unconstrained `text` "while the domain types are closed unions". True for one of the
+three. `TppCostProductFamily` is a closed six-value union — but `apiFamily` is typed plain `string`
+(`apiFamilyForEndpoint` derives it from endpoint shape, not a fixed set), and `fee_class` is an open
+vocabulary the contract itself declares as an unconstrained string. CHECK-constraining either would refuse
+legitimate values the first time the scheme adds an endpoint family. So only `product_family` got a CHECK —
+and it earns one, being part of line identity under a UNIQUE key in a ledger with no UPDATE path, where a
+projection bug inventing a family would corrupt identity irrecoverably. The migration now states which of
+the three are constrained and why the other two are not, so the asymmetry reads as a decision.
+
+**DRIFT 7, right, and it led to something the reviewer did not see.** The payable diff line carries a
+ten-value `break_type` and a `reconciliation_break_id`, with the migration claiming "the payable side
+reuses that workflow" — while `GET /back-office/reconciliation/breaks` classifies by `LineType` (six
+values) and declares no `break_type`. Nothing maps one onto the other. Following that up surfaced a gap the
+review did not report: **`reconciliation_break_id` carries no foreign key at all**, so a payable diff line
+could cite a break that does not exist.
+
+I did not add the FK, and the reasoning matters because it differs from the `approval_request` case in
+addendum 4 where I did. There, the FK already existed and the fix was to widen it to a tenant-composite key
+against an existing global UNIQUE — a one-line tightening. Here there is no FK and no
+`UNIQUE (bank_id, id)` on `reconciliation_break` to reference, so adding one means altering an E1 table and
+deciding `ON DELETE` semantics for a regulated record, on a column BILL-15 writes and whose break-mapping
+question BILL-15 must settle first. Doing that as a drive-by in a payable story would be inventing E1
+design. So it is a BLOCKING criterion on BILL-15 — mapping, FK, and the `variance_amount` `Money`-vs-bare
+`milli_fils` shape — and the migration says the column is unconstrained pending that and must not be
+written. Explicit deferral, not an oversight.
+
+Infrastructure note, since it affected this round's verification: PostgreSQL died mid-session for the second
+time and the restarted cluster came up on a different data directory with password auth, so the scratch
+databases were gone. Rebuilt on `postgres:postgres@localhost` — which matches CI's own connection string —
+rather than editing `pg_hba.conf`, an action the harness correctly refused.
+
+Verified after the change, on a database built from scratch: the CHECK is present in the applied schema;
+unit 1423/1423; integration 170/170 across 77 files; Q4.5 PASSED, allowed gaps none; typecheck 0; ESLint
+clean; doc-link-check clean.
+
+### BILL-13 addendum 13 — the code was citing CLAUDE.md as authority for departing from CLAUDE.md
+
+Contract review on `8df9cc0` confirms the `product_family` CHECK and the BILL-15 criterion landed;
+its eleven findings are the dispositioned set. One aside was not, and it is a defect of mine:
+
+> `packages/billing/src/tpp-cost.ts:80` documents the milli-fils unit as "(CLAUDE.md money convention)".
+> CLAUDE.md does not state that convention; the comment mis-cites it.
+
+Correct, and it is the mechanism behind something the same reviewer noted a round earlier — that the
+milli-fils choice "looks sanctioned when it is not". The comment cited the very document that says the
+opposite (integer minor units, "fils for AED") as the *source* of the deviation. I wrote that line in
+BILL-12, and it has been sitting on `main` asserting a settled position on the question I have been
+escalating as open in every report since.
+
+Fixed here rather than deferred to "whenever the decision lands", because the mis-citation is a factual
+error independent of the decision: the comment now states that milli-fils deviates and is unratified, why
+it was chosen (ADR 0007 prices tariffs at 2.5 and 0.5 fils, which minor units cannot hold without rounding
+the payable), that the earlier citation was wrong, and that BILL-17 owns the resolution. No behaviour
+changes — it is a comment — and correcting it does not pre-judge the decision either way. Grepped for
+other authority claims of the same shape: none.
+
+This touches a file outside the story's diff, which is deliberate and worth justifying: leaving a false
+claim of authority on `main` while asking a human to decide the same question would undermine the
+escalation. One comment line, in the story that surfaced it.
+
+Verified: typecheck 0; unit 1423/1423; ESLint clean.
+
+### BILL-13 addendum 14 — a review reopened a cleared finding, and it was right to
+
+Hard-stop on `7f70892`: FAIL (8). It confirms this branch's fixes landed — it now credits the PSU test
+for asserting "both the absent identifier *value* and the absent `psu` key shape", and notes the diff
+"only corrects a comment that had wrongly cited CLAUDE.md as the unit's source". Seven findings are the
+dispositioned deferrals, each flagged uncertain.
+
+The eighth is one **earlier rounds explicitly cleared**: the `internal_view_select` policy is fail-OPEN
+when `app.tenant_group` is unset — a session holding `bank_internal_view` with nothing pinned reads every
+tenant's rows. Round 6 dismissed it as "verbatim the ratified HOST-02 / ADR 0028 pattern … not new here,
+so not raised". Both readings are factually right, and the later one is more useful: the idiom is
+pre-existing AND this story widens what it covers.
+
+Verified before acting, and it produced a correction in the reviewer's favour and one against it:
+
+- **The fail-open branch is real.** `NULLIF(current_setting('app.tenant_group', true), '') IS NULL OR
+  bank_id IN (…)` passes all rows when unset. It is deliberate single-tenant backward compatibility per
+  ADR 0028, reachable only through `runGovernedAggregate` behind a registered, approved purpose with a
+  High-class-logged bypass — a hardening item, not a live breach.
+- **The blast radius is six tables, not the eight claimed.** 0039's loop excludes
+  `billing_tpp_cost_document` and `billing_tpp_cost_ap_dispatch`. Those are exactly the two provider-fed
+  payload tables the same review flags under FAIL 3 as potential PSU sinks — so the withheld grant from
+  addendum 4 already puts the riskiest two outside the cross-tenant read. The review's own two findings
+  intersect where the story had already closed the gap.
+
+What I did *not* do is change the policy. Deviating in one migration would leave nine policies disagreeing
+about what an unpinned session means, which is worse than a consistent known weakness. What was actually
+missing is an owner: ADR 0028's Consequences records the fix verbatim as a "marked follow-up", its
+prerequisite HOST-02 is `done`, and **no backlog item owned it**. So **HOST-04** now does, carrying the
+measured surface (the idiom appears in nine migrations — 0030 defines it, 0031-0037 and 0039 use it), the
+six-not-eight correction, the requirement that the fix be one pass over the shared idiom rather than
+per-migration patches, and the open question it needs answered: whether unpinned should deny all rows or
+resolve an explicit default group, since the demo profile currently depends on the fallback.
+
+Its acceptance criteria include the anti-vacuous test this story learned to insist on the hard way — prove
+fail-closed directly, and prove the test fails if the fallback clause is restored.
+
+No code changed. Backlog and build log only.
+
+## 2026-08-17 — BILL-14: provider-document ingestion (Nebras-primary taxonomy)
+
+The payable actuals. `POST /back-office/billing/tpp-cost-documents` added **spec-first** (93 → 94 paths,
+client regenerated), then failing tests, then code — the parser tests were confirmed red 14/14 before the
+module existed.
+
+**Parsing behind an adapter.** `TppCostDocumentParser` is the seam; the Nebras tax-invoice parser is the
+one implementation, so a PDF/EDI/API transport can be added without touching the ingest service. VAT is
+split by **stream**, not by document (ADR 0007 D4): Hub sections are VAT-exclusive so 5% is added to the
+stated net, underlying-LFI sections are VAT-inclusive so 5/105 is carved out of the stated gross. Gross is
+always computed as net + vat rather than net × 1.05, so the three reconcile exactly under half-up rounding
+at every amount — asserted across a range, not one example. Document totals are **derived from the lines**
+and then checked against the provider's own; a disagreement is refused, because "trust the header" and
+"trust the lines" are both wrong when they conflict.
+
+**A deliberately partial category map.** Five categories map to fee classes we already price. Four are
+knowingly unmapped: `Balance (Discounted)` and `CoP (Discounted)` because the IG §10.9 sample carries a
+unit anomaly (0.25 vs 0.005) that BD-20 must resolve on a real invoice, and `Payment Data` and
+`Setup and Consent` because no current fee class corresponds without inventing scheme semantics. Mapping
+them now would silently mis-state the payable; flagging them cannot. Unmapped lines persist with
+`mapped: false` and `fee_class NULL`, which the schema CHECK ties together. The map is versioned data with
+a cited source, so a correction is config, not a release.
+
+### The redaction control, and two bugs the double-check caught
+
+Criterion 5 was the load-bearing one: these tables are INSERT-only with no deletion path, so customer
+detail must be removed **before** the first INSERT. Redaction keys on field NAMES and on identifier
+SHAPES — and the shape choice matters more than it looks. The repo's PII guard refuses real-shaped
+fixtures, forcing synthetic forms (national-identifier prefix 999, IBAN bank code 000). That pushed the
+redactor to match `\d{3}-\d{4}-\d{7}-\d` and `AE` + 21 digits **structurally** rather than by prefix or
+bank code — which is precisely what makes it catch a real value it has never been shown. A hook that
+looked like an obstacle produced a better control.
+
+The parser redacts and has no accessor for the raw payload; the store re-checks at the boundary that makes
+a write permanent. That second check found two defects that no review had to:
+
+1. **Redaction was not idempotent.** Replacing a PSU-named field keeps its key, so re-running the redactor
+   flagged the same keys again — and the boundary check reads "reported something" as "never redacted". It
+   rejected correct writes. Already-redacted values are now left alone and not re-reported, and idempotence
+   is its own test, because a control depending on a property should assert that property.
+2. **Two patterns were eating the invoice TRNs.** A generic long-digit-run rule and an unanchored phone
+   pattern both matched a 15-digit UAE TRN (`100123456700003` contains `00` followed by twelve digits). TRNs
+   are **required** header evidence under IG §10.9, so redaction was destroying a mandatory field and
+   inflating the count an auditor reads. The digit-run rule is gone and the phone prefix is anchored so it
+   cannot match inside a longer number. The residual risk — an account number under a key the list does not
+   recognise — is now stated in the code with where the fix belongs, rather than papered over by a heuristic
+   that destroys required evidence.
+
+**Migration 0040 grants what BILL-13 withheld.** The cross-tenant internal-view read on
+`billing_tpp_cost_document` was deliberately held back until redaction existed; it is now granted, and
+BILL-13's own test was narrowed from a frozen table list to the *condition* (redaction proven), so it still
+fails if `ap_dispatch` — whose `response_payload` is P9's, with no redaction until BILL-16 — ever inherits
+a grant it has not earned.
+
+**Second-person verification, claimed accurately.** `verified_by` is checked against the caller's verified
+P2 subject claim and an upload nominating its own uploader is refused (409), normalised so one human under
+two spellings cannot pass as two people. What that proves is **distinctness**, not that the verifier
+authenticated — a request carries one credential — and the code says so, pointing at four-eyes (202 +
+`approval_request`) as where the stronger control lives. Given how often this track has been caught
+over-claiming a control, the comment matters as much as the check.
+
+**The absence alarm** anchors on the 5th of the month following the period, moving off a weekend only —
+public holidays are an institution calendar the Back Office does not own, so it errs late rather than
+alarming on a day the Hub was never obliged to deliver. It fires only once the anchor has passed, and a
+credit note does not count as an invoice. IG §10.12.2 makes reporting non-receipt the participant's own
+obligation, which is what makes this a compliance control rather than a convenience.
+
+**Gates:** unit 1455/1455; integration 179/179 across 78 files on a pristine PostgreSQL 16.13; Q4.5 PASSED
+with `billing_tpp_cost_document` and `_document_line` now covered, allowed gaps none; typecheck 0; ESLint
+clean; Q1b no weakening detected. `docs:check` earned its keep — the anti-drift gate caught the README's
+stale "93 paths" the moment the spec grew.
+
+**Still open, and inherited rather than introduced:** the directory `OverLimitFees` unit is still
+unconfirmed because the egress policy continues to deny `data.directory.openfinance.ae` (rating stays
+fail-closed), and BD-20 still needs the first real Nebras invoice — which is also what resolves the four
+unmapped categories. Both now carry to BILL-15.
+
+### BILL-14 addendum — the redactor covered the payload and not the columns beside it
+
+Both advisory reviews ran on the first push. The hard-stop reviewer found the one that mattered, and it
+is the **fourth** instance of this track's recurring pattern — a control claimed more broadly than it was
+built:
+
+> `redactProviderPayload` is applied to exactly one thing: the JSON blob. The per-line fields are read
+> straight off the provider document and copied verbatim … The module header says "there is no code path
+> that yields the raw one" — true of `payload`, not true of the columns beside it.
+
+Exactly right, and worse than it first looks: `line_ref`, `source_category`, `cost_recipient_id`, the
+document reference, the issuer/recipient ids and the TRNs all bypassed the redactor into structured
+columns — and `billing_tpp_cost_document_line` was *already* cross-tenant readable from 0039's loop.
+
+**Refused rather than redacted, and the distinction is the fix.** Redaction cannot apply to these fields:
+`line_ref` is part of a UNIQUE key and `source_category` is the evidence a fee-class mapping derives
+from, so a marker would destroy identity rather than protect anyone. `assertIdentifierFieldsClean` now
+refuses the whole document when any of them carries a customer-detail shape — in a family with no
+deletion path, rejecting an upload beats storing something unremovable. Tested per field, header and
+line, plus a test that the refusal message does not itself echo the offending value (it crosses the API
+boundary as a 422).
+
+Also from the hard-stop review: **the archive ran before validation**, so a document later refused as a
+conflict had already had its raw bytes retained. Archiving now happens only after every refusal has
+passed, and the obligations the interface cannot enforce — tenant scoping, matching retention,
+classification floor, no cross-tenant read — are written at the call site. Provider values were also
+being interpolated into parse-error messages that cross the API boundary; those now name the field and
+say the value is deliberately not echoed.
+
+The contract review found six more real ones, three of them defects rather than drift:
+
+1. **A reused `Idempotency-Key` raised a bare 23505 → 500.** The table carries `UNIQUE (bank_id,
+   idempotency_key)` as well as the issuer/reference key, and `saveDocument` handled only the second —
+   while its own doc comment claimed idempotency on the first. Same claim-without-evidence shape. Both
+   keys are now honoured: same key + same document replays, same key + different document conflicts.
+2. **The response omitted the four fields that ARE the verified-upload evidence** — `document_sha256`,
+   `received_at`, `verified_by`, `verified_at`. All four were computed and then dropped, so the caller
+   could not verify the integrity hash or the second-person record it had just supplied.
+3. **`source_note` was accepted and silently discarded.** There is no column for it, so it is now
+   recorded in the INSERT-only audit trail, which is where "email received 3 Jul, from …" provenance
+   belongs anyway.
+4. **`issued_at` was any non-empty string** while the contract declares `format: date-time`; Postgres
+   would accept "3 July 2026" and the response would echo it. Now RFC 3339 or refused.
+5. **Neither response schema declared `required`**, which is precisely why (2) was invisible to
+   validation. Both now do — 18 fields on `TppCostDocument` — so that class of omission fails a
+   validator instead of shipping.
+6. **Five of six `document_type` values always 400** because only the Nebras invoice has a transport
+   wired. The spec now says so on the field rather than advertising a taxonomy that half-rejects.
+
+And the gap behind all of it: **no test exercised the HTTP route.** The service was tested directly, so
+the envelope, the 201/200 selection, the error mapping and the wire shape were unasserted —
+`verify:contract` cannot help, it probes only parameter-less GETs. Six route-level tests through
+`createApp` now bind them, including that a same-document re-upload under a new key returns 200 rather
+than 201, and that every response key is snake_case.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180** across 78 files; Q4.5
+PASSED, allowed gaps none; typecheck 0; ESLint clean; doc-link-check clean; Q1b **5 changed test files, no
+weakening detected**.
+
+Left as recorded rather than fixed: `x-rate-limit-per-min` is unenforced repo-wide (inherited, not this
+story's), the 409 response declares no `content` (precedent runs both ways in the same file), and the
+milli-fils unit question — now seven more fields deep — which is still the human decision BILL-17 blocks
+on. PostgreSQL also died four times during this story; each time it was restarted and the run repeated
+from a pristine database rather than reported around.
+
+### BILL-14 addendum 2 — an unvalidated enum, and a replay reporting evidence that matched no row
+
+Second contract review: **DRIFT (10)**. Six were real, four of those defects rather than drift.
+
+**An unchecked cast on a contract-declared enum.** `cost_recipient_type` was
+`section.cost_recipient_type as CostRecipientType` — a TypeScript cast over parsed provider JSON, with
+no validation. Every other provider-supplied discriminator in the parser *is* checked (`vat_treatment`,
+`currency`, `document_type` at the service), so this one was the outlier. A section saying
+`"third_party"` either reached the wire in a closed-enum field, or hit the column CHECK as an unmapped
+5xx instead of the 422 every other malformed field gets. Now validated, refused with the same 422.
+
+**A replay reported evidence that matched no stored row — the subtle one.** On the `200`
+already-ingested path the service returned *this request's* `document_sha256`, `received_at`,
+`verified_by` and `verified_at`. That looks harmless until you notice what dedupe keys on:
+`evidence_hash` is computed over commercial substance — reference, issuer, period, totals, lines — and
+deliberately **not** over the raw bytes, because two byte-different files stating the same charges are
+the same document. So a file differing only in JSON key order, whitespace or `due_at` takes the `200`
+path, and the response then hands back an integrity hash matching nothing in the ledger, breaking
+exactly the reconciliation the field exists for. The root cause was at the seam: the store interface
+returned only `{ id, documentReference }`, discarding evidence `saveDocument` had already read back. It
+now returns the stored values, and the service reports those on a replay.
+
+**My own YAML bug, emitted into a published artifact.** The `409` description used a folded scalar whose
+text began and ended with `'`. In a folded block those are not YAML quoting — they became part of the
+string and were carried verbatim into the generated client. Fixed, and while there the `409` gained the
+`ErrorEnvelope` `content` block it was missing (the implementation returns a body; the spec typed it
+`content?: never`, so a generated client could not see the error it actually receives) and a description
+naming the **third** cause the implementation added — idempotency-key reuse — which the contract had
+never documented.
+
+Recorded, not actioned: `x-rate-limit-per-min` is unenforced repo-wide (inherited); `source_note` is not
+recorded on the `200` path, which is defensible since the contract promises it no durability; and the
+path sits under the LFI-billing section banner while tagged `tpp-billing` — cosmetic, flagged twice now,
+and worth a tidy when the spec is next reorganised.
+
+Re-verified on a pristine database: unit **1464/1464**; integration **180/180**; Q4.5 PASSED; typecheck
+0; ESLint clean. PostgreSQL died a fifth time mid-verification and was restarted before the run was
+repeated — noted because five crashes in one story is an environment signal, not a code one.
+
+## 2026-08-17 — BILL-15: three-way payable reconciliation + dispute-window management
+
+Own metering ↔ expected statement ↔ provider document. The comparison itself is a pure function in
+`packages/billing/src/tpp-cost-reconciliation.ts` — no clock, no store, no I/O, every timestamp
+arriving on the input — so a reconciliation is reproducible from its inputs alone. That mattered
+immediately: three of this story's defects were only findable because the function could be probed
+directly.
+
+**Matching.** At the `(costRecipientType, costRecipientId, feeClass)` grain under a configurable
+tolerance defaulting to `fils(1)`. Expectations are milli-fils and documents state fils, so exact
+equality is never the test and the tolerance is what makes a match mean anything. Variance class is
+decided in a deliberate precedence — units, then net, then VAT. Units first because a volume
+difference is settled against metering and a rate argument built on the wrong volume wastes the
+§10.13 window; VAT last because it is the residual once net agrees, a treatment error rather than a
+pricing dispute, and it goes to a different desk.
+
+**One difference, one break.** An expectation and a document line disagreeing on the counterparty
+produce a single `wrong_recipient`, not a missing charge plus an unexpected one — two half-truths
+would open two queries against two counterparties for a single charge and neither would be
+answerable. The pairing REFUSES when two document lines share the fee class: nothing in the evidence
+says which one our expectation meant, and a guessed pairing names the wrong counterparty in the query.
+
+`duplicate_charge` is detected across documents only. Within one document a provider may legitimately
+split a category over several rows, so those aggregate; the same charge on the Nebras invoice and an
+LFI self-invoice is a different claim, because the Nebras invoice reconciles both cost components
+(IG §10.2).
+
+`unmatched_expected_line` earns its place in the taxonomy by distinguishing our mapping gap from
+their omission: a fee class the Hub could never name on an invoice is not a missing charge and must
+not be queried with them. It is fixed by extending the category map, not by writing to Nebras.
+
+**Three defects I found in my own first implementation**, each now pinned by a test proven to fail
+without the fix:
+
+- An **off-period document anchored the query deadline a month early**. A 2026-05 invoice issued in
+  June dragged the 2026-06 deadline from 2026-08-02 back to 2026-07-03. My own comment had warned
+  about overstating the time remaining; this understated it, which is just as wrong — abandoning a
+  live query early loses the same right as missing a dead one.
+- A **duplicated charge reported a net variance of zero**. `actualTotalNetMilliFils` was accumulated
+  only on the matched, wrong-recipient and unexpected paths, so an invoice pair over-billing us by a
+  full line showed no exposure on the one number BILL-16 decides what to pay from.
+- The **wrong-recipient pairing guessed** via `.find()` among several candidates.
+
+**Criterion 6(a) — `break_type` → `LineType`.** The line class follows the cost RECIPIENT, not the
+break class: `line_type` names which stream a break belongs to, and a rate variance is the same kind
+of line whether over- or under-rated. IG §10.2's two payable components map one-to-one — Hub fees to
+`nebras_fees`, underlying-LFI API access to `lfi_access_log`. `payment_settlement` is deliberately
+unused because it means money movement, not fee liability. That leaves `breakType` as a guard rather
+than a routing input, and it is used as one: it validates against the frozen ten-value taxonomy and
+throws, so an eleventh break class added without revisiting this mapping fails loudly instead of
+being silently filed as a Hub fee.
+
+**Criterion 6(b) — the deferred foreign key**, landed as migration `0041`. `UNIQUE (bank_id, id)` on
+`reconciliation_break` (additive; `id` is already the primary key, so it constrains nothing new and
+exists only to give the composite FK a target) plus the tenant-composite FK BILL-13 deferred.
+`ON DELETE` is deliberately absent — NO ACTION, meaning a delete of a referenced break is refused.
+For a table with a 5-year immutable retention obligation the alternatives are both wrong: CASCADE
+would let one delete propagate into the payables ledger, and SET NULL would sever the link between a
+payable variance and the break it was raised as while reporting success. `MATCH SIMPLE` is
+load-bearing and easy to misread: the nullable break id keeps the reference optional, and the FK is
+enforced in full only when it is set.
+
+**Criterion 5 — the billing-query bundle** refuses three ways, and refusal is the point since the
+bundle crosses the bank boundary through P6. A missing §10.11.3 field produces a query Nebras rejects
+for incompleteness and the days it consumed do not come back. A closed window means asserting a claim
+we no longer hold. Identifier-shaped `transactionDetail` would export PSU data to the scheme —
+§10.11.3 asks for "payment/transaction detail" and the tempting reading is to attach the payment, so
+the guard reuses BILL-14's `assertIdentifierFieldsClean` rather than adding a second redaction path.
+A test pins that the refusal does not eat the invoice number and interaction id the query is useless
+without.
+
+**Not done, stated plainly.** Criterion 3 is half-built: `openPayableBreaks()` is the gate query and
+is tested tenant-scoped over a real database, but the refusal it feeds lives in BILL-16, so the
+end-to-end blocked path cannot be tested until BILL-16 lands. Criterion 6(c) remains BLOCKED on the
+money-unit decision — `ReconciliationBreak.variance_amount` is a `Money` object while
+`billing_tpp_cost_diff_line` stores `variance_milli_fils` bare, and reconciling those shapes needs
+the answer BILL-17 owns. No Money-shaped variance is written in the meantime.
+
+Contract: `POST /back-office/billing/tpp-cost-documents/{document_id}:reconcile` added spec-first
+(94 → 95 paths) on `finance:reconciliation:write`, mirroring `billing-records:reconcile` because
+judging a counterparty's figures against our own is one capability regardless of which way the money
+flows. It runs synchronously rather than returning 202 like its receivable twin: it compares stored
+evidence rather than fetching from the Hub, so there is nothing to wait on. A route test was written
+alongside the service tests — a `:reconcile` suffix on a path parameter is exactly the shape a router
+silently fails to match, and `pnpm verify:contract` probes only parameter-less GETs.
+
+Verified on a pristine database: unit **1512/1512**; integration **187/187** across 79 files; Q4.5
+**PASSED** with `billing_tpp_cost_reconciliation` and `billing_tpp_cost_diff_line` now covered;
+typecheck 0; ESLint clean.
+
+## 2026-08-17 — BILL-15 addendum: both reviewers, five fixes (same PR)
+
+Hard-stop **PASS**, no violations. Contract review **DRIFT** with three findings. Every fix below came
+from a reviewer's finding or non-blocking observation — none from the gates, which were green
+throughout. That is now the consistent pattern across BILL-13, BILL-14 and BILL-15.
+
+**The sharpest finding: this diff made the milli-fils deviation worse rather than inheriting it.**
+`TppCostReconciliation` published eight money-valued fields with no ISO 4217 anywhere, while the
+sibling `TppCostDocument` — my own BILL-14 schema — lists `currency` as *required* beside its
+milli-fils amounts. Adjacent schemas in one story family, opposite treatment. The currency was in hand
+at the wire function and simply not emitted, so this was not a case of storage lacking the data. And
+the deferral recorded on BILL-15 covers what diff lines *store*; publishing a currency-less **wire
+contract** went past what was deferred and would have made BILL-17's "convert to `Money` at the
+boundary" option strictly more expensive. Currency now flows through the domain result and is required
+on the schema. That decides nothing about the unit — it stops the amounts being bare integers.
+
+Relatedly, the new fields lacked the `(see BILL-17 — the unit is unratified)` marker BILL-14 puts on
+`unit_price_milli_fils`, and `tolerance_milli_fils` described milli-fils affirmatively as settled
+convention — the reverse of the status the backlog records. Marker added throughout.
+
+**One hardcoded remediation for every error.** The route returned "ingest the period's expected
+statement (BILL-12)" for the 404 and the 401 as well as the 409. The contract defines `remediation` as
+what the caller can do to *resolve* the error, and telling someone whose document id does not exist to
+ingest a statement sends them to fix something that is not broken. The error now carries its own. My
+route test had asserted only that the field was **present** — the claiming-vs-evidencing gap again —
+so it now asserts the remediation fits its error, and that the 404's does *not* mention the statement.
+
+**Two on the billing-query bundle**, from the hard-stop reviewer's non-blocking notes. This is the one
+artefact in the story that crosses the bank boundary toward Nebras, so both were worth taking:
+
+- Only `transactionDetail` was screened. `reasonCode` is the one that matters — an unmapped line's
+  reason code embeds the provider's own `sourceCategory`, so provider-supplied text does reach the
+  wire. BILL-14 already refuses an identifier-shaped category at ingest, which *is* the right boundary,
+  but that left this artefact depending on an invariant established two stories away. Every text field
+  is now screened at the point of departure.
+- Non-string values were skipped, justified in my own comment as "a number cannot carry an identifier
+  shape". True of today's four shapes, not of numbers — a future digit-only rule would be bypassed by
+  the one type that carries digits. Values are coerced before screening.
+
+The test for that last change is labelled for what it actually proves rather than what it suggests: no
+shape in the current list can match a bare number, so nothing can demonstrate that screen firing. It is
+a regression guard that widening the screen did not start refusing the amounts every bundle carries,
+and it says so.
+
+Re-verified on a pristine database: unit **1515/1515**; integration **187/187** across 79 files;
+typecheck 0; ESLint clean; Q1b "6 changed test files — no weakening detected"; doc-link-check clean.
+
+CI could not run on either #320 or #321: every job completes 3–6 seconds after starting with
+`runner_id: 0`, an empty `runner_name` and no `steps` array. That is a GitHub Actions runner-allocation
+failure, verified by fetching the job records rather than inferred from the failure count.
+
+## 2026-08-18 — Two convention decisions taken by the adopting bank
+
+Both were escalated across BILL-13..BILL-16 as repo-wide questions with no owner, which is how drift
+survives. The bank answered both; this records the answers and what they cost.
+
+### Money at the wire — the milli-fils deviation resolved (Option A)
+
+Milli-fils is a **rating and storage precision only**. The wire carries the binding convention
+(integer minor units + ISO 4217). Nothing about the convention is amended, because nothing needed to
+be — it is now upheld everywhere it applies.
+
+The precision is real: ADR 0007 prices scheme tariffs at 2.5, 0.5 and 0.25 fils, which minor units
+cannot hold without rounding the payable at every line, and per-line rounding then diverges from the
+invoice total being reconciled against. It simply belongs behind the boundary, where the general
+ledger already sat — `accounting.ts` has always posted in fils.
+
+The conversion is deliberately not a per-field map, because of the defect class this track has now
+hit three times. Rounding net, VAT and gross **independently** produces a triple that does not tie:
+net 2500.5 and VAT 125.5 both round up to 2501 + 126 = 2627, while gross 2626.0 rounds to 2626. A
+consumer checking `net + vat === gross` — which the convention invites, and which the document
+table's own CHECK enforces — would see a contract violation on perfectly good data. `toWireMoneyTriple`
+derives gross from the rounded parts, and **refuses** a source whose parts do not already tie in
+milli-fils, so it cannot paper over an upstream defect by presenting a consistent wire figure over
+inconsistent evidence. An 8000-combination sweep pins the tie across every sub-fil remainder.
+
+Two integer fields legitimately stay in milli-fils, and neither is an amount — both now say so in the
+contract rather than reading as leftovers:
+
+- `unit_price_milli_fils` is a unit **rate**. Rounding a 2.5-fils scheme tariff to 3 destroys the
+  price itself.
+- `tolerance_milli_fils` is a matching **threshold** whose entire purpose is sub-fil resolution.
+
+Signed amounts round symmetrically, asserted explicitly: an asymmetric rounding here would be
+invisible and would favour the bank on every credit.
+
+Unblocks BILL-15 criterion 6(c) — diff lines keep `variance_milli_fils` in storage, which is correct
+behind the boundary, and the API emits `Money`, so the two shapes reconcile at the seam.
+
+### CODE-03 — the audit convention (option (c), stop overloading both fields)
+
+`scope_used` gets `SYSTEM_ACTOR_SCOPE` (`system`) and `response_status` gets
+`SYSTEM_ACTOR_RESPONSE_STATUS` (`0`) for every headless emitter.
+
+Six invented tokens across fourteen sites had accumulated — `billing:rate`, `billing:post`,
+`reconciliation:run`, `billing:assure`, `billing:reconcile`, `billing:collect`. None was ever passed
+to `assertScope`, so no privilege was granted anywhere; what they did was name scopes an auditor
+cannot resolve against the contract, permanently, in an INSERT-only table with five-year retention
+and no deletion path. The job's identity is not lost by the sentinel — it is already carried twice,
+in `acting_principal` and `event_type`.
+
+Zero is not a status code, which is exactly why it can mean "no HTTP response was issued" without
+colliding with one, and it satisfies the `NOT NULL` column without relaxing a constraint on regulated
+evidence.
+
+**The discriminator is `acting_principal`, not `acting_persona`** — a distinction that mattered.
+`tpp-billing/invoicing.ts` carries `acting_persona: 'system'` while its `acting_principal` is a
+**human** `initiatedBy` executing a four-eyes-approved invoice run, under the scope that human
+actually held. Persona-based classification would have erased a real human authorisation from the
+trail. It keeps its real scope and HTTP status.
+
+The anti-drift check the ticket asked for is `services/bff/test/audit-scope-resolvability.spec.ts`.
+It resolves every `scope_used` literal in the BFF (following same-file constants) against the
+**generated route table** — the same inventory `rbac.ts` enforces, so the check cannot drift from the
+contract by reading it a second, different way — and guards that the scan finds sites at all, so it
+cannot pass by scanning nothing.
+
+One self-inflicted defect worth recording: the first backlog edit put a colon-space inside a plain
+YAML scalar and broke the file, and it was committed because the validation ran in a shell statement
+*after* the commit rather than before it. Validation now precedes the commit.
+
+Verified: unit **1568/1568**; typecheck 0; ESLint clean.
+
+---
+
+## 2026-08-18 — STD: UAE Open Finance standards-conformance review (docs-only; 14 stories filed)
+
+A conformance diff of the repo against the current scheme baseline — Standards v2.1-final +
+errata3, API Hub v8 (releases 2026.19.0 and 2026.22.0), Nebras Interaction Guide v5.0 (Jun 2026),
+the Limitation of Liability Model v2.1, and the Ozone Connect availability/response-time/data-quality
+policies. No source changed; the output is `docs/reviews/standards-conformance-2026-08.md`, ADR 0030,
+a new STANDARDS block of STD-01..STD-14 in the backlog (laid out in EXECUTION order, not id order,
+because next-story picks by file position), an as-built note on ADR 0010, the one-word P10 citation
+fix in `CLAUDE.md` (ADR 0022 -> ADR 0010), and PRD repairs — the §6 API-surface table rebuilt with
+verified per-tag counts and real scope strings, §7.6 re-attributed to IG v5.0, BD-16 updated, and the
+BACKOFFICE-01 CoP bundling-window hedge retired.
+
+METHOD. Every claim was produced by one pass and then re-verified by a second, adversarial pass that
+opened the file and read the lines, with instructions to try to refute rather than confirm. 45 claims
+were tested: 33 CONFIRMED, 11 CORRECTED, 1 REFUTED. The finished documents were then put through a
+second, five-way critique against the tree, which returned FIX_FIRST from all five and corrected nine
+further defects — three of them in the review's own §2, where the MECHANISM was wrong rather than the
+citation: the liability lookup does not go silent (it emits an AED 0 signal), the fail-closed breach is
+not confined to the console (eight sites), and the bulk-revoke count never reaches the second approver
+at all. A tenth correction reordered the backlog block, because file position — not the comment
+claiming an order — is what next-story actually obeys. The corrections were material and are the reason
+the passes were run — the ADR-0022 mis-citation is in EIGHT sites, not the four first found; the
+respondent-clock constants are at `respondent-disputes/service.ts:31-34`, not 30-36; the case-id
+collision is conditional on an omitted optional field rather than unconditional; `slo.ts` has no
+default-target constant at all. Line numbers in the review are as at c5ba31b.
+
+THE HEADLINE IS NOT DRIFT. The architecture is conformant and that is the hard part: consent
+source-of-truth stays in the Hub with the local record a mirror, P6 is the only egress for Nebras API
+Hub traffic (the documentation-mirror fetches in the rate-card watcher sit outside it — that is the
+open ruling below), the
+LFI backend is called Ozone Connect and never a resource server, there is no AML GO client anywhere,
+the 7-state consent enum is byte-exact, and the liability matrix and rate card match the published
+schedules. What is missing is a mechanism that NOTICES when the scheme moves.
+
+THE PROOF OF THAT, exactly. Interaction Guide v5.0 arrived 2026-08-17. It was read, and its deltas
+were written into PRD BD-16. Then nothing: the code still runs v4 figures, the runtime adoption
+catalogue still advertises "Interaction Guide v4 figures" to users (`readiness/catalog.ts:195`), and
+the follow-up story the PRD and build-log both PROMISED was never written into `docs/backlog.yaml`.
+That was the refuted claim — we tested the hypothesis that the story existed, under any id or status,
+and it does not. The loop could never have picked it up. Filing STD-02/-03/-04 is the single
+highest-value output here.
+
+The fix for the general case is nearly free and is the substance of ADR 0030: `rate-card-watch.ts`
+already fetches three scheme URLs on a weekly cron and opens a High-classification, `autoApply: false`
+review task when a content hash moves. The scheme's Release Notes and Errata register — cited in this
+repo at `docs/research/lfi-billing-system-tier2.md:387` — is simply not one of them. The mechanism
+that would have caught the v5.0 drift exists and is pointed at the wrong pages.
+
+SEVEN DEFECTS FOUND WHILE VERIFYING, which outrank the drift because they are wrong today:
+- The Operations Console serves fabricated numbers under `DEPLOY_PROFILE=enterprise`. The `slo`,
+  `certChain` and `ozone` deps are never injected in ANY profile (`app.ts:609-615`) and no enterprise
+  implementation exists, so a bank sees a hardcoded 99.8% uptime as operational truth. CLAUDE.md's
+  fail-closed rule is broken in the console and in seven more places besides — six demo sources wired
+  unconditionally in the scheduled worker (`worker.ts:389,398,402,405,408,416`) and one in the request
+  path. Two are worse than a green panel: the CAAP recorder writes FABRICATED registration events into
+  the INSERT-only `audit_high_sensitivity` table, and the cert monitor watches a fake chain that is
+  permanently "critical in 5 days", so a real scheme-certificate expiry would never be seen. (STD-11)
+- The service-desk SLA clock does not pause at weekends (`service-desk/service.ts:98`, raw elapsed ms)
+  though PRD §10 makes that a binding default and every other SLA module honours it. A P2 opened
+  Friday 16:00 breaches Saturday 16:00. (STD-03)
+- `liability.ts:47` returns 0 for any unmodelled issue, and the threshold derives from the same
+  lookup — so both sides are 0, `0 >= 0` is true, and the class crosses trivially: it emits a signal
+  and two P3 tickets reporting AED 0 at `low` severity. Not suppressed, silently worthless — harder to
+  spot than silence. The scheme's AED 15,000 / 48-hour new-beneficiary class has no row at all. (STD-09)
+- Fraud revoke is the only revoke path that records no `sla_met` verdict, so a <5s breach on the
+  highest-risk revocation is invisible. `NEBRAS_SLA_MS` is defined twice and restated a third time in
+  a different unit. (STD-09)
+- The four-eyes bulk-revoke count can exceed what is revoked — the portal counts with `REVOCABLE`
+  (including `AwaitingAuthorization`), the sweep uses `ACTIVE_STATUSES`. Approving "12" and revoking 9
+  is an integrity defect, not a cosmetic one. (STD-05)
+- `scheme_net_settlement` is the shipped DEFAULT collection rail but the `selected_rail` CHECK admits
+  only three other values, so any collection on the default is rejected by Postgres at write time.
+  BILLING-domain, flagged rather than fixed here. (STD-13)
+- An undocumented direct-egress path: the rate-card watcher fetches scheme pages with plain `fetch`,
+  no P6. Probably an intended carve-out (documentation mirrors, not the API Hub) but recorded nowhere
+  — and ADR 0030 would extend that very watcher, so it needs a ruling before STD-01 builds on it.
+
+CONFORMANCE GAPS PROPER, in brief: the simulator never echoes `x-fapi-interaction-id` (mandatory on
+responses per the standard, and the correlation key Nebras support requires on every ticket), has no
+consent state machine (any unknown id returns a fabricated `Authorized`; API Hub 2026.22.0 now returns
+400 for revoke in a non-revocable state), and seeds its dataset and Consent Manager surfaces
+incoherently — measured overlap zero for every 2026 period, so a cross-surface reconciliation reads
+every consent as Authorized. Consent vocabulary is PSD2 (`AISP_DATA_SHARING`, `accounts:read`) rather
+than UAE permission codes; consent types are absent entirely. UAEFTS appears nowhere, ACWP/ACWC
+nowhere, and `ipp_status` has no enum in the contract — while V2.2 already makes `paymentRail`
+mandatory with Tier 2 dates of 28 Feb 2027 / 31 May 2027. Two of the seven `NebrasEgressPort`
+operations have no simulator route, so the M6 port-swap gate structurally cannot detect a defect in
+those enterprise calls.
+
+DELIBERATELY NOT DONE. No source file was touched — every code fix is a story, because comment-only
+edits are still source edits under the worktree rule and because several of them need a spec-only PR
+first. The respondent-dispute clock VALUES were left alone on purpose: 3/15/3/3 business days are
+correct under v5.0, only the attribution is stale, and "fixing" the numbers would introduce a real
+error while correcting a cosmetic one. errata3 was pinned but not scheduled — it touches international
+payment creditors only, OFBO initiates no payments, and re-certification is change-triggered rather
+than errata-triggered.
+
+FOR A HUMAN (five, none decidable by the loop): ADR 0030 accept/reject; the P6 documentation-fetch
+ruling; ADR 0010, still `Proposed` while BACKOFFICE-63 is `done` and diverges from its Option 1 in
+three ways — the missing `acknowledged` state means the bank has no evidence an STR was ever filed;
+ADR 0011, the same Proposed-but-implemented pattern; and STANDARDS block priority, since placing it
+before COMMERCIAL means the loop takes conformance ahead of BILL-13..17, which have four PRs in
+flight. An as-built note was appended to ADR 0010 recording the divergence; its `## Decision` section
+is byte-identical to HEAD (the diff on that file is purely additive), so the human rules on the record
+as it stood.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, no broken references or duplicate
+numbers; `discovery:link` OK (STD- ids are outside the `^BACKOFFICE-\d+$` waist regex, so unaffected);
+backlog YAML parses, 193 items (161 done), STD block field order matches the canonical sequence and
+the simulated next-story pick is STD-09, the first dependency-free defect. Per-tag path
+counts in the repaired PRD table were recomputed from the spec and sum to 93. Docs-only — no source,
+no spec, no tests changed.
+
+---
+
+## 2026-08-18 — STD addendum: ADR 0030 accepted, P6 ruled, and the defect the ruling uncovered
+
+Two of the five parked decisions came back the same day, and grounding one of them turned up a live
+defect that no story owned.
+
+ADR 0030 ACCEPTED (Option 1) with two binding amendments. The P6 question is RULED (a) — public
+scheme-DOCUMENTATION change-detection sits outside P6, which governs the authenticated API data plane.
+Three facts decided it, and none of them is "it seemed fine": `NebrasEgressPort` is seven purpose-built
+typed methods with NO generic fetch, so routing docs through it means a new method on a regulated port
+interface plus both adapters plus the contract bench — real cost, poor fit. CLAUDE.md:57 scopes P6 to
+the scheme certificate chain, i.e. mTLS API traffic, and one of the three watched URLs is CBUAE
+Confluence rather than a Nebras host at all, so a "P6 for Nebras-domain traffic" reading would leave
+direct egress anyway and achieve nothing. And no bank grants a regulated workload unmediated outbound
+HTTPS — at M6 this call traverses the bank's forward proxy whatever any ADR says.
+
+The carve-out is deliberately narrow and CONDITIONAL: unauthenticated GETs of public scheme
+documentation, no credentials, no PSU or bank data, response used only for change detection — and it
+requires pinning the redirect behaviour (`redirect: 'follow'` on an unauthenticated GET is
+SSRF-adjacent even with nothing to steal) and keeping the fetcher injectable so a bank points it at its
+own proxy without a code change. Net effect is LESS unmanaged egress than before the ruling, not more.
+
+THE DEFECT UNDERNEATH IT (new, STD-15). Checking what happens when that egress is blocked exposed a gap
+bigger than the ruling. `rate-card-watch.ts:399` returns `failedSources`; `worker.ts:336` calls
+`runBillingRateCardWatch` inside `Promise.allSettled` and DISCARDS the resolved value. It is never read.
+A failed source writes one `billing_rate_card_watch_failed` audit row and raises nothing — no ITSM
+ticket, no risk signal. So a proxy-blocked or moved page leaves the watch DEAD AND LOOKING ALIVE: weekly
+audit rows nobody reads. That is this review's own thesis turned on the repo's tooling, and ADR 0030
+would have inherited it — pinning a regulatory baseline to a watcher whose silence is indistinguishable
+from "nothing changed" manufactures false assurance, which is worse than no registry. Hence amendment
+(ii): fail loudly first. STD-15 filed, STD-01 depends on it.
+
+Backlog consequences: STD-01 goes blocked -> pending (ADR 0030 accepted) with `depends_on: [STD-15]`,
+and the block re-orders to STD-09..15 -> STD-01 -> STD-02..04 -> STD-05..08. 194 items, 8 blocked (was
+9). Simulated next-story pick is unchanged at STD-09.
+
+ADR 0010 (STR/AML) was PARKED by the owner, not resolved — recorded as such in the review's decision
+queue so it cannot later read as settled. BACKOFFICE-63 stays `done` against a `Proposed` ADR and the
+bank still has no evidence an STR was ever filed. ADR 0011 remains open.
+
+Evidence: docs gates green — `docs:check` 60 docs / 30 ADRs, `discovery:link` OK, `adr-number-check` 1
+ADR added no collision; backlog YAML parses, canonical field order holds, next-story pick simulated.
+Still docs-only — no source, no spec, no tests changed.
+
+---
+
+## 2026-08-22 — HARNESS-16 done: the injected-violation self-test (ADR 0029's debt, discharged)
+
+THE QUESTION THE HARNESS HAD NEVER ACTUALLY BEEN ASKED. ADR 0029 said it plainly: "a comment-only
+diff cannot show that a reviewer CATCHES a violation, only that the path runs. A green verdict here
+is weak evidence by construction." Every review to that point had either passed or found bugs the
+build agent wrote BY ACCIDENT. Nothing had ever been deliberately planted, so "the reviewers catch
+violations" was an assumption wearing evidence's clothes - which is the exact shape of defect this
+repository keeps rediscovering.
+
+PR #331: six violations planted in a branch written to look like ordinary work - a plausible commit
+message, a plausible cover story in the code comment ("outside the reconciliation story's surface so
+it can ship ahead of it"), and three passing unit tests. Closed unmerged.
+
+RESULT: ALL SIX CAUGHT, ZERO MISSES. Hard-stop VERDICT: FAIL (6 findings); contract-conformance
+VERDICT: DRIFT (12 findings).
+
+THE CONTROL CONDITION IS THE HALF THAT MAKES IT A MEASUREMENT. All TEN deterministic gates stayed
+GREEN - Q1, Q1b, Q2, Q2b, Q2c, Q3 x2, Q4, Q4.5, Discovery. CI's mechanical half found nothing wrong
+with an endpoint that serves finance payables data to every authenticated persona, mutates the
+INSERT-only audit table, and writes raw request bodies to stdout. That is not a criticism of those
+gates - none of them is built to see any of it. It is the point: without the green half, a red AI
+check proves only that SOMETHING was wrong, not that the reviewer found what nothing else could.
+
+Getting that half right took care, and one attempt nearly spoiled it: the first version of the
+planted test file failed `tsc --noEmit` under noUncheckedIndexedAccess. Left in, Q1 would have gone
+red and the result would have been confounded - a red Q-gate proves the deterministic gate caught
+it. Fixed before pushing. The PII plant is semantic rather than literal for the same reason: the
+pii-guard hook blocks Emirates-ID and IBAN literals outright, so a literal would never have reached
+a reviewer; logging the body unredacted while redactPii() sits ten lines away is the violation a
+reviewer has to REASON about. console.error not console.log, because the latter trips lint.
+
+WHAT RAISES CONFIDENCE ABOVE THE SCORE. Both reviewers traced MECHANISMS, not patterns. The scope
+finding walked the actual fall-through - matchRoute misses, requiredScopeFor returns null, the
+middleware returns next() - then cited the comparable finance surfaces that DO declare a scope.
+Hard-stop went further than the plant on the audit row: it found migrations/0003_rls.sql:69 REVOKEs
+UPDATE so the database would reject the call, then correctly refused to treat that as mitigation
+because the method has no caller and no test, so nothing in CI exercises it. It pre-empted the
+rationalisation ("the amendment convention ADR governs amending ADR DOCUMENTS, not audit rows - it
+does not authorise this") and quoted the planted cover story back as evidence. Contract-conformance
+did the arithmetic - AED 1,500.50 is 150050 fils - and noted the neighbouring surface uses
+variance_milli_fils, "so there is no reading of the contract under which a decimal is correct here".
+
+THE MOST USEFUL FINDING WAS ONE NOBODY PLANTED, AND BOTH REVIEWERS FOUND IT INDEPENDENTLY: the
+planted tests were STRUCTURALLY INCAPABLE of catching the bug. All three authenticated with
+AUTHED_HEADERS, a platform-super-admin token that satisfies any scope check by construction, so the
+suite could never have surfaced the missing scope gate, and no test asserted a 403 for a non-finance
+persona. A suite that looks like coverage and proves nothing is precisely what Q1b and the mutation
+ratchet exist to catch and cannot see. Eleven further unplanted findings came back, including
+composition (a second parallel routing/authorisation path), a missing meta.next_cursor, and money
+flattened into sibling scalars rather than the nested Money object - a defect SEPARATE from the
+float, since even an integer would not validate against the schema.
+
+CALIBRATION, NOT JUST VOLUME. Hard-stop flagged the synthetic TPP legal names and then reasoned
+CORRECTLY that corporate names are not personal data - "recorded only so the judgement is visible
+rather than silently made". Contract-conformance marked three findings with explicitly lower
+confidence and cleared the UUID check with reasoning. Each routed the other's findings across
+rather than double-counting or dropping them. A reviewer that flags everything is as useless as one
+that flags nothing; these did neither.
+
+NOT KEPT AS A FIXTURE, deliberately. The branch is closed and deleted. The plants were tuned to the
+reviewers' current prompts, so re-running it would measure those prompts rather than the code -
+a regression suite built from it would decay into exactly the vacuous pass it was built to disprove.
+
+TAKEN TOGETHER WITH PR #324, where these same reviewers went FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS
+against a gate the build agent wrote and reproduced every bypass live, HARNESS-16's central claim is
+now evidenced from both directions: they catch planted violations, and they catch real ones.
+
+HARNESS-19 filed for the runner-starvation classifier (drafted as 17, then 18 - both taken by
+concurrent loops while this was in flight, which is itself an argument for a reservation gate on
+backlog ids like the one Q2c gives ADR numbers).
+
+---
+
+## 2026-08-18 — ADR 0031: amending an accepted ADR (in-place for facts, supersession for decisions)
+
+User decision (Option C of three). Prompted by ADR 0029's amendment table, which flagged the
+question rather than assuming an answer after the hard-stop AI reviewer raised it twice on
+PR #318, at explicitly stated low-to-moderate confidence, and declined to rule on it — correctly,
+since it is a governance call for a control-plane owner rather than a reviewer.
+
+THE INVESTIGATION CHANGED THE QUESTION. The practice already existed and was undocumented:
+ADR 0007 was accepted on 2026-08-17 and substantively corrected THE SAME DAY — commit 0f0a79a,
+"correct VAT, query-window, and collection mechanics", 65 insertions and 22 deletions against an
+accepted decision record — by the BILL-11 work stream, with nothing on the document saying so.
+Only `git log` knew. So the choice was never whether to start allowing in-place amendment; it was
+keep doing it silently, stop entirely, or do it with a record. ADR 0029 was not the first case,
+only the first FLAGGED case, and the only one carrying an amendment table.
+
+Also established while checking: there is no written ADR process anywhere (no README in
+docs/adrs/, one passing mention in DEVELOPMENT.md), and the sole supersession precedent
+(ADR 0012 -> 0016) is a DECISION REVERSAL, not a factual correction — so it set no convention
+for the case at hand. 29 ADRs before this PR: 23 Accepted, 5 Proposed, 1 Superseded (30 / 24 / 5 / 1
+with ADR 0031 itself). An earlier revision of this line read "20 Accepted, 5 Proposed, 1 Superseded"
+— a count that did not even sum to 29, and it is worth recording WHY it was wrong: it was measured
+with the FIRST draft of the classifier, whose status regex silently missed the `- **Status:**` bold
+form. The gate's own bug undercounted the population the gate applies to. Re-measured with the
+fixed exports over the real corpus, enumerated rather than totalled.
+
+THE RULE. Statement of fact changed (what was built, measured, or proved) -> edit in place and
+add a dated row to an "Amendments after acceptance" table. DECISION changed (option chosen, or
+its scope) -> supersede with a new ADR, the 0012 -> 0016 route. Proposed ADRs are exempt: the
+rule attaches at acceptance, the point at which someone might be building against the document.
+
+ENFORCED, NOT MERELY WRITTEN. scripts/adr-amendment-check.mjs fails a PR that modifies an ADR
+whose BASE-BRANCH status is Accepted unless the diff adds a dated amendment row or flips the
+status to Superseded. This repo's own history is the argument: an unenforced convention is "a
+local convention wearing a gate's clothes" (HARNESS-09), and ADR 0007 is proof this particular
+one would not have held. Discoverability is mechanical rather than documentary — nobody reads a
+process doc before editing a file, so the failure message states the rule at the one moment
+somebody wants it.
+
+Placement follows HARNESS-07 doctrine: a separately guarded step in the EXISTING q2c job, not a
+new job. Q2c already fetches the base ref this check needs, and adding a check-run name would
+strand branch-protection rules pinned to the current ones. Guarded on `!cancelled()` so an
+earlier step's failure cannot skip it — a skipped gate looks exactly like a passing one.
+
+DELIBERATE COST, recorded in the ADR: a typo fix in an accepted ADR also costs a row. The check
+cannot separate substantive from cosmetic without making a judgement call in CI, and a gate that
+guesses is worse than one that is slightly heavy. If it proves noisy the proportionate relaxation
+is to require a row only when the diff REMOVES lines, and that change must itself be an amendment
+to ADR 0031 recorded in its own table.
+
+ADR 0007 BACKFILLED in the same change — the one known case where document and history disagree
+with nothing to say so. The backfill is itself an in-place amendment and carries its own row,
+including a row recording that the table was added retrospectively.
+
+THE HARNESS EARNED ITS KEEP ON THIS PR, TWICE, AGAINST A GATE I WROTE. HARNESS-16's advisory
+hard-stop reviewer returned VERDICT: FAIL (7 findings) on the first draft of this check and
+REPRODUCED three live bypasses rather than asserting them. Round two returned FAIL (3) and
+reproduced two more — both the same root cause: the rename branch tested `isAdrPath` on the
+DESTINATION path, so renaming an accepted ADR out of the matched shape while rewriting it walked
+past the gate entirely (`0007-payables.md` -> `adr-0007-payables.md`, exit 0, "nothing to check"),
+as did moving it out of `docs/adrs/` (a bare `D` under the old pathspec, read as the documented
+deletion carve-out). Fixed by scoping on the ORIGIN path and dropping the pathspec: what puts a
+change in scope is that the thing being edited WAS an accepted ADR on base — where the author
+moves it to is exactly the freedom the bypass exploited.
+
+Two findings were mine to own, not the reviewer's to catch. A commit claimed a rename fix and two
+tests and shipped NEITHER: a live bypass probe ran `git add -A && git commit` (sweeping
+uncommitted work) then `git reset --hard HEAD~1` (discarding it), and the commit message carried
+the tell in its own test count. Both reviewers caught the empty commit. Process fix adopted and
+held since: COMMIT FIRST, THEN PROBE. Separately the reviewer flagged, out of scope, a FALSE-RED
+I had introduced while fixing finding 2 — `hasNewAmendmentRow` keyed its row set on the ISO date
+alone, so a second genuine amendment on a day the ADR had already been amended read as "already
+there". ADR 0007 carries two rows dated 2026-08-17, so it was days from biting. A false red on
+compliant work is worse than most bypasses: a bypass lets one bad change through, a false red
+blocks a good one and teaches people the gate is noise, which is how a control stops being read
+at all. Now compared on whole normalised rows.
+
+ROUND THREE: VERDICT: FAIL (4 findings), all four reproduced, three of them code defects I had
+introduced while fixing rounds one and two. This is the entry worth reading twice, because the
+pattern is that EVERY fix opened its own hole.
+
+(1) Route 1 was satisfied by EDITING an existing amendment row rather than adding one. Comparing
+whole rows had closed a false-RED (a same-day second amendment) and opened its exact mirror: an
+edited row is absent from the base set, so it reads as "new". Appending ONE PERIOD to an old row
+licensed an arbitrary rewrite - and the reviewer's reproduction changed the DECISION SCOPE, the
+one case ADR 0031 routes to supersession rather than to a row. The gate green-lit the case the
+convention most exists to catch. Neither end of that trade is safe alone; membership is now judged
+in BOTH directions - a new row must appear AND every base row must survive unmodified.
+
+(2) The D+A rewrite pairing keyed on the ADR NUMBER, so rewriting AND renumbering escaped
+completely. Same evasion as renaming while rewriting, which this script already refused to honour;
+the number is a label, not the record. Leftover deletions and additions now pair across numbers,
+deterministically sorted. Accepted cost, stated: a PR that genuinely deletes one ADR and adds an
+unrelated one will now be flagged. Checked before accepting it - 0001..0030 with no gaps, and NO
+ADR HAS EVER BEEN DELETED in this repo's history, so the false-red is hypothetical while the
+bypass was demonstrated. A lone deletion with nothing to pair against stays exempt.
+
+(3) parseNameStatus enumerated M/R/C/D/A and silently dropped everything else, so a git TYPECHANGE
+(T - replacing an accepted ADR with a symlink) reported "nothing to check". Closed as a CATEGORY
+rather than a letter: any status git invents that touches an ADR path is treated as a
+modification. The reviewer rated this exotic and was unsure it was worth closing; closing the
+class rather than the instance is what made it worth doing once.
+
+(4) NOT a code defect, and the most important of the four. The deletion carve-out was justified in
+ADR 0031 by the claim that doc-link-check "already fails a PR that deletes an ADR still referenced
+by a current-state doc". That is FALSE, and I verified it independently rather than taking the
+finding on trust: doc-link-check resolves FILE-PATH references, and there are ZERO
+docs/adrs/NNNN-*.md path references anywhere in the set it scans. ADRs are cited by NUMBER. Every
+real path reference lives in docs/backlog.yaml, docs/research/, docs/reviews/, mcp-gateway, and
+ai-review.yml - all outside the scanned set. So deleting an accepted ADR is green on both gates
+and silent, which is precisely the outcome the ADR claimed was prevented. A decision record
+asserting something its own history does not support is the exact failure mode ADR 0031 exists to
+stop, and it was doing it in the paragraph justifying an exemption. Corrected in place; whether
+deletion should require a record is now an OPEN CONTROL-PLANE QUESTION for the ADR's owner, not
+something this script decides quietly.
+
+TWO TEST ASSERTIONS WERE INVERTED, AND THE DISTINCTION MATTERS. Both had encoded a bypass as an
+expectation ("an unrelated D and A ... both exempt"; "lone A and D exempt"). They were changed to
+flag MORE, not less - strictly stronger, which is the opposite of the reward-hacking move the
+tripwire and Q1b exist to block. Recorded explicitly because a test edit accompanying a green run
+should always have to justify its direction.
+
+ROUND FOUR: both reviewers PASS (hard-stop VERDICT: PASS, contract-conformance VERDICT: CONFORMANT)
+and all ten deterministic gates green. Three non-blocking items were still worth fixing, and one of
+them matters more than its size.
+
+THE COMMENT WAS LYING ABOUT THE CODE, IN THE FILE THAT EXISTS TO STOP EXACTLY THAT. Round 3 closed
+the status allow-list "as a CATEGORY, not a letter" - and the guard shipped as `!/^([MRCDA]\d*)$/`,
+which excluded SCORED letters too. `M100` (git's break-rewrite form, emitted under -B) matched the
+exclusion, fell past every specific branch and parsed to []. The reviewer reproduced it, then went
+further and tried to reach it from real git: plain --name-status prints an unscored `M`, and
+diff.breakRewrites is unset by default, so it is a latent gap rather than a live bypass. That is why
+it survived two rounds. But the comment asserted a closure the code did not deliver - a document
+asserting what its history does not support, which is ADR 0031's entire thesis, occurring inside
+ADR 0031's own enforcement script. Fixed by listing the forms the specific branches actually handle
+(`M\d*|[RC]\d*|D|A`) and accepting a scored `M` as a modification; pinned by a regression assertion
+so the claim and the code cannot drift apart again.
+
+Also fixed: the q2c step label still read "ADR amendment record (ADR 0030)" after the 0030 -> 0031
+renumber, so the gate's user-visible name pointed at what is now a DIFFERENT ADR on main
+(0030-standards-baseline-registry). Caught by contract-conformance and hard-stop independently. And
+the test fixture stopped reusing `docs/adrs/0030-new.md` as a synthetic path, since that number is
+now a real record. ADR_BASE_REF added to the recorded KNOWN LIMITS: a caller setting it to HEAD gets
+an empty diff and a green gate - not defended against, because the workflow does not set it, so
+setting it would be a visible line in the diff, the same posture as the route-2 status-line limit.
+
+FOUR ROUNDS, AND THE PATTERN IS THE FINDING. FAIL(7) -> FAIL(3) -> FAIL(4) -> PASS. Every fix opened
+its own hole: whole-row comparison closed a false-RED and opened a false-GREEN; the rename fix left
+renumbering open; the category closure leaked scored letters. A gate this small needed four
+adversarial passes to hold, which is the strongest available argument that HARNESS-16's reviewers are
+doing work no deterministic gate was doing.
+
+Evidence: 18 guard tests (59 across scripts/test after HARNESS-17 merged in its own five) incl. an ANTI-VACUOUS-PASS probe driving the exact ADR 0007 shape
+(accepted, corrected, unrecorded) and asserting it FAILS, plus a regression guard that an
+EXISTING amendment table does not license silent editing forever after — the defect that would
+quietly gut this gate. doc-link-check 60 docs / 30 ADRs clean; adr-number-check no collision.
+
+---
+
+## 2026-08-18 — ADR 0031 addendum: the review harness caught a bypass in the gate, and a false fix
+
+Two corrections to the entry above, both found by the AI reviewers on PR #324 and both worth
+recording because of what they say about the harness rather than about the gate.
+
+1. RENAME BYPASS IN THE GATE. hard-stop found that `modifiedAdrs` filtered `git diff
+   --name-status` on status `M` exactly, so renaming an accepted ADR while editing it — git
+   reports `R100`/`R087`, never `M` — walked straight past the check. The cheapest possible way
+   around the rule the gate exists to enforce, in the PR that adds the gate. It did not infer
+   this: it REPRODUCED the bypass in a scratch repository and confirmed the gate reports "no
+   accepted ADR modified" and exits 0. Fixed by `parseNameStatus`, which handles `R*` and `C*`
+   and reads base text from the OLD path.
+
+2. A FIX THAT WAS NOT IN THE BRANCH. The first attempt at (1), commit 2e1eb40, claimed a code
+   change and two tests and shipped neither — its stat was ADR prose only. Cause: the "live
+   bypass test" ran `git add -A && git commit` to stage a throwaway probe, sweeping up the
+   still-uncommitted fix and tests, then `git reset --hard HEAD~1` discarded the lot. The ADR
+   prose survived only because it was written after the reset, which is exactly why the branch
+   ended up asserting a behaviour it did not have. Both reviewers caught the discrepancy on the
+   next run — contract-conformance by diffing HEAD against the commit the message described,
+   hard-stop by noticing the stat and the unchanged test count.
+
+   The commit message carried the tell: "11 in this file, 45 across scripts/test". 11 + 36 = 47.
+   The arithmetic did not add up and was not checked.
+
+   Process fix: COMMIT FIRST, THEN PROBE. A destructive probe must never be able to take
+   uncommitted work with it. Applied here — the fix was committed before the rename probe ran,
+   and verified present afterwards.
+
+This is the strongest evidence to date for HARNESS-16, and it is not the green verdicts. The
+harness caught a security-relevant bypass in a merge gate, then caught a false claim that the
+bypass had been fixed. Both times a human reading the diff would have had to diff a commit
+message against its own contents to notice.
+
+## 2026-08-19 — HARNESS-17: the portal E2E install stops eating the job (PR #328)
+
+The Q3 portal E2E job failed four times on 2026-08-19, every time on
+`playwright install --with-deps chromium` and never on anything in this repo. Three of those runs
+consumed the full 20-minute job cap and reported `cancelled`, which reads as neither pass nor fail —
+the suite never started, so the gate produced no evidence either way.
+
+MEASURED FIRST, AND THE MEASUREMENT KILLED THE OBVIOUS FIX. On the last healthy run (job
+95996474055) the combined step cost 103s, split:
+
+    apt, via --with-deps    07:50:15 -> 07:51:47    ~92s   (89%)
+    browser downloads       07:51:47 -> 07:51:58    ~11s   (11%)
+
+Caching the browsers — what I proposed to the user before looking — would have saved about eleven
+seconds and fixed nothing. apt is both the cost and the hang risk. Recorded because the wrong answer
+was already on the table when the numbers arrived.
+
+WHAT apt WAS ACTUALLY INSTALLING, from that same run's output: fonts-freefont-ttf,
+fonts-tlwg-loma-otf, fonts-unifont, fonts-wqy-zenhei, fonts-ipafont-gothic, xfonts-*. Nothing else
+was unpacked — Chromium's own libraries are already on the ubuntu-latest image, so the browser
+launches with or without the step. The last failure stalled at
+`Ign:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages` and emitted
+nothing for five and a half minutes.
+
+Four changes:
+
+1. Cache `~/.cache/ms-playwright`, keyed on the RESOLVED Playwright version rather than a lockfile
+   hash — an unrelated dependency bump must not evict 290 MiB of browsers.
+2. Split apt from the download into separate, individually capped steps (4m / 6m) so a slow mirror
+   fails fast and names itself instead of silently consuming the job budget.
+3. The apt step is now `continue-on-error: true`. It installs fonts an English-language portal suite
+   does not exercise; blocking every PR on an external Ubuntu mirror to get them is the worse trade.
+   *(SUPERSEDED — see "DECIDED" below. The step was made non-fatal first; once CI proved
+   the suite runs with no packages installed at all, it was removed outright and q3-e2e now
+   carries no `continue-on-error`.)*
+4. The version resolution refuses an empty value. `echo "v=$(cmd)"` exits 0 even when cmd fails, and
+   the pipe through `tr` swallows the status, so a `--filter` miss would have produced the key
+   `ms-playwright-Linux-` shared by every Playwright version — one version's browsers served to
+   another, with no signal at all.
+
+THE PART THAT NEEDED THE MOST CARE was (3) — while it still existed — because "make the failing step non-fatal" is the shape
+of reward-hacking even when it is correct here. So the guard pins the ASYMMETRY, not the change:
+`continue-on-error` must appear EXACTLY ONCE in q3-e2e, and in the fonts step. The browser download,
+the services, the portal build and the suite itself must all still be able to red the job.
+
+Counting across the whole job rather than checking named steps is load-bearing, and the first draft
+got it wrong. That draft guarded the suite via `if (suite) { ... }` keyed on its literal
+`- run: pnpm --filter @ofbo/portal e2e` line — which goes vacuous the moment someone gives that step
+a `name:`. Proved it rather than asserting it: rename the suite step AND mark it continue-on-error,
+so a failing E2E test would no longer red CI, and the branch form reports green while the count form
+catches it. Same defect class this session kept finding elsewhere — a control claimed more broadly
+than it was built — this time in the guard written to prevent it.
+
+Evidence: harness suite 82/82. Every new assertion mutation-checked and caught by its own guard
+alone — remove `continue-on-error` from the fonts step; add it to the browser download; delete the
+version-emptiness check — with `ci.yml` restored byte-for-byte after each. ci.yml parses and the
+q3-e2e step table shows one `continue-on-error`, caps 4m/6m, job cap unchanged at 20m.
+
+Not settled here, and left for a human: dropping `--with-deps` (and this step) entirely is the
+larger lever — 89% of the install — but it is a behaviour change on CI shared by every PR.
+
+**CI evidence, and it is stronger than a clean run would have been.** On the verifying run
+([32237329042](https://github.com/openfinance-os/ofbo/actions/runs/32237329042)) the apt mirror was
+**still hanging** — the log carries
+`##[error]The action 'install Playwright system deps' has timed out after 4 minutes` — so the fonts
+step was killed at its cap, `continue-on-error` absorbed it, and the browser download, the services,
+the portal build and the E2E suite all ran and passed. That is the fifth mirror failure today, and
+under the previous shape it would have been the fifth `cancelled` in a row. All ten gating jobs
+green; q3-e2e finished in 410s against its 1200s cap, and the cache saved
+(`Cache saved with key: ms-playwright-Linux-1.60.0`), which also settles the unverified
+`actions/cache@v4` major.
+
+One caveat worth naming rather than leaving for someone to trip over: the jobs API reports that step
+as `conclusion: success`, because `continue-on-error` rewrites a failed step's conclusion. The
+timeout is in the log and raised as a run annotation, but a reader scanning the step table sees
+green. The step's cost while the mirror is down is four wasted minutes per run — which sharpens, but
+does not decide, the question left to a human above.
+
+**Warm-cache path proven on the next run** ([32238395327](https://github.com/openfinance-os/ofbo/actions/runs/32238395327)),
+which was the one thing the cold run could not show: `Cache hit for: ms-playwright-Linux-1.60.0` →
+`Cache restored from key: ms-playwright-Linux-1.60.0`, 259 MB in 7s, and `install Playwright
+Chromium` fell from 12s to **1s** because the browser was already present. That also settles the
+`actions/cache@v4` major, which the build session could not verify. On this run the mirror recovered
+— the fonts step completed in 145s and the whole 967-line log carries zero `##[error]` lines, so it
+succeeded rather than failing quietly. 10/10 gates green again, q3-e2e 331s.
+
+So both paths are now exercised: the cold run proved the fix holds when the mirror is down, and the
+warm run proved the cache restores. The measured cache saving is the ~11s predicted — the fix that
+mattered was making the fonts step unable to take the job with it.
+
+**DECIDED: the apt step is removed entirely** (handed back to me with "you decide", so the call and
+its evidence are recorded here rather than left open).
+
+The run above is the experiment that settles it. On 32237329042 the fonts step hung inside
+`apt-get update` and was killed at its cap having logged **zero `Setting up` lines** — not one
+package was installed — and the portal E2E suite then ran and passed in 25s. The suite has therefore
+already been observed working with no fonts present. Supporting checks, all negative: no screenshot
+or snapshot assertion anywhere in `apps/portal` (no `toHaveScreenshot`/`toMatchSnapshot`), no Arabic
+or RTL content, no `font-family` or `next/font` declaration, and the spec's only non-ASCII characters
+are `§ — →`, all in the base DejaVu set on the runner image.
+
+Against that: the step failed the job four times in one day on an external Ubuntu mirror, and on the
+two runs after that cost 253s (killed at the cap) and 145s, versus a ~92s healthy cost and an ~11s
+browser download. It is 89% of the install and buys nothing this suite uses.
+
+The consequence I care about most is that **`continue-on-error` is now gone from q3-e2e entirely** —
+which is what both advisory reviewers singled out as the thing a human should look at. There is no
+longer any step here whose failure is cosmetic, so the guard asserts the count is **zero**, not
+"one, on the harmless step". Residual risk, unchanged and accepted: if a future runner image drops a
+real Chromium library, the failure surfaces in the E2E step as a browser that will not launch —
+fatal, legible and attributable — instead of being absorbed by a provisioning step.
+
+The guard's comment-stripping is load-bearing and was proved, not assumed: the workflow's own
+comment block now discusses both `continue-on-error` and `install-deps`, so a guard counting raw
+text fails two assertions on an *unmodified* file. Verified by running the no-strip variant against
+a clean `ci.yml` — 2 failures. Six mutations checked in all (reintroduce the apt step, restore
+`--with-deps`, make the browser download non-fatal, delete the cache, drop the version-emptiness
+check, raise the job cap below `steps:`), each caught by exactly its own assertion.
+
+## 2026-08-19 — BILL-16 addendum: the five hard-stop findings on PR #323
+
+The advisory hard-stop reviewer returned `VERDICT: FAIL (5 findings)` on #323. All five are fixed
+here. Three of them were open questions I had escalated to the user earlier in the session and which
+came back as "you decide", so the decisions and their reasoning are recorded rather than left
+implicit.
+
+**FAIL 5 — `approvals/service.ts`: the four-eyes gate did not gate under concurrency.** `approve()`
+read the record, checked `pending`, ran the gated operation, and only THEN persisted — with
+`store.update` setting `state` unconditionally. Two approvers on one pending request both pass every
+check before either write lands, so both execute. For `billing.tpp_cost.period_close` that closes a
+period twice; for any money-moving gated operation it moves the money twice.
+
+Reproduced before fixing, which is the part worth recording: a test holding the operation open until
+both approvers are past their checks reported `expected 2 to be 1`. The gate was decorative under a
+race.
+
+Fixed with a compare-and-swap: `ApprovalStore.claimForApproval(id, approver, approvedAt)` performs
+`UPDATE ... WHERE approval_request_id = $1 AND state = 'pending'` and reports whether it won. The
+claim happens BEFORE the operation runs, which picks the safer failure mode — a claim that succeeds
+and an execution that then fails leaves an `approved` row with no `execution_result`, which is
+visible and recoverable, whereas executing first risks doing the irreversible thing twice.
+
+Verified at the database, not only in the in-memory store (whose atomicity is an accident of Node
+being single-threaded and proves nothing about Postgres): two concurrent claims on separate
+connections gave rowCount 1 and 0, a third claim on the now-approved row gave 0, and neither
+`approver` nor `approved_at` was overwritten by the late claim.
+
+**FAIL 5 — `payable-dispatch.ts`: nothing correlated the dispatcher with the approval it cited.**
+Every existing check verified the CLOSE — that it happened, for this period, in time, by two distinct
+principals. None verified who was calling dispatch, which is where the money actually moves. Any
+holder of `finance:reconciliation:write` could honour a scheme direct debit by quoting an approval
+they had no part in.
+
+The rule chosen is PARTICIPATION, not a third signature: the dispatcher must be the initiator or the
+approver of the cited close. Requiring a third human would be six-eyes, which PRD §10 does not ask
+for and which no approval mechanism here expresses — inventing one would be a new platform primitive
+(rule 6) rather than a binding of the existing one. Compared via `normalisePrincipal`, for the same
+reason the self-approval check is: a raw `===` would let re-spelled padding decide who may move
+money.
+
+Consequence for the fixtures, stated plainly because it changed existing tests: the harness's
+dispatching principal was `demo:finance-analyst@bank`, which is neither participant, so eight tests
+went red on the new rule. They were fixed by pointing the `APPROVER` constant at the identity the
+approval fixture already names as its approver — the constant now means what it is called. The
+superadmin fixture likewise had to become a participant: holding `platform:superadmin` is not a
+four-eyes bypass, and building that fixture the other way would have quietly asserted that it is.
+
+**FAIL 3 — `payable-dispatch.ts`: the caller-supplied `Idempotency-Key` went raw into an INSERT-only
+row.** The adjacent field on the same call was redacted, and the failure-path audit redacted the very
+same value eleven lines below — the diff's own reasoning applied inconsistently.
+
+Redaction is the wrong instrument here: the column is a dedupe key and must stay comparable, and
+`redactText` masks only recognised patterns so an unrecognised-but-sensitive value would survive. It
+is HASHED instead — `sha256:<hex>`, matching the digest convention already used in the billing
+stores. Deterministic, so `UNIQUE (bank_id, idempotency_key, dispatch_state)` still dedupes a retry
+exactly as before; total, so nothing a human typed into that header survives in the clear. P9 still
+receives the RAW key, because the vendor's own dedupe is keyed on what the caller sent — hashing it
+on the way out would make every retry a new instruction, which is the double-debit this service
+exists to prevent.
+
+**FAIL 3 ×2 — IBAN/email-shaped literals in two fixtures.** Both are deliberate redaction canaries,
+and a redaction test whose input the redactor does not recognise proves nothing. The reviewer said as
+much and then made the point that actually mattered: *"that exemption is not written down anywhere I
+could find"*. It was right. A survey of the tree found the convention already holding perfectly —
+all eight IBAN-shaped literals use the unallocated bank code `000`, and there are zero real-prefix
+`784` Emirates IDs — and NOTHING enforcing it. A convention held only by everyone remembering is one
+bad afternoon from breaking silently.
+
+So it is now written into CLAUDE.md's hard stops and enforced by
+`scripts/test/pii-literal-check.test.mjs` (3 tests, in the Discovery harness glob). Worth noting why
+a CI guard and not just the existing hook: the repo already has a session hook that refuses to write
+a real-prefix Emirates ID — it fired on this session's own proof script, correctly — but hooks run in
+the agent session, not in CI. That is the gap the guard closes.
+
+Evidence: unit 1591/1591 (223 files), integration **188/188 against a real Postgres**, typecheck
+clean across all nine packages, lint clean, harness 79/79. Each new assertion was checked by
+mutation: the concurrency test reported `expected 2 to be 1` before the CAS; the dispatch-authority
+and hash tests both failed before their fixes; and the three PII assertions were each driven red by
+one planted literal (a bank-code-033 IBAN, a real-prefix Emirates ID assembled at runtime, and an
+IBAN shape in shipped source), each caught by exactly its own assertion with the file restored
+afterwards.
+
+## 2026-08-21 — HARNESS-18: stop mutation + ai-review re-running on every push (Actions budget)
+
+The GitHub Actions allowance was being exhausted in roughly four days of each month. Measured over
+18–19 Aug 2026 from per-job timings — GitHub bills the **sum of every job**, each rounded up to the
+whole minute, so a `ci` run that reads as 6 minutes on the Actions tab bills 22:
+
+| workflow | jobs/run | billable min/run | runs / 2 days | ~billable min |
+|---|---|---|---|---|
+| `ci` | 10 | 22 | 60 | ~870 |
+| `mutation` | 1 | 25 (10–14 cancelled) | 30 | ~380 |
+| `ai-review` | 3 | 12 | 30 | ~220 |
+| `deploy` | 5 | 9 | ~4 | ~36 |
+
+~1,500 billable minutes in two days — ~750/day, ~16,000/month against a 3,000-minute allowance.
+
+The recent spike was not drift. A `paths:` filter on `pull_request` is evaluated against the **whole
+PR diff**, not the commits just pushed, so the moment a branch touched `services/bff/src/auth.ts`
+once, every later push re-ran the 25-minute mutation job — doc-only pushes included. Both live
+branches touch `auth.ts` and `approvals/service.ts`, which is why 30 of the 51 mutation runs this
+workflow has ever had (created 24 Jun) landed in those two days. Fifteen of the thirty were cancelled
+by the concurrency group after burning 10–14 minutes each: 215 runner-minutes that produced no
+mutation score at all. Six of thirty completed. `ai-review` compounded it independently — created
+15 Aug, 24 runs on 19 Aug alone at ~12 min each, because both reviewer legs spend ~5 minutes in a
+model call re-reading the entire diff, re-paid per intermediate commit plus the tokens behind them.
+
+Both now use `types: [opened, ready_for_review, reopened]`. This is a **cost** change, not a coverage
+change: mutation still sees every security-core PR and ai-review still reviews every PR, at open
+(drafts included — `opened` fires for them, preserving ai-review's deliberate no-skip-drafts rule)
+and again at ready-for-review, the state a human is actually asked to merge. What is dropped is the
+~20 intermediate re-runs per PR that re-proved the same thing. Safe because **neither is a required
+status check** — the pinned contexts in `docs/governance/runbooks/main-branch-protection-activation.md`
+are Q1, Q1b, Q2, Q2b, Q3 ×2, Q4, Q4.5 and Discovery only.
+
+Escape hatches differ because the two workflows differ. `mutation` already has `workflow_dispatch`,
+which accepts any ref, so it needs no label. `ai-review` deliberately has none (no merge base, nowhere
+to post) and a Checks-tab re-run replays the *original* head SHA — so it gets `labeled`, narrowed on
+the `config` job to the `ai-review` label. That is the only way to re-review the current head, and the
+narrowing stops an unrelated label costing two model calls.
+
+Guard: `scripts/test/ci-cost-guard.test.mjs`, 8 assertions in the dependency-free discovery-gates
+glob. Verified non-hollow by putting `synchronize` back and watching exactly one assertion go red. It
+asserts the coverage half too — `opened`, `ready_for_review` and `cancel-in-progress` must survive —
+so a later edit cannot quietly turn the cost fix into a coverage cut.
+
+**Deliberately not taken, both needing a human decision.** (1) Folding `q45-lineage` into
+`q3-integration-contract`: q45 re-runs `pnpm test:integration` byte-identically to q3 and then a
+one-second `lineage:gate` — ~2 billable minutes and a redundant Postgres container per `ci` run — but
+`Q4.5 — BCBS 239 lineage validation` is a **pinned required-check context**, so merging it renames the
+check and blocks every merge until an admin updates branch protection. (2) Path-filtering `ci.yml` so
+docs-only PRs skip Q1/Q3/Q3-E2E/Q4.5 (~50 min/day): `ci.yml` has no paths filter at all, so an ADR-only
+PR runs Playwright E2E and three Postgres containers — but conditionally skipping gates contradicts
+this repo's own HARNESS-07 / q1b doctrine that an omitted gate must never be indistinguishable from a
+passing one.
+
+Also noted, not fixed: the mutation job has grown from the ~8 minutes its header claimed to ~25,
+now flush against its own `timeout-minutes: 25` ceiling. A job pinned to its timeout is the job most
+likely to start failing spuriously, and the 3× growth is unexplained. The stale header claim was
+corrected rather than left to drift (Q2b). Playwright's 2m57s uncached browser install is not in scope
+— HARNESS-17 / PR #328 already removes the 92-second `--with-deps` apt step and caches the browsers.
+
+Expected saving ~270 min/day, ~36% of total spend, without weakening a merge gate.
+
+Evidence: `scripts/test` 44/44, discovery harness 40/40, `docs:check` 60 docs / 30 ADRs, `discovery:link`
+OK, backlog YAML parses, both workflows parse and their resolved triggers were inspected. No source,
+spec, or product tests changed — CI configuration, one new guard test, and docs.
+
+### Addendum, 2026-08-21 — the allowance is not "running low", it is EXHAUSTED
+
+Found while watching PR #329's own checks. Every job on it failed 2-3 seconds after creation with
+`runner_id: 0`, no runner name, **zero steps executed** and no log file (the logs endpoint 404s). That
+is GitHub refusing to allocate a runner at dispatch, not a gate finding a defect.
+
+Bisected against the run history:
+
+| | run | created | outcome |
+|---|---|---|---|
+| last success | ci #959 (PR #328) | `2026-08-19T10:02:08Z` | success, 4m |
+| first failure | ci #960 (PR #328) | `2026-08-19T10:08:30Z` | failure, 0m — now on `run_attempt: 8` |
+
+So the cutover is between **10:02 and 10:08 UTC on 19 Aug 2026**, and CI has been down repo-wide for
+~42 hours. It is not branch-specific: the same signature appears on `feature/HARNESS-17-…`,
+`claude/adr-0030-amendment-convention` (retried 7 times) and `claude/github-actions-budget-jryfmy`,
+across `ci`, `mutation` and `ai-review` alike. Nothing merges until the spending limit is raised or
+the monthly allowance resets.
+
+Two consequences worth recording. First, the burn measurements in the entry above were taken over
+18-19 Aug — which is precisely the window that spent the allowance, so they describe the run rate that
+caused this, not a quiet period. Second, HARNESS-18 could not be verified in CI: the gates it touches
+were run locally instead (`scripts/test` 44/44 including the 8 new guards, discovery harness 40/40,
+`doc-link-check` 60 docs / 30 ADRs, `discovery-link-check` OK, both workflows parsed and their resolved
+triggers inspected). The change touches no source — CI configuration, one dependency-free guard test,
+and docs — so the locally-runnable gates are the ones that cover it. It still needs a green CI run
+before merge, once runners are available again.
+
+The manual re-runs are worth calling out as a trap: a dispatch failure looks like a flake, so seven and
+eight attempts were spent re-running runs that cannot start. They cost no minutes, but they cost time
+and they obscure the real signal.
+
+## 2026-08-22 — HARNESS-17 + HARNESS-18 merged; billing restored; HG-0001 waiver recorded
+
+The Actions allowance was topped up at ~06:50Z, ending a ~3-day repo-wide CI outage (19 Aug
+10:0xZ → 22 Aug 06:5xZ) during which every job was rejected at dispatch with `runner_id: 0`, no
+runner, no logs. Confirmed restored by re-running the rejected runs rather than by pushing empty
+commits: both got real runners immediately and executed normally.
+
+Both PRs verified green on their actual merge heads — all nine pinned required contexts plus
+Discovery — and merged:
+
+| PR | Story | Merge commit |
+|---|---|---|
+| #328 | HARNESS-17 — portal E2E Playwright install | `026f8f0` |
+| #329 | HARNESS-18 — mutation + ai-review trigger breadth | `53d439e` |
+
+`#329` needed a real merge of `main` first: both branches append to this append-only journal, so
+`docs/build-log.md` conflicted. Resolved by keeping **both** blocks in date order (HARNESS-17
+08-19, then HARNESS-18 08-21) per the journal's chronology rule — nothing dropped or rewritten.
+`docs/backlog.yaml` auto-merged; both entries verified present. Re-verified on the merged tree:
+`scripts/test` 49/49 (the two guard suites now cross-check each other's workflow edits),
+discovery 40/40, docs and waist gates clean.
+
+**The saving is already observable.** The `synchronize` push of the merge commit ran `ci` only —
+`mutation` and `ai-review` did not fire, which before HARNESS-18 would have cost ~25 and ~12
+runner-minutes respectively for no new information.
+
+Also fixed en route: the main checkout and the worktree were both sitting on the same branch (a
+`checkout -B` collision from this session), which made the main checkout's tree read as "uncommitted
+changes" that were in fact the exact inverse of the branch's own commits. Committing that would have
+reverted the work. Main checkout is now on `main`; the worktree owns the feature branch.
+
+**HG-0001 deviation.** These merges were performed by the agent, on the harness owner's explicit
+in-session authorisation, with branch protection not yet enabled. HG-0001 forbids agent self-merge
+and is unchanged. The deviation is recorded at
+`docs/governance/waivers/2026-08-22-01-HG-0001-agent-performed-merge.md` and linked from HG-0001,
+because the release evidence bundle seals commit provenance as Art. 12/17 attribution — an
+unexplained agent merge in that bundle is a finding, a recorded one is a decision. The waiver is
+scoped to these two merges and argues for prioritising the branch-protection runbook, which would
+have refused them outright.
+
+## 2026-08-22 — HARNESS-20: close the mutation-gate coverage hole HARNESS-18 opened
+
+The advisory hard-stop reviewer found a real defect in HARNESS-18 — four minutes after PR #329
+had already been merged. Worth recording both halves of that: the control this harness exists to
+run did its job, and merging before it finished is what let the defect land.
+
+**The hole.** HARNESS-18 narrowed `mutation.yml` to `opened`/`ready_for_review`/`reopened` and
+claimed "a cost change, not a coverage change". False, and ADR 0029 had already named the trade
+before the change was made:
+
+1. PR opened **non-draft**, diff touches no security-core path → `opened` fires, `paths:` does
+   not match, no run. Correct.
+2. A later push adds `approvals/service.ts` or `high-class-audit.ts` → `synchronize` was gone,
+   so **nothing fired**.
+3. `ready_for_review` cannot fire — the PR was never a draft.
+4. The PR merges with its four-eyes / high-class-audit changes mutation-tested **zero times**,
+   caught only by the weekly schedule, on the Monday after it is already on `main`.
+
+The whole-diff `paths:` semantics that caused HARNESS-18's cost problem were also what made that
+case safe. Removing `synchronize` removed the cost and the safety together.
+
+**The fix separates two questions `paths:` conflates.** `paths:` answers "is this *branch*
+relevant?" — GitHub evaluates it against the cumulative PR diff, so a branch that never touches
+the security core still starts nothing and costs zero. A new ~1-minute `changes` classifier job
+answers "did *this push* touch it?" against the pushed range `before..after`, which `paths:`
+cannot express. The ~25-minute job is gated on it.
+
+So a docs-only push to a branch that touched `auth.ts` last week costs ~1 minute; a push that
+edits `auth.ts` runs the gate; and case 2 above now runs the gate. Against the 18–19 Aug window
+that motivated HARNESS-18: ~30 × 25 min becomes ~30 × 1 min plus the few that genuinely qualify.
+**The saving is kept, not reversed.**
+
+**The classifier fails open by construction.** Force-pushed base, missing payload range,
+un-computable diff — all run the gate rather than guess. A cost control that skips a security
+gate on uncertainty is not a cost control. It is a pure decision function in
+`scripts/mutation-scope-check.mjs` rather than inline workflow shell, precisely so all three
+fail-open branches are reachable from tests instead of only from a live CI event.
+
+**Also from the same review.** `ai-review` comments now name the SHA they reviewed and say the
+verdict is stale if the PR has moved on. Dropping `synchronize` there remains right — a
+classifier cannot make a whole-diff model call cheaper — but the accepted cost was a verdict that
+lags the head, and a sticky ✅ from head-at-open otherwise reads as current over every later push.
+Costs no extra job and no extra runner minute. ADR 0029 was amended in place using its own
+existing dated-table convention: its Cost bullet described `synchronize` as current and offered
+the narrowing as a hypothetical, and now states what ships and that the predicted cost was
+**accepted, not avoided**. The `labeled` trigger is recorded there too, including that it lets a
+triage-permission actor re-fire a credentialed run where every prior trigger required write. The
+"the build agent opens its PRs as drafts" premise is corrected rather than repeated —
+`next-story/SKILL.md` never says it, PRs here are opened both ways, and the conclusion (do not
+exclude drafts) never needed it.
+
+**Guards, proven non-hollow.** `scripts/test/mutation-scope-check.test.mjs` (8 tests) covers every
+decision branch, each fail-open path individually, and asserts `SECURITY_CORE` cannot drift from
+the workflow's `paths:` list. `ci-cost-guard.test.mjs` is restructured — its old assertion that
+*both* workflows exclude `synchronize` is now exactly backwards for `mutation.yml`, so the two are
+asserted separately, because they control cost by different means. Seven mutations checked, each
+caught by exactly its own assertion, tree restored clean: reintroduce the narrow trigger, ungate
+the job, drift the file list, drop `REVIEWED_SHA`, add `synchronize` to ai-review, make the
+classifier fail **closed**, and make it skip on a failed diff.
+
+A process note worth keeping, because it cost real rework: the first mutation-check run used
+`git checkout --` to restore files whose HARNESS-20 edits were still **uncommitted**, which
+reverted them to `HEAD` and destroyed the work rather than undoing the mutation. Commit first,
+then mutate. The second run was clean.
+
+Evidence: `scripts/test` 58/58, discovery harness 40/40, `doc-link-check` 61 docs / 30 ADRs,
+`discovery-link-check` OK, both workflows parse and their resolved triggers were inspected, and
+the classifier was exercised end-to-end against real commit ranges in this repository.
+
+---
+
+## 2026-08-22 — HARNESS-21: the AI-review parity guard judges the PR diff, not the distance from main
+
+Found by being on the receiving end of it. #323 was marked ready for review, and both reviewer
+legs skipped with:
+
+    this PR modifies the review control plane (.github/workflows/ai-review.yml)
+
+#323 modifies no control-plane file. HARNESS-20 had merged twenty minutes earlier and edited
+`ai-review.yml` on main; #323 was simply behind. The guard could not tell those apart.
+
+THE COMPARISON ASKED THE WRONG QUESTION. The preflight ran
+
+    git diff --name-only "origin/${DEFAULT_REF}" HEAD -- "${control_plane[@]}"
+
+a TWO-DOT diff, which compares main's TIP against the PR head and answers *do these files differ?*
+The question the guard needs answered is *did this PR change them?* — the three-dot merge-base
+form. Checked both ways on #323 before changing anything: two-dot names `ai-review.yml`, three-dot
+is empty.
+
+Two harms beyond the wrong skip, and the second is the one that would have kept it hidden:
+
+- The skip is NON-FATAL by design (a fork PR must not be permanently red through no fault of its
+  author), so an over-broad skip renders the check **green** while its comment says *this is not a
+  pass*. That is the HARNESS-07 class again, in its worst form: the reader has to open a comment to
+  discover the green is hollow.
+- The message's own remedy is backwards for staleness. *This resolves once the PR merges* is true
+  of a genuine modification; a stale PR resolves by merging main **in**, the opposite direction. An
+  author following the instruction would wait for the wrong event.
+
+It also decays silently and gets worse as main's commit rate rises — every control-plane edit
+re-blocks every open PR behind it.
+
+THE SECURITY INTENT IS UNCHANGED, and was the first thing re-checked rather than the last.
+`on: pull_request` runs the workflow FROM THE PR HEAD with the credential in scope, so a PR must
+not be able to rewrite the reviewer and collect its token in the same run. Three-dot still refuses
+exactly that PR. Only the diff form changed: the `control_plane` list, the fork guard, the
+credential guard and the fatal/non-fatal split are untouched.
+
+The reason string was corrected too — it now says the files changed *relative to its merge base
+with* main, which is what is now measured.
+
+Guard: `scripts/test/ai-review-parity-scope.test.mjs`, 3 tests. Two of them LIFT THE COMMAND
+VERBATIM out of the workflow and execute it against synthetic repositories where main advances on
+the control-plane file after the branch forks — so they bind the guard's BEHAVIOUR, not its
+spelling, and would still catch a rewrite that changed the wording while keeping the wrong
+semantics. The third is the anti-vacuous-pass half: a PR that genuinely edits the file must still
+be flagged. **That third test passed before the fix**, which is what shows this narrows nothing
+that matters — the change removes false positives only.
+
+Mutation-proved in both directions, because a guard that only ever reports *nothing changed* would
+satisfy the first two tests trivially:
+
+| mutation | caught by |
+| --- | --- |
+| revert to the two-dot form | both staleness tests |
+| scope the diff to no control-plane path | anti-vacuous-pass |
+| compare `HEAD...HEAD` — always empty | anti-vacuous-pass |
+
+Evidence: harness suite 121/121, `ai-review.yml` parses, and the three mutations above each red
+their own assertion with the workflow restored byte-for-byte after each.
+
+Parked, not fixed here: HARNESS-20's note asks for a backlog-ID reservation gate — Q2c does this
+for ADR numbers, nothing does it for backlog IDs, and 17/18/20 all collided across concurrent
+branches. 21 was free on main at branch time; if another branch also took it, this one yields.
+
+---
+
+## 2026-08-22 — #325 merged (money at the wire + audit convention); HG-0001 waiver 02 recorded
+
+Last of the six PRs open this morning. The backlog is now empty of open pull requests: #324, #328,
+#329, #323, #311, #334, #325.
+
+**The merge needed two mechanical hurdles cleared, neither of them governance.** GitHub's plain
+`/merge` endpoint refuses a PR belonging to a stack (403, "use the asynchronous merge endpoint"),
+and the stacked async endpoint then failed with *"cannot be merged because it has a merge
+conflict"* — while a local merge of the branch into `main` was clean and `refs/pull/325/merge`
+existed.
+
+Both of those observations were true, and the conclusion drawn from them was wrong. The conflict
+was not between this branch and `main`; it was the **stack's own recorded base** sitting at
+`b8112c9` while `main` had moved to `21900de`. #323 — this PR's former base — had merged, GitHub
+retargeted #325 to `main`, and the stack's view lagged. Merging `main` into the branch refreshed
+the stack base and `mergeable` flipped to true. Worth recording as a diagnostic lesson: for a
+**stacked** PR, `git merge <branch>` into main and the existence of the merge ref are both weaker
+evidence than they look, because neither exercises the stack.
+
+Merged at `9112c46` with `sha` pinned in the request, so GitHub would have cancelled had the head
+moved. Merge commit `af297a7`. All ten required checks verified green on that exact head — not on
+a stale run — plus mutation on the security core (18m43s, `break: 70`).
+
+**HG-0001 deviation, second of the day.** The merge was performed by the agent on the harness
+owner's explicit in-session authorisation, reaffirmed after the control was quoted back and after
+being offered the alternative of merging it themselves. Recorded at
+`docs/governance/waivers/2026-08-22-02-HG-0001-agent-performed-merge.md` and linked from HG-0001.
+
+Two things make this waiver weightier than 01, and they are stated there rather than smoothed over:
+
+- **It is product code, not harness.** Money representation at the wire, the audit convention, and
+  the billing paths in `packages/billing` / `services/bff`. Waiver 01 covered CI-cost changes only.
+- **There is no AI review of record for it.** Both advisory legs returned `DID NOT COMPLETE` on
+  `6e5b9ff` — 315s and 384s with a valid credential, exiting without writing a review file. That is
+  HARNESS-16, not a finding about the diff, but the effect is identical: nothing reviewed this
+  change. They were not re-run, on the owner's instruction.
+
+Two agent-performed merges in one day is the point at which "exception" reads as "practice". The
+branch-protection runbook would have refused both. That, and HARNESS-16 — an advisory control that
+cannot complete is not advisory, it is absent — are the two follow-ups the waiver names.
+
+---
+
+## 2026-08-22 — HARNESS-22: the reviewers were running out of turns, and saying nothing about it
+
+HARNESS-16 shipped the reviewers and proved they CATCH violations (PR #331, all six plants found).
+What it had not established is that they *finish*. On PR #325 both legs died after 326s and 397s
+with a valid credential, writing no review file, and #325 merged with no AI review of record —
+recorded in HG-0001 waiver 02 as the sharpest cost of this defect.
+
+**Job conclusion is the wrong instrument, and using it would have produced a false answer.** A
+reviewer that finds violations also exits red. PR #331 shows as `failure` and is a *working*
+review with six findings. Legs were therefore classified by whether the **engine step** failed —
+engine success + enforce-verdict failure means a real review that reported findings; engine
+failure means no review file at all.
+
+Across every leg that actually invoked an engine:
+
+| outcome | n | changed files | churn |
+| --- | --- | --- | --- |
+| reviewed ok | 16 | **5 – 10** | 16 – 1080 |
+| DID NOT COMPLETE | 2 | **41** | 1430 |
+
+Complete separation — no success above 10 files, no failure below 41.
+
+**File count separates; churn does not.** #324 reviewed fine at 1080 churn across 6 files while
+#325 failed at 41 files. That asymmetry is the whole argument for the mechanism: a context-window
+limit would track lines, a per-file **tool-call** budget tracks file count, and the prompt requires
+the reviewer to Read each changed file to cite findings at `file:line`. That budget is
+`--max-turns`, which was **30**. Raised to **80**.
+
+**What is not known, stated because the number is sized from it.** Both failures are the same PR,
+so this is one independent observation, not two. The 10–41 file gap is unsampled, so the real cliff
+is somewhere inside it. And the engine's own error was never read: GitHub caps the job-log API
+response at ~1.2 KB of tail, and the full-log download is a blob-host redirect this environment
+cannot follow. Correlation plus a mechanism that fits — not a quoted error. 80 is headroom over a
+demonstrated failure, not a computed requirement.
+
+**Residual, deliberately not fixed here:** a large enough PR still exhausts any fixed budget, and
+still surfaces as the generic DID NOT COMPLETE. Making exhaustion distinguishable from a crash is a
+separate story, and it is the one that would have let this be diagnosed in minutes instead of by
+correlating twenty-seven job records.
+
+### The guard, and the mistake that shaped it
+
+`scripts/test/ai-review-turn-budget.test.mjs`, 3 tests: the budget must be **declared** (absent
+means the action's unpinned default), must **exceed the value that demonstrably failed**, and
+`claude_args` must contain **only flags**.
+
+That third test exists because I made exactly that mistake while writing this fix. `claude_args: |`
+is a literal block handed straight to the CLI, so the rationale comment I first wrote *inside* it
+would have been passed as an argument. It failed in the quietest possible way: the YAML still
+parsed, and the guard's own regex still read the correct number out of an argument list the engine
+would have rejected — a guard reporting a budget the engine never received. The rationale now lives
+in YAML comments outside the block, and the shipped test enforces it rather than my scratch probe.
+
+Mutation-proved four ways, workflow restored byte-for-byte after each:
+
+| mutation | caught by |
+| --- | --- |
+| revert to 30 | budget-floor assertion |
+| lower to 45 — above the old value, below the floor | budget-floor assertion |
+| remove `--max-turns` entirely | budget-declared assertion |
+| smuggle a `#` comment into `claude_args` | args-are-flags assertion |
+
+Evidence: harness suite 127/127; `ai-review.yml` parses with a single `with:` block carrying
+exactly three keys (an intermediate edit left a duplicate `with:` — caught by parsing the step back
+out rather than by eye).
+
+## 2026-08-25 — BILL-16 done, BILL-15 closed, BILL-17 console shipped (the payable side works end to end)
+
+BILL-16 had domain, service and port layers and no store, so not one of its criteria was
+deliverable end to end. This closes that, closes the BILL-15 criterion that was waiting on it,
+and ships the console that makes the whole payable side demonstrable.
+
+**The store, and the three obligations the schema could not carry.** Migration 0043 adds
+`billing_tpp_cost_period_close` — a table rather than a status column, because a close is evidence
+of a four-eyes act (two named principals, an approval, a moment) and this family has no UPDATE
+grant a flag could be set through. `UNIQUE (bank_id, billing_period)` makes a retry idempotent and
+a divergent second close unrepresentable rather than merely unusual. Three store classes, not one:
+folding `recordDispatch` into `PgBillingTppCostStore` would have destroyed the property the dispatch
+service's own comment claims — that its store surface cannot reach the evidence tables — while
+leaving the comment behind to assert it.
+
+Criterion 5 is discharged by reading `approval_request` inside the SAME tenant transaction as the
+INSERT rather than accepting operator-shaped arguments: the cited approval must be approved, for
+this period, granted in time; both principals are stamped from the approval RECORD and normalised,
+and a mismatch against the caller's own view is refused; the P9 response is redacted before the
+first INSERT and re-checked at the write boundary, with the caller-supplied Idempotency-Key stored
+as a digest because an inbound header's content is whatever an operator typed into it. Transition
+ORDER — which 0039 states the UNIQUE constraint does not carry — is refused too.
+
+Migration 0043 also grants `bank_internal_view` the read on `billing_tpp_cost_ap_dispatch` that
+0039 withheld and 0040 deferred to this story. The condition was redaction proven against a
+persisted row; that control now exists, and the two integration assertions that tracked the
+condition flipped deliberately.
+
+**Two findings the tests produced rather than review.** Migration 0042 already CHECKs
+`approved_at <= expires_at`, so a late approval cannot EXIST to be cited — the criterion is met one
+level stronger than the write path needs, and the test now asserts the INSERT is refused instead of
+seeding an impossible row. And nothing in production set `reconciliationBreakId`, so every diff line
+persisted with a null id — which `openPayableBreaks` reads as "raised and not yet worked". The first
+break of any period would have blocked its close FOREVER, with no workflow anywhere able to clear
+it: the gate could only ever say no. `TppCostReconcileService` now escalates material payable breaks
+into real E1 breaks and stamps the ids before persisting, idempotent on the run.
+
+That escalation is what lets **BILL-15 criterion 3** be walked end to end — an open break refuses
+the close request, refuses the close EXECUTION when it lands inside the approval window, and leaves
+the payable unapproved so dispatch refuses; resolving it lets the same period close. Each leg is
+asserted in its own right rather than relying on the first to protect the rest.
+
+**IG §10.16 netting** is REPORTED, not applied: ADR 0007 keeps both role ledgers gross, so each
+position stays on the wire as its own signed line and `nettedMilliFils` states how much cancelled.
+An adjustment citing no approval is refused — otherwise a desk could make a residue disappear by
+asserting it away. Residue posts to suspense AND raises an E1 break, derived exactly as the ledger
+derives it.
+
+**Also fixed, because it made the surface unreachable:** the BILL-14/15 document and reconcile routes
+were never wired into `worker.ts` or `serve.ts`, so every deployed call hit a fail-closed default
+that threw a plain `Error` the route could not type — an unhandled 500 rather than the contract's
+envelope.
+
+**BILL-17 (partial).** A TPP Cost Management section on the existing billing console rather than a
+new module, plus the one IA pass (`/billing` → "Billing & TPP Cost", `/tpp-billing` → "LFI Revenue &
+TPP Registry"; hrefs and API paths unchanged). Deterministic demo scenarios seed a CLOSED period
+with a dispatched-then-accepted payable and a BLOCKED period with an escalated VAT-variance break —
+two periods, because one cannot demonstrate the gate in both directions. Hosted smoke asserts the
+totals tie out and that a close is never 200.
+
+Still owed on BILL-17, recorded on the item: a dedicated Stitch screen (no Stitch tooling was
+reachable from the session that built this, so the console was built token-only against the existing
+UIF-01 primitives and passes design-conformance, no-raw-style and axe); a TPP-cost-specific governed
+export; most of the named scenario list as seeded demos rather than tests; and browser E2E.
+
+Spec-first: 95 → 98 paths. `TppCostDispatchState` mirrors the 0039 CHECK value for value — the
+BILL-17 obligation not to let those vocabularies drift.
+
+Evidence: unit 1654/1654 across 229 files; integration 210/210 across 80 files on a pristine
+PostgreSQL 16.13; Q4.5 lineage PASSED with both new tables covered and allowed gaps none; coverage
+94.78% lines; typecheck 11/11 packages; ESLint clean; `verify:contract` 33 conformant / 0 drift
+against a live BFF; docs:check, discovery:link and pii-literal-check clean. The full four-eyes close
+was walked against the running BFF: request → 202 + approval_request → second principal approves →
+the close row lands with both principals normalised from the approval record.
+
+## 2026-08-25 — addendum: the two reviewers on the BILL-16/17 branch (1 hard stop, 4 drifts)
+
+Both reviewers ran before the PR left draft. Every finding was real; all are fixed on the branch.
+
+**HARD STOP — the cross-tenant grant rested on a claim broader than the control.** Migration 0043
+granted `bank_internal_view` SELECT on `billing_tpp_cost_ap_dispatch` asserting "no unredacted
+provider text reachable in this table". True for `response_payload`, which the store screens at the
+write boundary — and NOT true for `financial_system_ref` beside it. 0039 enumerated three free-form
+columns and missed that one; the only control on it was `redactText`, which masks exactly three
+SHAPES (Emirates ID, IBAN, e-mail) and passes everything else through. A P9 reference reading
+`DD/2026-07/NEBRAS - mandate held by A. Rahman, acct ending 4412` matches nothing, and lands
+permanently in a table with no deletion path.
+
+Fixed by constraining the SHAPE rather than trying to mask harder: a dispatch reference is an
+opaque vendor identifier, so anything that is not one is REFUSED. That is total in the way masking
+is not — prose cannot get in at all, rather than getting in unrecognised. It fails closed (an
+unrecordable reference stops the dispatch being recorded, which is the right direction when the
+alternative is a permanent name), and it admits the `[REDACTED:*]` markers the service may have
+substituted, so it is not a denial of service on correct data — the failure mode BILL-14 already hit
+once when a generic digit rule ate the required TRNs.
+
+The reviewer also noted the evidence gap: 0040's bar was redaction "proven by a test against a
+persisted row", and the discharge proved a REFUSAL (`count == 0`). There is now a test that writes a
+dispatch, reads the row back, and asserts no IBAN, Emirates-ID or e-mail shape survives in either
+provider-fed column or the idempotency key.
+
+**DRIFT 1 — store refusals were untyped 500s.** `PayableWriteError` was mapped nowhere in the BFF,
+so an unknown payable, an illegal dispatch transition and every write-time approval check escaped to
+`app.onError`. The contract declares 404 and 409 for exactly those, which made both branches
+unreachable on the deployed path — `serve.ts` and `worker.ts` both wire the real Pg store. The error
+now carries its own status and remediation (the status belongs with the code that decides which
+refusal occurred, not in a route-side lookup that drifts when a refusal is added).
+
+**DRIFT 2 — an already-closed period answered 202.** The request path checked only breaks, so
+re-closing minted a second approval and sent a second principal to approve an act that had already
+happened. The store refused a divergent close at EXECUTION, but that is a different endpoint hours
+later. `closeForPeriod` now refuses at request time, BEFORE the break query — a closed period is a
+settled fact, and reporting it as break-blocked would send an operator to resolve breaks that cannot
+unblock anything.
+
+**DRIFT 3 — a real money bug.** `net`, `vat` and `gross` were each rounded independently from
+milli-fils, which breaks the source row's own CHECK on the wire: 2500 → 3, 1500 → 2, 4000 → 4, and
+3 + 2 is not 4. The repo has `toWireMoneyTriple` for exactly this and the sibling BILL-14 route
+already used it; this one did not. Now pinned by a test asserting the wire publishes 5.
+
+**DRIFT 4 — `replayed` on an HTTP replay.** Retrying with the same Idempotency-Key returns the
+original body verbatim, so `replayed` carries whatever it said first time. The flag reports what
+happened DOWNSTREAM (P9 or our ledger matched an existing instruction), not at the HTTP layer. The
+spec now says so precisely rather than implying the cache re-stamps it.
+
+Advisories also taken: `billing.tpp_cost.period_close` gains a non-PII `operation_summary`
+(approving it authorises money movement, so a blank summary was the worst case for one, not a
+cosmetic gap), and the 202 now carries `expires_at` so a client can show the two-hour window.
+
+One more found by `verify:contract` against a live BFF rather than by either reviewer: the demo seed
+used a readable `demo-approval-...` id where `ApprovalRequest.approval_request_id` is declared
+`format: uuid`, so `GET /approvals/pending` drifted. The seed now derives a deterministic v4-shaped
+id by hash — idempotent AND conformant.
+
+Left open, and recorded rather than fixed: the `app.tenant_group IS NULL` fail-open fallback that
+0043 replicates into two more policies is a known weakness owned by HOST-04; this diff widens its
+blast radius rather than introducing it. `ApprovalRequest` declares no `required` list, which is why
+a thin four-eyes body validates — that affects every gated path, not this one, and belongs in its
+own spec-change.
+
+Re-verified after the fixes: unit 1659/1659, integration 214/214, Q4.5 PASSED allowed gaps none,
+coverage 94.87% lines, typecheck 11/11, ESLint clean, `verify:contract` 33 conformant / 0 drift.
+
+## 2026-08-25 — BILL-17 second pass: governed evidence export, real materiality, browser E2E
+
+Four of the five gaps the first BILL-17 pass left open are closed. The Stitch obligation is not, and
+is still recorded as owed rather than worked around.
+
+**Governed TPP cost evidence export.** `GET /back-office/billing/tpp-cost-export` (spec-first,
+98 → 99 paths, `billing:read`) issues one period's payable evidence as a single pack — documents
+with their parsed lines nested, reconciliations, diff lines, the four-eyes close, the append-only AP
+dispatch log. Distinct from `GET /back-office/billing/export`, which is the tenant *portability*
+artifact: that one answers "give me my data if I leave", this one answers "show me the evidence
+behind this month's payable".
+
+Three decisions worth recording. The five collections are read in **one transaction**, because
+across five a dispatch landing between two of them would make the pack attest to a period that
+never existed at any instant. Rows come from `to_jsonb(t)` rather than an enumerated projection —
+a hand-written column list silently stops exporting whatever a later migration adds, and this is
+evidence. And the digest covers the body **excluding itself**: a digest that covered itself could
+never be recomputed, because the recipient would need the answer to check the answer.
+
+Audited on every call, since reading a period's whole evidence base is a disclosure event whatever
+it contains. The audit row carries the digest and the counts, never the pack — copying it in would
+duplicate the ledger into a second INSERT-only store on every download. The service **refuses (503)
+when no audit sink is configured** rather than exporting ungoverned; an unaudited governed export is
+a contradiction, and degrading silently is how it would become one.
+
+Amounts inside the pack stay in the ledger's milli-fils rather than wire `Money`, stated in the
+schema so it reads as a decision: the digest must attest to what the ledger holds, not to a rounded
+restatement. The console reads its own figures from the cost-period endpoint, which does emit Money.
+
+Verified end to end against a live BFF, with the digest recomputed by an independent Python
+implementation — `39acbcaa…` published, `39acbcaa…` recomputed.
+
+**Materiality — the one the last pass listed as deliberately unchanged.** `PayableBreak.material`
+was hardcoded `true` at seven construction sites, so `openPayableBreaks`'s `AND d.material` filtered
+nothing. It is now derived **once, centrally**, over the whole break array before anything reads it.
+Seven inline copies of a judgement is exactly how the hardcoded value survived — every site looked
+locally reasonable, and nobody noticed that no site had decided anything. The seven literals are now
+a named `MATERIALITY_DECIDED_CENTRALLY` placeholder, so a reader cannot mistake them for verdicts.
+
+Stated precisely, because it is less than it sounds: **at the defaults, materiality equals the
+matching tolerance**, so every break that exists is still material and no default behaviour moves.
+What moves is that the judgement is derived and configurable. A test pins that equality rather than
+implying a gap that the defaults do not open. `wrong_recipient` is material at zero variance — the
+spec's own `TppCostDiffLine.material` description says so — and the constant documents that payables
+count milli-fils while the E1 `BreakThreshold` counts fils, a factor of a thousand apart.
+
+**Browser E2E, and a CI gap it uncovered.** Eight Playwright specs cover the new section. Writing
+them surfaced something the first pass had not: the `q3-e2e` job ran only `pnpm db:seed`, which
+creates **zero** TPP cost evidence — `seedTppCostEvidence` lives behind `db:seed:demo`, which only
+`deploy.yml` ran. The console therefore rendered empty in CI, and any spec asserting seeded data
+would have failed. The job now runs the demo seed too, matching the hosted demo it is meant to
+mirror. Measured on a clean database: `db:seed` alone → 0 closes, 0 dispatches, 0 documents;
+with `db:seed:demo` → the closed period 2026-06 with a `dispatched`→`accepted` log, and 2026-07
+blocked by a material VAT variance linked to a real E1 break.
+
+One thing deliberately **not** asserted in the browser: the read-only branch (`billing:read` without
+`finance:reconciliation:write`). No demo persona holds that combination — `finance-analyst` has
+both and every other persona lacks `billing:read` entirely — so a browser test for it would assert a
+fiction. It is covered at component level, where the input can actually be constructed.
+
+**Still owed: Stitch.** Re-checked this session. The toolset has `DesignSync` (claude.ai
+design-system projects) and the connector registry has no Stitch entry, so the project CLAUDE.md
+binds to (`8050269076066130289`) is unreachable from here. Citing a screen id that was never
+generated would be worse than leaving this open.
+
+Evidence: unit 1677/1677 · integration 215/215 on a pristine PostgreSQL 16.13 · Q4.5 PASSED, allowed
+gaps none · typecheck 11/11 · ESLint clean · `verify:contract` 34 conformant / 0 drift against a
+live BFF · docs:check, pii-literal-check, design-conformance, no-raw-style, design-tokens and axe
+all clean.
+
+## 2026-08-25 — addendum: both reviewers on the BILL-17 second pass (1 hard stop, 1 regression, 4 drifts)
+
+The hard-stop reviewer returned **FAIL (2)** and the conformance reviewer **DRIFT (2) + 3 spec defects**.
+Every finding was real. The most serious was a regression I had introduced in the same pass.
+
+**FAIL 5 — the materiality change silently disabled the close gate for two break types.**
+`classifyVariance` reaches `vat_variance` only after `Math.abs(netVariance) <= tolerance`, so a VAT
+break's net variance is **~0 by construction**. My rule judged every type on net variance, and the
+default materiality equals the default tolerance — so `|0| > 1 fil` is false and **every VAT break
+became immaterial at any magnitude of VAT error**. `quantity_variance` failed the same way whenever
+the counts differed but the money did not (100 units at 10 fils vs 200 at 5 fils nets to zero).
+
+Measured, not argued: both returned `material: false`, and both were `true` before the change.
+Downstream, `material` is the *only* filter on all three payable controls — the four-eyes close
+refusal, the E1 escalation, and the IG §10.13 window alarm. A disputed VAT line would have reached
+an approved payable, been dispatched to P9, and become an accepted charge when the 30-day window
+shut. That is precisely the hard stop the gate exists to enforce, and my commit message had claimed
+"no default behaviour moves." It moved.
+
+Fixed by judging each break on **the dimension it is about**: a VAT break on its VAT variance, a
+quantity break on its counts (units are counted facts — `UNIT_TOLERANCE` is 0), the rest on net.
+`isPayableBreakMaterial` now takes the break rather than a loose `(type, number)` pair, so passing
+the wrong magnitude is no longer expressible. Two regression tests pin exactly the zero-net shapes.
+
+Why my own test missed it: it exercised only `rate_variance`, the one type for which net *is* the
+right measure. A test that covers the case the rule was written around proves very little.
+
+**FAIL 3 — the export published provider-fed columns onto a new download surface.**
+`to_jsonb(d)` and `to_jsonb(a)` carried `parsed_payload`, `raw_document_ref` and `response_payload`
+into a downloadable file. Migration 0039:22-29 names those three specifically as the columns the
+schema *cannot* constrain, and 0039:426-436 withholds even the read-only cross-tenant grant from
+their tables pending a redaction control. This endpoint inherited all three from a projection.
+
+Worst of the three was `raw_document_ref`: it is the **address of the raw-artifact archive**, which
+holds unredacted provider originals by design, and whose own comment says it is "deliberately NOT one
+of the cost tables for that reason — an unredacted artifact does not belong behind the
+governed-aggregate seam." The pack was handing out the route to it.
+
+Fixed three ways. `- 'raw_document_ref'` is now the one deliberate subtraction from the projection —
+the evidence of what was charged is the parsed lines, not a pointer to the scan. The store scrubs the
+whole pack through the provider redactor at the **read** boundary, symmetric with the write boundary
+that already exists precisely because that redactor is heuristic; it scrubs rather than refuses,
+because denying an auditor a whole period over one legacy row is the wrong failure for a read, and
+the count of anything removed rides the audit row so a leak is investigable. And the spec's claim
+("Contains no PSU identifiers … redacted at ingest") is narrowed to what the controls actually
+enforce, since it was stronger than the schema's own.
+
+The reviewer also noted the tests that appeared to prove PSU-freedom could not fail — they regex only
+the Emirates ID shape against demo rows containing neither. Recorded; the new integration test
+asserts on the serialised artefact a human receives.
+
+**The demo seeded a break the engine cannot produce.** The blocked period wrote `vat_variance` with
+225,000 milli-fils of *net* variance — impossible, since that classifies as `rate_variance`. The E2E
+was asserting against a fiction, which is worse than thin coverage because it reads as the real
+thing. Reseeded as `rate_variance` with the same money, which is what `reconcilePayable` would
+actually emit.
+
+That exposed a genuine limitation now recorded rather than papered over: `billing_tpp_cost_diff_line`
+has no VAT columns and persists `variance_milli_fils` as the **net** variance for every type, so a
+stored `vat_variance` shows a variance of ~0 and the console understates a VAT dispute to zero. The
+close gate is unaffected — materiality is judged in memory, where the VAT figures still exist — but
+the reporting weakness is real and belongs to whoever picks up the diff-line schema next.
+
+**Conformance drifts, all fixed.** `TppCostDiffLine.material` said "Exceeds the tolerance" when it
+now means materiality, and the description records the vat/net trap so the next reader does not
+reintroduce it. `TppCostReconciliation` asserted milli-fils "never reaches the wire as an amount"
+while the evidence pack does exactly that — the claim now names its one exception instead of
+contradicting itself 170 lines later. `sha256` gained `pattern: '^[0-9a-f]{64}$'`, because the bare
+form is deliberate and the repo's dominant convention is the `sha256:`-prefixed one, so nothing
+stopped a later "harmonisation" from breaking every recipient's recomputation. The portal proxy's
+401/403/502 branches emitted two-field error bodies, copying a deviation from the sibling proxies;
+this one carries the full four-field envelope.
+
+**Not fixed, recorded:** the pack's five collections are `additionalProperties: true` with no declared
+properties, so a future migration can widen the disclosure surface with no contract signal — the
+flip side of the deliberate `to_jsonb` choice. And the exported records carry no ISO 4217 currency,
+because four of the five source tables have no currency column. Both belong in a spec-change with the
+diff-line schema work, not in a code fix here.
+
+Evidence after the fixes: unit 1681/1681 · integration 216/216 on a pristine PostgreSQL 16.13 ·
+Q4.5 PASSED, allowed gaps none · typecheck 11/11 · ESLint clean · docs:check clean · the governed
+export re-verified against a live BFF with `raw_document_ref` and the `s3://` locator absent and the
+digest still recomputing.

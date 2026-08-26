@@ -7,6 +7,7 @@ import {
   type SnapshotRow
 } from '../src/analytics/ingestion.js'
 import { InMemoryHighClassAuditSink } from '../src/high-class-audit.js'
+import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '@ofbo/db'
 
 /**
  * BACKOFFICE-32 — the ingestion job polls Nebras via P6 with exponential back-off,
@@ -103,7 +104,11 @@ describe('NebrasIngestionService — happy path', () => {
     // audit
     expect(audit.events).toHaveLength(1)
     expect(audit.events[0]!.event_type).toBe('nebras_ingestion_completed')
-    expect(audit.events[0]!.response_status).toBe(200)
+    // CODE-03: a scheduled run issues no HTTP response, so the row records that rather than a 200
+    // nobody received. The scope moved the same way — this job borrowed `reconciliation:read`, a
+    // scope a Finance persona holds and no principal held here.
+    expect(audit.events[0]!.response_status).toBe(SYSTEM_ACTOR_RESPONSE_STATUS)
+    expect(audit.events[0]!.scope_used).toBe(SYSTEM_ACTOR_SCOPE)
   })
 })
 
@@ -140,7 +145,12 @@ describe('NebrasIngestionService — last-good fallback', () => {
     expect(result.sources[0]!.snapshot_id).toBe('snap-prev') // last-good retained
     expect(aggregates.staleCalls).toEqual([PERIOD])
     expect(result.stale_sources).toBe(1)
-    expect(audit.events[0]!.response_status).toBe(207) // partial
+    expect(audit.events[0]!.response_status).toBe(SYSTEM_ACTOR_RESPONSE_STATUS)
+    // The 207 encoded "partial". Losing it from the status column loses nothing, because the
+    // per-source outcome is on the row itself — assert that, so the evidence is proven present
+    // rather than assumed.
+    const body = audit.events[0]!.request_body as { sources: Array<{ outcome: string }> }
+    expect(body.sources.filter((entry) => entry.outcome === 'stale_fallback')).toHaveLength(1)
     expect(egress.calls.tpp_reports).toBe(4) // all attempts spent
   })
 })

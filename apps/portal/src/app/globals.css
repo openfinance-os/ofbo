@@ -9,6 +9,15 @@
  * app shell; this keeps the M1 shell rendering on tokens in the meantime.
  */
 
+/*
+ * HOST-01 scaffold (ADR 0027) — per-tenant brand accent for the flagged three-tenant demo.
+ * `data-tenant` is set on <html> in layout.tsx; the Tailwind `brand` utility reads --brand-accent.
+ * Hex lives here (a .css file, outside the token-only .tsx scan) — never in a component.
+ */
+:root { --brand-accent: #6366f1; }            /* Alpha Bank — indigo (default) */
+:root[data-tenant='beta-bank'] { --brand-accent: #10b981; }   /* Beta Bank — emerald */
+:root[data-tenant='gamma-takaful'] { --brand-accent: #14b8a6; } /* Gamma Takaful — teal */
+
 @layer base {
   * {
     box-sizing: border-box;

@@ -19,12 +19,20 @@ export function beginAppTx(bankId: string): string {
 
 /**
  * BACKOFFICE-33 (ADR 0015) — cross-fintech aggregation preamble. Assumes the SELECT-only
- * `bank_internal_view` role and DELIBERATELY does NOT pin `app.bank_id`: the `internal_view_select`
- * policies (`USING (true)`) let this role read the aggregate MVs ACROSS every tenant. This is the
- * platform's single highest-sensitivity data path — the one place per-tenant RLS is bypassed — so
- * it is ONLY ever reached through `runGovernedAggregate`, which first verifies a registered+approved
+ * `bank_internal_view` role, the one place per-tenant RLS is bypassed. It is ONLY ever reached
+ * through `runGovernedAggregate`, which first verifies a registered+approved
  * `query_purpose_registry` purpose and High-class logs the bypass. Never call this directly.
+ *
+ * HOST-02 (ADR 0028) — `tenantGroupId` scopes the bypass to ONE customer's tenant group. When
+ * provided it pins `app.tenant_group`, and the re-scoped `internal_view_select` policies
+ * (migration 0030) read only the bank_ids in that group — so a hosted deployment can never read
+ * across CUSTOMER boundaries. When omitted (single-tenant default / legacy callers) no group is
+ * pinned and the policy's fallback reads as before (the demo bank is the only bank).
  */
-export function beginInternalViewTx(): string {
+export function beginInternalViewTx(tenantGroupId?: string): string {
+  if (tenantGroupId !== undefined) {
+    if (!UUID_RE.test(tenantGroupId)) throw new Error(`invalid tenant_group_id (must be a UUID v4): ${tenantGroupId}`)
+    return `BEGIN; SET LOCAL ROLE bank_internal_view; SELECT set_config('app.tenant_group', '${tenantGroupId}', true)`
+  }
   return `BEGIN; SET LOCAL ROLE bank_internal_view`
 }

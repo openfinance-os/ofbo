@@ -1,0 +1,13 @@
+{
+  "name": "@ofbo/billing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "validate:pint-ae": "node scripts/validate-pint-ae.mjs"
+  }
+}
