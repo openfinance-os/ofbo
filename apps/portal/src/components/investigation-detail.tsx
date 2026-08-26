@@ -85,8 +85,8 @@ function AuditTrail({ break_ }: { break_: ReconciliationBreak }) {
   const escalatable = (ESCALATABLE_STATES as readonly string[]).includes(break_.status)
   const events: { label: string; at: string | null; tone: string }[] = [{ label: 'Break detected', at: break_.created_at, tone: 'bg-reconciled' }]
   if (break_.assigned_to) events.push({ label: `Assigned to ${break_.assigned_to}`, at: break_.sla_clock_started_at, tone: 'bg-reconciled' })
-  if (break_.nebras_dispute_case_id) events.push({ label: `Escalated — Nebras case ${break_.nebras_dispute_case_id}`, at: null, tone: 'bg-break' })
-  else if (escalatable) events.push({ label: 'Escalation requested', at: null, tone: 'bg-break' })
+  if (break_.nebras_dispute_case_id) events.push({ label: `Escalated — Nebras case ${break_.nebras_dispute_case_id}`, at: null, tone: 'bg-aging' })
+  else if (escalatable) events.push({ label: 'Escalation requested', at: null, tone: 'bg-aging' })
   if (break_.resolution_outcome) events.push({ label: `Resolved — ${break_.resolution_outcome}`, at: null, tone: 'bg-reconciled' })
   return (
     <section data-testid="audit-trail" aria-labelledby="audit-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4">

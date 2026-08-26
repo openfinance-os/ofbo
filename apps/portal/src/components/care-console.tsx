@@ -34,8 +34,8 @@ export interface CareConsoleProps {
 /** Maps the 7 consent states to the OFBO status palette (PRD §7 triad + neutral). */
 const STATUS_TONE: Record<string, string> = {
   Authorized: 'bg-reconciled/10 text-reconciled',
-  AwaitingAuthorization: 'bg-break/10 text-break',
-  Suspended: 'bg-break/10 text-break',
+  AwaitingAuthorization: 'bg-aging/10 text-aging',
+  Suspended: 'bg-aging/10 text-aging',
   Rejected: 'bg-breach/10 text-breach',
   Revoked: 'bg-breach/10 text-breach',
   Consumed: 'bg-surface-container-high text-on-surface-variant',

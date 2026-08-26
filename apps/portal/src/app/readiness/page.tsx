@@ -53,7 +53,7 @@ export default async function ReadinessPage({
         ) : (
           <>
             {profileNotice && (
-              <p className="mb-4 rounded-lg border border-break/30 bg-break/10 px-4 py-3 text-sm text-on-surface" data-testid="readiness-profile-notice">
+              <p className="mb-4 rounded-lg border border-aging/30 bg-aging/10 px-4 py-3 text-sm text-on-surface" data-testid="readiness-profile-notice">
                 {profileNotice}
               </p>
             )}

@@ -8,7 +8,7 @@ import type { Kpi, KpiTone } from '../lib/dashboard'
  */
 const TONE: Record<KpiTone, { ring: string; value: string; dot: string }> = {
   breach: { ring: 'border-breach/30', value: 'text-breach', dot: 'bg-breach' },
-  break: { ring: 'border-break/30', value: 'text-break', dot: 'bg-break' },
+  break: { ring: 'border-aging/30', value: 'text-aging', dot: 'bg-aging' },
   reconciled: { ring: 'border-reconciled/30', value: 'text-reconciled', dot: 'bg-reconciled' },
   neutral: { ring: 'border-outline-variant', value: 'text-primary', dot: 'bg-outline' }
 }

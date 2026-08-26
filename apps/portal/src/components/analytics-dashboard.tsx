@@ -21,7 +21,7 @@ export interface AnalyticsDashboardProps {
 const humanize = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
 export function FreshnessBadge({ freshness }: { freshness: FreshnessEnvelope }) {
-  const tone = freshness.stale ? 'bg-break/10 text-break' : 'bg-reconciled/10 text-reconciled'
+  const tone = freshness.stale ? 'bg-aging/10 text-aging' : 'bg-reconciled/10 text-reconciled'
   return (
     <span data-testid="freshness" data-stale={freshness.stale ? 'true' : 'false'} title={freshness.stale_cause ?? 'fresh'} className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
       {freshness.stale ? `Stale · ${freshness.stale_cause ?? 'unknown'}` : 'Fresh'}
@@ -49,7 +49,7 @@ function barFill(key: string): string {
   const t = statusTone(key)
   if (!t) return 'fill-secondary'
   if (t.includes('breach')) return 'fill-breach'
-  if (t.includes('break')) return 'fill-break'
+  if (t.includes('break')) return 'fill-aging'
   if (t.includes('reconciled')) return 'fill-reconciled'
   return 'fill-outline'
 }

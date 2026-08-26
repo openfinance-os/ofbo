@@ -28,7 +28,7 @@ export interface ApprovalsPortalProps {
 }
 
 const STATE_TONE: Record<string, string> = {
-  pending: 'bg-break/10 text-break',
+  pending: 'bg-aging/10 text-aging',
   approved: 'bg-reconciled/10 text-reconciled',
   rejected: 'bg-breach/10 text-breach',
   timed_out: 'bg-surface-container-high text-on-surface-variant'
@@ -145,7 +145,7 @@ export function ApprovalsPortal({ approvals = [], subject, scopes, superadmin, e
       <section aria-labelledby="pending-approvals-heading" className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm">
         <div className="px-4 py-3 border-b border-outline-variant flex items-center gap-2">
           <h2 id="pending-approvals-heading" className="font-bold text-sm text-primary uppercase tracking-widest">Pending Approvals</h2>
-          <span aria-hidden="true" className="bg-break/10 text-break px-2 py-0.5 rounded-full text-xs font-bold">{approvals.length}</span>
+          <span aria-hidden="true" className="bg-aging/10 text-aging px-2 py-0.5 rounded-full text-xs font-bold">{approvals.length}</span>
           <span className="sr-only">{approvals.length} pending approvals</span>
         </div>
         <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-3">

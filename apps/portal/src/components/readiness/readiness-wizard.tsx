@@ -263,7 +263,7 @@ function GovernanceStep({
               <span className="rounded bg-surface-container px-1.5 py-0.5 font-mono text-xs text-on-surface-variant">{d.id}</span>
               <span className="font-semibold">{d.title}</span>
               {d.blocks && (
-                <span className="rounded-full bg-break/15 px-2 py-0.5 text-xs font-semibold text-break">blocks {d.blocks}</span>
+                <span className="rounded-full bg-aging/15 px-2 py-0.5 text-xs font-semibold text-aging">blocks {d.blocks}</span>
               )}
             </div>
             <p className="mt-1 text-xs text-on-surface-variant">{d.impact}</p>

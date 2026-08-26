@@ -51,7 +51,7 @@ describe('EventTimeline', () => {
     render(<EventTimeline timeline={tl([ev({ id: 'g', event_type: 'granted' }), ev({ id: 'r', event_type: 'revoked' }), ev({ id: 'm', event_type: 'modified' })])} />)
     expect(screen.getByTestId('event-dot-g').className).toMatch(/bg-reconciled/)
     expect(screen.getByTestId('event-dot-r').className).toMatch(/bg-breach/)
-    expect(screen.getByTestId('event-dot-m').className).toMatch(/bg-break/)
+    expect(screen.getByTestId('event-dot-m').className).toMatch(/bg-aging/)
   })
 
   it('never renders the PSU identifier (PII discipline)', () => {

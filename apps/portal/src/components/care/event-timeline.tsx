@@ -11,7 +11,7 @@ import type { CareTimeline, CareTimelineEvent } from '../../lib/care'
 const DOT_TONE: Record<CareTimelineEvent['event_type'], string> = {
   granted: 'bg-reconciled',
   accessed: 'bg-secondary',
-  modified: 'bg-break',
+  modified: 'bg-aging',
   revoked: 'bg-breach'
 }
 

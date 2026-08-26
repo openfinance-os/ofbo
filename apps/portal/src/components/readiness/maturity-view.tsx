@@ -28,7 +28,7 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
             <li key={m.id} className="flex items-start gap-3 px-4 py-3" data-testid={`milestone-${m.id}`}>
               <span
                 className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                  m.status === 'done' ? 'bg-reconciled/15 text-reconciled' : 'bg-break/15 text-break'
+                  m.status === 'done' ? 'bg-reconciled/15 text-reconciled' : 'bg-aging/15 text-aging'
                 }`}
                 aria-hidden
               >
@@ -40,7 +40,7 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
                   {m.title}
                   <span
                     className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
-                      m.status === 'done' ? 'bg-reconciled/15 text-reconciled' : 'bg-break/15 text-break'
+                      m.status === 'done' ? 'bg-reconciled/15 text-reconciled' : 'bg-aging/15 text-aging'
                     }`}
                   >
                     {m.status === 'done' ? 'delivered' : 'remaining'}
@@ -77,7 +77,7 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        p.enterprise_status === 'ready' ? 'bg-reconciled/15 text-reconciled' : 'bg-break/15 text-break'
+                        p.enterprise_status === 'ready' ? 'bg-reconciled/15 text-reconciled' : 'bg-aging/15 text-aging'
                       }`}
                     >
                       {p.enterprise_status === 'ready' ? 'ready' : 'to write (M6)'}
@@ -97,7 +97,7 @@ export function MaturityView({ maturity }: { maturity: MaturitySummary }) {
 function Stat({ value, label, tone }: { value: string; label: string; tone: 'reconciled' | 'break' }) {
   return (
     <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-4 shadow-sm">
-      <div className={`text-3xl font-bold ${tone === 'reconciled' ? 'text-reconciled' : 'text-break'}`}>{value}</div>
+      <div className={`text-3xl font-bold ${tone === 'reconciled' ? 'text-reconciled' : 'text-aging'}`}>{value}</div>
       <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{label}</div>
     </div>
   )
