@@ -22,8 +22,11 @@ const humanize = (k: string) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.t
 
 export function FreshnessBadge({ freshness }: { freshness: FreshnessEnvelope }) {
   const tone = freshness.stale ? 'bg-aging/10 text-aging' : 'bg-reconciled/10 text-reconciled'
+  // The stale cause is a raw enum and can be long (NO_INGESTED_AGGREGATES_FOR_PERIOD renders
+  // 299px unbroken), so the pill has to be allowed to wrap — held on one line it pushed the
+  // 390px layout 18px wide.
   return (
-    <span data-testid="freshness" data-stale={freshness.stale ? 'true' : 'false'} title={freshness.stale_cause ?? 'fresh'} className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
+    <span data-testid="freshness" data-stale={freshness.stale ? 'true' : 'false'} title={freshness.stale_cause ?? 'fresh'} className={`inline-block max-w-full break-all px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${tone}`}>
       {freshness.stale ? `Stale · ${freshness.stale_cause ?? 'unknown'}` : 'Fresh'}
     </span>
   )
@@ -157,8 +160,13 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
     <dl className="space-y-1">
       {entries.map(([k, v]) => (
         <div key={k} className="flex justify-between gap-2 text-xs">
-          <dt className="text-on-surface-variant">{humanize(k)}</dt>
-          <dd className="text-primary text-right">
+          <dt className="text-on-surface-variant shrink-0">{humanize(k)}</dt>
+          {/* min-w-0 is load-bearing, not tidiness. A flex item defaults to min-width:auto, so
+              without it this <dd> refuses to shrink below the intrinsic width of whatever it
+              wraps — and when that is an ObjectTable, the table's own overflow-x-auto never
+              engages and the whole DOCUMENT scrolls sideways instead (/risk ran 555px past a
+              1440px viewport). The scroll belongs to the table, not the page. */}
+          <dd className="text-primary text-right min-w-0">
             <Value value={v} depth={depth + 1} />
           </dd>
         </div>
@@ -199,7 +207,9 @@ export function AnalyticsSection({ title, view, testid }: { title: string; view:
   const sections = sectionsOf(view)
   return (
     <section data-testid={testid} className="space-y-3">
-      <div className="flex items-center gap-3">
+      {/* Wraps: a stale cause is a long unbroken enum, so on a phone the badge takes its own
+          row rather than pushing the section header past the viewport. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
         <h2 className="font-bold text-sm text-primary uppercase tracking-widest">{title}</h2>
         <FreshnessBadge freshness={view.freshness} />
       </div>

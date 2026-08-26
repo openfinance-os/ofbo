@@ -60,11 +60,14 @@ export function ProfileView({ principal }: { principal: ShellPrincipal }) {
           Privileges are granted per role and enforced everywhere (the back office never grants beyond the role).
           {principal.superadmin ? ' This is a super-administrator role with full platform access.' : ''}
         </p>
+        {/* Rows wrap on narrow screens rather than holding one line: a scope id is long and
+            unbreakable, and `shrink-0` on it pushed /profile 52px past a 390px viewport. The
+            id stays intact; only the row folds. */}
         <ul className="divide-y divide-outline-variant">
           {principal.scopes.map((s) => (
-            <li key={s} className="flex items-baseline justify-between gap-4 py-2">
+            <li key={s} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
               <span className="text-sm text-on-surface">{SCOPE_DESCRIPTIONS[s] ?? s}</span>
-              <code className="shrink-0 font-mono text-xs text-on-surface-variant">{s}</code>
+              <code className="font-mono text-xs text-on-surface-variant break-all">{s}</code>
             </li>
           ))}
         </ul>

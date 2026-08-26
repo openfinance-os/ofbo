@@ -5,7 +5,7 @@ Audit of the built portal screens against the **Open Finance Back Office Design 
 **`apps/portal/design/tokens.ts` = design tokens; `specs/backoffice-openapi.yaml` = behaviour +
 data.** Verdicts judge *appearance/layout only* — data binding and behaviour are out of scope.
 
-> **ADR 0026 (2026-08-26) replaced the basis of this document.** It previously audited each route
+> **ADR 0033 (2026-08-26) replaced the basis of this document.** It previously audited each route
 > against a pinned screen id in the external Stitch project. Stitch was retired as the appearance
 > authority, so per-route screen ids are gone and with them the `MISSING REF` verdict class —
 > Investigation Detail had no Stitch counterpart and was recorded as un-auditable for two months.
@@ -26,14 +26,15 @@ deliberately *not* automated.
 | Gate | Enforces | Where |
 |---|---|---|
 | Token-only | No raw hex, arbitrary px/rem/em, inline `style` props, or the retired `--ofbo-*` palette | `design-conformance.spec.ts` (Q1) |
-| WCAG 2.1 AA contrast | The 14 enumerated foreground/background pairs — body and secondary text, accent, nav chrome, all four status colours as text, and the DEMO and TRAINING markers — asserted on every build | `design-tokens.spec.ts` (Q1) |
-| Status semantics | Four distinct states; no status may collide with the accent in hue or chroma | `design-tokens.spec.ts` (Q1) |
+| WCAG 2.1 AA contrast | The 16 enumerated foreground/background pairs — body and secondary text, accent, nav chrome, all four status colours as text, and the DEMO and TRAINING markers **on each ground they are painted on**, light and navy | `design-tokens.spec.ts` (Q1) |
+| Status semantics | Four distinct states, each **reachable from a screen**; no status may collide with the accent in hue or chroma | `design-tokens.spec.ts` + `ui-primitives.spec.ts` (Q1) |
+| Typefaces served | Every family in `fontFamily` is requested by `layout.tsx`, and no other is | `design-tokens.spec.ts` (Q1) |
 | **Rendered review** | **A screenshot of the built screen, attached to the PR** | **human, per story** |
 
 The rendered review is the load-bearing one. Retiring an external reference removes the thing that
 forced anyone to *look* at a screen. Gates catch token drift and unreadable colour; they cannot
 catch a broken layout, a wrapped heading, or a panel that renders empty. **A UI story without an
-attached screenshot is not reviewable** — that is the trade ADR 0026 made explicit, and it is the
+attached screenshot is not reviewable** — that is the trade ADR 0033 made explicit, and it is the
 one part of this document that depends on discipline rather than CI.
 
 **The contrast gate enumerates its pairs, and that list is the gate.** A pair not on it is not
@@ -41,6 +42,14 @@ checked. The first cut of this gate omitted the status colours and the DEMO mark
 the values the Institutional Blue migration had regressed, with the mandated non-prod marker
 down at 3.27:1. Adding a token means adding its pair; a gate scoped around what changed is not
 a gate.
+
+**A pair is a token AND a ground, and the second cut of this gate learned that the hard way.**
+It enumerated every semantic token against the light ground and none against the navy shell,
+while `text-demo` was rendering on that shell at 3.44:1 in `app-shell.tsx` — the same omission
+one level down, and on the same regulatory marker. Darkening the marker for the light ground had
+inverted its failure rather than removed it. There is no value that clears AA on both grounds, so
+the marker is now two tokens (`ext.demo`, `ext.nav.demo`) and the gate asserts each against the
+ground it is actually painted on. A token painted on a new ground belongs in the list twice.
 
 ## Per-route status
 
@@ -53,7 +62,7 @@ each is audited against the design-system components and patterns it composes.
 | `/reconciliation` · recon-console.tsx | stat tiles, register table, outcome panel | **CONFORMANT** | Bespoke outcome panel (UIF-07); three-source totals + margin-by-fintech + sign-off landed in UIF-07b |
 | `/reconciliation/breaks/[id]` · investigation-detail.tsx | drawer, three-source diff | **AUDITABLE** | Previously `MISSING REF` — un-auditable for want of an external screen. That blocker is gone; audit against the drawer + table patterns |
 | `/approvals` · approvals-portal.tsx | four-eyes pattern, queue rows | **CONFORMANT** | Dual initiator/approver block; `202` + `approval_request`, never inline |
-| `/analytics` · analytics-dashboard.tsx | typed section renderer, gauge, contribution bars, KPI strip | **CONFORMANT** | ADR 0016 typed panels — unaffected by ADR 0026 |
+| `/analytics` · analytics-dashboard.tsx | typed section renderer, gauge, contribution bars, KPI strip | **CONFORMANT** | ADR 0016 typed panels — unaffected by ADR 0033 |
 | `/risk` · risk-dashboard.tsx | KPI strip, contribution bars, liability monitor | **CONFORMANT** | UIF-04 |
 | `/operations` · operations-console.tsx | platform-health strip, pipeline bars, outages table | **CONFORMANT** | UIF-05 |
 | `/tpp-billing` · tpp-billing.tsx | KPI overview row, columnar registry, search/filter | **CONFORMANT** | UIF-08/-08b/-08c. Billing-cycle stepper dropped as low-value |
@@ -107,7 +116,7 @@ reconciled badge on the new palette. **That is the first thing to check on the n
 
 ## References
 
-- ADR 0026 — retire Stitch; adopt Institutional Blue (this document's basis)
+- ADR 0033 — retire Stitch; adopt Institutional Blue (this document's basis)
 - ADR 0016 — typed analytics panels (substantive decision stands; appearance premise superseded)
 - `apps/portal/design/design.md` — human-readable token mirror
 - `docs/ui-ux-review.md` — the UX-track findings this audit does not duplicate

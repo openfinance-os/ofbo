@@ -249,3 +249,49 @@ test.describe('TPP Cost Management console (BILL-17)', () => {
     await expect(page.getByTestId('nav-billing')).toContainText(/LFI Revenue/i)
   })
 })
+
+/**
+ * BACKOFFICE-82 — the gate class that did not exist.
+ *
+ * `docs/design-conformance-audit.md` is explicit that the token gates "cannot catch a broken
+ * layout", and leaves that to a human looking at a screenshot. /risk then shipped tearing the
+ * document open by 555px at 1440 — a table escaping its card because a flex ancestor at
+ * min-width:auto stopped its `overflow-x-auto` engaging — and the audit still recorded the
+ * route as CONFORMANT. A screenshot review catches that only if someone thinks to scroll
+ * sideways, which is exactly the thing nobody does.
+ *
+ * Horizontal overflow is the one layout failure that IS mechanically checkable: the page body
+ * must never scroll sideways. Wide content (tables, code, diagrams) scrolls inside its own
+ * container instead. Asserted on every route at desktop and phone width, so the defect class
+ * cannot come back silently. It does not replace the rendered review — it removes the one
+ * failure the rendered review kept missing.
+ */
+test.describe('layout containment (BACKOFFICE-82)', () => {
+  const ROUTES = [
+    '/dashboard', '/approvals', '/care', '/reconciliation', '/analytics', '/billing',
+    '/tpp-billing', '/compliance', '/risk', '/operations', '/agents', '/audit', '/guide', '/profile'
+  ]
+  const VIEWPORTS = [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 }
+  ]
+
+  for (const vp of VIEWPORTS) {
+    test(`the page body never scrolls sideways at ${vp.width}x${vp.height}`, async ({ page }) => {
+      await page.setViewportSize(vp)
+      await login(page, SUPER)
+
+      const offenders: string[] = []
+      for (const route of ROUTES) {
+        await page.goto(route, { waitUntil: 'networkidle' })
+        const overflow = await page.evaluate(() => {
+          const d = document.documentElement
+          return d.scrollWidth - d.clientWidth
+        })
+        // 1px of slack absorbs sub-pixel rounding; a real break is tens to hundreds of px.
+        if (overflow > 1) offenders.push(`${route} +${overflow}px`)
+      }
+      expect(offenders, 'routes scrolling the page body sideways').toEqual([])
+    })
+  }
+})

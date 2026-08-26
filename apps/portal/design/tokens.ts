@@ -1,8 +1,8 @@
 /**
- * OFBO portal design tokens — THE source of appearance truth (ADR 0026).
+ * OFBO portal design tokens — THE source of appearance truth (ADR 0033).
  *
  * "Institutional Blue", the MiddleLeap design system for the Open Finance Back
- * Office. ADR 0026 retired the external Stitch project as the appearance
+ * Office. ADR 0033 retired the external Stitch project as the appearance
  * authority: this file is now the source, not a mirror of one.
  *
  * Division of truth:
@@ -86,7 +86,7 @@ export const color = {
 
 /**
  * OFBO semantic extensions. The operational status set is load-bearing across every
- * console (PRD §7). ADR 0026 made it FOUR states, not three: "parked on a
+ * console (PRD §7). ADR 0033 made it FOUR states, not three: "parked on a
  * counterparty" and "running out of clock" are different problems with different
  * owners, and conflating them in one amber was a modelling error.
  *
@@ -110,19 +110,20 @@ export const ext = {
     // it distinguishable — saturation is held at/below the "reads as grey" threshold so
     // a parked break can never be mistaken for the blue that means "act here".
     awaiting: '#68707e',
-    reconciled: '#1d7f54', // green — matched / settled
-    /** @deprecated ADR 0026 — renamed to `aging`. Kept one minor release; remove next major. */
-    break: '#98640c'
+    reconciled: '#1d7f54' // green — matched / settled
   },
   /**
-   * The persistent DEMO marker (regulatory hard-stop, CLAUDE.md). demo-banner.tsx renders
-   * it as `text-demo` at text-xs, so it must be legible as TEXT.
+   * The persistent DEMO marker (regulatory hard-stop, CLAUDE.md) as rendered on a LIGHT
+   * ground — demo-banner.tsx paints it `text-demo` at text-xs, so it must be legible as TEXT.
    *
    * MiddleLeap's mark orange is #e65c2d; at 3.27:1 on the ground it failed AA and made the
    * mandated non-prod marker the least readable thing on the page. This token is the
-   * darkened text-safe form (4.61:1). The brand orange stays the MARK colour in the design
-   * system — if the banner ever becomes a filled pill (ink on orange, as designed), this
-   * token can go back to #e65c2d.
+   * darkened text-safe form (4.61:1).
+   *
+   * There is no single value that clears AA on BOTH grounds — the ground demands luminance
+   * <= 0.16 and the navy shell demands >= 0.23 — so the marker is two tokens, not one, and
+   * `nav.demo` below carries the shell form. Pairing a marker with the ground it is painted
+   * on is the rule this token set now encodes; see the AA block in design-tokens.spec.ts.
    */
   demo: '#c54418',
   // BACKOFFICE-59 — the persistent TRAINING-environment marker colour. A distinct violet,
@@ -131,7 +132,7 @@ export const ext = {
   training: '#6d28d9',
   /**
    * The dark "institutional shell" navy chrome — sidebar and sign-in panel.
-   * ADR 0026 keeps this shell rather than inverting it, which is the single
+   * ADR 0033 keeps this shell rather than inverting it, which is the single
    * biggest reason the Institutional Blue migration is a values-only swap:
    * all 82 `nav*` utility uses across the portal are unaffected.
    * The top bar + content stay on the light surface tokens.
@@ -142,7 +143,16 @@ export const ext = {
     surface: '#141b2d', // navy shell surface
     on: '#c3ccde', // 10.6:1 on surface — default nav text
     elevated: '#1e2740', // hover bg + shell border
-    active: '#6ba1f5' // 6.6:1 on surface — active item accent
+    active: '#6ba1f5', // 6.6:1 on surface — active item accent
+    /**
+     * The DEMO marker as painted ON the shell (app-shell.tsx, the "Switch role · demo"
+     * footer). This is MiddleLeap's mark orange, unmodified: it measures 4.85:1 on the
+     * navy and was only ever unusable on the light ground. The brand colour returns
+     * exactly where it is legible.
+     */
+    demo: '#e65c2d',
+    /** The TRAINING marker on the shell — 6.3:1, the violet lifted off the navy. */
+    training: '#a78bfa'
   }
 } as const
 

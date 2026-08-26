@@ -1,4 +1,4 @@
-# ADR 0026 — Retire Stitch as the appearance authority; adopt the in-repo "Institutional Blue" design system
+# ADR 0033 — Retire Stitch as the appearance authority; adopt the in-repo "Institutional Blue" design system
 
 - Status: **Accepted** — chosen by the user (2026-08-26)
 - Date: 2026-08-26
@@ -8,6 +8,15 @@
 - Scope: the portal's **appearance authority and appearance layer**. Behaviour and data remain
   governed by `specs/backoffice-openapi.yaml`; this ADR does not touch an endpoint, a contract,
   or an acceptance criterion.
+
+### Amendments after acceptance
+
+The decision below is unchanged since acceptance. This is a correction to a statement of *fact* —
+the ADR's own number — recorded per ADR 0031.
+
+| date | amendment |
+| --- | --- |
+| 2026-08-26 | **Renumbered 0026 → 0033.** This ADR was accepted as 0026, a number ADR 0026 (Nebras VAS commercial positioning) had already taken in PR #290 the day before. Q2b flagged the collision and the merge went ahead regardless, so `main` carried two ADR 0026s and every "ADR 0026" citation was ambiguous. Renumbered to the next free number under the rewrite pairing ADR 0032 anticipates; the file move is tracked, so this is a renumber and not a deletion. No content below changed. |
 
 ## Context
 

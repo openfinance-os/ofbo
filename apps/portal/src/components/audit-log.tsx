@@ -68,7 +68,10 @@ export function AuditLog({
           No audit events match this filter.
         </p>
       ) : (
-        <table data-testid="audit-log-table" className="w-full text-sm text-left">
+        /* Six columns of ids and timestamps come to ~915px; on a phone that is the widest thing
+           on the page, so the scroll has to belong to the table and not the document. */
+        <div className="overflow-x-auto">
+          <table data-testid="audit-log-table" className="w-full text-sm text-left">
           <thead className="text-on-surface-variant border-b border-outline-variant">
             <tr>
               <th className="py-2 pr-4">Event</th>
@@ -96,6 +99,7 @@ export function AuditLog({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </section>
   )
