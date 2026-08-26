@@ -114,7 +114,9 @@ export const ext = {
   },
   /**
    * The persistent DEMO marker (regulatory hard-stop, CLAUDE.md) as rendered on a LIGHT
-   * ground — demo-banner.tsx paints it `text-demo` at text-xs, so it must be legible as TEXT.
+   * ground — demo-banner.tsx paints it `text-demo` at text-xs in BOTH light placements (docked in
+   * the shell's top bar, floating on the shell-less surfaces), so it must be legible as TEXT and
+   * carries no fill of its own to sit on.
    *
    * MiddleLeap's mark orange is #e65c2d; at 3.27:1 on the ground it failed AA and made the
    * mandated non-prod marker the least readable thing on the page. This token is the
