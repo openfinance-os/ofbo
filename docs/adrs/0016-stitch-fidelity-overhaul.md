@@ -7,6 +7,15 @@
   the new **UI-FIDELITY** backlog track, BACKOFFICE-27/-30/-31/-28 (analytics contracts),
   Stitch project `8050269076066130289` ("Refined" screens are canonical)
 
+### Amendments after acceptance
+
+The decision below is unchanged since acceptance. These are corrections to statements of *fact*,
+recorded per ADR 0031.
+
+| date | amendment |
+| --- | --- |
+| 2026-08-26 | The superseding ADR's number, in the status line above, was **0026 → 0033**. That ADR was accepted as 0026, a number the Nebras VAS commercial-positioning ADR already held, so the pointer here resolved to two different documents. Renumbered under BACKOFFICE-82; the supersession itself — appearance-authority premise only — is unchanged. |
+
 ## Context
 
 A live visual review (2026-06-21, portal vs Stitch "Refined" references, screenshots
