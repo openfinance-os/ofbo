@@ -71,7 +71,25 @@ export function RegistryTable({ counterparties, canBilling, registerAction, more
             No consuming TPPs in the registry.
           </p>
         ) : (
-          <table className="w-full text-sm">
+          /* table-fixed, with the proportions declared rather than inferred.
+             An auto-layout table contributes its intrinsic width to the DOCUMENT's scrollable
+             overflow even when an ancestor scroll container clips it — measured at 390px, this
+             table's 624px of content left the page 243px wider than the viewport while the card
+             itself was correctly 340px and scrolling internally. Of every containment idiom
+             tried (min-w-0 on the grid item, contain:inline-size, overflow on each axis and
+             ancestor, width/max-width on the scroller), only fixing the layout algorithm stopped
+             it. The colgroup then keeps the columns deliberate instead of equal-width: the name
+             needs the room, the amount and the action do not. */
+          <table className="w-full table-fixed text-sm">
+            {/* Twelfths, so the four add to exactly 1. The name gets the most (it truncates and
+                carries the org id under it); the action column has to hold a "Register" button
+                without clipping it, so it matches the amount rather than taking the remainder. */}
+            <colgroup>
+              <col className="w-5/12" />
+              <col className="w-3/12" />
+              <col className="w-2/12" />
+              <col className="w-2/12" />
+            </colgroup>
             <thead>
               <tr className="text-xs uppercase tracking-wide text-on-surface-variant">
                 <th scope="col" className="px-4 py-2 text-left font-semibold">TPP</th>
@@ -168,12 +186,18 @@ export function TppBilling({ counterparties = [], invoiceRuns = [], registryMore
 
       {counterparties.length ? <TppBillingOverview counterparties={counterparties} /> : null}
 
+      {/* min-w-0 on the grid items, for the same reason /risk needed it on a flex item: a grid
+          item defaults to min-width:auto and will not shrink below its content, so the registry
+          card's own overflow-x-auto clipped visually while the document still scrolled 243px
+          sideways underneath it. The scroll belongs to the table. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <RegistryFilter registrationState={registrationState} unbilledOnly={unbilledOnly} />
           <RegistryTable counterparties={counterparties} canBilling={canBilling} registerAction={registerAction} moreHref={registryMoreHref} />
         </div>
-        <InvoiceRunsTable invoiceRuns={invoiceRuns} moreHref={invoiceMoreHref} />
+        <div className="min-w-0">
+          <InvoiceRunsTable invoiceRuns={invoiceRuns} moreHref={invoiceMoreHref} />
+        </div>
       </div>
     </div>
   )

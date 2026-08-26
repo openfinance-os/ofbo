@@ -31,8 +31,14 @@ export function SectionCard({
       data-testid={testid}
       className="rounded-xl border border-outline-variant bg-surface-container-lowest shadow-sm"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-outline-variant px-4 py-3">
-        <div className="flex items-center gap-2">
+      {/* Wraps on narrow viewports. A title plus a `shrink-0` action is wider than a phone
+          (the TPP-cost console's "Request period close" put this row at 486px in a 340px
+          card, scrolling the whole document), and neither half can be allowed to squash:
+          the title carries meaning and the action is a control. So the row folds instead,
+          and the title block gets min-w-0 so a long title truncates within its own line
+          rather than pushing the action off the edge. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-outline-variant px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
           <h2 id={hid} className="text-sm font-bold uppercase tracking-widest text-primary">{title}</h2>
           {meta}
         </div>
