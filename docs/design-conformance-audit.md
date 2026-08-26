@@ -55,11 +55,44 @@ each is audited against the design-system components and patterns it composes.
 | `/` · dashboard-command.tsx | system-health panel, four-eyes queue panel | **CONFORMANT** | UIF-06 |
 | `/` (sign-in) · page.tsx | sign-in panel, persona cards, provenance bar | **CONFORMANT** | Previously recorded as "the one surface outside the Stitch set". It is now a first-class design-system surface — and the screen Institutional Blue was derived from |
 
+## Rendered verification — 2026-08-26 (BACKOFFICE-81)
+
+The first pass under the new rule. Portal run locally (`next dev`, port 3100), driven with
+Playwright at **1440×900**, screens captured and inspected.
+
+| Screen | Verdict | Note |
+|---|---|---|
+| `/` sign-in | **PASS** | Navy panel, cool ground, blue accent on persona tags and links. DEMO pill legible. |
+| `/dashboard` | **PASS** | Navy shell with blue active item; four-eyes queue panel; footer DEMO statement present. |
+| `/reconciliation` | **PASS** | Error state renders in the new breach red; primary action in the new blue. |
+| `/care` | **PASS** | PSU lookup form, "Audited (high-sensitivity)" chip, primary button all correct. |
+| `/guide` | **PASS** | Strongest of the set — navy hero, blue eyebrow, cool cards. |
+| `/readiness` | **PASS** | Public route. Confirms the corrected DEMO orange is legible on its own tint. |
+
+No console errors on any screen beyond the React DevTools notice.
+
+### Finding — DEMO pill occludes the footer's bottom-right link
+
+On every authenticated screen, the `DemoPill` (`fixed bottom-3 right-3 z-50`) sits over the
+footer's right-hand link, truncating "Production readiness" to "Pro…".
+
+**Pre-existing, not introduced by BACKOFFICE-81** — that commit changed the pill's colour only,
+never its position. It is `pointer-events-none`, so the link stays clickable and the DEMO marker
+itself is fully visible and legible; the regulatory requirement is met. This is a cosmetic
+collision, and fixing it belongs in its own story rather than in a palette change.
+
+### Not verified
+
+**Status badges were not rendered in situ.** The four status colours drive
+`status-badge.tsx`, which needs live BFF data; the BFF would not start in this environment
+(no `.env`, and `tsx` did not finish compiling). Their contrast is asserted mathematically by
+the AA block in `design-tokens.spec.ts`, but nobody has yet *seen* a breach, aging, awaiting or
+reconciled badge on the new palette. **That is the first thing to check on the next UI story.**
+
 ## Open items
 
-- **Re-audit is required after the Institutional Blue migration** (BACKOFFICE-81). Every verdict
-  above predates the palette change. The gates confirm tokens and contrast; nobody has looked at a
-  rendered screen since. Treat the table as *carried forward*, not *re-verified*.
+- **The per-route table above predates the palette change** and is carried forward, not
+  re-verified — the six screens in the rendered pass are the exception.
 - **Accessibility is claimed narrowly.** WCAG 2.1 AA for colour contrast, focus visibility, reduced
   motion and text resize — verified on every build. Screen-reader labelling of the four-eyes flow
   and a keyboard-trap audit of the overlay components are **open**. Do not represent the portal as
