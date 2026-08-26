@@ -9,7 +9,7 @@ import type { TrendPoint, SeverityBar, KpiTone } from '../lib/dashboard'
 
 const FILL: Record<KpiTone, string> = {
   breach: 'fill-breach',
-  break: 'fill-break',
+  break: 'fill-aging',
   reconciled: 'fill-reconciled',
   neutral: 'fill-outline'
 }

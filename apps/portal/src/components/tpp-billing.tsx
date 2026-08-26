@@ -42,9 +42,9 @@ const STATUS_TONE: Record<string, string> = {
   live: 'bg-reconciled/10 text-reconciled',
   registered: 'bg-reconciled/10 text-reconciled',
   dispatched: 'bg-reconciled/10 text-reconciled',
-  pending_registration: 'bg-break/10 text-break',
-  pending_approval: 'bg-break/10 text-break',
-  directory_only: 'bg-break/10 text-break',
+  pending_registration: 'bg-aging/10 text-aging',
+  pending_approval: 'bg-aging/10 text-aging',
+  directory_only: 'bg-aging/10 text-aging',
   suspended: 'bg-breach/10 text-breach',
   withheld: 'bg-breach/10 text-breach'
 }

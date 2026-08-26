@@ -13,7 +13,7 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 
 const ALERT_TONE: Record<string, string> = {
   info: 'border-l-secondary bg-secondary-fixed/30',
-  warning: 'border-l-break bg-break/10',
+  warning: 'border-l-break bg-aging/10',
   critical: 'border-l-breach bg-breach/10'
 }
 

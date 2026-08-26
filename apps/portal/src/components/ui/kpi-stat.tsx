@@ -11,7 +11,7 @@ export type StatTone = 'reconciled' | 'break' | 'breach' | 'neutral'
 
 const TREND_TONE: Record<StatTone, string> = {
   reconciled: 'text-reconciled',
-  break: 'text-break',
+  break: 'text-aging',
   breach: 'text-breach',
   neutral: 'text-on-surface-variant'
 }

@@ -278,9 +278,9 @@ export function BillingConsole({ view, error, errorRemediation, errorDocsUrl, si
             {simulateAction ? <ProfitabilitySimulator period={period} action={simulateAction} /> : null}
           </SectionCard>
 
-          <section aria-labelledby="insurance-deferred-heading" data-testid="insurance-deferred" className="rounded-xl border border-break/40 bg-break/10 p-4">
+          <section aria-labelledby="insurance-deferred-heading" data-testid="insurance-deferred" className="rounded-xl border border-aging/40 bg-aging/10 p-4">
             <div className="flex items-start gap-3">
-              <span className="material-symbols-outlined text-break" aria-hidden="true">lock_clock</span>
+              <span className="material-symbols-outlined text-aging" aria-hidden="true">lock_clock</span>
               <div>
                 <h2 id="insurance-deferred-heading" className="text-sm font-bold text-on-surface">Insurance commissions remain deferred</h2>
                 <p className="mt-1 text-sm text-on-surface-variant">

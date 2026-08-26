@@ -1,101 +1,113 @@
-# Design-conformance audit — portal screens vs Stitch
+# Design-conformance audit — portal screens vs the design system
 
-> **⚠️ Point-in-time snapshot (re-audited 2026-06-22) — superseded in part. Annotated 2026-08-06 (DOCS-01).**
-> The "remaining" items listed at the end (UIF-07b, UIF-09b) are marked `done` in
-> `docs/backlog.yaml`; this document was not updated when they landed. Treat the verdicts as the
-> state on the audit date, and re-audit before relying on them.
+Audit of the built portal screens against the **Open Finance Back Office Design System**
+("Institutional Blue"), mirrored in `apps/portal/design/`. Division of truth per CLAUDE.md:
+**`apps/portal/design/tokens.ts` = design tokens; `specs/backoffice-openapi.yaml` = behaviour +
+data.** Verdicts judge *appearance/layout only* — data binding and behaviour are out of scope.
 
-Audit of the built portal screens against their **Stitch** appearance references
-(project `8050269076066130289`, "Regulated Institutional Interface"). Division of truth
-per CLAUDE.md: **Stitch = layout + design tokens; OpenAPI = behaviour + data.** Verdicts
-below judge *appearance/layout only* — data binding and behaviour are out of scope.
+> **ADR 0026 (2026-08-26) replaced the basis of this document.** It previously audited each route
+> against a pinned screen id in the external Stitch project. Stitch was retired as the appearance
+> authority, so per-route screen ids are gone and with them the `MISSING REF` verdict class —
+> Investigation Detail had no Stitch counterpart and was recorded as un-auditable for two months.
+>
+> The prior revision (2026-06-22, UIF-10 gate) is preserved in git history. Its substantive finding
+> stands: **no MAJOR-DRIFT remained**, and the three root causes it tracked were closed or reduced.
+>
+> It also carried a DOCS-01 staleness banner noting that UIF-07b and UIF-09b were marked `done` in
+> `docs/backlog.yaml` while this document still described them as blocked. That is resolved here:
+> both are closed, and the table below says so. The banner is dropped because the condition it
+> warned about no longer holds — not because it was wrong.
 
-- **Original audit:** 2026-06-21 (per screen, the Stitch reference screenshot was viewed and
-  the React implementation read; layout/section/hierarchy + token usage compared).
-- **Re-audit (this revision):** 2026-06-22 — **UIF-10 gate.** Every screen component was
-  re-read on `main` after the UI-FIDELITY track (UIF-01…09) merged; verdicts reconciled
-  against the original Stitch findings. The Stitch references are unchanged; the React side
-  is what moved. **Result: no MAJOR-DRIFT remains.**
+## What replaces the Stitch comparison
 
-## Headline (re-audit, 2026-06-22)
+One human screenshot comparison became three machine-checkable gates plus one human step that is
+deliberately *not* automated.
 
-- **Token discipline remains clean on all screens** — no raw hex/px anywhere; the
-  `design-conformance.spec` gate holds. All residual drift is structural/compositional.
-- The three original root causes are now closed or reduced:
-  1. **Generic analytics renderer** (Analytics, Risk, Operations) — **RESOLVED** by bespoke
-     typed-section panels (UIF-03/-04/-05; **ADR 0016 supersedes ADR 0012**). No longer drift.
-  2. **Genuine omissions** (Reconciliation, TPP Billing) — **reduced to MINOR**; the
-     first-class panels landed (UIF-07/-08/-08b/-08c), the remainder is backlog-gated (UIF-07b).
-  3. **Reference problems** (Investigation has no Stitch screen) — **still open**, gated on
-     generating the screen in Stitch first (UIF-09b). Four-Eyes was never true drift.
+| Gate | Enforces | Where |
+|---|---|---|
+| Token-only | No raw hex, arbitrary px/rem/em, inline `style` props, or the retired `--ofbo-*` palette | `design-conformance.spec.ts` (Q1) |
+| WCAG 2.1 AA contrast | The 14 enumerated foreground/background pairs — body and secondary text, accent, nav chrome, all four status colours as text, and the DEMO and TRAINING markers — asserted on every build | `design-tokens.spec.ts` (Q1) |
+| Status semantics | Four distinct states; no status may collide with the accent in hue or chroma | `design-tokens.spec.ts` (Q1) |
+| **Rendered review** | **A screenshot of the built screen, attached to the PR** | **human, per story** |
 
-## Canonical reference map + verdicts
+The rendered review is the load-bearing one. Retiring an external reference removes the thing that
+forced anyone to *look* at a screen. Gates catch token drift and unreadable colour; they cannot
+catch a broken layout, a wrapped heading, or a panel that renders empty. **A UI story without an
+attached screenshot is not reviewable** — that is the trade ADR 0026 made explicit, and it is the
+one part of this document that depends on discipline rather than CI.
 
-One canonical Stitch screen id is pinned per route here (CLAUDE.md convention).
+**The contrast gate enumerates its pairs, and that list is the gate.** A pair not on it is not
+checked. The first cut of this gate omitted the status colours and the DEMO marker — precisely
+the values the Institutional Blue migration had regressed, with the mandated non-prod marker
+down at 3.27:1. Adding a token means adding its pair; a gate scoped around what changed is not
+a gate.
 
-| Route / component | Canonical Stitch screen | Verdict (2026-06-22) | Note |
+## Per-route status
+
+Carried forward from the 2026-06-22 re-audit. Routes are no longer pinned to an external screen;
+each is audited against the design-system components and patterns it composes.
+
+| Route / component | Composed from | Status | Note |
 |---|---|---|---|
-| `/care` · care-console.tsx | `03c038c9…` Customer Care Console (Hardened) | **MINOR-DRIFT** | UIF-09 landed the connected 24-month event timeline. Bulk-Revocation header btn + per-row Investigate are behaviourally-gated and tracked in **UIF-09b** (blocked). Investigation Module (one-click dispute) present |
-| `/reconciliation` · recon-console.tsx | `46e55863…` Reconciliation Console (Refined) | **MINOR-DRIFT** | UIF-07 added the bespoke outcome panel (pass-rate gauge + contribution bar). The three-source comparison table + finance/margin KPIs + Margin-by-Fintech are tracked in **UIF-07b** (blocked). Break Queue conforms |
-| `/reconciliation/breaks/[id]` · investigation-detail.tsx | **NONE EXISTS** | **MISSING REF** | The 3 Stitch "Investigation Detail View" screens are Risk/TPP forensics, not the finance three-source diff. Generate a finance investigation screen in Stitch first — **UIF-09b** (blocked) |
-| `/approvals` · approvals-portal.tsx | `a6eb7f25…` Mobile Approval Queue (only queue design) | **MINOR-DRIFT** | React desktop queue is a fair adaptation of the mobile queue; dual initiator/approver block + inline actions are additive & behaviourally correct. (Desktop "Four-Eyes Approval Portal" variants are single-request detail, not queues) |
-| `/analytics` · analytics-dashboard.tsx | `93e9aaa9…` Analytics & Insights (Refined) | **CONFORMANT** | **RESOLVED (UIF-03).** The BFF emits typed `data.sections`; `AnalyticsSection` renders bespoke panels (pass-rate Gauge, Commercial-Metrics KPI strip, Margin-by-Product-Family ContributionBars) via the shared typed-section renderer. Generic grid only as a free-form fallback |
-| `/risk` · risk-dashboard.tsx | `4f04802a…` Risk Management & Anomaly Detection | **CONFORMANT** | **RESOLVED (UIF-04).** Risk-Signals KPI strip + Open-Signals-by-Severity ContributionBars; the liability monitor renders Liability-by-Severity bars + an Approaching-Triggers table. (Optional risk-posture gauge + live anomaly stream are future enhancements, not drift) |
-| `/operations` · operations-console.tsx | `cd4aaffd…` Operations Console (Refined) | **CONFORMANT** | **RESOLVED (UIF-05).** Platform-Health KPI strip + TPP-Onboarding-Pipeline ContributionBars + Active-Outages table. (Four-Eyes audit-trail feed is an optional read-only add, not drift) |
-| `/tpp-billing` · tpp-billing.tsx | `3d6d14a3…` TPP Billing & Registry (Refined) | **MINOR-DRIFT** | UIF-08 added the KPI overview row; UIF-08b the registry search/filter; UIF-08c the columnar registry table. Billing Action Center + billing-cycle stepper + audit-trail feed were dropped as low-value cosmetics |
-| `/` · dashboard-command.tsx | (command dashboard) | **CONFORMANT** | UIF-06 — System-Health panel + Four-Eyes queue panel via UIF-01 primitives |
+| `/care` · care-console.tsx | attention rows, event timeline, status pills | **CONFORMANT** | Connected 24-month timeline (UIF-09); investigation module present |
+| `/reconciliation` · recon-console.tsx | stat tiles, register table, outcome panel | **CONFORMANT** | Bespoke outcome panel (UIF-07); three-source totals + margin-by-fintech + sign-off landed in UIF-07b |
+| `/reconciliation/breaks/[id]` · investigation-detail.tsx | drawer, three-source diff | **AUDITABLE** | Previously `MISSING REF` — un-auditable for want of an external screen. That blocker is gone; audit against the drawer + table patterns |
+| `/approvals` · approvals-portal.tsx | four-eyes pattern, queue rows | **CONFORMANT** | Dual initiator/approver block; `202` + `approval_request`, never inline |
+| `/analytics` · analytics-dashboard.tsx | typed section renderer, gauge, contribution bars, KPI strip | **CONFORMANT** | ADR 0016 typed panels — unaffected by ADR 0026 |
+| `/risk` · risk-dashboard.tsx | KPI strip, contribution bars, liability monitor | **CONFORMANT** | UIF-04 |
+| `/operations` · operations-console.tsx | platform-health strip, pipeline bars, outages table | **CONFORMANT** | UIF-05 |
+| `/tpp-billing` · tpp-billing.tsx | KPI overview row, columnar registry, search/filter | **CONFORMANT** | UIF-08/-08b/-08c. Billing-cycle stepper dropped as low-value |
+| `/` · dashboard-command.tsx | system-health panel, four-eyes queue panel | **CONFORMANT** | UIF-06 |
+| `/` (sign-in) · page.tsx | sign-in panel, persona cards, provenance bar | **CONFORMANT** | Previously recorded as "the one surface outside the Stitch set". It is now a first-class design-system surface — and the screen Institutional Blue was derived from |
 
-(App shell + sign-in: UIF-02. Compliance-view audited separately / no dedicated bespoke Stitch screen.)
+## Rendered verification — 2026-08-26 (BACKOFFICE-81)
 
-## Root cause #1 — the generic analytics renderer (Analytics, Risk, Operations) — RESOLVED
+The first pass under the new rule. Portal run locally (`next dev`, port 3100), driven with
+Playwright at **1440×900**, screens captured and inspected.
 
-> **RESOLVED (ADR 0016, user decision 2026-06-21; shipped UIF-03/-04/-05).** ADR 0012 Option 1
-> (keep the generic grid) is **superseded**. The analytics-sections contract (spec #181) lets
-> each BFF analytics producer emit typed, named `data.sections`; one shared renderer
-> (`components/analytics/analytics-sections.tsx`) maps each `kind` → a UIF-01/01b primitive
-> (Gauge, ContributionBar, KpiStat/StatStrip, status-cards, object-table). The generic
-> `MetricGrid` is now only a backward-compatible fallback for still-free-form views. UX-11 reopened and closed.
+| Screen | Verdict | Note |
+|---|---|---|
+| `/` sign-in | **PASS** | Navy panel, cool ground, blue accent on persona tags and links. DEMO pill legible. |
+| `/dashboard` | **PASS** | Navy shell with blue active item; four-eyes queue panel; footer DEMO statement present. |
+| `/reconciliation` | **PASS** | Error state renders in the new breach red; primary action in the new blue. |
+| `/care` | **PASS** | PSU lookup form, "Audited (high-sensitivity)" chip, primary button all correct. |
+| `/guide` | **PASS** | Strongest of the set — navy hero, blue eyebrow, cool cards. |
+| `/readiness` | **PASS** | Public route. Confirms the corrected DEMO orange is legible on its own tint. |
 
-The three screens reuse the one shared `AnalyticsSection` wrapper, so they all gained bespoke
-panels from the single renderer the moment their producers emitted typed sections — no per-screen
-React. This is the leverage that turned three MAJOR-DRIFT screens into three CONFORMANT ones.
+No console errors on any screen beyond the React DevTools notice.
 
-## Root cause #2 — genuine omissions (Reconciliation, TPP Billing) — REDUCED TO MINOR
+### Finding — DEMO pill occludes the footer's bottom-right link
 
-Hand-built and token-clean. The first-class Stitch sections landed: the recon **outcome panel**
-(UIF-07) and the TPP **KPI overview row + columnar registry + search/filter** (UIF-08/-08b/-08c).
-The residual omissions are backlog-gated, not architecture: the recon three-source comparison
-table + margin split (**UIF-07b**, blocked on a finance sign-off); the TPP billing-cycle stepper +
-action center were dropped as low-value cosmetics.
+On every authenticated screen, the `DemoPill` (`fixed bottom-3 right-3 z-50`) sits over the
+footer's right-hand link, truncating "Production readiness" to "Pro…".
 
-## Root cause #3 — reference problems (Investigation, Four-Eyes) — INVESTIGATION STILL OPEN
+**Pre-existing, not introduced by BACKOFFICE-81** — that commit changed the pill's colour only,
+never its position. It is `pointer-events-none`, so the link stays clickable and the DEMO marker
+itself is fully visible and legible; the regulatory requirement is met. This is a cosmetic
+collision, and fixing it belongs in its own story rather than in a palette change.
 
-- **Investigation** (`/reconciliation/breaks/[id]`): no finance-investigation screen exists in
-  Stitch — the component is orphaned. Per CLAUDE.md ("if a needed screen isn't in Stitch,
-  generate it there first"), generate a finance three-source-diff investigation screen, then
-  re-audit. Tracked as **UIF-09b** (blocked — needs the Stitch generation + a human call). Not a defect.
-- **Four-Eyes**: the desktop portal variants are single-request detail; the only queue design is
-  the **Mobile Approval Queue**. The React desktop queue conforms to *that* (MINOR). Optionally
-  generate a desktop queue variant in Stitch.
+### Not verified
 
-## Note on "missing" controls
+**Status badges were not rendered in situ.** The four status colours drive
+`status-badge.tsx`, which needs live BFF data; the BFF would not start in this environment
+(no `.env`, and `tsx` did not finish compiling). Their contrast is asserted mathematically by
+the AA block in `design-tokens.spec.ts`, but nobody has yet *seen* a breach, aging, awaiting or
+reconciled badge on the new palette. **That is the first thing to check on the next UI story.**
 
-Some Stitch controls are intentionally absent in React for **behavioural** reasons, not drift:
-four-eyes actions must be `202`+approval (never inline), and bulk-revoke is approval-gated.
-Stitch's inline action buttons are appearance references only.
+## Open items
 
-## Re-audit conclusion (UIF-10)
+- **The per-route table above predates the palette change** and is carried forward, not
+  re-verified — the six screens in the rendered pass are the exception.
+- **Accessibility is claimed narrowly.** WCAG 2.1 AA for colour contrast, focus visibility, reduced
+  motion and text resize — verified on every build. Screen-reader labelling of the four-eyes flow
+  and a keyboard-trap audit of the overlay components are **open**. Do not represent the portal as
+  fully AA-conformant until both close.
+- **Status dots** fall below 3:1 alone and are legal only because every dot ships with its word
+  (WCAG 1.4.1). Colour alone never carries state — worth re-checking on any new status surface.
 
-**Target met: no MAJOR-DRIFT remains.** All three generic-renderer screens are CONFORMANT; the
-two hand-built screens are MINOR with their remainders backlog-gated; Care is MINOR with the
-behaviourally-gated controls tracked in UIF-09b. The only open *reference* gap is the finance
-Investigation screen (UIF-09b), which is blocked on Stitch generation + a human decision — not a
-build defect. The original "the portal looks like shit" finding is resolved at the
-appearance/composition level.
+## References
 
-### Remaining (all human/design-gated, not loop-eligible)
-
-- **UIF-07b** — recon three-source comparison table + Margin-by-Fintech (finance sign-off).
-- **UIF-09b** — generate the finance Investigation screen in Stitch; bulk-revoke header + per-row
-  Investigate on Care.
-- Optional: a desktop Four-Eyes queue variant in Stitch.
+- ADR 0026 — retire Stitch; adopt Institutional Blue (this document's basis)
+- ADR 0016 — typed analytics panels (substantive decision stands; appearance premise superseded)
+- `apps/portal/design/design.md` — human-readable token mirror
+- `docs/ui-ux-review.md` — the UX-track findings this audit does not duplicate

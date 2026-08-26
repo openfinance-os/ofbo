@@ -5,14 +5,14 @@ import type { ReadinessDigest, ReadinessAssessmentInput, ReadinessProfile } from
 
 const EFFORT_STYLE: Record<string, string> = {
   low: 'bg-reconciled/15 text-reconciled',
-  medium: 'bg-break/15 text-break',
+  medium: 'bg-aging/15 text-aging',
   scoping: 'bg-error-container text-error'
 }
 const EFFORT_LABEL: Record<string, string> = { low: 'Low', medium: 'Medium', scoping: 'Scoping' }
 
 function scoreTone(score: number): string {
   if (score >= 85) return 'text-reconciled'
-  if (score >= 65) return 'text-break'
+  if (score >= 65) return 'text-aging'
   return 'text-error'
 }
 
@@ -98,7 +98,7 @@ export function ReadinessDigestView({
               <li key={g.id} className="flex flex-wrap items-baseline gap-2 text-sm">
                 <span className="rounded bg-surface-container px-1.5 py-0.5 font-mono text-xs text-on-surface-variant">{g.id}</span>
                 <span className="font-semibold">{g.title}</span>
-                <span className="rounded-full bg-break/15 px-2 py-0.5 text-xs font-semibold text-break">blocks {g.blocker}</span>
+                <span className="rounded-full bg-aging/15 px-2 py-0.5 text-xs font-semibold text-aging">blocks {g.blocker}</span>
                 <span className="text-on-surface-variant">— {g.is_default ? 'on default' : `set: ${g.answer}`}</span>
               </li>
             ))}

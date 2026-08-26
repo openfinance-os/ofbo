@@ -52,14 +52,14 @@ describe('Panel', () => {
 describe('status vocabulary (single source of truth)', () => {
   it('maps the triad consistently', () => {
     expect(statusTone('breach')).toContain('text-breach')
-    expect(statusTone('pending')).toContain('text-break')
+    expect(statusTone('pending')).toContain('text-aging')
     expect(statusTone('reconciled')).toContain('text-reconciled')
   })
 
   it('resolves the cross-screen drift case (suspended is amber, not red)', () => {
     // The review found `suspended` rendered red on analytics but amber on care.
-    expect(statusTone('suspended')).toContain('text-break')
-    expect(statusTone('Suspended')).toContain('text-break')
+    expect(statusTone('suspended')).toContain('text-aging')
+    expect(statusTone('Suspended')).toContain('text-aging')
   })
 
   it('returns null for unknown tokens but neutral via the OrNeutral helper', () => {

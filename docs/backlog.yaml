@@ -125,13 +125,17 @@ milestones:
       - { id: BACKOFFICE-70, title: LFI Ozone Connect health-check surfacing, status: done }
 
   - name: UI
-    # Portal screen build-out from the Stitch project (8050269076066130289) "Regulated Institutional
-    # Interface" design system. Division of truth: Stitch = appearance (layout + tokens);
-    # specs/backoffice-openapi.yaml = behaviour + data. Every screen is token-only (no raw hex/px),
-    # OpenAPI-bound (no Stitch mock values), DEMO-bannered, persona scope-gated, zero PII, four-eyes
-    # via 202 + approval_request (never inline), and cites its Stitch screen id in the PR for
-    # design<->code traceability. Positioned post-M5 to avoid disrupting the in-flight backend loop;
-    # promote UI-00/01/02 earlier on request once the foundation is approved.
+    # Portal screen build-out against the Open Finance Back Office Design System
+    # ("Institutional Blue"), mirrored in apps/portal/design/. Division of truth:
+    # apps/portal/design/tokens.ts = design tokens (THE source — ADR 0026 retired the external
+    # Stitch project as the appearance authority); specs/backoffice-openapi.yaml = behaviour + data.
+    # Every screen is token-only (no raw hex/px), OpenAPI-bound (no mock values on the wire),
+    # DEMO-marked, persona scope-gated, zero PII, four-eyes via 202 + approval_request (never
+    # inline). PRs cite the design-system component or pattern and ATTACH A SCREENSHOT of the built
+    # screen — with no external reference to diff against, the rendered review is the check.
+    # Historical items below still name Stitch screen ids; those are a record of how the screen was
+    # built, not a live dependency. Positioned post-M5 to avoid disrupting the in-flight backend
+    # loop; promote UI-00/01/02 earlier on request once the foundation is approved.
     items:
       - { id: UI-00-DESIGN-SYSTEM, title: Codify Stitch design.md as a repo-canonical Tailwind token preset, status: done, depends_on: [M1-PORTAL-SHELL], note: "Pull the 'Regulated Institutional Interface' design.md into apps/portal/design/ as the canonical token source; emit a Tailwind preset (Inter + JetBrains Mono scale, navy #0F172A primary, status semantics red=breach/amber=break/green=reconciled, 4px spacing, radii, density toggles). ADR in docs/adrs/ for adopting Tailwind. Migrate the M1 shell's plain globals.css onto tokens and RETIRE the ad-hoc --ofbo-* palette (reconcile, do not preserve). CI lint fails on raw hex/px in components. Push edits back to Stitch via upload_design_md. Relates to BACKOFFICE-26 (console design-system + Al Tareq brand conformance, M5)" }
       - { id: UI-01-APP-SHELL, title: App shell (sidebar/topbar, persona-switcher, scope-aware nav), status: done, depends_on: [UI-00-DESIGN-SYSTEM], note: "Refactor the existing flat portal-main layout into the design-system shell: 240px collapsible sidebar, 64px top bar, persona-switcher with role badge, global search slot, density toggle. Nav hides modules outside the persona scope matrix. ABSORB (do not recreate) the M1 components: demo-banner, scope-echo (-> persona-switcher/role-badge), audit-panel (-> audit-trail timeline). The login screen (app/page.tsx) stays - it is the one surface outside the Stitch set; restyle to tokens" }

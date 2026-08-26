@@ -40,7 +40,7 @@ export interface ReconConsoleProps {
 const RUN_TONE: Record<string, string> = {
   completed: 'bg-reconciled/10 text-reconciled',
   running: 'bg-secondary-fixed text-on-secondary-fixed',
-  partial: 'bg-break/10 text-break',
+  partial: 'bg-aging/10 text-aging',
   failed: 'bg-breach/10 text-breach'
 }
 /**
@@ -49,7 +49,7 @@ const RUN_TONE: Record<string, string> = {
  * (reconciled=green), escalated_nebras_dispute|escalated_fintech_billing (breach=red).
  */
 const BREAK_TONE: Record<string, string> = {
-  flagged: 'bg-break/10 text-break',
+  flagged: 'bg-aging/10 text-aging',
   assigned: 'bg-secondary-fixed text-on-secondary-fixed',
   resolved_matched: 'bg-reconciled/10 text-reconciled',
   resolved_internal_correction: 'bg-reconciled/10 text-reconciled',
@@ -85,7 +85,7 @@ export function KpiCards({ run }: { run: ReconciliationRun }) {
       <Kpi label="Total Lines" value={run.line_count_total.toLocaleString('en-US')} sub={`${run.run_type} · ${run.status}`} />
       <Kpi label="Matched" value={run.line_count_matched.toLocaleString('en-US')} sub={`${rate}% success rate`} tone="text-reconciled" />
       <Kpi label="Unmatched" value={run.line_count_unmatched.toLocaleString('en-US')} sub={run.line_count_unmatched > 0 ? 'Action required' : 'Clear'} tone={run.line_count_unmatched > 0 ? 'text-breach' : 'text-primary'} />
-      <Kpi label="Disputed" value={run.line_count_disputed.toLocaleString('en-US')} sub="Nebras-linked" tone="text-break" />
+      <Kpi label="Disputed" value={run.line_count_disputed.toLocaleString('en-US')} sub="Nebras-linked" tone="text-aging" />
     </div>
   )
 }

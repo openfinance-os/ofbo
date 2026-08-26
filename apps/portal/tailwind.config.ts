@@ -2,10 +2,11 @@ import type { Config } from 'tailwindcss'
 import { color, ext, borderRadius, spacing, fontFamily } from './design/tokens'
 
 /**
- * UI-00b — the portal Tailwind preset, generated from the repo-canonical design
- * tokens (apps/portal/design/tokens.ts), which mirror the Stitch "Open Finance Back
- * Office" Material 3 system verbatim. Components reference token-named utilities
- * (e.g. bg-primary-container, text-on-surface, bg-demo) — never raw hex/px.
+ * The portal Tailwind preset, generated from the design tokens
+ * (apps/portal/design/tokens.ts) — which are THE source of appearance truth as of
+ * ADR 0026, not a mirror of an external tool. Components reference token-named
+ * utilities (e.g. bg-primary-container, text-on-surface, bg-demo) — never raw hex/px.
+ * design-conformance.spec.ts enforces that.
  */
 export default {
   content: ['./src/**/*.{ts,tsx}'],
@@ -13,13 +14,18 @@ export default {
     extend: {
       colors: {
         ...color,
-        // OFBO semantic layer (Stitch base ships only `error`).
+        // OFBO semantic layer — four states (ADR 0026). The accent (`secondary`)
+        // is never a status; `awaiting` is slate so "waiting" cannot read as "act here".
         breach: ext.status.breach,
-        break: ext.status.break,
+        aging: ext.status.aging,
+        awaiting: ext.status.awaiting,
         reconciled: ext.status.reconciled,
+        /** @deprecated ADR 0026 — use `aging`. Kept one minor release so the rename
+         *  of ~71 call sites lands in its own reviewable commit. */
+        break: ext.status.break,
         demo: ext.demo,
         training: ext.training,
-        // UI-01 — dark "institutional shell" navy chrome (Stitch Operations Console (Synchronized)).
+        // The dark "institutional shell" navy chrome — kept, not inverted (ADR 0026).
         nav: ext.nav.surface,
         'on-nav': ext.nav.on,
         'nav-elevated': ext.nav.elevated,
@@ -32,6 +38,7 @@ export default {
       spacing: { ...spacing },
       fontFamily: {
         sans: [...fontFamily.sans],
+        display: [...fontFamily.display],
         mono: [...fontFamily.mono],
         symbols: [...fontFamily.symbols]
       }
