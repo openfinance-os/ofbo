@@ -39,9 +39,35 @@ describe('PersonaLoginList', () => {
     expect(hidden.value).toBe('demo-token:risk-analyst')
   })
 
-  it('surfaces a sign-in error when present', () => {
+  /**
+   * BACKOFFICE-84 — re-pointed from the raw enum to the sentence an operator reads.
+   *
+   * This asserted that `mfa_not_satisfied` appeared verbatim in the alert, which is exactly the
+   * rendering the story replaces: unreadable at best, and for the infrastructure case actively
+   * misleading, because a database outage printed "invalid_token" and sent people to check a token
+   * that was fine. The requirement — a failed sign-in must SAY SO on the screen — is unchanged and
+   * still asserted; what moved is that the message now has to be usable.
+   */
+  it('surfaces a readable sign-in error when present', () => {
     render(<PersonaLoginList personas={personas} error="mfa_not_satisfied" />)
-    expect(screen.getByTestId('signin-error')).toHaveTextContent('mfa_not_satisfied')
+    expect(screen.getByTestId('signin-error')).toHaveTextContent(/multi-factor authentication/i)
+  })
+
+  it('distinguishes a service failure from a rejected credential', () => {
+    // The two need different actions — retry, versus pick a different role — so they must not read
+    // the same. This is the pairing the old single-reason handler could not express at all.
+    const { rerender } = render(<PersonaLoginList personas={personas} error="service_unavailable" />)
+    const service = screen.getByTestId('signin-error').textContent ?? ''
+    expect(service).toMatch(/temporarily unavailable/i)
+    expect(service).toMatch(/no session was created/i)
+
+    rerender(<PersonaLoginList personas={personas} error="invalid_token" />)
+    expect(screen.getByTestId('signin-error').textContent).not.toBe(service)
+  })
+
+  it('still shows an unrecognised reason rather than a blank alert', () => {
+    render(<PersonaLoginList personas={personas} error="some_new_reason" />)
+    expect(screen.getByTestId('signin-error')).toHaveTextContent('some_new_reason')
   })
 
   it('UX: shows the welcome explainer + enriches each role card with its purpose and reachable modules', () => {

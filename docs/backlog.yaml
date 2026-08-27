@@ -721,6 +721,81 @@ milestones:
             source, so the codes cannot drift between fixtures, tests and adapters.
           - The V2.2 paymentRail obligation and its Tier 2 dates are recorded against this item so the
             forward requirement has a delivery hook rather than living only in a research doc.
+      - id: BACKOFFICE-89
+        title: x-fapi-interaction-id is required-and-typed in the contract, and unvalidated at the BFF
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a new feature — a conformance defect against the contract on an existing middleware,
+          raised by the advisory contract-conformance reviewer on PR 341. HG-0007 gates the entry
+          of NEW feature-bearing work so it traces to an evidenced problem; there is no product
+          question for a discovery run to answer here, only a spec/implementation disagreement to
+          resolve.
+        note: >-
+          THE DRIFT. specs/backoffice-openapi.yaml:3060 declares fapiInteractionId as
+          `schema: { type: string, format: uuid }`. services/bff/src/app.ts:902-914 checks
+          PRESENCE only, so any non-empty string is accepted and echoed into
+          AuditEvent.request_trace_id — while the handler's own remediation text at :908 tells the
+          caller "Send a UUID v4". The BFF is the layer that writes the trail, so an arbitrary
+          caller string takes a one-way trip into an INSERT-only table with no deletion path for
+          regulated records.
+
+          WHY NOW. BACKOFFICE-84 added UUID validation on the PORTAL side of the same header
+          (apps/portal/src/app/api/login/route.ts), for exactly that reason. That leaves the BFF as
+          the only layer that will accept a non-UUID, which is worse than the symmetric state it
+          replaced: a caller whose id the BFF accepts gets a different one back from the portal, so
+          the two layers' audit rows for one interaction no longer share a trace id — and CLAUDE.md
+          requires x-fapi-interaction-id propagated END TO END.
+
+          SPEC FIRST, because three sources state three rules. The contract says `format: uuid`
+          (any version). CLAUDE.md says "IDs: UUID v4". The BFF's remediation says v4. The portal's
+          validator is deliberately version-agnostic, implementing the SPEC rather than the
+          convention. Tightening the implementation before deciding which rule is correct would
+          just pick one by accident. Resolve via the spec-change skill — either tighten the
+          parameter to a v4 pattern, or state in its description that any version is accepted —
+          then make the BFF middleware enforce whatever the contract then says.
+        acceptance:
+          - Spec-only PR first, resolving the v4-vs-any-version question in one place, with
+            CLAUDE.md and the BFF remediation text agreeing with it.
+          - The BFF middleware rejects a header that does not match the contract's declared shape,
+            with the standard error envelope, and the remediation text matches the rule enforced.
+          - A non-UUID header can no longer reach request_trace_id in audit_high_sensitivity,
+            asserted against a real store.
+          - Portal and BFF agree on the header's shape, so one interaction carries one trace id
+            across both layers.
+      - id: BACKOFFICE-90
+        title: A Q4.5 lineage assertion can pass on a row it is not about (LIMIT 1, no ORDER BY)
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a test-integrity defect in an existing assertion, found while running the
+          integration suite for BACKOFFICE-84. No product question for a discovery run to answer.
+        note: >-
+          packages/db/test/billing-payable-store.int.spec.ts:555-560 asserts the BCBS 239 column
+          lineage for AP dispatch with
+          "SELECT columns FROM lineage_events WHERE table_name = 'billing_tpp_cost_ap_dispatch' LIMIT 1"
+          — no ORDER BY, and no filter on source. That table has THIRTEEN lineage rows after
+          "pnpm db:seed": twelve from billing-payable-store (the emitter under test, carrying
+          response_payload) and one from seed-demo-scenario carrying six columns and no
+          response_payload. Which one LIMIT 1 returns is physical heap order, so the assertion is
+          nondeterministic.
+
+          Both outcomes are wrong. It FAILS when the seed row surfaces first (reproduced locally on
+          a clean database in a full integration run, while the same file passes in isolation), and
+          when it passes it may be reading a row the store under test did not write — a Q4.5
+          lineage gate that can be satisfied by the seed is not a gate.
+
+          Pre-existing and unrelated to BACKOFFICE-84's diff (nothing there touches this table's
+          lineage), and CI is currently green on it, which is precisely why it is filed rather than
+          quietly fixed inside an unrelated story: reaching green by editing a test mid-story is the
+          pattern the test-tripwire and Q1b exist to stop, even when the edit is a strengthening.
+        acceptance:
+          - The assertion scopes to source = billing-payable-store with a deterministic order, so it
+            can only be satisfied by a row the emitter under test wrote.
+          - The suite passes both in isolation and in a full integration run against a freshly
+            seeded database, repeatedly.
+          - Any sibling lineage assertion with the same LIMIT-1-without-ORDER-BY shape is found and
+            given the same treatment — one instance of this is unlikely to be the only one.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +

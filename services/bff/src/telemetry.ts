@@ -43,6 +43,95 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
   }
 }
 
+/**
+ * The CODE LOCATIONS an error came from, without its message.
+ *
+ * A 500 used to log `error_name` and nothing else, so the envelope's promise — "quote the
+ * interaction id to support; it correlates to the server-side log" — resolved to a log line
+ * containing `"error_name": "Error"`. There was no cause anywhere, and diagnosing one meant
+ * temporarily patching the handler to print the error.
+ *
+ * The message is the part that is unsafe: it can quote the offending input, which on this
+ * codebase can be a PSU identifier. Stack FRAMES cannot — they are file paths, line numbers and
+ * function names, fixed at build time and carrying no request data. So the frames are exactly the
+ * diagnosable half, and dropping the first line of `stack` (which is `Name: message`) drops
+ * exactly the unsafe half.
+ *
+ * Frames still pass through redactingLog like any other field, so a path that somehow contained a
+ * PII shape would be masked anyway. Capped because a stack is unbounded and a log line is not.
+ */
+export function errorFrames(error: unknown, limit = 8): string {
+  if (!(error instanceof Error) || typeof error.stack !== 'string') return ''
+  const message = typeof error.message === 'string' ? error.message : ''
+  const lines = error.stack.split('\n')
+  const messageLines = message === '' ? 1 : message.split('\n').length
+
+  // Measure the message out, and VERIFY the head is what V8 would have written — `Name: message`,
+  // or bare `Name` when the message is empty. Where it is not, emit nothing.
+  const head = lines.slice(0, messageLines).join('\n')
+  if (head !== (message === '' ? error.name : `${error.name}: ${message}`)) return ''
+
+  // Then keep ONLY the source location from each frame, never the line's free text.
+  //
+  // This is what makes the result safe rather than merely likely-safe. Every earlier cut emitted
+  // whole lines and tried to decide which lines were trustworthy — first by prefix, then by shape,
+  // then by requiring all of them to match. Each is a judgement about what text is safe to pass
+  // through, and each was defeated by a line contrived to look like a frame:
+  // `at psu_id 999-... in accounts.sql:12:5` satisfies all three.
+  //
+  // Extracting the location inverts that. `path:line:column` cannot carry free text by
+  // construction, so it no longer matters what the rest of the line said or who wrote it — a
+  // hand-written stack contributes a file position or contributes nothing. The function name is
+  // the only thing lost, and a file and line already pinpoint the code it would have named.
+  const locations: string[] = []
+  for (const line of lines.slice(messageLines)) {
+    if (line.trim() === '') continue
+    if (!STACK_FRAME.test(line)) return '' // not a frame at all — the whole stack is untrusted
+    const at = FRAME_LOCATION.exec(line)
+    if (at?.[1]) locations.push(at[1])
+    if (locations.length >= limit) break
+  }
+  return locations.join(' | ')
+}
+
+/**
+ * A line that is structurally a stack frame. Kept as a VALIDATOR — one non-frame line condemns the
+ * whole stack — but no longer the thing that decides what TEXT is emitted, which is the job
+ * FRAME_LOCATION now does.
+ *
+ * `(<anonymous>)` is admitted because V8 genuinely emits it: `at new Promise (<anonymous>)` sits in
+ * any stack that crosses a promise boundary, and rejecting it made the validator discard every
+ * real stack. Found by probing an actual stack rather than reasoning about what one ought to look
+ * like, which is the only way this pattern should ever be widened.
+ */
+const STACK_FRAME = /^\s*at\s+(?:.*:\d+:\d+\)?|.*\(<anonymous>\)|<anonymous>)\s*$/
+
+/**
+ * The source location inside a frame — and only when it is genuinely a MODULE path.
+ *
+ * Extracting the trailing `something:line:column` was still too permissive: a hand-assigned stack
+ * line reading `at John Smith:12:5` yields `Smith:12:5`, which is free text wearing a location's
+ * shape. And the second layer does not cover it — `redactText` masks Emirates-ID, IBAN and email
+ * SHAPES, not names.
+ *
+ * So the path must end in a module extension — `.ts`, `.js`, `.mjs`, `.cjs`, `.tsx`, `.jsx`. That
+ * is not a guess about what prose looks like; it is what a JavaScript stack frame's file path IS.
+ * A name, an account reference, a free-text fragment: none end in `.ts` or `.js`, so none survive,
+ * whoever wrote the stack.
+ *
+ * `node:` internals are deliberately NOT admitted. An earlier cut allowed `node:[^\s()]+`, whose
+ * unbounded tail let `at node:AdaLovelace:12:5` through verbatim — the exact class of hole this
+ * pattern exists to close, reintroduced by the alternative meant to preserve a diagnostic. Node's
+ * own frames are the least useful ones in a stack anyway; the application frames, which are what
+ * anyone actually reads, all end in an extension.
+ *
+ * This is the fourth attempt at this line and the first that constrains the OUTPUT rather than
+ * judging the input. Each earlier one asked "does this look like something safe to emit?" — by
+ * prefix, by shape, by whole-stack validation — and each was answered by a line contrived to look
+ * that way. Naming the small set of things that may be emitted ends the argument.
+ */
+const FRAME_LOCATION = /([^\s()]+\.(?:m|c)?[jt]sx?:\d+:\d+)\)?\s*$/
+
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted
 export function redactingLog(write: (line: string) => void = (l) => console.log(l)) {

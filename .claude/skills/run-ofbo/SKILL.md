@@ -17,6 +17,11 @@ pnpm install
 
 Optional but recommended: a repo-root `.env` (exists in this checkout, never committed) with `DATABASE_URL` (Supabase — must be the IPv4 session pooler host, not the direct host) and `SIM_ADMIN_TOKEN`. With `DATABASE_URL` the BFF runs exactly like the deployed worker (durable Postgres audit/approvals/idempotency); without it, stores are in-memory and the sim's admin endpoint is unguarded — everything still runs.
 
+**The PORTAL requires `DATABASE_URL`.** Sign-in is audit-relevant, so with no audit sink to write
+to the portal refuses to mint a session rather than issue one that leaves no row in the INSERT-only
+trail (BACKOFFICE-84). The BFF and simulator still run without it; the portal will start, but every
+sign-in returns `?error=service_unavailable` until a database is configured.
+
 ## Run (agent path)
 
 ```bash

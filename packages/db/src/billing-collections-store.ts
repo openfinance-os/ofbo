@@ -9,6 +9,7 @@ import type {
   SettlementResidueBreak
 } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
+import { isoDateFromPg } from './pg-date.js'
 import type { LineageSink } from './lineage.js'
 
 export interface StoredDirectCollectionInvoice {
@@ -43,9 +44,9 @@ function digest(value: unknown): string {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`
 }
 
-function isoDate(value: unknown): string {
-  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10)
-}
+/** Invoice dates are calendar dates — read them without a zone conversion (see pg-date.ts).
+ *  A `due_at` read a day early makes an invoice overdue a day early and moves dunning with it. */
+const isoDate = isoDateFromPg
 
 export class PgBillingCollectionsStore {
   private readonly pool: pg.Pool
