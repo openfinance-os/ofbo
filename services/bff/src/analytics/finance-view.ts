@@ -216,6 +216,13 @@ export class FinanceViewService {
       } : null,
       // Same reason: `totals`, `byTpp` and `byProductFamily` were spread straight from the
       // TypeScript shape, so `by_product_family` arrived as `byProductFamily`.
+      //
+      // Not purely a casing fix, though: the shared mapper also emits `period` and `currency` at
+      // report level, which the hand-mapped block did not. That is an ADDITIVE widening of the
+      // response — legal, since `AnalyticsView.data` is `additionalProperties: true`, and an
+      // improvement on the money posture (this block now says which currency its amounts are in;
+      // `collections` still does not). Recorded here rather than left for a reader to discover,
+      // because "casing only" would understate what changed on the wire.
       tpp_profitability: profitability ? profitabilityReportWire(profitability) : null,
       roi_narrative: {
         fee_variance_recovered_milli_fils: assurance?.roiContribution.feeVarianceRecoveredMilliFils ?? 0,

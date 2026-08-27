@@ -5,7 +5,7 @@ import { ScopeDeniedError } from '../src/rbac.js'
 import type { Principal } from '../src/auth.js'
 import type { FeeAccrual } from '@ofbo/db'
 import { emptyMargin, type MarginSummary } from '../src/reconciliation/margin.js'
-import { FAPI_HEADERS } from './helpers.js'
+import { camelCaseKeys, FAPI_HEADERS } from './helpers.js'
 import { aed, type RevenueAssuranceReport } from '@ofbo/billing'
 
 /**
@@ -115,6 +115,17 @@ describe('FinanceViewService — composition', () => {
       settlement_break_count: 1,
       dunning_by_state: { overdue: 1, escalated: 1 }
     }))
+    // BACKOFFICE-87 — pin the collections half AT THE ENDPOINT, not only on the mapper.
+    // `finance-view-wire.spec.ts` asserts `collectionsWire` in isolation and never constructs a
+    // FinanceViewService, so on its own it cannot notice this endpoint dropping the shared mapper.
+    // Without the two assertions below, reverting `collections: collectionsWire(collections)` to
+    // the old hand-mapped block leaves the whole suite green — and `dso_by_tpp` is exactly where
+    // the camelCase shipped (`tppId`, `dsoDays`, `openMilliFils`), which is why the fixture above
+    // supplies a camelCase row.
+    expect((data.collections as { dso_by_tpp: Record<string, unknown>[] }).dso_by_tpp[0]).toEqual({
+      tpp_id: 'TPP-1', dso_days: 18, invoice_count: 2, open_invoice_count: 1, open_milli_fils: 750_000
+    })
+    expect(camelCaseKeys(data.collections), 'camelCase keys reached the wire').toEqual([])
     const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
     const collectionPanel = sections.find((section) => section.title === 'Collections & Net Settlement')
     expect(collectionPanel?.stats).toEqual(expect.arrayContaining([
@@ -170,7 +181,7 @@ describe('FinanceViewService — composition', () => {
       totals: expect.objectContaining({ receivable_milli_fils: aed(100), profit_milli_fils: aed(87) }),
       reconciliation: { balanced: true, delta_milli_fils: 0 }
     }))
-    expect(JSON.stringify(data.tpp_profitability)).not.toMatch(/[a-z][A-Z]/) // no camelCase, any depth
+    expect(camelCaseKeys(data.tpp_profitability), 'camelCase keys reached the wire').toEqual([])
     const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
     expect(sections.find((section) => section.title === 'TPP Profitability')?.stats).toEqual(expect.arrayContaining([
       { label: 'Receivables', value: 'AED 100.00' },

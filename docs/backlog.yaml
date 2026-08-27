@@ -259,7 +259,6 @@ milestones:
   # silent; then STD-02..04, the IG v5.0 re-baseline the PRD promised at BD-16 and never filed; then
   # STD-05..08, the fidelity chain.
   - name: STD
-      - { id: BACKOFFICE-88, title: "Money amounts ship as bare *_milli_fils integers instead of the Money envelope", status: pending, note: "CLAUDE.md binds money on the wire to integer minor units plus ISO 4217 ({ amount, currency }). GET /back-office/billing/console and GET /back-office/analytics/finance-view emit amounts as bare integers named *_milli_fils with no currency - open_milli_fils, settlement_expected_net_milli_fils, settlement_received_milli_fils, settlement_residue_milli_fils, and the whole profitability amount set (receivable/hub_cost/lfi_cost/liability_provision/tpp_aas_margin/profit). The spec CARVE-OUT does not cover them: it is scoped to RATES and THRESHOLDS and says so in as many words at specs/backoffice-openapi.yaml unit_price_milli_fils ('a unit RATE in integer milli-fils, NOT a money amount') and tolerance_milli_fils. Milli-fils exist so a 2.5-fil scheme tariff survives without rounding the price away; an accrued balance has no such need. NOT folded into BACKOFFICE-87 deliberately - that story removed a camelCase leak with no consumer change, whereas this alters a live response shape the portal reads (apps/portal/src/lib/billing-console.ts) and both AnalyticsView schemas are additionalProperties:true, so the contract permits the current shape and must be tightened FIRST via the spec-change skill: spec, then tests, then code and the portal readers together. Surfaced by the advisory contract-conformance reviewer on PR 341." }
     items:
       - id: STD-09
         title: Liability and revoke-SLA completeness — fail loud, one source, cover the fraud path
@@ -721,6 +720,58 @@ milestones:
             source, so the codes cannot drift between fixtures, tests and adapters.
           - The V2.2 paymentRail obligation and its Tier 2 dates are recorded against this item so the
             forward requirement has a delivery hook rather than living only in a research doc.
+      - id: BACKOFFICE-88
+        title: Money amounts ship as bare *_milli_fils integers and *_aed floats instead of the Money envelope
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a new feature — a conformance defect against an already-binding convention
+          (CLAUDE.md §"API conventions"), on endpoints that already shipped. HG-0007 gates the
+          entry of NEW feature-bearing work so it traces to an evidenced problem; the problem
+          here is evidenced by the convention itself and by the advisory contract-conformance
+          reviewer that raised it on PR 341 and again on PR 343. There is no product question
+          for a discovery run to answer.
+        note: >-
+          CLAUDE.md binds money on the wire to integer minor units plus ISO 4217
+          ({ amount, currency }). Two endpoints break it in two different directions.
+
+          (a) BARE INTEGERS, no currency. GET /back-office/billing/console and
+          GET /back-office/analytics/finance-view emit amounts named *_milli_fils with no
+          currency alongside — collections.open_milli_fils, settlement_expected_net_milli_fils,
+          settlement_received_milli_fils, settlement_residue_milli_fils, dso_by_tpp[].open_milli_fils
+          (services/bff/src/billing/wire.ts:170-181), the whole profitability amount set
+          receivable/hub_cost/lfi_cost/liability_provision/tpp_aas_margin/profit (wire.ts:88-96),
+          and reconciliation.delta_milli_fils (wire.ts:115).
+
+          (b) DECIMAL FLOATS in MAJOR units — the worse half, and the half the first draft of this
+          item missed. profit_aed (wire.ts:105) is computed as profitMilliFils / MF_PER_AED at
+          packages/billing/src/profitability.ts:165, a float division, on both by_tpp[] and
+          by_product_family[]. Its siblings are the same class: roi_narrative.fee_variance_recovered_aed
+          (services/bff/src/analytics/finance-view.ts:222) and the revenue_assurance *_aed fields
+          (wire.ts:211,214,217,257). Float money is the failure mode the minor-unit convention
+          exists to prevent, so these belong in scope explicitly rather than being inferred from
+          "the milli-fils fields".
+
+          The spec CARVE-OUT does not reach any of them: it is scoped to RATES and THRESHOLDS and
+          says so in as many words — unit_price_milli_fils at specs/backoffice-openapi.yaml:4033-4039
+          ("A unit RATE in integer milli-fils …, NOT a money amount. The binding money convention
+          governs amounts") and tolerance_milli_fils at :4155-4158 ("a threshold rather than an
+          amount"). Milli-fils exist so a 2.5-fil scheme tariff survives without rounding the price
+          away; an accrued receivable balance has no such need.
+
+          NOT folded into BACKOFFICE-87 deliberately. That story removed a camelCase leak with no
+          consumer change; this alters a live response shape the portal reads
+          (apps/portal/src/lib/billing-console.ts). Both AnalyticsView schemas are
+          additionalProperties:true (spec:3287-3297), so the current shape is contract-LEGAL and
+          convention-illegal — the contract must be tightened FIRST via the spec-change skill:
+          spec, then tests, then code and the portal readers together.
+        acceptance:
+          - Spec-only PR first — the two response bodies name their money fields explicitly with the
+            Money schema, so the shape stops being additionalProperties-legal by omission.
+          - Every amount listed above ships as { amount, currency } in integer minor units; no
+            *_aed float survives the change, including the roi_narrative and revenue_assurance ones.
+          - The portal readers move in the same PR as the code, so no screen reads a field that no
+            longer exists.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +

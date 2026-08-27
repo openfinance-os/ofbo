@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ProfitabilityAmounts, ProfitabilityReport } from '@ofbo/billing'
 import { collectionsWire, profitabilityReportWire } from '../src/billing/wire.js'
+import { camelCaseKeys } from './helpers.js'
 
 /**
  * BACKOFFICE-87 — snake_case is a binding convention, and two endpoints disagreed about it.
@@ -19,20 +20,6 @@ import { collectionsWire, profitabilityReportWire } from '../src/billing/wire.js
  * These assert the MAPPERS, which both endpoints now share — one shape, one place to change it.
  */
 
-const CAMEL = /[a-z][A-Z]/
-
-/** Every key at every depth — a nested camelCase key is the one that slipped through before. */
-function allKeys(value: unknown, acc: string[] = []): string[] {
-  if (Array.isArray(value)) {
-    for (const item of value) allKeys(item, acc)
-  } else if (value && typeof value === 'object') {
-    for (const [k, v] of Object.entries(value)) {
-      acc.push(k)
-      allKeys(v, acc)
-    }
-  }
-  return acc
-}
 
 describe('finance-view / billing-console share one wire shape', () => {
   it('collectionsWire emits snake_case at every depth, including inside dso_by_tpp', () => {
@@ -49,8 +36,7 @@ describe('finance-view / billing-console share one wire shape', () => {
       ]
     })
 
-    const offenders = allKeys(wire).filter((k) => CAMEL.test(k))
-    expect(offenders, 'camelCase keys reached the wire').toEqual([])
+    expect(camelCaseKeys(wire), 'camelCase keys reached the wire').toEqual([])
     // The nested row specifically — this is the one that shipped as `tppId`.
     expect(Object.keys((wire.dso_by_tpp as Record<string, unknown>[])[0]!)).toContain('tpp_id')
   })
@@ -76,8 +62,7 @@ describe('finance-view / billing-console share one wire shape', () => {
     }
     const wire = profitabilityReportWire(report)
 
-    const offenders = allKeys(wire).filter((k) => CAMEL.test(k))
-    expect(offenders, 'camelCase keys reached the wire').toEqual([])
+    expect(camelCaseKeys(wire), 'camelCase keys reached the wire').toEqual([])
     expect(Object.keys(wire)).toContain('by_product_family')
   })
 })
