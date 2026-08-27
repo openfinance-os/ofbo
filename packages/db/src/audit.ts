@@ -78,6 +78,18 @@ export interface AuthSinkEvent {
   superadmin_marker?: boolean
   approval_request_id?: string
   justification?: string
+  /**
+   * The HTTP status the CALLER actually received, when the emitter cannot infer it.
+   *
+   * `record()` derives the status from `event_type` (401 for a refusal, 403 for a scope denial,
+   * 200 otherwise), which is exactly right for the BFF, whose `deny()` returns those codes. It is
+   * wrong for a browser-facing caller: the portal's sign-in answers a form POST with a 303
+   * redirect either way, so an inferred 401 would put a status in the INSERT-only trail that no
+   * caller ever received — and the spec is explicit that `response_status` is "the HTTP status
+   * returned to the caller" (it added the `0` literal for actors that issue no HTTP response at
+   * all, precisely to stop this). A caller that knows its own status says so.
+   */
+  response_status?: number
 }
 
 export interface AuditEmitterConfig {
@@ -173,8 +185,11 @@ export class PgAuditEmitter {
         ...(event.approval_request_id ? { approval_request_id: event.approval_request_id } : {}),
         ...(event.justification ? { justification: event.justification } : {})
       },
+      // The caller's own status wins; the event_type mapping is the fallback for callers whose
+      // response codes it actually describes (see AuthSinkEvent.response_status).
       response_status:
-        event.event_type === 'signin_failure' ? 401 : event.event_type === 'scope_denied' ? 403 : 200
+        event.response_status
+        ?? (event.event_type === 'signin_failure' ? 401 : event.event_type === 'scope_denied' ? 403 : 200)
     })
   }
 

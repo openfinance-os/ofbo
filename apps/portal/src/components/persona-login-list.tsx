@@ -1,4 +1,4 @@
-import type { PersonaLogin } from '../lib/portal'
+import type { PersonaLogin, SignInFailureReason } from '../lib/portal'
 import { PERSONA_GUIDE, CAPABILITIES } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
 import { BuiltWithHarness } from './built-with-harness'
@@ -20,9 +20,13 @@ import { BuiltWithHarness } from './built-with-harness'
  * causes are genuinely different actions: retry, or pick a different role.
  *
  * An unrecognised reason still falls through to the raw string rather than being swallowed — a
- * new reason must be visible, not silently rendered as a blank alert.
+ * new reason must be visible, not silently rendered as a blank alert. But falling through is the
+ * LAST line of defence, not the design: the map is keyed on `SignInFailureReason`, the same union
+ * the route produces, so adding a reason without a message here is a compile error rather than a
+ * slug on screen. The two vocabularies were independent literals before, which is how
+ * `service_unavailable` came to be declared twice with nothing tying them together.
  */
-const SIGNIN_ERRORS: Record<string, string> = {
+const SIGNIN_ERRORS: Record<SignInFailureReason, string> = {
   service_unavailable:
     'Sign-in is temporarily unavailable — the sign-in could not be recorded to the audit trail, so no session was created. Please try again in a moment.',
   invalid_token: 'Sign-in failed: that token was not recognised.',
@@ -101,7 +105,11 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
         </p>
         {error ? (
           <p role="alert" className="signin-error mt-3" data-testid="signin-error">
-            {SIGNIN_ERRORS[error] ?? `Sign-in failed: ${error}`}
+            {/* `error` arrives from the query string, so it is an arbitrary string at runtime — the
+                cast narrows it for the lookup only, and the `??` below is what actually handles a
+                value outside the union. The map's exhaustive typing is about the PRODUCER side:
+                a new reason must gain a message here or the build fails. */}
+            {SIGNIN_ERRORS[error as SignInFailureReason] ?? `Sign-in failed: ${error}`}
           </p>
         ) : null}
         <ul className="mt-5 space-y-2" data-testid="persona-list">

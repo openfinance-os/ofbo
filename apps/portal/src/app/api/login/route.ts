@@ -2,7 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { redactingLog, errorFrames } from '@ofbo/bff/telemetry'
 import { TOKEN_COOKIE } from '../../../lib/cookies'
-import { recordSignIn, recordSignInFailure, SignInError, verifyAndMint } from '../../../lib/portal'
+import {
+  recordSignIn,
+  recordSignInFailure,
+  SignInError,
+  SIGN_IN_RESPONSE_STATUS,
+  verifyAndMint,
+  type SignInFailureReason
+} from '../../../lib/portal'
 
 /** The sanctioned operational sink — masks by key and by shape before anything is written. */
 const signInLog = redactingLog()
@@ -62,11 +69,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       // about afterwards and the one an attacker generates in volume — a trail holding who got in
       // but not who was turned away answers neither. Awaited so the row lands before the redirect,
       // but not allowed to change the outcome: the sign-in is already refused.
-      await recordSignInFailure(e.reason, traceId, null)
+      // The persona, when the refusal happened after the token resolved to one. Passing `null`
+      // unconditionally wrote `acting_persona: 'unknown'` for every refusal, including an
+      // `unknown_persona` rejection — a §2 scope-matrix event whose whole subject is WHICH persona
+      // was refused — while the BFF records the real persona for the identical reasons.
+      await recordSignInFailure(e.reason, traceId, e.persona)
     }
     // Named for what the operator can act on, not for the internal cause — the reason string
     // reaches the sign-in screen, so it must carry no detail of the underlying error.
-    const reason = authFailure ? e.reason : 'service_unavailable'
+    const reason: SignInFailureReason = authFailure ? e.reason : 'service_unavailable'
     if (!authFailure) {
       // The cause is genuinely useful and genuinely unsafe to echo, so it goes to the server log
       // correlated by trace id, and never into the redirect.
@@ -88,7 +99,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     // diagnosable from the server log, and this header is what correlates the screen the operator
     // is looking at with the line that names the cause. Telling them to quote a trace id and then
     // omitting it from the very response that carries the error was the gap.
-    const failed = NextResponse.redirect(new URL(`/?error=${reason}`, req.url), 303)
+    const failed = NextResponse.redirect(new URL(`/?error=${reason}`, req.url), SIGN_IN_RESPONSE_STATUS)
     failed.headers.set('x-fapi-interaction-id', traceId)
     return failed
   }
@@ -112,12 +123,12 @@ export async function POST(req: NextRequest): Promise<Response> {
       acting_persona: principal.persona,
       reason: 'no audit sink resolved — refusing to mint a session that leaves no regulated record'
     })
-    const refused = NextResponse.redirect(new URL('/?error=service_unavailable', req.url), 303)
+    const refused = NextResponse.redirect(new URL('/?error=service_unavailable', req.url), SIGN_IN_RESPONSE_STATUS)
     refused.headers.set('x-fapi-interaction-id', traceId)
     return refused
   }
 
-  const res = NextResponse.redirect(new URL('/dashboard', req.url), 303)
+  const res = NextResponse.redirect(new URL('/dashboard', req.url), SIGN_IN_RESPONSE_STATUS)
   res.cookies.set(TOKEN_COOKIE, token, {
     httpOnly: true,
     secure: true,

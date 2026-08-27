@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IdentityProviderPort } from '@ofbo/ports'
+import type { AuthSinkEvent } from '@ofbo/db'
 import {
   listPersonaLogins,
   recentAudit,
   recordSignIn,
+  recordSignInFailure,
   SignInError,
   verifyAndMint,
   type AuditSink,
@@ -80,6 +82,36 @@ describe('verifyAndMint', () => {
   it('rejects a token the IdP will not verify', async () => {
     await expect(verifyAndMint('garbage', { idp })).rejects.toMatchObject({ reason: 'invalid_token' })
   })
+
+  /**
+   * BACKOFFICE-84 — the refusal must name the persona it refused, when it knows one.
+   *
+   * `recordSignInFailure` was called with `null` for every failure, so the audit row said
+   * `acting_persona: 'unknown'` even for `unknown_persona` — a §2 scope-matrix event whose whole
+   * subject is WHICH persona was turned away. The BFF records the real persona for the identical
+   * refusals (services/bff/src/auth.ts), so two callers were populating the same spec field
+   * differently for the same event class. The information was never missing; `SignInError` just
+   * did not carry it.
+   */
+  it('carries the persona on refusals that got far enough to establish one', async () => {
+    await expect(verifyAndMint('demo-token:ghost', { idp })).rejects.toMatchObject({
+      reason: 'unknown_persona',
+      persona: 'ghost-persona'
+    })
+    await expect(verifyAndMint('demo-token:no-mfa', { idp })).rejects.toMatchObject({
+      reason: 'mfa_not_satisfied',
+      persona: 'risk-analyst'
+    })
+  })
+
+  it('carries no persona when the token never resolved to one', async () => {
+    // `invalid_token` establishes nothing. Echoing an unverified subject into an INSERT-only trail
+    // is exactly what the 'unknown' placeholder exists to prevent — the absence is the fact here.
+    await expect(verifyAndMint('garbage', { idp })).rejects.toMatchObject({
+      reason: 'invalid_token',
+      persona: null
+    })
+  })
 })
 
 describe('listPersonaLogins', () => {
@@ -108,7 +140,11 @@ describe('recordSignIn', () => {
         acting_principal: 'demo:risk-analyst',
         acting_persona: 'risk-analyst',
         trace_id: 'trace-123',
-        superadmin_marker: false
+        superadmin_marker: false,
+        // The status the BROWSER actually received. Without it the emitter infers 200 from the
+        // event type, and a sign-in is a 303 to /dashboard — a status no caller ever got, written
+        // into a trail with no deletion path.
+        response_status: 303
       })
     )
   })
@@ -129,6 +165,29 @@ describe('recordSignIn', () => {
       recordSignIn(principal, 'trace-123', { auditSink: { record: async (e) => { written.push(e) } } })
     ).resolves.toBe(true)
     expect(written).toHaveLength(1)
+  })
+
+  /**
+   * BACKOFFICE-84 — the failure row must record the persona and the real response status.
+   *
+   * The emitter derives `response_status` from `event_type` (401 for `signin_failure`), which is
+   * correct for the BFF, whose `deny()` returns one. This route answers a form POST with a 303 in
+   * every outcome, so the inferred 401 described a response nobody received — and the spec is
+   * explicit that the field is "the HTTP status returned to the caller".
+   */
+  it('records the failure with the refused persona and the status the caller received', async () => {
+    const written: AuthSinkEvent[] = []
+    await recordSignInFailure('unknown_persona', 'trace-456', 'ghost-persona', {
+      auditSink: { record: async (e) => { written.push(e) } }
+    })
+    expect(written).toHaveLength(1)
+    expect(written[0]).toMatchObject({
+      event_type: 'signin_failure',
+      acting_principal: 'unknown', // no principal was established — that is what failed
+      acting_persona: 'ghost-persona',
+      reason: 'unknown_persona',
+      response_status: 303
+    })
   })
 })
 

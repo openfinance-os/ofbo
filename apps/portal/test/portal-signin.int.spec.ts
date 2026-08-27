@@ -56,14 +56,21 @@ describe('portal sign-in against a real audit trail', () => {
 
     // `reason` is carried inside request_body_redacted, which is where PgAuditEmitter puts it.
     const row = await admin.query(
-      `SELECT event_type, request_body_redacted, response_status FROM audit_high_sensitivity
+      `SELECT event_type, request_body_redacted, response_status, acting_persona FROM audit_high_sensitivity
         WHERE request_trace_id = $1 AND event_type = 'signin_failure'`,
       [trace]
     )
     expect(row.rows).toHaveLength(1)
     expect(row.rows[0].request_body_redacted.reason).toBe('invalid_token')
-    // The store maps a signin_failure to 401 — the refusal is recorded as one.
-    expect(row.rows[0].response_status).toBe(401)
+    // The status the BROWSER received, which is the 303 asserted above — not the 401 the emitter
+    // infers from `signin_failure` for the BFF, whose `deny()` genuinely returns one. The spec
+    // defines `response_status` as "the HTTP status returned to the caller", and this trail is
+    // INSERT-only: a status no caller received cannot be corrected later.
+    expect(res.status).toBe(303)
+    expect(row.rows[0].response_status).toBe(303)
+    // `invalid_token` establishes no persona, so there is none to record — the placeholder here
+    // is the absence of a fact, not a lost one.
+    expect(row.rows[0].acting_persona).toBe('unknown')
   }, 60_000)
 
   it('mints the session AND writes the High-class audit row', async () => {
@@ -82,11 +89,14 @@ describe('portal sign-in against a real audit trail', () => {
 
     // The row the session is not allowed to exist without.
     const row = await admin.query(
-      `SELECT event_type, acting_persona FROM audit_high_sensitivity
+      `SELECT event_type, acting_persona, response_status FROM audit_high_sensitivity
         WHERE request_trace_id = $1 AND event_type = 'signin_success'`,
       [TRACE]
     )
     expect(row.rows).toHaveLength(1)
     expect(row.rows[0].acting_persona).toBe('operations-analyst')
+    // Same rule on the success path: a sign-in is a 303 to /dashboard, never the 200 the event
+    // type would otherwise imply.
+    expect(row.rows[0].response_status).toBe(303)
   }, 60_000)
 })

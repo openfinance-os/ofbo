@@ -104,8 +104,42 @@ export function resetAuditPools(): void {
   cachedSource = undefined
 }
 
+/**
+ * The reason vocabulary the sign-in screen renders — ONE declaration.
+ *
+ * These strings are produced here and consumed by `persona-login-list.tsx`, which maps each to
+ * the sentence an operator reads. When the two were independent literals, adding a reason and
+ * forgetting its message was a silent fall-through to the raw slug on screen; typing the message
+ * map as `Record<SignInFailureReason, string>` makes that a compile error instead.
+ *
+ * `service_unavailable` is not a `SignInError` — it is what the route reports when the failure was
+ * INFRASTRUCTURE rather than the credential, which is the distinction this story exists to make.
+ */
+export type SignInAuthReason = 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona'
+export type SignInFailureReason = SignInAuthReason | 'service_unavailable'
+
+/**
+ * Every outcome of POST /api/login is a 303 redirect — to the dashboard on success, back to the
+ * sign-in screen with a reason on failure. Declared once so the audit rows and the route cannot
+ * disagree about what the caller received.
+ */
+export const SIGN_IN_RESPONSE_STATUS = 303
+
 export class SignInError extends Error {
-  constructor(public readonly reason: 'invalid_token' | 'mfa_not_satisfied' | 'unknown_persona') {
+  /**
+   * `persona` is carried when the refusal happened AFTER the token resolved to one — an
+   * unsatisfied MFA, a persona outside the §2 matrix. The audit row then names the persona that
+   * was turned away instead of the `'unknown'` placeholder, which is what the BFF already records
+   * for the identical refusals. An `unknown_persona` refusal is a scope-matrix event; a trail that
+   * does not say which persona it was answers nobody's question about it.
+   *
+   * It stays null for `invalid_token`, where no persona was ever established — echoing an
+   * unverified subject into an INSERT-only trail is the thing the placeholder exists to prevent.
+   */
+  constructor(
+    public readonly reason: SignInAuthReason,
+    public readonly persona: string | null = null
+  ) {
     super(reason)
     this.name = 'SignInError'
   }
@@ -129,9 +163,9 @@ export async function verifyAndMint(token: string, deps: PortalDeps = {}): Promi
   } catch {
     throw new SignInError('invalid_token')
   }
-  if (!claims.mfa) throw new SignInError('mfa_not_satisfied')
+  if (!claims.mfa) throw new SignInError('mfa_not_satisfied', claims.persona)
   const scopes = mintScopes(claims.persona)
-  if (scopes.length === 0) throw new SignInError('unknown_persona')
+  if (scopes.length === 0) throw new SignInError('unknown_persona', claims.persona)
   return {
     subject: claims.subject,
     persona: claims.persona,
@@ -184,7 +218,11 @@ export async function recordSignInFailure(
       acting_persona: persona,
       reason,
       trace_id: traceId,
-      superadmin_marker: false
+      superadmin_marker: false,
+      // The status the BROWSER received, not the one the event type implies. This route answers a
+      // form POST with a 303 in every outcome; the emitter's default would stamp 401 on a response
+      // no caller ever got, into a trail with no deletion path.
+      response_status: SIGN_IN_RESPONSE_STATUS
     })
   } catch (e) {
     signInLog('signin_failure_unaudited', {
@@ -221,7 +259,9 @@ export async function recordSignIn(principal: PortalPrincipal, traceId: string, 
     acting_persona: principal.persona,
     reason: null,
     trace_id: traceId,
-    superadmin_marker: principal.superadmin
+    superadmin_marker: principal.superadmin,
+    // Same reason as the failure path: a successful sign-in is a 303 to /dashboard, not a 200.
+    response_status: SIGN_IN_RESPONSE_STATUS
   })
   return true
 }
