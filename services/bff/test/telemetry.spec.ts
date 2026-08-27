@@ -89,8 +89,10 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       const frames = errorFrames(new Error(`lookup failed for ${psu}`))
       expect(frames).not.toContain(psu)
       expect(frames).not.toContain('lookup failed')
-      expect(frames).toContain('at ')
-      expect(frames).toContain('telemetry.spec')
+      // Bare `path:line:column`, with no `at ` and no function name — the free text a frame line
+      // carries is never emitted, only its location.
+      expect(frames).not.toContain('at ')
+      expect(frames).toMatch(/telemetry\.spec\.ts:\d+:\d+/)
     })
 
     /**
@@ -109,8 +111,8 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       expect(frames).not.toContain(psu)
       expect(frames).not.toContain('detail:')
       expect(frames).not.toContain('point of conflict')
-      // …while still yielding the real frames, which is the whole reason the function exists.
-      expect(frames).toContain('telemetry.spec')
+      // …while still yielding the real locations, which is the whole reason the function exists.
+      expect(frames).toMatch(/telemetry\.spec\.ts:\d+:\d+/)
     })
 
     /**
@@ -128,7 +130,7 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       expect(frames).not.toContain(psu)
       expect(frames).not.toContain('accounts.sql')
       expect(frames).not.toContain('insert failed')
-      expect(frames).toContain('telemetry.spec')
+      expect(frames).toMatch(/telemetry\.spec\.ts:\d+:\d+/)
     })
 
     /**
@@ -160,16 +162,29 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
      * is empty, so those errors fell through to the shape filter alone — the exact guard this
      * file documents as fallible.
      */
-    it('verifies the precondition even when the message is empty', () => {
-      const psu = '999-1990-1234567-1'
+    /**
+     * An empty message is the weakest position the head check can be in — it degenerates to
+     * `head === error.name`, which a hand-written stack can satisfy trivially. So this asserts
+     * what holds even there: whatever free text the stack's lines carry, only their LOCATION is
+     * emitted.
+     *
+     * An earlier cut of this test asserted the opposite — that the contrived line's text SHOULD
+     * appear — which documented the hole as intended behaviour instead of closing it. Asserting
+     * that an identifier-shaped literal reaches the log is the wrong assertion to write down, and
+     * it is why the location extraction replaced line-level filtering entirely.
+     */
+    it('emits only the location even when the message is empty', () => {
+      const marker = 'caller-controlled-text'
       const error = new Error()
-      error.stack = `Error\n  at psu_id ${psu} in accounts.sql:12:5`
-      expect(errorFrames(error)).toContain('accounts.sql') // head matches: frames are trusted
-      // …but a stack whose head is NOT what V8 would write is refused outright.
+      error.stack = `Error\n  at ${marker} in accounts.sql:12:5`
+      const frames = errorFrames(error)
+      expect(frames).not.toContain(marker)
+      expect(frames).toBe('accounts.sql:12:5')
+
+      // …and a stack whose head is not what V8 would write is refused outright.
       const rewritten = new Error()
-      rewritten.stack = `  at psu_id ${psu} in accounts.sql:12:5`
+      rewritten.stack = `  at ${marker} in accounts.sql:12:5`
       expect(errorFrames(rewritten)).toBe('')
-      expect(errorFrames(rewritten)).not.toContain(psu)
     })
 
     it('caps the frame count so one error cannot flood the log', () => {

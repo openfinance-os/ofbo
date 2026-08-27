@@ -17,6 +17,18 @@ pnpm install
 
 Optional but recommended: a repo-root `.env` (exists in this checkout, never committed) with `DATABASE_URL` (Supabase — must be the IPv4 session pooler host, not the direct host) and `SIM_ADMIN_TOKEN`. With `DATABASE_URL` the BFF runs exactly like the deployed worker (durable Postgres audit/approvals/idempotency); without it, stores are in-memory and the sim's admin endpoint is unguarded — everything still runs.
 
+**Running the PORTAL without `DATABASE_URL` needs `OFBO_ALLOW_UNAUDITED_SIGNIN=true`.** Sign-in is
+audit-relevant, so with no audit sink to write to the portal refuses to mint a session rather than
+issue one that leaves no row in the INSERT-only trail (BACKOFFICE-84). That refusal is the correct
+default — an environment that merely loses `DATABASE_URL` stops issuing sessions instead of issuing
+untraceable ones — so the no-database mode is an explicit opt-in:
+
+```bash
+OFBO_ALLOW_UNAUDITED_SIGNIN=true PORT=3000 pnpm --filter @ofbo/portal exec next dev
+```
+
+Never set it in a deployed environment. With `DATABASE_URL` present it is unnecessary and ignored.
+
 ## Run (agent path)
 
 ```bash

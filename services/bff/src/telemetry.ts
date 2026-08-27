@@ -66,54 +66,51 @@ export function errorFrames(error: unknown, limit = 8): string {
   const lines = error.stack.split('\n')
   const messageLines = message === '' ? 1 : message.split('\n').length
 
-  // VERIFY the precondition instead of assuming it, and verify it for EVERY error rather than
-  // only the ones with a message. Measuring the message out is sound only while `stack` actually
-  // opens with what V8 puts there — `Name: message`, or bare `Name` when the message is empty.
-  // A re-thrown error with a rewritten stack, or a non-V8 runtime, breaks that, and then there is
-  // no trustworthy guard left: the shape filter alone admits `at psu_id 999-… in accounts.sql:12:5`.
-  //
-  // Compared EXACTLY, not with `includes`, and with no short-circuit for the empty message — an
-  // earlier cut guarded this with `message !== '' && …`, which meant an empty-message error never
-  // had its precondition checked at all and fell through to the shape filter on its own.
+  // Measure the message out, and VERIFY the head is what V8 would have written — `Name: message`,
+  // or bare `Name` when the message is empty. Where it is not, emit nothing.
   const head = lines.slice(0, messageLines).join('\n')
   if (head !== (message === '' ? error.name : `${error.name}: ${message}`)) return ''
 
-  // Every remaining line must BE a frame — not "keep the ones that look like frames".
+  // Then keep ONLY the source location from each frame, never the line's free text.
   //
-  // Filtering leaves the shape heuristic deciding, line by line, what to admit. Validating puts it
-  // in the opposite position: one line that is not a frame condemns the whole stack, and nothing
-  // is emitted. That closes the empty-message case, where the head check degenerates to
-  // `head === error.name` and a hand-rewritten stack could otherwise walk its remaining lines past
-  // the filter one at a time.
-  const rest = lines.slice(messageLines).filter((line) => line.trim() !== '')
-  if (rest.length === 0 || !rest.every((line) => STACK_FRAME.test(line))) return ''
-
-  return rest.slice(0, limit).map((line) => line.trim()).join(' | ')
+  // This is what makes the result safe rather than merely likely-safe. Every earlier cut emitted
+  // whole lines and tried to decide which lines were trustworthy — first by prefix, then by shape,
+  // then by requiring all of them to match. Each is a judgement about what text is safe to pass
+  // through, and each was defeated by a line contrived to look like a frame:
+  // `at psu_id 999-... in accounts.sql:12:5` satisfies all three.
+  //
+  // Extracting the location inverts that. `path:line:column` cannot carry free text by
+  // construction, so it no longer matters what the rest of the line said or who wrote it — a
+  // hand-written stack contributes a file position or contributes nothing. The function name is
+  // the only thing lost, and a file and line already pinpoint the code it would have named.
+  const locations: string[] = []
+  for (const line of lines.slice(messageLines)) {
+    if (line.trim() === '') continue
+    if (!STACK_FRAME.test(line)) return '' // not a frame at all — the whole stack is untrusted
+    const at = FRAME_LOCATION.exec(line)
+    if (at?.[1]) locations.push(at[1])
+    if (locations.length >= limit) break
+  }
+  return locations.join(' | ')
 }
 
 /**
- * Two independent guards, because one of them is a heuristic and the other is not.
+ * A line that is structurally a stack frame. Kept as a VALIDATOR — one non-frame line condemns the
+ * whole stack — but no longer the thing that decides what TEXT is emitted, which is the job
+ * FRAME_LOCATION now does.
  *
- * The message is REMOVED BY MEASUREMENT. `stack` opens with `Name: <message>`, so the message
- * occupies exactly `message.split('\n').length` leading lines and those lines are dropped without
- * inspecting them. That is arithmetic, not pattern-matching, and it cannot be defeated by what the
- * message happens to contain.
- *
- * Which matters, because the obvious alternatives can be. Filtering for lines that start with
- * `at ` keeps a continuation line reading `  at the point of conflict`. Tightening that to require
- * a trailing `:line:column` keeps `  at psu_id 999-… in accounts.sql:12:5` — and driver and parser
- * errors quote source positions in exactly that form, which is precisely the class of error that
- * also quotes the offending parameter. Any shape filter is a guess about what a message cannot
- * look like, and this function exists to keep message content out of the operational log.
- *
- * The shape check is a VALIDATOR, not a filter, and that distinction is the whole of its safety.
- * A filter leaves the heuristic deciding line by line what to admit — so a stack it partly
- * recognises still emits its recognised half. A validator inverts it: one line that is not a frame
- * condemns the entire stack and nothing is emitted at all. Combined with the head check, a line
- * can only reach the log when the message was measured out AND every surviving line is a frame.
- * Where either fails, `errorFrames` returns nothing; losing a diagnostic is the cheap side.
+ * `(<anonymous>)` is admitted because V8 genuinely emits it: `at new Promise (<anonymous>)` sits in
+ * any stack that crosses a promise boundary, and rejecting it made the validator discard every
+ * real stack. Found by probing an actual stack rather than reasoning about what one ought to look
+ * like, which is the only way this pattern should ever be widened.
  */
 const STACK_FRAME = /^\s*at\s+(?:.*:\d+:\d+\)?|.*\(<anonymous>\)|<anonymous>)\s*$/
+
+/**
+ * The source location inside a frame — the trailing `path:line:column` and nothing around it.
+ * A native frame (`at new Promise (<anonymous>)`) has none and contributes nothing.
+ */
+const FRAME_LOCATION = /([^\s(]+:\d+:\d+)\)?\s*$/
 
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted
