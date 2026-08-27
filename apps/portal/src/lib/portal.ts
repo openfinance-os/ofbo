@@ -145,12 +145,13 @@ export async function verifyAndMint(token: string, deps: PortalDeps = {}): Promi
  * sign-in, exactly as the BFF auth middleware treats it; a failed write fails the sign-in rather
  * than producing an unaudited session.
  *
- * ONE case is not covered by that sentence, and it is stated here rather than left implied: when
- * no sink is configured at all there is no write to fail, so the sign-in proceeds unaudited. That
- * is deliberate for local dev without a database, and it is announced rather than silent — see
- * below. A deployment that reaches this branch is misconfigured.
+ * Returns whether the event was actually WRITTEN. A failed write throws and fails the sign-in; an
+ * absent sink cannot throw, so it returns false and the caller decides — which is how the one
+ * remaining path to an unaudited session is closed. See `handleSignIn`, which refuses to mint a
+ * session on a false return unless a deployment has explicitly opted into running without a
+ * database.
  */
-export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<void> {
+export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<boolean> {
   const sink = resolveAuditSink(deps)
   if (!sink) {
     // An absent sink still issues a session, so this is the one path that produces the unaudited
@@ -171,7 +172,7 @@ export async function recordSignIn(principal: PortalPrincipal, traceId: string, 
         ? 'the caller injected a null audit sink — the sign-in was NOT written to the audit trail'
         : 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
     })
-    return
+    return false
   }
   await sink.record({
     event_type: 'signin_success',
@@ -181,6 +182,7 @@ export async function recordSignIn(principal: PortalPrincipal, traceId: string, 
     trace_id: traceId,
     superadmin_marker: principal.superadmin
   })
+  return true
 }
 
 /** Recent High-class events for this principal — the "audit visible" surface. */

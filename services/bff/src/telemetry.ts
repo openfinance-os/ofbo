@@ -78,12 +78,17 @@ export function errorFrames(error: unknown, limit = 8): string {
   const head = lines.slice(0, messageLines).join('\n')
   if (head !== (message === '' ? error.name : `${error.name}: ${message}`)) return ''
 
-  return lines
-    .slice(messageLines)
-    .filter((line) => STACK_FRAME.test(line))
-    .slice(0, limit)
-    .map((line) => line.trim())
-    .join(' | ')
+  // Every remaining line must BE a frame — not "keep the ones that look like frames".
+  //
+  // Filtering leaves the shape heuristic deciding, line by line, what to admit. Validating puts it
+  // in the opposite position: one line that is not a frame condemns the whole stack, and nothing
+  // is emitted. That closes the empty-message case, where the head check degenerates to
+  // `head === error.name` and a hand-rewritten stack could otherwise walk its remaining lines past
+  // the filter one at a time.
+  const rest = lines.slice(messageLines).filter((line) => line.trim() !== '')
+  if (rest.length === 0 || !rest.every((line) => STACK_FRAME.test(line))) return ''
+
+  return rest.slice(0, limit).map((line) => line.trim()).join(' | ')
 }
 
 /**
@@ -101,12 +106,14 @@ export function errorFrames(error: unknown, limit = 8): string {
  * also quotes the offending parameter. Any shape filter is a guess about what a message cannot
  * look like, and this function exists to keep message content out of the operational log.
  *
- * The shape filter stays, but only ever as a SECOND pass over lines the arithmetic has already
- * cleared — never as a fallback standing on its own. Where the precondition fails, `errorFrames`
- * returns nothing rather than letting the heuristic decide; that was the correction, because a
- * fallible guard reached exactly when the reliable one gives up is not defence in depth.
+ * The shape check is a VALIDATOR, not a filter, and that distinction is the whole of its safety.
+ * A filter leaves the heuristic deciding line by line what to admit — so a stack it partly
+ * recognises still emits its recognised half. A validator inverts it: one line that is not a frame
+ * condemns the entire stack and nothing is emitted at all. Combined with the head check, a line
+ * can only reach the log when the message was measured out AND every surviving line is a frame.
+ * Where either fails, `errorFrames` returns nothing; losing a diagnostic is the cheap side.
  */
-const STACK_FRAME = /^\s*at\s+.*:\d+:\d+\)?\s*$/
+const STACK_FRAME = /^\s*at\s+(?:.*:\d+:\d+\)?|.*\(<anonymous>\)|<anonymous>)\s*$/
 
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted

@@ -13,6 +13,10 @@ import { TOKEN_COOKIE } from '../src/lib/cookies.js'
 beforeAll(() => {
   process.env.DEPLOY_PROFILE = 'demo'
   delete process.env.DATABASE_URL
+  // These cases run WITHOUT a database, which is now a mode a deployment must opt into rather than
+  // fall into: an unaudited sign-in is refused by default. Setting it here states plainly that the
+  // suite is exercising degraded local dev — and the refusal itself is covered below.
+  process.env.OFBO_ALLOW_UNAUDITED_SIGNIN = 'true'
 })
 
 /** A real UUID, because that is what the header is documented to carry and what the route now
@@ -107,10 +111,15 @@ describe('POST /api/login — the trace id is validated before it is trusted', (
   }
 
   it('does not echo or record a non-UUID trace id', async () => {
-    const psu = '999-1990-1234567-1'
-    const res = await login(requestWithTrace(psu) as never)
+    // Deliberately NOT an identifier-shaped literal. What this asserts is "anything that is not a
+    // UUID is replaced", and an arbitrary string proves that exactly as well — CLAUDE.md's
+    // identifier-literal exemption is worded for tests that assert a REDACTION control, and this
+    // asserts a validation one. Using a PSU shape here to dramatise the risk would be borrowing an
+    // exemption this test has no claim to.
+    const supplied = 'not-a-uuid-caller-controlled'
+    const res = await login(requestWithTrace(supplied) as never)
     const echoed = res.headers.get('x-fapi-interaction-id') ?? ''
-    expect(echoed).not.toContain(psu)
+    expect(echoed).not.toContain(supplied)
     // Replaced with a real one rather than dropped — the response still correlates to a log line.
     expect(echoed).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
   })
@@ -119,6 +128,39 @@ describe('POST /api/login — the trace id is validated before it is trusted', (
     const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
     const res = await login(requestWithTrace(uuid) as never)
     expect(res.headers.get('x-fapi-interaction-id')).toBe(uuid)
+  })
+})
+
+/**
+ * BACKOFFICE-84 — a session is never minted without a regulated record.
+ *
+ * A failing audit WRITE already failed the sign-in. The remaining gap was an absent sink: nothing
+ * threw, `recordSignIn` returned quietly, and a privileged scope-bearing session was issued with
+ * no row in the INSERT-only trail. CLAUDE.md does not qualify "audit-relevant operations emit to
+ * audit_high_sensitivity" by WHY the sink is missing, so neither does the route.
+ */
+describe('POST /api/login — no session without an audit record', () => {
+  it('refuses to sign in when no audit sink resolves', async () => {
+    const prior = process.env.OFBO_ALLOW_UNAUDITED_SIGNIN
+    delete process.env.OFBO_ALLOW_UNAUDITED_SIGNIN
+    try {
+      const res = await handleSignIn(loginRequest('demo-token:operations-analyst') as never, {
+        auditSink: null
+      })
+      expect(res.headers.get('location')).toMatch(/\/\?error=service_unavailable$/)
+      expect(res.headers.get('set-cookie') ?? '').not.toContain('demo-token')
+    } finally {
+      if (prior !== undefined) process.env.OFBO_ALLOW_UNAUDITED_SIGNIN = prior
+    }
+  })
+
+  it('allows it only when a deployment has explicitly opted into running unaudited', async () => {
+    // The escape hatch exists for local dev without a database. It must be SET, never inferred —
+    // an environment that merely loses DATABASE_URL stops issuing sessions.
+    const res = await handleSignIn(loginRequest('demo-token:operations-analyst') as never, {
+      auditSink: null
+    })
+    expect(res.headers.get('location')).toMatch(/\/dashboard$/)
   })
 })
 

@@ -113,8 +113,22 @@ describe('recordSignIn', () => {
     )
   })
 
-  it('is a no-op when no audit sink is configured (degraded local dev)', async () => {
-    await expect(recordSignIn(principal, 'trace-123', { auditSink: null })).resolves.toBeUndefined()
+  /**
+   * BACKOFFICE-84 — re-pointed from `toBeUndefined()` to the value that replaced it. `recordSignIn`
+   * now REPORTS whether it wrote, because "no sink" was the one path that produced a session with
+   * no regulated record and nothing threw to stop it. The caller acts on that answer; this asserts
+   * the answer is truthful.
+   */
+  it('reports that it did NOT write when no audit sink is configured', async () => {
+    await expect(recordSignIn(principal, 'trace-123', { auditSink: null })).resolves.toBe(false)
+  })
+
+  it('reports that it DID write when a sink is present', async () => {
+    const written: unknown[] = []
+    await expect(
+      recordSignIn(principal, 'trace-123', { auditSink: { record: async (e) => { written.push(e) } } })
+    ).resolves.toBe(true)
+    expect(written).toHaveLength(1)
   })
 })
 

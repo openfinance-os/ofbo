@@ -41,9 +41,10 @@ export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Pro
   const traceId = supplied && UUID.test(supplied) ? supplied : randomUUID()
 
   let principal
+  let audited = false
   try {
     principal = await verifyAndMint(token, deps)
-    await recordSignIn(principal, traceId, deps)
+    audited = await recordSignIn(principal, traceId, deps)
   } catch (e) {
     // TWO different failures, and telling them apart is the point.
     //
@@ -85,6 +86,28 @@ export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Pro
     const failed = NextResponse.redirect(new URL(`/?error=${reason}`, req.url), 303)
     failed.headers.set('x-fapi-interaction-id', traceId)
     return failed
+  }
+
+  // FAIL CLOSED on an unaudited sign-in, not just on a failed audit WRITE.
+  //
+  // A write that throws already fails the sign-in. The gap was the case where there is no sink to
+  // write to at all: `recordSignIn` had nothing to throw, returned quietly, and a privileged
+  // scope-bearing session was minted with no row in the INSERT-only regulated trail. CLAUDE.md
+  // does not qualify "audit-relevant operations emit to audit_high_sensitivity" by why the sink
+  // happens to be missing.
+  //
+  // Local dev genuinely runs without a database, so that mode is preserved — but as an EXPLICIT
+  // opt-in a deployment must set, never as the silent default it was. An environment that simply
+  // loses DATABASE_URL now stops issuing sessions instead of issuing untraceable ones.
+  if (!audited && process.env.OFBO_ALLOW_UNAUDITED_SIGNIN !== 'true') {
+    signInLog('signin_refused_unaudited', {
+      trace_id: traceId,
+      acting_persona: principal.persona,
+      reason: 'no audit sink resolved — refusing to mint a session that leaves no regulated record'
+    })
+    const refused = NextResponse.redirect(new URL('/?error=service_unavailable', req.url), 303)
+    refused.headers.set('x-fapi-interaction-id', traceId)
+    return refused
   }
 
   const res = NextResponse.redirect(new URL('/dashboard', req.url), 303)
