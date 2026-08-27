@@ -57,16 +57,47 @@ function resolveIdp(deps: PortalDeps): IdentityProviderPort {
   return deps.idp ?? getAdapter('p2-identity-provider', profileFromConfig(process.env))
 }
 
+/**
+ * ONE pool per process, not one per request.
+ *
+ * `PgAuditEmitter`'s constructor creates a `pg.Pool`, and these resolvers used to call it on every
+ * sign-in and every dashboard render. Nothing ever called `close()`, so each request left a pool
+ * holding connections open until they idled out, and under any sustained traffic they accumulated
+ * until the pooler refused new ones.
+ *
+ * What that looked like on the hosted demo: sign-in worked, then failed for every persona for
+ * several minutes, then recovered — and because `api/login/route.ts` reported any failure as
+ * `invalid_token`, it presented as an auth problem rather than an exhausted connection pool.
+ * Measured 12/12 succeeding, then 0/12 failing, with the failures returning in ~550ms against
+ * ~1700ms for a success: the fast-fail signature of a refused connection, not a slow query.
+ *
+ * Memoised on the URL so a changed DATABASE_URL still builds a new pool, and so tests that inject
+ * `deps` are unaffected. Module scope is the right lifetime here: it is per-isolate in a Worker
+ * and per-process locally, which is exactly the scope a connection pool should have.
+ */
+let cachedSink: { url: string; sink: AuditSink } | undefined
+let cachedSource: { url: string; source: AuditSource } | undefined
+
 function resolveAuditSink(deps: PortalDeps): AuditSink | null {
   if (deps.auditSink !== undefined) return deps.auditSink
   const url = process.env.DATABASE_URL
-  return url ? new PgAuditEmitter(url, TENANCY) : null
+  if (!url) return null
+  if (cachedSink?.url !== url) cachedSink = { url, sink: new PgAuditEmitter(url, TENANCY) }
+  return cachedSink.sink
 }
 
 function resolveAuditSource(deps: PortalDeps): AuditSource | null {
   if (deps.auditSource !== undefined) return deps.auditSource
   const url = process.env.DATABASE_URL
-  return url ? new PgAuditReader(url, TENANCY) : null
+  if (!url) return null
+  if (cachedSource?.url !== url) cachedSource = { url, source: new PgAuditReader(url, TENANCY) }
+  return cachedSource.source
+}
+
+/** Drop the memoised pools — for tests that swap DATABASE_URL between cases. */
+export function resetAuditPools(): void {
+  cachedSink = undefined
+  cachedSource = undefined
 }
 
 export class SignInError extends Error {
