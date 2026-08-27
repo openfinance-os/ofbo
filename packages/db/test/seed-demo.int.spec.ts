@@ -3,7 +3,7 @@ import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { seedDemoDataset } from '../src/seed.js'
 import { seedDemoScenario } from '../src/seed-demo.js'
-import { accrualByTpp } from '@ofbo/synthetic-data'
+import { accrualByTpp, DEMO_BANK_ID } from '@ofbo/synthetic-data'
 
 /** The same relative months the seed writes — month-1/-2/-3 from today. */
 const month = (back: number) => {
@@ -88,6 +88,50 @@ describe('demo scenario seed', () => {
     expect(statuses.rows[0].n).toBeGreaterThanOrEqual(3) // active_traffic, directory_only, dormant
     const unbilled = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE unbilled_traffic = true`)
     expect(unbilled.rows[0].n).toBeGreaterThanOrEqual(1)
+  })
+
+  /**
+   * DEMO — the seed states a COMPLETE set, so an orphan cannot outlive the seed that wrote it.
+   *
+   * Both seeds are additive-only (`ON CONFLICT DO NOTHING` / `WHERE NOT EXISTS`, not one DELETE
+   * between them), which is right for idempotency and means a seed can only ever ADD. Rows written
+   * by a seed that was later retired stay for ever, and re-running the current seed can never
+   * remove them because from its point of view there is nothing to do.
+   *
+   * That is not hypothetical. The hosted demo carried three `Fictional fintech 0N` counterparties
+   * that exist NOWHERE in this repository — orphans of a seed replaced months earlier — leading the
+   * TPP registry (it sorts by directory sync time) above Lean, Tabby and Tarabut, and counting
+   * toward the registration-state mix in the KPI strip. The deploy runs `db:apply && db:seed:demo`,
+   * so every merge re-seeded and left them exactly where they were.
+   *
+   * This plants that exact shape and asserts the seed removes it — while leaving every counterparty
+   * the seed DOES declare untouched, which is the half that makes the delete safe rather than
+   * merely effective.
+   */
+  it('removes a counterparty the seed no longer declares, and keeps the ones it does', async () => {
+    const ORPHAN = 'org-retired-seed-orphan'
+    await admin.query(
+      `INSERT INTO tpp_counterparty (bank_id, channel, organisation_id, legal_name, directory_synced_at, production_status, registration_state)
+       VALUES ($1, 'internal_retail', $2, 'Retired Seed Orphan Ltd', now(), 'directory_only', 'unregistered')
+       ON CONFLICT (bank_id, organisation_id) DO NOTHING`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    const before = await admin.query(`SELECT 1 FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`, [DEMO_BANK_ID, ORPHAN])
+    expect(before.rows, 'the orphan must exist before the seed runs, or this proves nothing').toHaveLength(1)
+
+    await seedDemoScenario(url)
+
+    const after = await admin.query(`SELECT 1 FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`, [DEMO_BANK_ID, ORPHAN])
+    expect(after.rows, 'the orphan survived a re-seed').toHaveLength(0)
+
+    // The book itself is untouched — the delete is scoped to what the seed does not declare.
+    const kept = await admin.query(
+      `SELECT organisation_id FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = ANY($2::text[])`,
+      [DEMO_BANK_ID, ['org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap', 'org-falaj-money']]
+    )
+    expect(kept.rows.map((r) => r.organisation_id).sort()).toEqual(
+      ['org-falaj-money', 'org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap']
+    )
   })
 
   it('seeds 3 invoice runs and 3 scheme notifications', async () => {

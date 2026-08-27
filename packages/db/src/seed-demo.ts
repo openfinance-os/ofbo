@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import pg from 'pg'
 import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
+import { reconcileSeededSet } from './reconcile.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 
 /**
@@ -722,6 +723,32 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
           WHERE bank_id = $1 AND organisation_id = $2`,
         [DEMO_BANK_ID, orgId, regNum, CONTACTS, prodStatus, regState, mtdFils(orgId)]
       )
+    }
+
+    // The registry is now a COMPLETE statement, not just a present one.
+    //
+    // Everything above is additive — `WHERE NOT EXISTS` / `UPDATE` — so this seed could add the
+    // book and still leave behind counterparties from a seed retired months ago. It did: the
+    // hosted demo carried three `Fictional fintech 0N` rows that exist nowhere in this repository,
+    // leading the registry (it sorts by directory sync time) above Lean, Tabby and Tarabut and
+    // counting toward the registration-state mix in the KPI strip. Re-seeding could never remove
+    // them, and the deploy runs `db:apply && db:seed:demo`, so every merge left them exactly where
+    // they were.
+    //
+    // The keep-set is DERIVED from the same two literals that insert above, not written out a
+    // second time — a hand-maintained copy would drift, and the failure mode of a drifted keep-set
+    // is deleting a row the seed just wrote.
+    const seededTpps = [...tpps.map(([orgId]) => orgId), ...bookRows.map(([orgId]) => orgId)]
+    const removedTpps = await reconcileSeededSet(pool, {
+      table: 'tpp_counterparty',
+      keyColumn: 'organisation_id',
+      bankId: DEMO_BANK_ID,
+      keep: seededTpps
+    })
+    if (removedTpps.length > 0) {
+      // Announced, never silent. A DELETE inside a seed is the last thing anyone should have to
+      // infer from a row count moving.
+      console.log(`  reconciled tpp_counterparty — removed ${removedTpps.length} row(s) the seed no longer declares: ${removedTpps.join(', ')}`)
     }
 
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the

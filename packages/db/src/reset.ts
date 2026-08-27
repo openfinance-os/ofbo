@@ -17,10 +17,28 @@ import pg from 'pg'
 // Preserved: the migration ledger (so migrations don't re-run) + migration-seeded config.
 const PRESERVE = new Set(['_migrations', 'retention_policy', 'classification_policy'])
 
-export async function resetDatabase(databaseUrl: string): Promise<{ truncated: string[]; refreshed: string[] }> {
+/**
+ * The ONE place that decides whether a destructive data operation is allowed to proceed.
+ *
+ * Exported so that anything else which deletes demo rows — the seed's set reconciliation, for one —
+ * calls THIS rather than writing a second copy of the same two-clause check. Two copies of a
+ * safety guard is one that gets updated and one that does not, and the lint rule makes the point
+ * structurally: `packages/db/src/reset.ts` is the only non-ports file permitted to read
+ * DEPLOY_PROFILE at all (eslint.config.mjs), so a second guard elsewhere could not be written
+ * without also weakening that rule.
+ *
+ * Deleting demo rows is legitimate ONLY because the OFBO demo environment is permanently non-prod
+ * and holds zero real PSU data (CLAUDE.md hard stop). Regulated production data has no deletion
+ * path, so this refuses under the enterprise profile rather than trusting the caller.
+ */
+export function assertDestructiveAllowed(operation: string): void {
   if (process.env.DEPLOY_PROFILE === 'enterprise' || process.env.NODE_ENV === 'production') {
-    throw new Error('db:reset is non-prod only and refuses to run under the enterprise/production profile (regulated data has no deletion path).')
+    throw new Error(`${operation} is non-prod only and refuses to run under the enterprise/production profile (regulated data has no deletion path).`)
   }
+}
+
+export async function resetDatabase(databaseUrl: string): Promise<{ truncated: string[]; refreshed: string[] }> {
+  assertDestructiveAllowed('db:reset')
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     const tables = (
