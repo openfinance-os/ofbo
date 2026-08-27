@@ -69,7 +69,12 @@ async function approvalsKpi(token: string, deps: DashboardDeps): Promise<Kpi[]> 
       label: 'Pending four-eyes approvals',
       value: String(approvals.length),
       sub: approvals.length === 0 ? 'nothing awaiting you' : 'awaiting a second principal',
-      tone: approvals.length === 0 ? 'neutral' : 'break',
+      // NEUTRAL, not `break`. `break` paints the figure in `ext.status.aging`, whose token
+      // definition is "open, approaching its clock" — and nothing here consults a clock. Every
+      // pending approval was amber, so five requests sitting comfortably inside their two-hour
+      // window (PRD §10) looked like five running out of it. A queue that is always amber tells an
+      // operator nothing on the day one of them genuinely IS aging.
+      tone: 'neutral',
       href: '/approvals'
     }
   ]
@@ -89,7 +94,12 @@ async function riskKpi(token: string, deps: DashboardDeps): Promise<Kpi[]> {
       label: 'Open risk signals',
       value: String(signals.length),
       sub: critical > 0 ? `${critical} high / critical` : 'none high-severity',
-      tone: critical > 0 ? 'breach' : signals.length > 0 ? 'break' : 'reconciled',
+      // The tone must agree with the sub-label directly beneath it. It used to read
+      // `signals.length > 0 ? 'break'`, so 200 INFO-severity signals rendered in the amber that
+      // means "approaching its clock" above a caption reading "none high-severity" — the colour
+      // contradicting the words under it, on the demo's first screen. Severity drives the tone
+      // now, which is what the card is about; volume alone is just a count.
+      tone: critical > 0 ? 'breach' : 'neutral',
       href: '/risk'
     }
   ]

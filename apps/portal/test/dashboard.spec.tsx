@@ -41,6 +41,42 @@ describe('getDashboardKpis', () => {
     expect(by['open-risk-signals']!.tone).toBe('breach')
   })
 
+  /**
+   * BACKOFFICE-94 — a COUNT is not a STATUS, and the two must not share a colour.
+   *
+   * `ext.status.aging` is defined in the token set as "open, approaching its clock". Both cards
+   * spent it on mere presence: any pending approval, and any open signal of any severity, painted
+   * the figure amber. So the demo's first screen showed five approvals sitting comfortably inside
+   * their two-hour window (PRD §10) in the colour that means running out of it — and 200
+   * info-severity signals in that same amber directly above a caption reading "none
+   * high-severity", the colour contradicting the words beneath it.
+   *
+   * A dashboard that is always amber cannot tell anyone about the day something is genuinely
+   * aging, which is the whole job of a status hue.
+   */
+  it('does not paint a plain count in a status colour', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [{ approval_request_id: 'a1' }, { approval_request_id: 'a2' }],
+      risk: [{ severity: 'info' }, { severity: 'low' }, { severity: 'medium' }]
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['pending-approvals']!.value).toBe('2')
+    expect(by['pending-approvals']!.tone).toBe('neutral')
+    // Severity drives the tone; volume alone does not.
+    expect(by['open-risk-signals']!.value).toBe('3')
+    expect(by['open-risk-signals']!.sub).toBe('none high-severity')
+    expect(by['open-risk-signals']!.tone).toBe('neutral')
+  })
+
+  it('still escalates when the severity actually warrants it', async () => {
+    const f = mockFetch({ runs: [], breaks: [], pending: [], risk: [{ severity: 'high' }, { severity: 'info' }] })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['open-risk-signals']!.tone).toBe('breach')
+    expect(by['open-risk-signals']!.sub).toContain('1 high / critical')
+  })
+
   it('gracefully omits a card whose source the persona cannot access (risk 403)', async () => {
     const f = mockFetch({ runs: [], breaks: [], pending: [], risk: null })
     const kpis = await getDashboardKpis('tok', P, deps(f))
@@ -56,6 +92,27 @@ describe('DashboardOverview', () => {
     expect(card).toHaveTextContent('5')
     expect(card).toHaveTextContent('Open breaks')
     expect(card.closest('a')).toHaveAttribute('href', '/reconciliation')
+  })
+
+  /**
+   * BACKOFFICE-94 — the headline figure is a SUMMARY FIGURE, so it is DM Sans.
+   *
+   * `design/tokens.ts` divides the three faces explicitly: DM Sans for "UI + summary figures",
+   * JetBrains Mono for "ids, exact amounts, trace ids". This card carried `font-mono` "per the
+   * Stitch financial-numerals rule" — a rule from a design source ADR 0033 RETIRED, still being
+   * followed after the system that replaced it said the opposite. At 30px it read as terminal
+   * output in the middle of a financial console.
+   *
+   * The gate next door (`design-conformance.spec.ts`) could not catch this: `font-mono` is a
+   * perfectly good token utility, and that gate checks that screens speak in tokens, not that they
+   * say something true with them. `tabular-nums` is asserted alongside because dropping mono must
+   * not cost the digit alignment — DM Sans carries the feature itself.
+   */
+  it('sets the headline figure in DM Sans with tabular numerals, not a code face', () => {
+    render(<DashboardOverview kpis={[{ key: 'open-breaks', label: 'Open breaks', value: '5', tone: 'break' }]} />)
+    const figure = screen.getByText('5')
+    expect(figure.className).not.toContain('font-mono')
+    expect(figure.className).toContain('tabular-nums')
   })
 
   it('renders nothing when there are no entitled KPIs', () => {

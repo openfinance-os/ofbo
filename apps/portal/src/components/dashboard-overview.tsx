@@ -3,8 +3,19 @@ import type { Kpi, KpiTone } from '../lib/dashboard'
 
 /**
  * Executive landing — a row of scope-aware KPI cards above the audit trail, so an audience
- * (or an operator) gets the headline state of the back office at a glance. Token-only; the
- * prominent figure uses JetBrains-Mono tabular-nums per the Stitch financial-numerals rule.
+ * (or an operator) gets the headline state of the back office at a glance. Token-only.
+ *
+ * THE FIGURE IS SET IN DM SANS, not mono. It used to carry `font-mono` "per the Stitch
+ * financial-numerals rule" — a rule from a design source ADR 0033 RETIRED. The system that
+ * replaced it says the opposite in as many words (`design/tokens.ts`): DM Sans is for "UI +
+ * summary figures", JetBrains Mono is for "ids, exact amounts, trace ids". A count of pending
+ * approvals is a summary figure. Set in a code face at 30px it read as terminal output in the
+ * middle of a financial console, which is exactly what a reviewer noticed on the demo.
+ *
+ * `tabular-nums` stays — DM Sans carries the feature, so the digits still align in a column
+ * without borrowing a monospace face to get it. Mono keeps the job the system gives it: the trace
+ * ids and exact money amounts elsewhere on this screen, where character-level comparison is the
+ * point.
  */
 const TONE: Record<KpiTone, { ring: string; value: string; dot: string }> = {
   breach: { ring: 'border-breach/30', value: 'text-breach', dot: 'bg-breach' },
@@ -21,7 +32,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
         <span className={`inline-block w-1.5 h-1.5 rounded-full ${t.dot}`} />
         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">{kpi.label}</p>
       </div>
-      <p className={`font-mono font-semibold text-3xl tabular-nums tracking-tight ${t.value}`}>{kpi.value}</p>
+      <p className={`font-semibold text-3xl tabular-nums tracking-tight ${t.value}`}>{kpi.value}</p>
       {kpi.sub ? <p className="text-xs text-on-surface-variant mt-1">{kpi.sub}</p> : null}
     </div>
   )
