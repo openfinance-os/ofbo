@@ -150,6 +150,51 @@ export async function verifyAndMint(token: string, deps: PortalDeps = {}): Promi
  * false return, unconditionally. That is how the last path to an unaudited session closes, and it
  * is why the portal requires a database to sign anyone in.
  */
+/**
+ * Emit the High-class sign-in FAILURE event.
+ *
+ * PRD §9 BACKOFFICE-47 requires it in as many words — "Mandatory MFA on every Internal Portal
+ * sign-in … no MFA-skip; failures audited" — and the portal was auditing only successes. A
+ * rejected credential is exactly the event a regulator asks about after the fact, and the one an
+ * attacker generates in volume; a trail that records who got in but not who was turned away
+ * answers neither question.
+ *
+ * Composes the same sink and the same `signin_failure` event type the BFF's own auth middleware
+ * already writes (services/bff/src/auth.ts) — no second audit path, no new event vocabulary.
+ *
+ * Unlike the success write this does NOT fail the request: the sign-in is already being refused,
+ * and turning an audit outage into a different refusal would only change which wrong reason the
+ * operator is shown. The failure to audit is announced instead, on the same footing as the
+ * missing-sink case above.
+ */
+export async function recordSignInFailure(
+  reason: string,
+  traceId: string,
+  persona: string | null,
+  deps: PortalDeps = {}
+): Promise<void> {
+  const sink = resolveAuditSink(deps)
+  if (!sink) return
+  try {
+    await sink.record({
+      event_type: 'signin_failure',
+      // No principal is established — that is what failed. The BFF writes the same 'unknown'
+      // placeholder rather than echoing an unverified token or subject back into the trail.
+      acting_principal: 'unknown',
+      acting_persona: persona,
+      reason,
+      trace_id: traceId,
+      superadmin_marker: false
+    })
+  } catch (e) {
+    signInLog('signin_failure_unaudited', {
+      trace_id: traceId,
+      reason: 'the sign-in failure could not be written to the audit trail',
+      error_name: e instanceof Error ? e.name : typeof e
+    })
+  }
+}
+
 export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<boolean> {
   const sink = resolveAuditSink(deps)
   if (!sink) {

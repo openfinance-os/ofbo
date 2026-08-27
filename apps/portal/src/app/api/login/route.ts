@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { redactingLog, errorFrames } from '@ofbo/bff/telemetry'
 import { TOKEN_COOKIE } from '../../../lib/cookies'
-import { recordSignIn, SignInError, verifyAndMint } from '../../../lib/portal'
+import { recordSignIn, recordSignInFailure, SignInError, verifyAndMint } from '../../../lib/portal'
 
 /** The sanctioned operational sink — masks by key and by shape before anything is written. */
 const signInLog = redactingLog()
@@ -57,6 +57,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     // and the screen blamed the token. Whoever picks that up goes to the IdP and finds nothing
     // wrong, because the fault was an exhausted connection pool.
     const authFailure = e instanceof SignInError
+    if (authFailure) {
+      // PRD §9 BACKOFFICE-47: failures audited. A refused credential is the event a regulator asks
+      // about afterwards and the one an attacker generates in volume — a trail holding who got in
+      // but not who was turned away answers neither. Awaited so the row lands before the redirect,
+      // but not allowed to change the outcome: the sign-in is already refused.
+      await recordSignInFailure(e.reason, traceId, null)
+    }
     // Named for what the operator can act on, not for the internal cause — the reason string
     // reaches the sign-in screen, so it must carry no detail of the underlying error.
     const reason = authFailure ? e.reason : 'service_unavailable'
