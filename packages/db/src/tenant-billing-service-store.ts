@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import pg from 'pg'
 import { canonicalJson, type ProfitabilityReport, type RevenueAssuranceReport } from '@ofbo/billing'
 import { beginAppTx } from './tenant-tx.js'
+import { isoDateFromPg } from './pg-date.js'
 import { isPurposeApproved, type GovernedAuditSink } from './governed-aggregate.js'
 import type { LineageSink } from './lineage.js'
 import {
@@ -82,7 +83,9 @@ function mapConfiguration(row: Record<string, unknown>): TenantConfiguration {
     slaWeekendPause: Boolean(row.sla_weekend_pause),
     fraudRevokeFourEyes: Boolean(row.fraud_revoke_four_eyes),
     careSurfaceResidency: row.care_surface_residency as 'portal' | 'enterprise',
-    yearAnchorDate: row.year_anchor_date instanceof Date ? row.year_anchor_date.toISOString().slice(0, 10) : String(row.year_anchor_date).slice(0, 10),
+    // A calendar date, read without a zone conversion — see pg-date.ts. This one drives
+    // `yearStep()`, so a day's drift here bills a whole month at the wrong bps tier.
+    yearAnchorDate: isoDateFromPg(row.year_anchor_date),
     retailOverageMilliFils: row.retail_overage_milli_fils === null ? null : Number(row.retail_overage_milli_fils),
     invoiceTemplateRef: row.invoice_template_ref as string,
     invoiceBrandKey: row.invoice_brand_key as string,

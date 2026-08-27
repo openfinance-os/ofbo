@@ -257,3 +257,6 @@ export {
 } from './governed-aggregate.js'
 
 export * from './billing-payable-store.js'
+
+/** Reading SQL `date` columns back as calendar dates, without a timezone conversion. */
+export { isoDateFromPg } from './pg-date.js'
