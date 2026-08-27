@@ -44,6 +44,39 @@ describe('POST /api/login', () => {
   })
 })
 
+/**
+ * BACKOFFICE-84 — a failing audit write must not be reported as a bad token.
+ *
+ * Sign-in is audited before the session is issued, and failing CLOSED when that write fails is
+ * correct: an unaudited session is worse than a refused one. What was wrong is what the operator
+ * was told. The handler caught every exception and redirected to `?error=invalid_token`, so a
+ * database outage arrived on screen as "your token is invalid" — and on the hosted demo it did
+ * exactly that, for every persona, for minutes at a time, while the BFF was healthy and accepting
+ * the very same token.
+ *
+ * The distinction is not cosmetic. `invalid_token` sends whoever is diagnosing it to the IdP and
+ * the token; the actual fault was an exhausted connection pool. These assert that an
+ * infrastructure failure says so, and that a genuine auth failure still says what it always did.
+ */
+describe('POST /api/login — failure attribution', () => {
+  it('reports an audit-write failure as a service failure, not a bad token', async () => {
+    const res = await login(loginRequest('demo-token:operations-analyst') as never, {
+      auditSink: { record: async () => { throw new Error('connection refused') } }
+    })
+    expect(res.status).toBe(303)
+    expect(res.headers.get('location')).toMatch(/\/\?error=service_unavailable$/)
+    // Fails closed — no session may be issued when the sign-in could not be audited.
+    expect(res.headers.get('set-cookie') ?? '').not.toContain('demo-token')
+  })
+
+  it('still reports a genuinely bad token as invalid_token', async () => {
+    const res = await login(loginRequest('not-a-real-token') as never, {
+      auditSink: { record: async () => undefined }
+    })
+    expect(res.headers.get('location')).toMatch(/\/\?error=invalid_token$/)
+  })
+})
+
 describe('POST /api/logout', () => {
   it('clears the session cookie and returns to sign-in', async () => {
     const req = new Request('https://portal.example/api/logout', { method: 'POST' })
