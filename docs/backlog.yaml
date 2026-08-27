@@ -325,8 +325,58 @@ milestones:
           - The contract states the revoke-SLA bound in exactly one place, and the relationship
             between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
           - A test fails if the two disagree, so an amendment cannot land in one and not the other.
+          - >-
+            The contract ENUMERATES the SLO key set that slo.slos[].key draws from. It enumerates
+            none today, so slo.slos[].key - the field a consumer matches on - is a live wire
+            identifier that no contract test can guard. STD-09 renamed one of them
+            (nebras_propagation_5s to nebras_propagation_sla, correctly, since an identifier must
+            not encode a value that can move) and nothing in the repo or the contract could have
+            objected. An in-repo grep confirmed no screen, export template, adapter or fixture read
+            the old key, but an out-of-repo consumer - an APM dashboard, a P5 adapter mapping -
+            would have broken silently. Enumerating the set is what makes the next rename visible.
           - The change goes spec-first through the spec-change skill, with the contract PR
             human-approved before any code follows it.
+      - id: BACKOFFICE-93
+        title: The revoke SLA verdict reaches approvers on two of three routes, and the contract documents it on none
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a cross-endpoint consistency defect plus the spec gap underneath it,
+          raised by the advisory contract-conformance reviewer on PR 344. No product question for a
+          discovery run to answer.
+        depends_on: [STD-09]
+        note: >-
+          After STD-09 the three revoke routes expose three different shapes to the person deciding
+          on them.
+
+          consents:revoke-bulk returns sla_met (bulk-revoke.ts). consents:revoke-fraud now returns
+          sla_met too (fraud-revoke.ts) - plus str_draft_ref, undocumented and pre-existing.
+          consents:revoke-admin returns neither- its SLA verdict exists only in the audit record
+          (revoke.ts), so the approver reading the response gets a raw millisecond count while the
+          approver on the other two routes gets a verdict.
+
+          STD-09 fixed the fraud route because that was its scope and deliberately did NOT touch the
+          admin one, for a reason worth recording. The fraud and bulk routes return through the
+          four-eyes :approve response, whose execution_result is typed { type - object } - free-form,
+          so a field can be added without a contract change. The admin route returns the DOCUMENTED
+          RevocationResult schema (specs/backoffice-openapi.yaml:3250), which names consent_id,
+          status, nebras_propagation_ms and psu_notified and nothing else. Adding sla_met there is a
+          spec change, and doing it as a side edit in a code story is exactly the shortcut the
+          spec-first rule exists to stop.
+
+          The deeper defect is that the asymmetry was INVISIBLE. One surface is schema-governed and
+          two are free-form, so the same field is a contract change on one route and a silent
+          addition on the other two - which is how three implementations of one concept drifted apart
+          without any gate objecting.
+        acceptance:
+          - >-
+            Spec-only PR first - RevocationResult gains sla_met, and the four-eyes execution_result
+            for the revoke operations stops being an unconstrained { type - object } so all three
+            routes are schema-governed rather than two of them being legal by omission.
+          - All three revoke routes return the same verdict field, and a test asserts the three
+            shapes agree rather than each being asserted alone.
+          - str_draft_ref, currently returned by the fraud route and documented nowhere, is either
+            declared in the contract or removed - not left as a fourth undocumented field.
       - id: BACKOFFICE-92
         title: The liability monitor puts money on the wire as bare AED major-unit integers
         status: pending
