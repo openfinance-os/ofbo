@@ -4,6 +4,7 @@ import type { FeeAccrual } from '@ofbo/db'
 import type { MarginSummary } from '../reconciliation/margin.js'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
+import { collectionsWire, profitabilityReportWire } from '../billing/wire.js'
 import { scopeDenied } from '../errors.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
@@ -191,16 +192,13 @@ export class FinanceViewService {
       tpp_aas_margin: margin,
       open_nebras_dispute_count: openDisputes,
       unbilled_traffic_alert_count: unbilled,
-      collections: {
-        open_invoice_count: collections.openInvoiceCount,
-        open_milli_fils: collections.openMilliFils,
-        settlement_break_count: collections.settlementBreakCount,
-        settlement_expected_net_milli_fils: collections.settlementExpectedNetMilliFils,
-        settlement_received_milli_fils: collections.settlementReceivedMilliFils,
-        settlement_residue_milli_fils: collections.settlementResidueMilliFils,
-        dunning_by_state: collections.dunningByState,
-        dso_by_tpp: collections.dsoByTpp
-      },
+      // The SHARED mapper, not a second copy. This block used to hand-map most fields and then
+      // spread `collections.dsoByTpp` raw, so the nested rows shipped `tppId` / `dsoDays` /
+      // `openMilliFils` — camelCase on the wire, while GET /back-office/billing/console emitted the
+      // identical payload correctly through wire.ts. `AnalyticsView.data` is
+      // `additionalProperties: true`, so no schema caught it; only the convention forbade it, and a
+      // convention with nothing asserting it is a preference. One shape, one place to change it.
+      collections: collectionsWire(collections),
       revenue_assurance: assurance ? {
         metering_coverage_percent: assurance.meteringCoveragePercent,
         leakage_milli_fils: assurance.leakageMilliFils,
@@ -216,12 +214,9 @@ export class FinanceViewService {
           counterfactual_milli_fils: finding.counterfactualMilliFils, status: finding.status, owner: finding.owner
         }))
       } : null,
-      tpp_profitability: profitability ? {
-        totals: profitability.totals,
-        by_tpp: profitability.byTpp,
-        by_product_family: profitability.byProductFamily,
-        reconciliation: profitability.reconciliation
-      } : null,
+      // Same reason: `totals`, `byTpp` and `byProductFamily` were spread straight from the
+      // TypeScript shape, so `by_product_family` arrived as `byProductFamily`.
+      tpp_profitability: profitability ? profitabilityReportWire(profitability) : null,
       roi_narrative: {
         fee_variance_recovered_milli_fils: assurance?.roiContribution.feeVarianceRecoveredMilliFils ?? 0,
         fee_variance_recovered_aed: assurance?.roiContribution.feeVarianceRecoveredAed ?? 0

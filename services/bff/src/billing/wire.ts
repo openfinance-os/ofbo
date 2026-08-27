@@ -164,7 +164,7 @@ export function portableBillingExportWire(result: TenantPortableBillingExport): 
   return { ...portableBillingExportWireBody(result), sha256: result.sha256 }
 }
 
-function collectionsWire(summary: CollectionsFinanceSummary): Record<string, unknown> {
+export function collectionsWire(summary: CollectionsFinanceSummary): Record<string, unknown> {
   return {
     open_invoice_count: summary.openInvoiceCount,
     open_milli_fils: summary.openMilliFils,

@@ -160,7 +160,17 @@ describe('FinanceViewService — composition', () => {
       reconciliation: { balanced: true, deltaMilliFils: 0 }
     }
     const { data } = await svc({ profitability: { latestReport: async () => report } }).view(finance, PERIOD)
-    expect(data.tpp_profitability).toEqual(expect.objectContaining({ totals: report.totals, reconciliation: { balanced: true, deltaMilliFils: 0 } }))
+    // BACKOFFICE-87 — re-pointed from the camelCase shape this assertion used to pin.
+    // It asserted `totals: report.totals` and `reconciliation: { deltaMilliFils }`, i.e. the raw
+    // TypeScript object spread straight onto the wire — so it codified the very drift it now
+    // guards against: this endpoint shipped camelCase while /billing/console shipped snake_case
+    // for the identical payload. The requirement (profitability totals and the reconciliation
+    // verdict are surfaced) is unchanged; the shape is now the binding one.
+    expect(data.tpp_profitability).toEqual(expect.objectContaining({
+      totals: expect.objectContaining({ receivable_milli_fils: aed(100), profit_milli_fils: aed(87) }),
+      reconciliation: { balanced: true, delta_milli_fils: 0 }
+    }))
+    expect(JSON.stringify(data.tpp_profitability)).not.toMatch(/[a-z][A-Z]/) // no camelCase, any depth
     const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
     expect(sections.find((section) => section.title === 'TPP Profitability')?.stats).toEqual(expect.arrayContaining([
       { label: 'Receivables', value: 'AED 100.00' },
