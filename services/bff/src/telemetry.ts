@@ -107,10 +107,24 @@ export function errorFrames(error: unknown, limit = 8): string {
 const STACK_FRAME = /^\s*at\s+(?:.*:\d+:\d+\)?|.*\(<anonymous>\)|<anonymous>)\s*$/
 
 /**
- * The source location inside a frame — the trailing `path:line:column` and nothing around it.
- * A native frame (`at new Promise (<anonymous>)`) has none and contributes nothing.
+ * The source location inside a frame — and only when it is genuinely a MODULE path.
+ *
+ * Extracting the trailing `something:line:column` was still too permissive: a hand-assigned stack
+ * line reading `at John Smith:12:5` yields `Smith:12:5`, which is free text wearing a location's
+ * shape. And the second layer does not cover it — `redactText` masks Emirates-ID, IBAN and email
+ * SHAPES, not names.
+ *
+ * So the path must end in a module extension, or be a `node:` internal. That is not a guess about
+ * what prose looks like; it is what a JavaScript stack frame's file path IS. A name, an account
+ * reference, a free-text fragment — none of them end in `.ts` or `.js`, so none of them survive,
+ * whoever wrote the stack.
+ *
+ * This is the fourth attempt at this line and the first that constrains the OUTPUT rather than
+ * judging the input. Each earlier one asked "does this look like something safe to emit?" — by
+ * prefix, by shape, by whole-stack validation — and each was answered by a line contrived to look
+ * that way. Naming the small set of things that may be emitted ends the argument.
  */
-const FRAME_LOCATION = /([^\s(]+:\d+:\d+)\)?\s*$/
+const FRAME_LOCATION = /((?:node:[^\s()]+|[^\s()]+\.(?:m|c)?[jt]sx?):\d+:\d+)\)?\s*$/
 
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted

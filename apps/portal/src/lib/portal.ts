@@ -146,25 +146,21 @@ export async function verifyAndMint(token: string, deps: PortalDeps = {}): Promi
  * than producing an unaudited session.
  *
  * Returns whether the event was actually WRITTEN. A failed write throws and fails the sign-in; an
- * absent sink cannot throw, so it returns false and the caller decides — which is how the one
- * remaining path to an unaudited session is closed. See `handleSignIn`, which refuses to mint a
- * session on a false return unless a deployment has explicitly opted into running without a
- * database.
+ * absent sink cannot throw, so it returns false — and the route refuses to mint a session on a
+ * false return, unconditionally. That is how the last path to an unaudited session closes, and it
+ * is why the portal requires a database to sign anyone in.
  */
 export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<boolean> {
   const sink = resolveAuditSink(deps)
   if (!sink) {
-    // An absent sink still issues a session, so this is the one path that produces the unaudited
-    // sign-in the docstring above says cannot happen. It cannot simply throw: local dev runs
-    // without a database by design, and the route tests delete DATABASE_URL deliberately.
+    // An absent sink cannot throw, so it reports instead: there is no audit row, and the caller
+    // turns that into a refused sign-in.
     //
-    // What it can do is stop being SILENT — for EVERY reason it happens, not just the one I first
-    // thought was the dangerous one. An earlier cut announced only the missing-DATABASE_URL case,
-    // reasoning that an injected `null` is a caller who knows what they are doing. But
-    // `handleSignIn(req, deps)` is an exported entry point, so that seam is reachable in principle
-    // from outside a test — and a sign-in that mints a session while leaving no trace in the
-    // regulated trail AND no trace in the operational log is the one outcome worth refusing to let
-    // happen quietly, whoever asked for it.
+    // Announced for EVERY reason it happens, not just the one that looks dangerous. The caller
+    // refuses the sign-in either way, so this is not what protects the trail — it is what makes a
+    // misconfigured deployment diagnosable instead of merely broken. An operator seeing sign-in
+    // fail everywhere needs the reason in the log, which is the same lesson as the rest of this
+    // story.
     signInLog('signin_unaudited_no_sink', {
       trace_id: traceId,
       acting_persona: principal.persona,

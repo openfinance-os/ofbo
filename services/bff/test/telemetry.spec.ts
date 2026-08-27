@@ -179,12 +179,25 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       error.stack = `Error\n  at ${marker} in accounts.sql:12:5`
       const frames = errorFrames(error)
       expect(frames).not.toContain(marker)
-      expect(frames).toBe('accounts.sql:12:5')
+      // Dropped entirely: `accounts.sql` is not a module path, so it is not a location this
+      // function will emit — the output set is named, not inferred from what looks safe.
+      expect(frames).toBe('')
 
       // …and a stack whose head is not what V8 would write is refused outright.
       const rewritten = new Error()
       rewritten.stack = `  at ${marker} in accounts.sql:12:5`
       expect(errorFrames(rewritten)).toBe('')
+    })
+
+    /**
+     * The case that closed the last hole: extracting `something:line:column` still let free text
+     * through when it wore a location's shape — `at John Smith:12:5` yielded `Smith:12:5`, and
+     * redactText masks identifier SHAPES, not names. Anchoring to a module extension ends it.
+     */
+    it('emits nothing for a location that is not a module path', () => {
+      const error = new Error()
+      error.stack = 'Error\n    at Some Person:12:5'
+      expect(errorFrames(error)).toBe('')
     })
 
     it('caps the frame count so one error cannot flood the log', () => {
