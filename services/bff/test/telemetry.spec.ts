@@ -63,7 +63,12 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
   })
 
   it('redactingLog masks PII shapes before anything reaches the log stream', () => {
-    const emiratesId = ['784', '1990', '1234567', '1'].join('-') // assembled at runtime
+    // The SYNTHETIC issuer range (999), never the real 784 — CLAUDE.md's PII hard stop admits no
+    // exemption for the real prefix, and redactText's pattern is prefix-agnostic
+    // (\d{3}[-._ ]?\d{4}…), so 999 exercises the identical shape. Written as a plain literal
+    // rather than assembled at runtime: a `.join('-')` would slip past pii-literal-check, which
+    // matches file TEXT, and a convention that only holds while everyone remembers it is not one.
+    const emiratesId = '999-1990-1234567-1'
     const lines: string[] = []
     redactingLog((l) => lines.push(l))('lookup', { trace_id: 't-1', note: `id ${emiratesId}` })
     expect(lines).toHaveLength(1)
@@ -80,11 +85,31 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
    */
   describe('errorFrames', () => {
     it('captures code locations and never the message', () => {
-      const psu = ['784', '1990', '1234567', '1'].join('-')
+      const psu = '999-1990-1234567-1' // synthetic range, plain literal — see above
       const frames = errorFrames(new Error(`lookup failed for ${psu}`))
       expect(frames).not.toContain(psu)
       expect(frames).not.toContain('lookup failed')
       expect(frames).toContain('at ')
+      expect(frames).toContain('telemetry.spec')
+    })
+
+    /**
+     * A MULTI-LINE message is the case that breaks a naive "keep lines starting with at ".
+     * `stack` is `Name: line1\nline2\n…\n    at frame`, so every continuation line of the message
+     * reaches the filter on equal terms with the frames — and driver errors that append a
+     * `detail:` are exactly the ones that quote the offending parameter. Dropping only the FIRST
+     * line of the stack is not enough; a frame has to be recognised by its shape.
+     */
+    it('drops every line of a multi-line message, not just the first', () => {
+      const psu = '999-1990-1234567-1'
+      const error = new Error(
+        `insert failed\n  detail: Key (psu_id)=(${psu}) already exists.\n  at the point of conflict`
+      )
+      const frames = errorFrames(error)
+      expect(frames).not.toContain(psu)
+      expect(frames).not.toContain('detail:')
+      expect(frames).not.toContain('point of conflict')
+      // …while still yielding the real frames, which is the whole reason the function exists.
       expect(frames).toContain('telemetry.spec')
     })
 

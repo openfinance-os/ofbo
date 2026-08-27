@@ -1,14 +1,27 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
+import { redactingLog, errorFrames } from '@ofbo/bff/telemetry'
 import { TOKEN_COOKIE } from '../../../lib/cookies'
 import { recordSignIn, SignInError, verifyAndMint, type PortalDeps } from '../../../lib/portal'
+
+/** The sanctioned operational sink — masks by key and by shape before anything is written. */
+const signInLog = redactingLog()
 
 /**
  * Sign-in: verify the persona's IdP token (MFA mandatory), mint scopes, emit the
  * High-class sign-in audit event, then set the httpOnly session cookie. A failed
  * sign-in returns to the screen with the reason — never a partial session.
+ *
+ * `handleSignIn` holds the logic and takes its dependencies explicitly; `POST` is the thin Next
+ * entry point. Injecting through POST's SECOND parameter would work today and be a trap tomorrow:
+ * that position is where Next passes its route context (`{ params }`), so a route that later gains
+ * a dynamic segment would silently receive the context as its `deps`.
  */
-export async function POST(req: NextRequest, deps: PortalDeps = {}): Promise<Response> {
+export async function POST(req: NextRequest): Promise<Response> {
+  return handleSignIn(req)
+}
+
+export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Promise<Response> {
   const form = await req.formData()
   const token = String(form.get('token') ?? '')
   const traceId = req.headers.get('x-fapi-interaction-id') ?? randomUUID()
@@ -37,11 +50,17 @@ export async function POST(req: NextRequest, deps: PortalDeps = {}): Promise<Res
     if (!authFailure) {
       // The cause is genuinely useful and genuinely unsafe to echo, so it goes to the server log
       // correlated by trace id, and never into the redirect.
-      console.error(JSON.stringify({
-        message: 'signin_infrastructure_failure',
+      //
+      // Through the SANCTIONED redacting sink, not a bare console.error. Nothing emitted here is
+      // request data today — a class name, a trace id — but the hard stop is a property of the
+      // PATH, not of today's field list, and the BFF's structurally identical handler already
+      // routes through this same sink. An unredacted second path in request-path code is one the
+      // next author inherits with no masking and no lint objection when they add `e.message`.
+      signInLog('signin_infrastructure_failure', {
         trace_id: traceId,
-        error_name: e instanceof Error ? e.name : typeof e
-      }))
+        error_name: e instanceof Error ? e.name : typeof e,
+        error_frames: errorFrames(e)
+      })
     }
     return NextResponse.redirect(new URL(`/?error=${reason}`, req.url), 303)
   }

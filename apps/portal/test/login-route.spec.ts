@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeAll } from 'vitest'
-import { POST as login } from '../src/app/api/login/route.js'
+import { POST as login, handleSignIn } from '../src/app/api/login/route.js'
 import { POST as logout } from '../src/app/api/logout/route.js'
 import { TOKEN_COOKIE } from '../src/lib/cookies.js'
 
@@ -60,7 +60,7 @@ describe('POST /api/login', () => {
  */
 describe('POST /api/login — failure attribution', () => {
   it('reports an audit-write failure as a service failure, not a bad token', async () => {
-    const res = await login(loginRequest('demo-token:operations-analyst') as never, {
+    const res = await handleSignIn(loginRequest('demo-token:operations-analyst') as never, {
       auditSink: { record: async () => { throw new Error('connection refused') } }
     })
     expect(res.status).toBe(303)
@@ -70,7 +70,7 @@ describe('POST /api/login — failure attribution', () => {
   })
 
   it('still reports a genuinely bad token as invalid_token', async () => {
-    const res = await login(loginRequest('not-a-real-token') as never, {
+    const res = await handleSignIn(loginRequest('not-a-real-token') as never, {
       auditSink: { record: async () => undefined }
     })
     expect(res.headers.get('location')).toMatch(/\/\?error=invalid_token$/)

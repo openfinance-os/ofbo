@@ -64,11 +64,26 @@ export function errorFrames(error: unknown, limit = 8): string {
   if (!(error instanceof Error) || typeof error.stack !== 'string') return ''
   return error.stack
     .split('\n')
-    .filter((line) => line.trimStart().startsWith('at '))
+    .filter((line) => STACK_FRAME.test(line))
     .slice(0, limit)
     .map((line) => line.trim())
     .join(' | ')
 }
+
+/**
+ * A frame is recognised by its SHAPE, not by starting with `at `.
+ *
+ * `stack` is `Name: message\n…frames`, so dropping the first line only removes a SINGLE-line
+ * message. A multi-line one — an aggregated validation error, or a driver error that appends a
+ * `detail:` naming the offending parameter — puts its continuation lines in front of the filter on
+ * equal terms with the frames, and a line reading `  at the point of conflict` sails through a
+ * `startsWith('at ')` test carrying message content into the log this function exists to keep it
+ * out of.
+ *
+ * Requiring the trailing `:line:column` is what separates them: every V8 frame ends in one, and
+ * prose essentially never does.
+ */
+const STACK_FRAME = /^\s*at\s+.*:\d+:\d+\)?\s*$/
 
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted
