@@ -2,29 +2,27 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { redactingLog, errorFrames } from '@ofbo/bff/telemetry'
 import { TOKEN_COOKIE } from '../../../lib/cookies'
-import { recordSignIn, SignInError, verifyAndMint, type PortalDeps } from '../../../lib/portal'
+import { recordSignIn, SignInError, verifyAndMint } from '../../../lib/portal'
 
 /** The sanctioned operational sink — masks by key and by shape before anything is written. */
 const signInLog = redactingLog()
 
-/**
- * Sign-in: verify the persona's IdP token (MFA mandatory), mint scopes, emit the
- * High-class sign-in audit event, then set the httpOnly session cookie. A failed
- * sign-in returns to the screen with the reason — never a partial session.
- *
- * `handleSignIn` holds the logic and takes its dependencies explicitly; `POST` is the thin Next
- * entry point. Injecting through POST's SECOND parameter would work today and be a trap tomorrow:
- * that position is where Next passes its route context (`{ params }`), so a route that later gains
- * a dynamic segment would silently receive the context as its `deps`.
- */
-export async function POST(req: NextRequest): Promise<Response> {
-  return handleSignIn(req)
-}
-
 /** A UUID, any version — the shape the header is documented to carry. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Promise<Response> {
+/**
+ * Sign-in: verify the persona's IdP token (MFA mandatory), mint scopes, emit the High-class
+ * sign-in audit event, then set the httpOnly session cookie. A failed sign-in returns to the
+ * screen with the reason — never a partial session, and never a session at all unless the audit
+ * write succeeded.
+ *
+ * NO dependency-injection seam. An earlier cut exported `handleSignIn(req, deps)` so tests could
+ * substitute an audit sink; that is a second way into the sign-in path, admitting a substitute IdP
+ * and a null audit trail, which is the "no new auth paths" rule. The failure paths are exercised
+ * through the real handler instead — an unreachable DATABASE_URL produces a genuine audit failure,
+ * and an absent one produces a genuine absent sink.
+ */
+export async function POST(req: NextRequest): Promise<Response> {
   const form = await req.formData()
   const token = String(form.get('token') ?? '')
 
@@ -43,8 +41,8 @@ export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Pro
   let principal
   let audited = false
   try {
-    principal = await verifyAndMint(token, deps)
-    audited = await recordSignIn(principal, traceId, deps)
+    principal = await verifyAndMint(token)
+    audited = await recordSignIn(principal, traceId)
   } catch (e) {
     // TWO different failures, and telling them apart is the point.
     //
@@ -88,18 +86,20 @@ export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Pro
     return failed
   }
 
-  // FAIL CLOSED on an unaudited sign-in, not just on a failed audit WRITE.
+  // FAIL CLOSED on an unaudited sign-in, not just on a failed audit WRITE. UNCONDITIONALLY.
   //
-  // A write that throws already fails the sign-in. The gap was the case where there is no sink to
-  // write to at all: `recordSignIn` had nothing to throw, returned quietly, and a privileged
-  // scope-bearing session was minted with no row in the INSERT-only regulated trail. CLAUDE.md
-  // does not qualify "audit-relevant operations emit to audit_high_sensitivity" by why the sink
-  // happens to be missing.
+  // A write that throws already failed the sign-in. The gap was an ABSENT sink: `recordSignIn` had
+  // nothing to throw, returned quietly, and a privileged scope-bearing session was minted with no
+  // row in the INSERT-only regulated trail.
   //
-  // Local dev genuinely runs without a database, so that mode is preserved — but as an EXPLICIT
-  // opt-in a deployment must set, never as the silent default it was. An environment that simply
-  // loses DATABASE_URL now stops issuing sessions instead of issuing untraceable ones.
-  if (!audited && process.env.OFBO_ALLOW_UNAUDITED_SIGNIN !== 'true') {
+  // An earlier cut let a deployment opt out of this with an environment flag, to preserve signing
+  // in without a database. That was the wrong instinct twice over: it invented a platform-level
+  // switch that disables a regulatory hard stop, which "compose, don't invent" forbids outright,
+  // and it put deployment-mode branching in application core code. CLAUDE.md states the rule with
+  // no exemption — "audit-relevant operations: emit to audit_high_sensitivity" — so there is no
+  // exemption here either. Running the portal now requires a database, which is what auditing
+  // every sign-in actually costs.
+  if (!audited) {
     signInLog('signin_refused_unaudited', {
       trace_id: traceId,
       acting_persona: principal.persona,
