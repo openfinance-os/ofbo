@@ -752,6 +752,16 @@ milestones:
           exists to prevent, so these belong in scope explicitly rather than being inferred from
           "the milli-fils fields".
 
+          (c) AND THE finance-view REVENUE-ASSURANCE BLOCK, which the first two drafts of this item
+          both missed. services/bff/src/analytics/finance-view.ts hand-maps revenue_assurance and
+          emits leakage_milli_fils, recovered_revenue_milli_fils, outstanding_recoverable_milli_fils,
+          counterfactual_opportunity_milli_fils and findings[].amount_milli_fils /
+          counterfactual_milli_fils as bare sub-minor integers with no currency. Draft one named the
+          *_milli_fils fields reached through wire.ts; draft two added the *_aed floats; neither
+          reached these, so a sweep worked to the letter of the item would have left the block
+          standing and believed itself complete. Enumerated explicitly for that reason - a scope list
+          that is 90% right is the kind nobody re-derives.
+
           The spec CARVE-OUT does not reach any of them: it is scoped to RATES and THRESHOLDS and
           says so in as many words — unit_price_milli_fils at specs/backoffice-openapi.yaml:4033-4039
           ("A unit RATE in integer milli-fils …, NOT a money amount. The binding money convention
@@ -768,8 +778,17 @@ milestones:
         acceptance:
           - Spec-only PR first — the two response bodies name their money fields explicitly with the
             Money schema, so the shape stops being additionalProperties-legal by omission.
+          - >-
+            The spec states the ROUNDING RULE, not just the target type. There is a third category
+            the contract has never named — BALANCES denominated in milli-fils because they were
+            summed from milli-fils RATES. A receivable accrued from 2.5-fil tariffs does not divide
+            cleanly by 1000, so converting it to minor units is a rounding decision, and an unstated
+            rounding rule is how two implementations of one contract disagree by a fil with neither
+            able to say which is right.
           - Every amount listed above ships as { amount, currency } in integer minor units; no
-            *_aed float survives the change, including the roi_narrative and revenue_assurance ones.
+            *_aed float survives the change, including the roi_narrative and revenue_assurance ones,
+            and no bare *_milli_fils AMOUNT survives either — rates and thresholds keep the
+            carve-out, balances do not.
           - The portal readers move in the same PR as the code, so no screen reads a field that no
             longer exists.
 

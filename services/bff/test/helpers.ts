@@ -23,6 +23,14 @@ export const AUTHED_HEADERS = {
  * product-family label would fail an otherwise-conformant response. That is a false-failure hazard
  * on the assertion that guards the convention, which is the worst place to have one. This walks
  * keys only.
+ *
+ * IT DOES NOT DISTINGUISH A FIELD NAME FROM A MAP KEY, and it cannot — both are object keys by the
+ * time a walker sees them. Where a payload uses DATA as keys, the convention does not apply and
+ * this helper will still object: `data.tpp_aas_margin.by_fintech[*].by_family` is keyed by
+ * `ProductFamily` values including `'CoP'`, which matches. So call it on the subtree you mean
+ * rather than on a whole response — `camelCaseKeys(data)` would fail today on a conformant payload.
+ * Naming the limit here because the paragraph above claims this helper removed a false-failure
+ * hazard, and it removed one of two.
  */
 export function camelCaseKeys(value: unknown, acc: string[] = []): string[] {
   if (Array.isArray(value)) {

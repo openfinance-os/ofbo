@@ -198,7 +198,24 @@ export class FinanceViewService {
       // identical payload correctly through wire.ts. `AnalyticsView.data` is
       // `additionalProperties: true`, so no schema caught it; only the convention forbade it, and a
       // convention with nothing asserting it is a preference. One shape, one place to change it.
+      //
+      // TWO of the three sibling blocks, to be exact — `collections` and `tpp_profitability` now go
+      // through the shared mappers, `revenue_assurance` below does not. That is deliberate and
+      // recorded here because the sentence above would otherwise imply it was swept too.
       collections: collectionsWire(collections),
+      // DELIBERATELY a narrower projection than `assuranceWire`, not an oversight.
+      //
+      // `GET /back-office/billing/console` emits the same source object through `assuranceWire`
+      // with period, currency, generated_at, variance_by_fee_class, recoveries, dispute_window,
+      // target, roi_contribution and richer findings[] rows — that is the operator's working
+      // surface for revenue assurance. This is the finance SUMMARY view, where the block is one
+      // panel among eight, so it carries the headline figures and the target verdict only.
+      //
+      // The cost is real and worth naming: `target_percent`, `target_met` and
+      // `missed_dispute_windows` are flattenings that exist nowhere else, so a field added to
+      // `RevenueAssuranceReport` reaches one endpoint and not the other. If that cost outgrows the
+      // benefit, the fix is to project FROM `assuranceWire` rather than beside it — a response-shape
+      // change with its own story, not a quiet edit here.
       revenue_assurance: assurance ? {
         metering_coverage_percent: assurance.meteringCoveragePercent,
         leakage_milli_fils: assurance.leakageMilliFils,
