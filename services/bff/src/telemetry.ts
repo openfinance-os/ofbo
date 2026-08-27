@@ -43,6 +43,33 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
   }
 }
 
+/**
+ * The CODE LOCATIONS an error came from, without its message.
+ *
+ * A 500 used to log `error_name` and nothing else, so the envelope's promise — "quote the
+ * interaction id to support; it correlates to the server-side log" — resolved to a log line
+ * containing `"error_name": "Error"`. There was no cause anywhere, and diagnosing one meant
+ * temporarily patching the handler to print the error.
+ *
+ * The message is the part that is unsafe: it can quote the offending input, which on this
+ * codebase can be a PSU identifier. Stack FRAMES cannot — they are file paths, line numbers and
+ * function names, fixed at build time and carrying no request data. So the frames are exactly the
+ * diagnosable half, and dropping the first line of `stack` (which is `Name: message`) drops
+ * exactly the unsafe half.
+ *
+ * Frames still pass through redactingLog like any other field, so a path that somehow contained a
+ * PII shape would be masked anyway. Capped because a stack is unbounded and a log line is not.
+ */
+export function errorFrames(error: unknown, limit = 8): string {
+  if (!(error instanceof Error) || typeof error.stack !== 'string') return ''
+  return error.stack
+    .split('\n')
+    .filter((line) => line.trimStart().startsWith('at '))
+    .slice(0, limit)
+    .map((line) => line.trim())
+    .join(' | ')
+}
+
 /** Structured log emitter: every line passes redactText (zero PII in operational logs). */
 // eslint-disable-next-line no-console -- this IS the sanctioned operational-log sink; the line is already redacted
 export function redactingLog(write: (line: string) => void = (l) => console.log(l)) {

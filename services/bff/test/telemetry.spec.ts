@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getAdapter, type OtelSpan } from '@ofbo/ports'
 import { createApp } from '../src/app.js'
-import { redactingLog } from '../src/telemetry.js'
+import { errorFrames, redactingLog } from '../src/telemetry.js'
 import { FAPI_HEADERS, AUTHED_HEADERS, FIXED_UUID } from './helpers.js'
 
 const idp = getAdapter('p2-identity-provider', 'demo')
@@ -70,5 +70,32 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
     expect(lines[0]).not.toContain(emiratesId)
     expect(lines[0]).toContain('[REDACTED:emirates_id]')
     expect(lines[0]).toContain('t-1')
+  })
+
+  /**
+   * BACKOFFICE-84 — a 500 used to log `error_name` and nothing else, so the error envelope's
+   * promise ("quote the interaction id to support; it correlates to the server-side log") led to
+   * a line naming no cause. Frames restore the diagnosable half WITHOUT the message, which is the
+   * half that can quote the offending input.
+   */
+  describe('errorFrames', () => {
+    it('captures code locations and never the message', () => {
+      const psu = ['784', '1990', '1234567', '1'].join('-')
+      const frames = errorFrames(new Error(`lookup failed for ${psu}`))
+      expect(frames).not.toContain(psu)
+      expect(frames).not.toContain('lookup failed')
+      expect(frames).toContain('at ')
+      expect(frames).toContain('telemetry.spec')
+    })
+
+    it('caps the frame count so one error cannot flood the log', () => {
+      const frames = errorFrames(new Error('deep'), 2)
+      expect(frames.split(' | ')).toHaveLength(2)
+    })
+
+    it('returns empty for a non-Error throw rather than inventing a stack', () => {
+      expect(errorFrames('a bare string')).toBe('')
+      expect(errorFrames(undefined)).toBe('')
+    })
   })
 })
