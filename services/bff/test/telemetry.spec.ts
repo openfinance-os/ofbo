@@ -194,9 +194,16 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
      * through when it wore a location's shape — `at John Smith:12:5` yielded `Smith:12:5`, and
      * redactText masks identifier SHAPES, not names. Anchoring to a module extension ends it.
      */
-    it('emits nothing for a location that is not a module path', () => {
+    it.each([
+      ['free text shaped like a location', 'Error\n    at Some Person:12:5'],
+      // The `node:` alternative that briefly existed had an unbounded tail, so anything after the
+      // prefix was emitted verbatim. Node's own frames carry no diagnostic weight, so the
+      // alternative is gone rather than tightened.
+      ['a node: prefix with arbitrary text', 'Error\n    at node:AdaLovelace:12:5'],
+      ['a real node internal, which is simply not emitted', 'Error\n    at node:internal/modules/esm/loader:650:26']
+    ])('emits nothing for %s', (_label, stack) => {
       const error = new Error()
-      error.stack = 'Error\n    at Some Person:12:5'
+      error.stack = stack
       expect(errorFrames(error)).toBe('')
     })
 
