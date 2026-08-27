@@ -62,7 +62,15 @@ export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Pro
         error_frames: errorFrames(e)
       })
     }
-    return NextResponse.redirect(new URL(`/?error=${reason}`, req.url), 303)
+    // The trace id rides the FAILURE too, not just the success. CLAUDE.md requires
+    // x-fapi-interaction-id propagated end-to-end, and the failure is the response that actually
+    // needs it: this handler's whole contribution is that an infrastructure failure is now
+    // diagnosable from the server log, and this header is what correlates the screen the operator
+    // is looking at with the line that names the cause. Telling them to quote a trace id and then
+    // omitting it from the very response that carries the error was the gap.
+    const failed = NextResponse.redirect(new URL(`/?error=${reason}`, req.url), 303)
+    failed.headers.set('x-fapi-interaction-id', traceId)
+    return failed
   }
 
   const res = NextResponse.redirect(new URL('/dashboard', req.url), 303)

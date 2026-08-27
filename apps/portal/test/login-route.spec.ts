@@ -41,6 +41,9 @@ describe('POST /api/login', () => {
     expect(res.headers.get('location')).toMatch(/\/\?error=invalid_token$/)
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).not.toContain('demo-token')
+    // The trace id rides the failure too — it is what correlates this screen with the server log
+    // line naming the cause, so the response carrying the error is the one that most needs it.
+    expect(res.headers.get('x-fapi-interaction-id')).toBe('trace-login-1')
   })
 })
 
