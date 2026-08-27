@@ -5,7 +5,7 @@ import { ScopeDeniedError } from '../src/rbac.js'
 import type { Principal } from '../src/auth.js'
 import type { FeeAccrual } from '@ofbo/db'
 import { emptyMargin, type MarginSummary } from '../src/reconciliation/margin.js'
-import { FAPI_HEADERS } from './helpers.js'
+import { camelCaseKeys, FAPI_HEADERS } from './helpers.js'
 import { aed, type RevenueAssuranceReport } from '@ofbo/billing'
 
 /**
@@ -115,6 +115,17 @@ describe('FinanceViewService — composition', () => {
       settlement_break_count: 1,
       dunning_by_state: { overdue: 1, escalated: 1 }
     }))
+    // BACKOFFICE-87 — pin the collections half AT THE ENDPOINT, not only on the mapper.
+    // `finance-view-wire.spec.ts` asserts `collectionsWire` in isolation and never constructs a
+    // FinanceViewService, so on its own it cannot notice this endpoint dropping the shared mapper.
+    // Without the two assertions below, reverting `collections: collectionsWire(collections)` to
+    // the old hand-mapped block leaves the whole suite green — and `dso_by_tpp` is exactly where
+    // the camelCase shipped (`tppId`, `dsoDays`, `openMilliFils`), which is why the fixture above
+    // supplies a camelCase row.
+    expect((data.collections as { dso_by_tpp: Record<string, unknown>[] }).dso_by_tpp[0]).toEqual({
+      tpp_id: 'TPP-1', dso_days: 18, invoice_count: 2, open_invoice_count: 1, open_milli_fils: 750_000
+    })
+    expect(camelCaseKeys(data.collections), 'camelCase keys reached the wire').toEqual([])
     const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
     const collectionPanel = sections.find((section) => section.title === 'Collections & Net Settlement')
     expect(collectionPanel?.stats).toEqual(expect.arrayContaining([
@@ -160,7 +171,17 @@ describe('FinanceViewService — composition', () => {
       reconciliation: { balanced: true, deltaMilliFils: 0 }
     }
     const { data } = await svc({ profitability: { latestReport: async () => report } }).view(finance, PERIOD)
-    expect(data.tpp_profitability).toEqual(expect.objectContaining({ totals: report.totals, reconciliation: { balanced: true, deltaMilliFils: 0 } }))
+    // BACKOFFICE-87 — re-pointed from the camelCase shape this assertion used to pin.
+    // It asserted `totals: report.totals` and `reconciliation: { deltaMilliFils }`, i.e. the raw
+    // TypeScript object spread straight onto the wire — so it codified the very drift it now
+    // guards against: this endpoint shipped camelCase while /billing/console shipped snake_case
+    // for the identical payload. The requirement (profitability totals and the reconciliation
+    // verdict are surfaced) is unchanged; the shape is now the binding one.
+    expect(data.tpp_profitability).toEqual(expect.objectContaining({
+      totals: expect.objectContaining({ receivable_milli_fils: aed(100), profit_milli_fils: aed(87) }),
+      reconciliation: { balanced: true, delta_milli_fils: 0 }
+    }))
+    expect(camelCaseKeys(data.tpp_profitability), 'camelCase keys reached the wire').toEqual([])
     const sections = data.sections as { title: string; stats?: { label: string; value: string }[] }[]
     expect(sections.find((section) => section.title === 'TPP Profitability')?.stats).toEqual(expect.arrayContaining([
       { label: 'Receivables', value: 'AED 100.00' },

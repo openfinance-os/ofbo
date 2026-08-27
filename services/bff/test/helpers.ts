@@ -14,3 +14,32 @@ export const AUTHED_HEADERS = {
   // BACKOFFICE-80 guardrail d: super-admin mutations carry a recorded justification
   'x-superadmin-justification': 'contract test sweep across all routes (BACKOFFICE-80)'
 }
+
+/**
+ * Every camelCase KEY at every depth — the shape check behind CLAUDE.md's snake_case convention.
+ *
+ * The obvious spelling, `JSON.stringify(payload).not.toMatch(/[a-z][A-Z]/)`, scans the serialised
+ * payload and so matches VALUES too: a `tpp_id` of `orgTabby`, a source ref like `invRef1A`, or a
+ * product-family label would fail an otherwise-conformant response. That is a false-failure hazard
+ * on the assertion that guards the convention, which is the worst place to have one. This walks
+ * keys only.
+ *
+ * IT DOES NOT DISTINGUISH A FIELD NAME FROM A MAP KEY, and it cannot — both are object keys by the
+ * time a walker sees them. Where a payload uses DATA as keys, the convention does not apply and
+ * this helper will still object: `data.tpp_aas_margin.by_fintech[*].by_family` is keyed by
+ * `ProductFamily` values including `'CoP'`, which matches. So call it on the subtree you mean
+ * rather than on a whole response — `camelCaseKeys(data)` would fail today on a conformant payload.
+ * Naming the limit here because the paragraph above claims this helper removed a false-failure
+ * hazard, and it removed one of two.
+ */
+export function camelCaseKeys(value: unknown, acc: string[] = []): string[] {
+  if (Array.isArray(value)) {
+    for (const item of value) camelCaseKeys(item, acc)
+  } else if (value && typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value)) {
+      if (/[a-z][A-Z]/.test(key)) acc.push(key)
+      camelCaseKeys(nested, acc)
+    }
+  }
+  return acc
+}

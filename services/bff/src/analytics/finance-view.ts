@@ -4,6 +4,7 @@ import type { FeeAccrual } from '@ofbo/db'
 import type { MarginSummary } from '../reconciliation/margin.js'
 import type { Principal } from '../auth.js'
 import { assertScope } from '../rbac.js'
+import { collectionsWire, profitabilityReportWire } from '../billing/wire.js'
 import { scopeDenied } from '../errors.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import { computeFreshness, FRESHNESS_CADENCE, type FreshnessEnvelope } from './freshness.js'
@@ -191,16 +192,30 @@ export class FinanceViewService {
       tpp_aas_margin: margin,
       open_nebras_dispute_count: openDisputes,
       unbilled_traffic_alert_count: unbilled,
-      collections: {
-        open_invoice_count: collections.openInvoiceCount,
-        open_milli_fils: collections.openMilliFils,
-        settlement_break_count: collections.settlementBreakCount,
-        settlement_expected_net_milli_fils: collections.settlementExpectedNetMilliFils,
-        settlement_received_milli_fils: collections.settlementReceivedMilliFils,
-        settlement_residue_milli_fils: collections.settlementResidueMilliFils,
-        dunning_by_state: collections.dunningByState,
-        dso_by_tpp: collections.dsoByTpp
-      },
+      // The SHARED mapper, not a second copy. This block used to hand-map most fields and then
+      // spread `collections.dsoByTpp` raw, so the nested rows shipped `tppId` / `dsoDays` /
+      // `openMilliFils` — camelCase on the wire, while GET /back-office/billing/console emitted the
+      // identical payload correctly through wire.ts. `AnalyticsView.data` is
+      // `additionalProperties: true`, so no schema caught it; only the convention forbade it, and a
+      // convention with nothing asserting it is a preference. One shape, one place to change it.
+      //
+      // TWO of the three sibling blocks, to be exact — `collections` and `tpp_profitability` now go
+      // through the shared mappers, `revenue_assurance` below does not. That is deliberate and
+      // recorded here because the sentence above would otherwise imply it was swept too.
+      collections: collectionsWire(collections),
+      // DELIBERATELY a narrower projection than `assuranceWire`, not an oversight.
+      //
+      // `GET /back-office/billing/console` emits the same source object through `assuranceWire`
+      // with period, currency, generated_at, variance_by_fee_class, recoveries, dispute_window,
+      // target, roi_contribution and richer findings[] rows — that is the operator's working
+      // surface for revenue assurance. This is the finance SUMMARY view, where the block is one
+      // panel among eight, so it carries the headline figures and the target verdict only.
+      //
+      // The cost is real and worth naming: `target_percent`, `target_met` and
+      // `missed_dispute_windows` are flattenings that exist nowhere else, so a field added to
+      // `RevenueAssuranceReport` reaches one endpoint and not the other. If that cost outgrows the
+      // benefit, the fix is to project FROM `assuranceWire` rather than beside it — a response-shape
+      // change with its own story, not a quiet edit here.
       revenue_assurance: assurance ? {
         metering_coverage_percent: assurance.meteringCoveragePercent,
         leakage_milli_fils: assurance.leakageMilliFils,
@@ -216,12 +231,16 @@ export class FinanceViewService {
           counterfactual_milli_fils: finding.counterfactualMilliFils, status: finding.status, owner: finding.owner
         }))
       } : null,
-      tpp_profitability: profitability ? {
-        totals: profitability.totals,
-        by_tpp: profitability.byTpp,
-        by_product_family: profitability.byProductFamily,
-        reconciliation: profitability.reconciliation
-      } : null,
+      // Same reason: `totals`, `byTpp` and `byProductFamily` were spread straight from the
+      // TypeScript shape, so `by_product_family` arrived as `byProductFamily`.
+      //
+      // Not purely a casing fix, though: the shared mapper also emits `period` and `currency` at
+      // report level, which the hand-mapped block did not. That is an ADDITIVE widening of the
+      // response — legal, since `AnalyticsView.data` is `additionalProperties: true`, and an
+      // improvement on the money posture (this block now says which currency its amounts are in;
+      // `collections` still does not). Recorded here rather than left for a reader to discover,
+      // because "casing only" would understate what changed on the wire.
+      tpp_profitability: profitability ? profitabilityReportWire(profitability) : null,
       roi_narrative: {
         fee_variance_recovered_milli_fils: assurance?.roiContribution.feeVarianceRecoveredMilliFils ?? 0,
         fee_variance_recovered_aed: assurance?.roiContribution.feeVarianceRecoveredAed ?? 0
