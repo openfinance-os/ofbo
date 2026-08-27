@@ -131,6 +131,29 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       expect(frames).toContain('telemetry.spec')
     })
 
+    /**
+     * When the arithmetic guard's PRECONDITION does not hold, there is nothing left to fall back
+     * to that is worth trusting.
+     *
+     * Measuring the message out assumes `stack` opens with `Name: <message>`. A re-thrown error
+     * with a rewritten stack, or a non-V8 runtime, breaks that — and then the only thing standing
+     * is the shape filter, which this file documents as admitting a message line shaped like a
+     * frame. Two guards are only two guards while both apply; on this path it is one, and it is
+     * the fallible one.
+     *
+     * So emit nothing. Losing the frames costs a diagnostic; guessing costs the hard stop.
+     */
+    it('emits nothing when the stack does not open with the message', () => {
+      const psu = '999-1990-1234567-1'
+      const error = new Error('the real message')
+      // A rewritten stack — the message is gone from the head, so counting its lines would slice
+      // off frames and leave whatever follows.
+      error.stack = `  at psu_id ${psu} in accounts.sql:12:5\n    at real (/app/x.ts:1:1)`
+      const frames = errorFrames(error)
+      expect(frames).not.toContain(psu)
+      expect(frames).toBe('')
+    })
+
     it('caps the frame count so one error cannot flood the log', () => {
       const frames = errorFrames(new Error('deep'), 2)
       expect(frames.split(' | ')).toHaveLength(2)

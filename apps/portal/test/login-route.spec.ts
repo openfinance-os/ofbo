@@ -15,11 +15,15 @@ beforeAll(() => {
   delete process.env.DATABASE_URL
 })
 
+/** A real UUID, because that is what the header is documented to carry and what the route now
+ *  requires before it will propagate one — `trace-login-1` was never a valid trace id. */
+const TRACE = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
+
 function loginRequest(token: string): Request {
   const body = new URLSearchParams({ token })
   return new Request('https://portal.example/api/login', {
     method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-fapi-interaction-id': 'trace-login-1' },
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-fapi-interaction-id': TRACE },
     body
   })
 }
@@ -32,7 +36,7 @@ describe('POST /api/login', () => {
     const setCookie = res.headers.get('set-cookie') ?? ''
     expect(setCookie).toContain(`${TOKEN_COOKIE}=demo-token%3Aoperations-analyst`)
     expect(setCookie.toLowerCase()).toContain('httponly')
-    expect(res.headers.get('x-fapi-interaction-id')).toBe('trace-login-1')
+    expect(res.headers.get('x-fapi-interaction-id')).toBe(TRACE)
   })
 
   it('rejects an unknown token: 303 back to sign-in with the reason, no cookie', async () => {
@@ -43,7 +47,7 @@ describe('POST /api/login', () => {
     expect(setCookie).not.toContain('demo-token')
     // The trace id rides the failure too — it is what correlates this screen with the server log
     // line naming the cause, so the response carrying the error is the one that most needs it.
-    expect(res.headers.get('x-fapi-interaction-id')).toBe('trace-login-1')
+    expect(res.headers.get('x-fapi-interaction-id')).toBe(TRACE)
   })
 })
 
@@ -77,6 +81,44 @@ describe('POST /api/login — failure attribution', () => {
       auditSink: { record: async () => undefined }
     })
     expect(res.headers.get('location')).toMatch(/\/\?error=invalid_token$/)
+  })
+})
+
+/**
+ * BACKOFFICE-84 — the trace id is CLIENT-SUPPLIED, and it lands somewhere permanent.
+ *
+ * `x-fapi-interaction-id` arrives on the request, is echoed back on the response, and is written
+ * to `audit_high_sensitivity` — which is INSERT-only with no deletion path for regulated records.
+ * Unvalidated, that is an attacker-controlled string with a one-way trip into the regulated trail:
+ * send a PSU identifier as the header and it is there for the five-year retention.
+ *
+ * The header is documented as a UUID v4 ("Send a UUID v4 in the x-fapi-interaction-id header" —
+ * the BFF's own 400 remediation), so anything else is not a trace id and is replaced with one.
+ * Rejecting the request would be the other option and is worse: it hands a caller a way to break
+ * sign-in with a malformed header.
+ */
+describe('POST /api/login — the trace id is validated before it is trusted', () => {
+  function requestWithTrace(trace: string): Request {
+    return new Request('https://portal.example/api/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-fapi-interaction-id': trace },
+      body: new URLSearchParams({ token: 'demo-token:operations-analyst' })
+    })
+  }
+
+  it('does not echo or record a non-UUID trace id', async () => {
+    const psu = '999-1990-1234567-1'
+    const res = await login(requestWithTrace(psu) as never)
+    const echoed = res.headers.get('x-fapi-interaction-id') ?? ''
+    expect(echoed).not.toContain(psu)
+    // Replaced with a real one rather than dropped — the response still correlates to a log line.
+    expect(echoed).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  })
+
+  it('passes a well-formed UUID through untouched', async () => {
+    const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
+    const res = await login(requestWithTrace(uuid) as never)
+    expect(res.headers.get('x-fapi-interaction-id')).toBe(uuid)
   })
 })
 

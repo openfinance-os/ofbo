@@ -62,10 +62,18 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
  */
 export function errorFrames(error: unknown, limit = 8): string {
   if (!(error instanceof Error) || typeof error.stack !== 'string') return ''
+  const message = typeof error.message === 'string' ? error.message : ''
   const lines = error.stack.split('\n')
-  // The message occupies exactly as many leading lines as it has, because `stack` opens with
-  // `Name: <message>`. MEASURED, not guessed — see below.
-  const messageLines = typeof error.message === 'string' ? error.message.split('\n').length : 1
+  const messageLines = message === '' ? 1 : message.split('\n').length
+
+  // VERIFY the precondition instead of assuming it. Measuring the message out is only sound while
+  // `stack` actually opens with `Name: <message>`; a re-thrown error with a rewritten stack, or a
+  // non-V8 runtime, breaks that. Where it does not hold there is no trustworthy guard left — the
+  // shape filter alone admits a message line shaped like a frame — so emit NOTHING. Losing the
+  // frames costs a diagnostic; guessing costs the hard stop.
+  const head = lines.slice(0, messageLines).join('\n')
+  if (message !== '' && !head.includes(message)) return ''
+
   return lines
     .slice(messageLines)
     .filter((line) => STACK_FRAME.test(line))

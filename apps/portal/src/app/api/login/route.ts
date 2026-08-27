@@ -21,10 +21,24 @@ export async function POST(req: NextRequest): Promise<Response> {
   return handleSignIn(req)
 }
 
+/** A UUID, any version — the shape the header is documented to carry. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function handleSignIn(req: NextRequest, deps: PortalDeps = {}): Promise<Response> {
   const form = await req.formData()
   const token = String(form.get('token') ?? '')
-  const traceId = req.headers.get('x-fapi-interaction-id') ?? randomUUID()
+
+  // The trace id is CLIENT-SUPPLIED and it lands somewhere permanent: it is echoed on the response
+  // and written to `audit_high_sensitivity`, which is INSERT-only with no deletion path for
+  // regulated records. Taken on trust, that is an attacker-controlled string with a one-way trip
+  // into the regulated trail — send a PSU identifier as the header and it is there for the
+  // five-year retention.
+  //
+  // So it is validated to the shape it is documented to have, and replaced when it is not one.
+  // Replaced rather than REJECTED on purpose: refusing the request would hand any caller a way to
+  // break sign-in with a malformed header, and the header is a correlation aid, not a credential.
+  const supplied = req.headers.get('x-fapi-interaction-id')
+  const traceId = supplied && UUID.test(supplied) ? supplied : randomUUID()
 
   let principal
   try {

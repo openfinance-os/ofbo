@@ -1,5 +1,6 @@
 import { getAdapter, profileFromConfig, type IdentityProviderPort } from '@ofbo/ports'
 import { mintScopes } from '@ofbo/bff/auth'
+import { redactingLog } from '@ofbo/bff/telemetry'
 import { PgAuditEmitter, PgAuditReader, type AuditEventSummary, type AuthSinkEvent } from '@ofbo/db'
 
 /**
@@ -11,6 +12,9 @@ import { PgAuditEmitter, PgAuditReader, type AuditEventSummary, type AuthSinkEve
  * Every dependency is injectable so the shell is unit-testable without a DB or
  * the Next runtime.
  */
+
+/** The sanctioned operational sink — masks by key and by shape before anything is written. */
+const signInLog = redactingLog()
 
 /** Tenancy stamp for the demo profile — mirrors the BFF worker (BD-14). */
 export const TENANCY = {
@@ -137,13 +141,36 @@ export async function verifyAndMint(token: string, deps: PortalDeps = {}): Promi
 }
 
 /**
- * Emit the High-class sign-in audit event. Awaited and propagated — audit is
- * load-bearing for sign-in, exactly as the BFF auth middleware treats it; a
- * failed write fails the sign-in rather than producing an unaudited session.
+ * Emit the High-class sign-in audit event. Awaited and propagated — audit is load-bearing for
+ * sign-in, exactly as the BFF auth middleware treats it; a failed write fails the sign-in rather
+ * than producing an unaudited session.
+ *
+ * ONE case is not covered by that sentence, and it is stated here rather than left implied: when
+ * no sink is configured at all there is no write to fail, so the sign-in proceeds unaudited. That
+ * is deliberate for local dev without a database, and it is announced rather than silent — see
+ * below. A deployment that reaches this branch is misconfigured.
  */
 export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<void> {
   const sink = resolveAuditSink(deps)
-  if (!sink) return
+  if (!sink) {
+    // An absent sink still issues a session, so this is the one path that produces the unaudited
+    // sign-in the docstring above says cannot happen. It cannot simply throw: local dev runs
+    // without a database by design, and the route tests delete DATABASE_URL deliberately.
+    //
+    // What it can do is stop being SILENT, and distinguish the two reasons it happens. An
+    // explicitly injected `null` is a caller saying "no audit here" — a test, or degraded local
+    // dev — and needs no announcement. An absent sink because DATABASE_URL is unset in a DEPLOYED
+    // environment is a misconfiguration producing unaudited sessions, and the only thing worse
+    // than finding that in the logs is not finding it anywhere.
+    if (deps.auditSink === undefined) {
+      signInLog('signin_unaudited_no_sink', {
+        trace_id: traceId,
+        acting_persona: principal.persona,
+        reason: 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
+      })
+    }
+    return
+  }
   await sink.record({
     event_type: 'signin_success',
     acting_principal: principal.subject,
