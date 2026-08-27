@@ -157,18 +157,20 @@ export async function recordSignIn(principal: PortalPrincipal, traceId: string, 
     // sign-in the docstring above says cannot happen. It cannot simply throw: local dev runs
     // without a database by design, and the route tests delete DATABASE_URL deliberately.
     //
-    // What it can do is stop being SILENT, and distinguish the two reasons it happens. An
-    // explicitly injected `null` is a caller saying "no audit here" — a test, or degraded local
-    // dev — and needs no announcement. An absent sink because DATABASE_URL is unset in a DEPLOYED
-    // environment is a misconfiguration producing unaudited sessions, and the only thing worse
-    // than finding that in the logs is not finding it anywhere.
-    if (deps.auditSink === undefined) {
-      signInLog('signin_unaudited_no_sink', {
-        trace_id: traceId,
-        acting_persona: principal.persona,
-        reason: 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
-      })
-    }
+    // What it can do is stop being SILENT — for EVERY reason it happens, not just the one I first
+    // thought was the dangerous one. An earlier cut announced only the missing-DATABASE_URL case,
+    // reasoning that an injected `null` is a caller who knows what they are doing. But
+    // `handleSignIn(req, deps)` is an exported entry point, so that seam is reachable in principle
+    // from outside a test — and a sign-in that mints a session while leaving no trace in the
+    // regulated trail AND no trace in the operational log is the one outcome worth refusing to let
+    // happen quietly, whoever asked for it.
+    signInLog('signin_unaudited_no_sink', {
+      trace_id: traceId,
+      acting_persona: principal.persona,
+      reason: deps.auditSink === null
+        ? 'the caller injected a null audit sink — the sign-in was NOT written to the audit trail'
+        : 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
+    })
     return
   }
   await sink.record({

@@ -66,13 +66,17 @@ export function errorFrames(error: unknown, limit = 8): string {
   const lines = error.stack.split('\n')
   const messageLines = message === '' ? 1 : message.split('\n').length
 
-  // VERIFY the precondition instead of assuming it. Measuring the message out is only sound while
-  // `stack` actually opens with `Name: <message>`; a re-thrown error with a rewritten stack, or a
-  // non-V8 runtime, breaks that. Where it does not hold there is no trustworthy guard left — the
-  // shape filter alone admits a message line shaped like a frame — so emit NOTHING. Losing the
-  // frames costs a diagnostic; guessing costs the hard stop.
+  // VERIFY the precondition instead of assuming it, and verify it for EVERY error rather than
+  // only the ones with a message. Measuring the message out is sound only while `stack` actually
+  // opens with what V8 puts there — `Name: message`, or bare `Name` when the message is empty.
+  // A re-thrown error with a rewritten stack, or a non-V8 runtime, breaks that, and then there is
+  // no trustworthy guard left: the shape filter alone admits `at psu_id 999-… in accounts.sql:12:5`.
+  //
+  // Compared EXACTLY, not with `includes`, and with no short-circuit for the empty message — an
+  // earlier cut guarded this with `message !== '' && …`, which meant an empty-message error never
+  // had its precondition checked at all and fell through to the shape filter on its own.
   const head = lines.slice(0, messageLines).join('\n')
-  if (message !== '' && !head.includes(message)) return ''
+  if (head !== (message === '' ? error.name : `${error.name}: ${message}`)) return ''
 
   return lines
     .slice(messageLines)
@@ -97,10 +101,10 @@ export function errorFrames(error: unknown, limit = 8): string {
  * also quotes the offending parameter. Any shape filter is a guess about what a message cannot
  * look like, and this function exists to keep message content out of the operational log.
  *
- * The shape filter stays as the SECOND guard, for the residue measurement cannot cover: a stack
- * whose first line is not the message at all (a re-thrown error with a rewritten `stack`, a
- * non-V8 runtime). There it is the only thing standing, so it is worth having — it is just not
- * worth relying on alone.
+ * The shape filter stays, but only ever as a SECOND pass over lines the arithmetic has already
+ * cleared — never as a fallback standing on its own. Where the precondition fails, `errorFrames`
+ * returns nothing rather than letting the heuristic decide; that was the correction, because a
+ * fallible guard reached exactly when the reliable one gives up is not defence in depth.
  */
 const STACK_FRAME = /^\s*at\s+.*:\d+:\d+\)?\s*$/
 

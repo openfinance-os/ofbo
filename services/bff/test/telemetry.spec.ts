@@ -154,6 +154,24 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       expect(frames).toBe('')
     })
 
+    /**
+     * The empty-message case, which an earlier cut of the precondition check skipped entirely:
+     * `message !== '' && !head.includes(message)` never evaluates its second half when the message
+     * is empty, so those errors fell through to the shape filter alone — the exact guard this
+     * file documents as fallible.
+     */
+    it('verifies the precondition even when the message is empty', () => {
+      const psu = '999-1990-1234567-1'
+      const error = new Error()
+      error.stack = `Error\n  at psu_id ${psu} in accounts.sql:12:5`
+      expect(errorFrames(error)).toContain('accounts.sql') // head matches: frames are trusted
+      // …but a stack whose head is NOT what V8 would write is refused outright.
+      const rewritten = new Error()
+      rewritten.stack = `  at psu_id ${psu} in accounts.sql:12:5`
+      expect(errorFrames(rewritten)).toBe('')
+      expect(errorFrames(rewritten)).not.toContain(psu)
+    })
+
     it('caps the frame count so one error cannot flood the log', () => {
       const frames = errorFrames(new Error('deep'), 2)
       expect(frames.split(' | ')).toHaveLength(2)
