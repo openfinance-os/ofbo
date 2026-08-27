@@ -76,3 +76,46 @@ describe('BACKOFFICE-26 — console design-system conformance (every screen)', (
     })
   }
 })
+
+/**
+ * BACKOFFICE-83 — the marker's two placements are coupled across THREE files: the root layout
+ * mounts the floating fallback, the app shell docks the inline one, and globals.css hides the
+ * fallback wherever the shell is present. Nothing in the type system ties those together, and
+ * the failure modes are asymmetric:
+ *
+ *   rule missing / selector drifts  → two markers on every authenticated screen (ugly, safe)
+ *   layout mount removed           → NO marker on sign-in and the error boundaries (a hard-stop
+ *                                    breach, and invisible until someone audits a screenshot)
+ *
+ * So assert the wiring, not the appearance. These are cheap and they fail loudly the moment a
+ * testid is renamed or the root mount is "tidied up".
+ */
+describe('BACKOFFICE-83 — the non-prod marker is mounted exactly once, everywhere', () => {
+  const read = (p: string) => readFileSync(join(SRC, p), 'utf8')
+
+  it('the root layout mounts the floating fallback, so no new page can forget the marker', () => {
+    const layout = read(join('app', 'layout.tsx'))
+    expect(layout).toMatch(/<DemoPill/)
+    expect(layout).toMatch(/<TrainingPill/)
+  })
+
+  it('the app shell docks the inline marker in its top bar', () => {
+    const shell = read(join('components', 'app-shell.tsx'))
+    expect(shell).toMatch(/<DemoMarker/)
+    expect(shell).toMatch(/<TrainingMarker/)
+  })
+
+  it('globals.css suppresses the floating fallback wherever the shell is mounted', () => {
+    const css = read(join('app', 'globals.css'))
+    // The selector must name BOTH the shell and each floating marker, or a duplicate ships.
+    expect(css).toMatch(/body:has\(\[data-testid='app-shell'\]\)[\s\S]*?\[data-testid='demo-banner'\]/)
+    expect(css).toMatch(/body:has\(\[data-testid='app-shell'\]\)[\s\S]*?\[data-testid='training-banner'\]/)
+    expect(css).toMatch(/display:\s*none/)
+  })
+
+  it('the shell carries the testid that suppression selector depends on', () => {
+    // If this id is renamed the CSS silently stops matching and two markers ship — the
+    // selector's contract, asserted from the other side.
+    expect(read(join('components', 'app-shell.tsx'))).toMatch(/data-testid="app-shell"/)
+  })
+})

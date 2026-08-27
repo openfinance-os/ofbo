@@ -207,6 +207,7 @@ milestones:
       - { id: UIF-09b-INVESTIGATION-BULKREVOKE, title: "Care/Investigation: bulk-revoke header + finance Investigation screen (Stitch-gen first)", status: done, reason: "Split from UIF-09; BOTH halves now delivered 2026-06-22. (b) the Stitch finance three-source screen exists (screen 251beaef…), and investigation-detail.tsx was brought up to it — per-source reconciled markers, a data-honest summary strip (present refs reconcile · missing ref → break of {variance}), and an Audit Trail timeline (all derived from getBreak; no fabricated history). escalate stays BACKOFFICE-05 via P6. TDD: investigation-detail.spec +4. (a) emergency PSU-wide bulk-revoke (BACKOFFICE-18, four-eyes): a BulkRevokeModule on the care console PSU view → bulkRevoke lib (POST /consents:revoke-bulk, reason CLIENT_INSTRUCTION) → 202 + approval_request → notice + link to /approvals; a second consents-admin approver completes it, never inline. PSU identifier travels server-side via hidden inputs (no PII re-typed in the browser); shown only when ≥1 revocable consent. TDD: bulk-revoke-form.spec + care-console gating test. Both from existing contracts (no spec change). NOTE residual (not part of this item): per-row 'Investigate' on consents is still undefined against the current contract — raise a spec/story if needed." }
       - { id: UIF-10-REAUDIT-GATE, title: Re-audit vs Stitch + pin canonical screen ids, status: done, depends_on: [UIF-02-SHELL-FIRSTRUN, UIF-03-ANALYTICS-BESPOKE, UIF-04-RISK-BESPOKE, UIF-05-OPS-BESPOKE, UIF-06-DASHBOARD-BESPOKE, UIF-07-RECON-THREEWAY, UIF-08-TPP-ACTIONCENTER, UIF-09-CARE-INVESTIGATION-FIDELITY], note: "Closed the track. Re-audited each portal screen (read every component on main) vs its Stitch 'Refined' reference and rewrote docs/design-conformance-audit.md (2026-06-22 re-audit): the three MAJOR-DRIFT analytics screens (Analytics/Risk/Operations) are RESOLVED → CONFORMANT by the bespoke typed-section panels (UIF-03/04/05, ADR 0016 supersedes 0012); Reconciliation + TPP-Billing MAJOR → MINOR (UIF-07/08/08b/08c; remainder gated UIF-07b); Care MINOR improved (timeline UIF-09; bulk-revoke/per-row-investigate gated UIF-09b); Investigation still MISSING REF (UIF-09b — needs a Stitch screen). TARGET MET: no MAJOR-DRIFT remains; residual MINOR items are gated (UIF-07b, UIF-09b) or accepted. Canonical Stitch screen id pinned per route in the audit doc's reference map. Docs-only; gen/lint/typecheck/test/build unaffected (full unit 876). Reviewers: hard-stop PASS, conformance CONFORMANT." }
       - { id: BACKOFFICE-82, title: "Institutional Blue: rendered defects the token gates could not see", status: done, depends_on: [UIF-10-REAUDIT-GATE], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Post-merge review of the ADR 0033 palette change, driven in a real browser across 17 routes x 4 viewports. main was RED on merge: Q2 (15 tsc errors in the WCAG helpers added to design-tokens.spec.ts — vitest does not type-check, so 30 runtime tests passed while tsc --noEmit failed) and Q2b (this ADR was accepted as 0026, a number the Nebras VAS positioning ADR already held; renumbered to 0033 with an amendment row per ADR 0031/0032). Three rendered defects no gate covered: (1) tokens named DM Sans + Instrument Serif while layout.tsx still linked Inter, so every screen rendered in the OS sans and Inter was fetched unused — font-display had 0 call sites; (2) text-demo renders on the NAVY shell in app-shell.tsx at 3.44:1, so darkening the marker for the light ground inverted its AA failure rather than removing it — no single value clears both grounds, so the marker is now two tokens (ext.demo, ext.nav.demo = the mark orange, legible where it always was) and the gate pairs every marker with each ground it is painted on (14 -> 16 pairs); (3) status-badge.tsx still mapped awaiting -> aging, so ADR 0033s fourth state never reached a screen and Tailwinds JIT never emitted .text-awaiting. Layout: /risk tore the document open 555px @1440 (a flex <dd> at min-width:auto stopped ObjectTables overflow-x-auto engaging); the DemoPill covered 128/140px of the footer link on every authenticated route. Also styled the dashboard audit panel (had zero token utilities) and closed two 390px overflows. Verified: 0 overflow and 0 AA failures across 17 routes x 4 viewports, DM Sans + Instrument Serif confirmed loading by glyph-metric probe. 1711 unit tests (up from 1702), typecheck/lint/doc-link-check green. New gates: typefaces-served, per-ground marker contrast, awaiting reachability." }
+      - { id: BACKOFFICE-83, title: "Dock the non-prod marker in the sticky top bar; quiet its treatment", status: done, depends_on: [BACKOFFICE-82], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Discharges the follow-up BACKOFFICE-82 deferred. The DEMO marker satisfied 'persistent on every screen' by floating fixed at bottom-3 right-3, which met the hard stop by covering whatever sat underneath — 128 of the 140px of the footer call-to-action on every authenticated route, and live figures on the data-dense consoles. BACKOFFICE-82 reserved gutters around it; this removes the cause instead and takes the gutters back out. TWO placements now: DemoMarker docked in the app shell top bar (which is sticky top-0, so it is on screen at every scroll position while sitting in normal flow where it cannot overlap), and DemoPill still mounted unconditionally in the ROOT layout so the marker rides the shell-less surfaces — sign-in, global-error, not-found, access-denied — and no new page can forget it. globals.css suppresses the floating one under body:has([data-testid=app-shell]); chosen as CSS not a React flag because it applies during SSR with no hydration flash and fails safe (unsupported :has() leaves the floating marker rendering, so worst case is two markers, never zero). TrainingMarker mirrors it. Treatment quieted per user request: fill, border, shadow and backdrop-blur removed from both placements, leaving a dot plus a short label in the marker colour — presence is the regulatory requirement, not prominence. Full statement still rides aria-label. AA gate widened to 18 pairs (the top-bar ground added, per its own rule that a new placement means a new pair): demo 4.98:1 and training 7.10:1 on surface-container-lowest. Verified in a browser across 14 routes x 2 viewports plus two shell-less surfaces: exactly one marker each, zero overlap, zero overflow. 1721 unit tests, E2E 32/32 against seeded Postgres; the new E2E was confirmed to fail when the suppression selector is broken." }
 
   - name: M6
     items:
@@ -262,7 +263,7 @@ milestones:
     items:
       - id: STD-09
         title: Liability and revoke-SLA completeness — fail loud, one source, cover the fraud path
-        status: pending
+        status: done
         research: docs/reviews/standards-conformance-2026-08.md
         note: >-
           Three defects on one theme, all found while verifying. services/bff/src/risk/liability.ts:47
@@ -292,6 +293,130 @@ milestones:
             paths, and a test asserts a breach on that path is visible in the audit record.
           - The CoP bundling-window hedge is removed from both the code comment and the PRD, replaced
             by the confirmed two-hour rule cross-referencing the rate card.
+      - id: BACKOFFICE-91
+        title: The OpenAPI carries a fourth copy of NFR-18's 5s revoke SLA, derived from nothing
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a spec-side defect that falsifies part of STD-09's own premise, raised by
+          the advisory contract-conformance reviewer on PR 344. No product question for a discovery
+          run to answer.
+        note: >-
+          STD-09 collapsed three declarations of NFR-18's 5-second revoke SLA into one
+          (services/bff/src/consents/nebras-sla.ts). It enumerated the copies in CODE and missed the
+          one in the ground-truth document: specs/backoffice-openapi.yaml:3264 describes
+          nebras_propagation_ms as "Must be < 5000 p99 (NFR-18)".
+
+          Nothing derives that description from NEBRAS_SLA_MS and no test compares them, so a scheme
+          amendment to 3s would leave the PUBLISHED CONTRACT telling integrators the bound is 5000
+          while the code enforced 3000 — the exact drift STD-09 set out to close, surviving in the
+          artifact with the widest audience. It is worse than the code copies were: an integrator
+          reading the contract has no way to discover the disagreement.
+
+          Deliberately NOT fixed inside STD-09. The contract is ground truth and changes through the
+          spec-change skill — spec, then tests, then code — never as a side edit in a code story.
+          Placed here rather than at the end of the STD list because it completes the single-sourcing
+          STD-09 claims, and a claim that is 3/4 true is the kind that stops being re-checked.
+
+          Remaining prose copies in code comments (consents/revoke.ts:14, consents/bulk-revoke.ts:19)
+          are narrative, not enforcement, and services/nebras-sim/src/app.ts:6 is legitimate — the
+          simulator EMULATES the counterparty rather than consuming the constant, so it must state
+          the threshold independently or it is not a simulator.
+        acceptance:
+          - The contract states the revoke-SLA bound in exactly one place, and the relationship
+            between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
+          - A test fails if the two disagree, so an amendment cannot land in one and not the other.
+          - >-
+            The contract ENUMERATES the SLO key set that slo.slos[].key draws from. It enumerates
+            none today, so slo.slos[].key - the field a consumer matches on - is a live wire
+            identifier that no contract test can guard. STD-09 renamed one of them
+            (nebras_propagation_5s to nebras_propagation_sla, correctly, since an identifier must
+            not encode a value that can move) and nothing in the repo or the contract could have
+            objected. An in-repo grep confirmed no screen, export template, adapter or fixture read
+            the old key, but an out-of-repo consumer - an APM dashboard, a P5 adapter mapping -
+            would have broken silently. Enumerating the set is what makes the next rename visible.
+          - The change goes spec-first through the spec-change skill, with the contract PR
+            human-approved before any code follows it.
+      - id: BACKOFFICE-93
+        title: The revoke SLA verdict reaches approvers on two of three routes, and the contract documents it on none
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a cross-endpoint consistency defect plus the spec gap underneath it,
+          raised by the advisory contract-conformance reviewer on PR 344. No product question for a
+          discovery run to answer.
+        depends_on: [STD-09]
+        note: >-
+          After STD-09 the three revoke routes expose three different shapes to the person deciding
+          on them.
+
+          consents:revoke-bulk returns sla_met (bulk-revoke.ts). consents:revoke-fraud now returns
+          sla_met too (fraud-revoke.ts) - plus str_draft_ref, undocumented and pre-existing.
+          consents:revoke-admin returns neither- its SLA verdict exists only in the audit record
+          (revoke.ts), so the approver reading the response gets a raw millisecond count while the
+          approver on the other two routes gets a verdict.
+
+          STD-09 fixed the fraud route because that was its scope and deliberately did NOT touch the
+          admin one, for a reason worth recording. The fraud and bulk routes return through the
+          four-eyes :approve response, whose execution_result is typed { type - object } - free-form,
+          so a field can be added without a contract change. The admin route returns the DOCUMENTED
+          RevocationResult schema (specs/backoffice-openapi.yaml:3250), which names consent_id,
+          status, nebras_propagation_ms and psu_notified and nothing else. Adding sla_met there is a
+          spec change, and doing it as a side edit in a code story is exactly the shortcut the
+          spec-first rule exists to stop.
+
+          The deeper defect is that the asymmetry was INVISIBLE. One surface is schema-governed and
+          two are free-form, so the same field is a contract change on one route and a silent
+          addition on the other two - which is how three implementations of one concept drifted apart
+          without any gate objecting.
+        acceptance:
+          - >-
+            Spec-only PR first - RevocationResult gains sla_met, and the four-eyes execution_result
+            for the revoke operations stops being an unconstrained { type - object } so all three
+            routes are schema-governed rather than two of them being legal by omission.
+          - All three revoke routes return the same verdict field, and a test asserts the three
+            shapes agree rather than each being asserted alone.
+          - str_draft_ref, currently returned by the fraud route and documented nowhere, is either
+            declared in the contract or removed - not left as a fourth undocumented field.
+      - id: BACKOFFICE-92
+        title: The liability monitor puts money on the wire as bare AED major-unit integers
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — the same money-convention conformance defect as BACKOFFICE-88, on a
+          different endpoint. Raised by the advisory contract-conformance reviewer on PR 344.
+        depends_on: [BACKOFFICE-88]
+        note: >-
+          GET /back-office/analytics/nebras-liability-monitor emits money as bare AED MAJOR units
+          with no currency: data.liability_matrix.per_incident_aed and .sla_execution_tiers_aed and
+          .new_beneficiary_exposure_cap_aed (services/bff/src/risk/liability.ts), plus
+          approaching_triggers[].accrued_aed and the object-table column accrued_aed. CLAUDE.md
+          binds money to integer MINOR units plus ISO 4217 - 1000 here means AED 1,000, where the
+          convention requires { amount: 100000, currency: "AED" }.
+
+          What makes this one sharp: the SAME response body already carries the conforming shape ten
+          lines away. The BACKOFFICE-65 forecast block folded into the identical payload encodes
+          expected_accrual as { amount: Math.round(expectedAed * 100), currency: "AED" }
+          (liability-forecast.ts), with the comment "Money: integer minor units (fils)". One
+          AnalyticsView therefore ships both encodings of the same kind of money, which is worse
+          than either encoding used consistently: a consumer cannot tell from the payload which rule
+          applies to a given field.
+
+          STD-09 added two values (new_beneficiary_breach and the exposure cap) in the
+          non-conforming shape rather than the conforming one, because matching the surrounding
+          block was the smaller change - and that is precisely how a local convention outlives the
+          binding one. Filed rather than fixed there: AnalyticsView.data is additionalProperties:true
+          so the contract permits both, and tightening it is a spec-change-first job with portal
+          readers moving in the same PR. Same shape as BACKOFFICE-88, so they should be done
+          together or in immediate sequence.
+        acceptance:
+          - Spec-only PR first, naming these fields with the Money schema so the shape stops being
+            additionalProperties-legal by omission.
+          - Every money field in this response ships as { amount, currency } in integer minor units,
+            including the object-table column and the exposure cap.
+          - One response body carries ONE money encoding - a test asserts no *_aed bare number
+            survives anywhere in the payload.
+          - The portal readers move in the same PR, so no screen reads a field that no longer exists.
       - id: STD-10
         title: Encode the Ozone Connect availability and response-time policies
         status: pending
@@ -791,6 +916,81 @@ milestones:
             carve-out, balances do not.
           - The portal readers move in the same PR as the code, so no screen reads a field that no
             longer exists.
+      - id: BACKOFFICE-89
+        title: x-fapi-interaction-id is required-and-typed in the contract, and unvalidated at the BFF
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a new feature — a conformance defect against the contract on an existing middleware,
+          raised by the advisory contract-conformance reviewer on PR 341. HG-0007 gates the entry
+          of NEW feature-bearing work so it traces to an evidenced problem; there is no product
+          question for a discovery run to answer here, only a spec/implementation disagreement to
+          resolve.
+        note: >-
+          THE DRIFT. specs/backoffice-openapi.yaml:3060 declares fapiInteractionId as
+          `schema: { type: string, format: uuid }`. services/bff/src/app.ts:902-914 checks
+          PRESENCE only, so any non-empty string is accepted and echoed into
+          AuditEvent.request_trace_id — while the handler's own remediation text at :908 tells the
+          caller "Send a UUID v4". The BFF is the layer that writes the trail, so an arbitrary
+          caller string takes a one-way trip into an INSERT-only table with no deletion path for
+          regulated records.
+
+          WHY NOW. BACKOFFICE-84 added UUID validation on the PORTAL side of the same header
+          (apps/portal/src/app/api/login/route.ts), for exactly that reason. That leaves the BFF as
+          the only layer that will accept a non-UUID, which is worse than the symmetric state it
+          replaced: a caller whose id the BFF accepts gets a different one back from the portal, so
+          the two layers' audit rows for one interaction no longer share a trace id — and CLAUDE.md
+          requires x-fapi-interaction-id propagated END TO END.
+
+          SPEC FIRST, because three sources state three rules. The contract says `format: uuid`
+          (any version). CLAUDE.md says "IDs: UUID v4". The BFF's remediation says v4. The portal's
+          validator is deliberately version-agnostic, implementing the SPEC rather than the
+          convention. Tightening the implementation before deciding which rule is correct would
+          just pick one by accident. Resolve via the spec-change skill — either tighten the
+          parameter to a v4 pattern, or state in its description that any version is accepted —
+          then make the BFF middleware enforce whatever the contract then says.
+        acceptance:
+          - Spec-only PR first, resolving the v4-vs-any-version question in one place, with
+            CLAUDE.md and the BFF remediation text agreeing with it.
+          - The BFF middleware rejects a header that does not match the contract's declared shape,
+            with the standard error envelope, and the remediation text matches the rule enforced.
+          - A non-UUID header can no longer reach request_trace_id in audit_high_sensitivity,
+            asserted against a real store.
+          - Portal and BFF agree on the header's shape, so one interaction carries one trace id
+            across both layers.
+      - id: BACKOFFICE-90
+        title: A Q4.5 lineage assertion can pass on a row it is not about (LIMIT 1, no ORDER BY)
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a test-integrity defect in an existing assertion, found while running the
+          integration suite for BACKOFFICE-84. No product question for a discovery run to answer.
+        note: >-
+          packages/db/test/billing-payable-store.int.spec.ts:555-560 asserts the BCBS 239 column
+          lineage for AP dispatch with
+          "SELECT columns FROM lineage_events WHERE table_name = 'billing_tpp_cost_ap_dispatch' LIMIT 1"
+          — no ORDER BY, and no filter on source. That table has THIRTEEN lineage rows after
+          "pnpm db:seed": twelve from billing-payable-store (the emitter under test, carrying
+          response_payload) and one from seed-demo-scenario carrying six columns and no
+          response_payload. Which one LIMIT 1 returns is physical heap order, so the assertion is
+          nondeterministic.
+
+          Both outcomes are wrong. It FAILS when the seed row surfaces first (reproduced locally on
+          a clean database in a full integration run, while the same file passes in isolation), and
+          when it passes it may be reading a row the store under test did not write — a Q4.5
+          lineage gate that can be satisfied by the seed is not a gate.
+
+          Pre-existing and unrelated to BACKOFFICE-84's diff (nothing there touches this table's
+          lineage), and CI is currently green on it, which is precisely why it is filed rather than
+          quietly fixed inside an unrelated story: reaching green by editing a test mid-story is the
+          pattern the test-tripwire and Q1b exist to stop, even when the edit is a strengthening.
+        acceptance:
+          - The assertion scopes to source = billing-payable-store with a deterministic order, so it
+            can only be satisfied by a row the emitter under test wrote.
+          - The suite passes both in isolation and in a full integration run against a freshly
+            seeded database, repeatedly.
+          - Any sibling lineage assertion with the same LIMIT-1-without-ORDER-BY shape is found and
+            given the same treatment — one instance of this is unlikely to be the only one.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +

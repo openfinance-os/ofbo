@@ -10,6 +10,7 @@ import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { NEBRAS_SLA_MS } from './nebras-sla.js'
 
 /**
  * BACKOFFICE-22 — fraud-suspected revocation. Narrow Risk scope
@@ -86,7 +87,13 @@ export function makeFraudRevokeOperation(deps: {
           psu_notified: false, // deferred per fraud policy
           compliance_notified: true,
           four_eyes_approved: true,
-          nebras_propagation_ms: ack.acknowledged_in_ms
+          nebras_propagation_ms: ack.acknowledged_in_ms,
+          // STD-09 — the VERDICT, not just the measurement. This path recorded
+          // `nebras_propagation_ms` and never compared it, so of the three revoke routes the
+          // fraud one — the highest-risk, four-eyes-gated, STR-adjacent path — was the only one
+          // whose audit record could not answer "did this meet NFR-18?". A breach here was
+          // invisible to exactly the review most likely to ask.
+          sla_met: ack.acknowledged_in_ms < NEBRAS_SLA_MS
         },
         response_status: 200
       })
@@ -95,6 +102,12 @@ export function makeFraudRevokeOperation(deps: {
         consent_id: consentId,
         status: 'Revoked',
         nebras_propagation_ms: ack.acknowledged_in_ms,
+        // The verdict rides the EXECUTION RESULT too, not only the audit body. `consents.bulk_revoke`
+        // already returns `sla_met` alongside its timing, so an approver reading the
+        // `:approve` response for the bulk route got the verdict and an approver reading it for the
+        // fraud route — the higher-risk one — got a raw millisecond count to interpret themselves.
+        // The audit record is for the review afterwards; this is what the approver sees at the time.
+        sla_met: ack.acknowledged_in_ms < NEBRAS_SLA_MS,
         psu_notified: false,
         str_draft_ref: strDraftRef
       }

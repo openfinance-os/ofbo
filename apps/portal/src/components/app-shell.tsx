@@ -8,6 +8,8 @@ import { SCOPES } from '../lib/scopes'
 import { personaLabel } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
 import { ScreenGuideOverlay } from './screen-guide-overlay'
+import { DemoMarker } from './demo-banner'
+import { TrainingMarker } from './training-banner'
 
 /**
  * UI-01 — the design-system app shell (translated from the Stitch "OFBO Portal"
@@ -162,6 +164,14 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            {/* The environment markers, docked. The top bar is `sticky top-0`, so a marker
+                placed here is on screen at every scroll position — which is what the hard stop
+                actually requires — while sitting in normal flow, where it cannot cover content
+                the way the floating pill did. Read order is environment, then help, then
+                identity: what this is before who you are. globals.css hides the floating
+                fallback wherever this shell is mounted, so exactly one of each shows. */}
+            <DemoMarker />
+            <TrainingMarker />
             {/* UX — the per-screen "why this exists" overlay (Open Finance context for
                 operators new to the scheme). Always present; explains the active module. */}
             <ScreenGuideOverlay activeKey={activeKey} />
@@ -190,27 +200,19 @@ export function AppShell({ principal, active, badges, children }: { principal: S
             </a>
           </div>
         </header>
-        {/* pb-12 keeps the last row of content out of the DemoPill's band for the same reason
-            the footer reserves one. This is the end-of-scroll case only: a viewport-fixed
-            marker necessarily sits over whatever occupies that corner mid-scroll, which is the
-            cost of the marker being unmissable on every screen (it is pointer-events-none, so
-            it never intercepts a click). Docking it into the top bar would remove the overlap
-            entirely, but that moves where a regulatory marker lives and belongs in its own
-            story rather than riding along with a layout fix. */}
-        <main id="shell-content" className="flex-1 px-container-padding pt-6 pb-12 min-w-0" data-testid="shell-content">
+        {/* The pb-12 gutter that used to be here is gone with the floating pill it was dodging.
+            Reserving empty space around a marker was always the workaround; docking it into the
+            sticky bar above is the fix, and the page gets its bottom back. */}
+        <main id="shell-content" className="flex-1 px-container-padding py-6 min-w-0" data-testid="shell-content">
           <div data-testid="shell-content-inner" className="mx-auto w-full max-w-screen-2xl">
             {children}
           </div>
         </main>
-        {/* UIF-02 — status footer: demo posture.
-            `pb-12` is the DemoPill's gutter, not decoration. The pill is fixed at bottom-3 and
-            occupies the lowest ~40px of the viewport; without a reserved band it covered 128 of
-            the 140px of "Production readiness →" on every authenticated screen. Reserving on the
-            footer rather than padding the right edge keeps it correct at every width, including
-            when the footer wraps and the link moves to its own line. */}
+        {/* UIF-02 — status footer: demo posture. Its own gutter is gone too; nothing floats over
+            "Production readiness →" any more, so the footer is back to even padding. */}
         <footer
           data-testid="shell-footer"
-          className="flex flex-wrap items-center gap-x-4 gap-y-1 px-container-padding pt-2 pb-12 border-t border-outline-variant bg-surface-container-lowest text-xs text-on-surface-variant"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 px-container-padding py-2 border-t border-outline-variant bg-surface-container-lowest text-xs text-on-surface-variant"
         >
           <span>DEMO profile · synthetic data only</span>
           <span className="font-mono">OFBO · non-prod</span>

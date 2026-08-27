@@ -1,5 +1,5 @@
 import type { ItsmPort } from '@ofbo/ports'
-import { liabilityAmount, type LiableParty, type LiabilitySignalSink } from './liability.js'
+import { liabilityAmount, UnmodelledLiabilityClassError, type LiableParty, type LiabilitySignalSink } from './liability.js'
 
 /**
  * BACKOFFICE-65 — predictive liability forecasting (regulated AI artefact).
@@ -89,10 +89,30 @@ export interface DriftSummary {
   backtest_points: number
 }
 
+/**
+ * A class present in telemetry that the liability matrix cannot price.
+ *
+ * The forecast is reached from a SYNCHRONOUS read (`GET
+ * /back-office/analytics/nebras-liability-monitor`, documented 200-only), so it cannot answer an
+ * unpriced class the way a scheduled job does. It also must not answer it with the confident zero
+ * this story removed. The third answer is the honest one: name the class, say it has no price, and
+ * leave it out of the priced arithmetic — the operator sees a gap in the MODEL rather than either
+ * a blank screen or a number nobody chose.
+ */
+export interface UnpricedClass {
+  issue: string
+  liable_party: LiableParty
+  observed_days: number
+  recent_incidents_7d: number
+  reason: string
+}
+
 export interface ForecastView {
   model: ModelCardMeta
   drift: DriftSummary
   forecasts: ClassForecast[]
+  /** Classes in telemetry with no entry in LIABILITY_MATRIX — priced by nothing, hidden by nothing. */
+  unpriced_classes: UnpricedClass[]
   fallback_active: boolean
   generated_at: string
 }
@@ -206,12 +226,31 @@ export class LiabilityForecastService {
 
     const seriesByClass: number[][] = []
     const forecasts: ClassForecast[] = []
+    const unpriced: UnpricedClass[] = []
     for (const points of byClass.values()) {
       const ordered = [...points].sort((a, b) => a.date.localeCompare(b.date))
       const counts = ordered.map((p) => p.incident_count)
+      const issue = ordered[0]!.issue
+      const liable_party = ordered[0]!.liable_party
+      try {
+        forecasts.push(forecastClass(issue, liable_party, counts))
+      } catch (e) {
+        // ONLY the unmodelled-class case is absorbed. Anything else is a genuine defect in the
+        // forecast and must still reach app.onError — swallowing it here would rebuild, one layer
+        // up, exactly the quiet-wrong-answer the matrix change removed.
+        if (!(e instanceof UnmodelledLiabilityClassError)) throw e
+        unpriced.push({
+          issue,
+          liable_party,
+          observed_days: counts.length,
+          recent_incidents_7d: counts.slice(-7).reduce((a, b) => a + b, 0),
+          reason: e.message
+        })
+        continue
+      }
       seriesByClass.push(counts)
-      forecasts.push(forecastClass(ordered[0]!.issue, ordered[0]!.liable_party, counts))
     }
+    unpriced.sort((a, b) => a.issue.localeCompare(b.issue) || a.liable_party.localeCompare(b.liable_party))
     forecasts.sort((a, b) => b.probability - a.probability || a.ref.localeCompare(b.ref))
 
     const recertifyBy = trainedThrough ? addDays(trainedThrough, RECERTIFICATION_INTERVAL_DAYS) : null
@@ -233,6 +272,7 @@ export class LiabilityForecastService {
       model,
       drift: backtestDrift(seriesByClass),
       forecasts,
+      unpriced_classes: unpriced,
       // Uncertified model → the deterministic BACKOFFICE-36 threshold monitor is authoritative.
       fallback_active: recertificationOverdue,
       generated_at: queryNow.toISOString()

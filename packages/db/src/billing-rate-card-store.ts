@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
+import { isoDateFromPg } from './pg-date.js'
 import type { LineageSink } from './lineage.js'
 
 export interface BillingRateCardVersionInput {
@@ -68,7 +69,11 @@ function toVersion(row: Record<string, unknown>): StoredBillingRateCardVersion {
   return {
     id: row.id as string,
     version: row.version as string,
-    effectiveFrom: iso(row.effective_from).slice(0, 10),
+    // `effective_from` is a SQL `date`, so it must NOT go through toISOString() — see pg-date.ts.
+    // `resolveRateCard` selects the active card by `effectiveFrom <= date`, so a day's drift east
+    // of UTC can pick the WRONG CARD entirely, which is the stepped-fee bug one level up from the
+    // year anchor. `createdAt` below is a timestamptz and is correctly an instant.
+    effectiveFrom: isoDateFromPg(row.effective_from),
     sourceUrl: row.source_url as string,
     configHash: row.config_hash as string,
     cardConfig: row.card_config,

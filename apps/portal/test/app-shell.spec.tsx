@@ -183,3 +183,60 @@ describe('AppShell', () => {
     expect(sidebar).toHaveAttribute('data-drawer-open', 'false')
   })
 })
+
+/**
+ * BACKOFFICE-83 — the DEMO marker is a regulatory hard stop (CLAUDE.md: "persistent DEMO banner
+ * on every screen"), so where it lives is a correctness question, not a styling one.
+ *
+ * It was a pill floating at the bottom-right corner, which satisfied "persistent" by covering
+ * whatever was underneath — 128 of the 140px of the footer's own call-to-action, and live
+ * figures on the data-dense consoles. Docking it in the sticky top bar keeps it on screen at
+ * every scroll position WITHOUT overlapping anything, because it is in normal flow.
+ *
+ * These assert the properties that make the dock a valid home for the marker: it is inside the
+ * sticky header, it announces the full statement, and it is not floating.
+ */
+describe('AppShell — the docked environment marker (BACKOFFICE-83)', () => {
+  it('docks the DEMO marker inside the sticky top bar, in normal flow', () => {
+    render(
+      <AppShell principal={finance} active="finance">
+        <p>content</p>
+      </AppShell>
+    )
+    const marker = screen.getByTestId('demo-marker')
+    expect(marker).toBeInTheDocument()
+    expect(marker).toHaveTextContent(/DEMO/)
+
+    // In the header, and the header is sticky — that pair is what "persistent" now rests on.
+    const header = marker.closest('header')
+    expect(header).not.toBeNull()
+    expect(header!.className).toMatch(/sticky/)
+    expect(header!.className).toMatch(/top-0/)
+
+    // Not floating: a marker that cannot cover content is the whole point of the move.
+    expect(marker.className).not.toMatch(/\bfixed\b/)
+    expect(marker.className).not.toMatch(/absolute/)
+  })
+
+  it('announces the full non-prod statement, not just the short label', () => {
+    render(
+      <AppShell principal={finance} active="finance">
+        <p>content</p>
+      </AppShell>
+    )
+    expect(
+      screen.getByRole('note', { name: /synthetic data only.*no real PSU data/i })
+    ).toBeInTheDocument()
+  })
+
+  it('does not mount a second, floating marker of its own', () => {
+    render(
+      <AppShell principal={finance} active="finance">
+        <p>content</p>
+      </AppShell>
+    )
+    // The floating fallback lives in the ROOT layout so it covers shell-less surfaces; the shell
+    // must not add one too, or the CSS that hides it would be masking a real duplicate.
+    expect(screen.queryByTestId('demo-banner')).toBeNull()
+  })
+})

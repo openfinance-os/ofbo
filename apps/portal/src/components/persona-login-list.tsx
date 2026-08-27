@@ -1,4 +1,4 @@
-import type { PersonaLogin } from '../lib/portal'
+import type { PersonaLogin, SignInFailureReason } from '../lib/portal'
 import { PERSONA_GUIDE, CAPABILITIES } from '../lib/persona-guide'
 import { OfboMark } from './ofbo-mark'
 import { BuiltWithHarness } from './built-with-harness'
@@ -11,6 +11,29 @@ import { BuiltWithHarness } from './built-with-harness'
  * enriched with the role's purpose + the modules it can reach (per the §2 scope matrix,
  * presentation-only via PERSONA_GUIDE). MFA is shown enforced (the IdP admits no skip path).
  */
+/**
+ * What a failed sign-in tells the person in front of it.
+ *
+ * The screen used to print the raw reason — "Sign-in failed: invalid_token" — which is both
+ * unreadable and, for the infrastructure case, actively misleading: it sent operators to check a
+ * token that was fine. Each message now says what happened and what to do about it, and the two
+ * causes are genuinely different actions: retry, or pick a different role.
+ *
+ * An unrecognised reason still falls through to the raw string rather than being swallowed — a
+ * new reason must be visible, not silently rendered as a blank alert. But falling through is the
+ * LAST line of defence, not the design: the map is keyed on `SignInFailureReason`, the same union
+ * the route produces, so adding a reason without a message here is a compile error rather than a
+ * slug on screen. The two vocabularies were independent literals before, which is how
+ * `service_unavailable` came to be declared twice with nothing tying them together.
+ */
+const SIGNIN_ERRORS: Record<SignInFailureReason, string> = {
+  service_unavailable:
+    'Sign-in is temporarily unavailable — the sign-in could not be recorded to the audit trail, so no session was created. Please try again in a moment.',
+  invalid_token: 'Sign-in failed: that token was not recognised.',
+  mfa_not_satisfied: 'Sign-in failed: multi-factor authentication was not completed.',
+  unknown_persona: 'Sign-in failed: that role is not in the scope matrix, so no privileges could be granted.'
+}
+
 export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]; error?: string }) {
   return (
     <section
@@ -82,7 +105,11 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
         </p>
         {error ? (
           <p role="alert" className="signin-error mt-3" data-testid="signin-error">
-            Sign-in failed: {error}
+            {/* `error` arrives from the query string, so it is an arbitrary string at runtime — the
+                cast narrows it for the lookup only, and the `??` below is what actually handles a
+                value outside the union. The map's exhaustive typing is about the PRODUCER side:
+                a new reason must gain a message here or the build fails. */}
+            {SIGNIN_ERRORS[error as SignInFailureReason] ?? `Sign-in failed: ${error}`}
           </p>
         ) : null}
         <ul className="mt-5 space-y-2" data-testid="persona-list">
