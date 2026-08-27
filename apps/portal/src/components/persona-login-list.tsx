@@ -1,5 +1,6 @@
 import type { PersonaLogin, SignInFailureReason } from '../lib/portal'
 import { PERSONA_GUIDE, CAPABILITIES } from '../lib/persona-guide'
+import { NAV_MODULES, type NavKey } from '../lib/nav'
 import { OfboMark } from './ofbo-mark'
 import { BuiltWithHarness } from './built-with-harness'
 
@@ -11,6 +12,10 @@ import { BuiltWithHarness } from './built-with-harness'
  * enriched with the role's purpose + the modules it can reach (per the §2 scope matrix,
  * presentation-only via PERSONA_GUIDE). MFA is shown enforced (the IdP admits no skip path).
  */
+/** Nav key → the label the sidebar uses for it. One source, so a role card and the sidebar cannot
+ *  name the same module differently. */
+const NAV_LABELS = Object.fromEntries(NAV_MODULES.map((m) => [m.key, m.label])) as Record<NavKey, string>
+
 /**
  * What a failed sign-in tells the person in front of it.
  *
@@ -132,9 +137,11 @@ export function PersonaLoginList({ personas, error }: { personas: PersonaLogin[]
                       {g ? <span className="block text-xs text-on-surface-variant">{g.tagline}</span> : null}
                       {g ? (
                         <span className="mt-1.5 flex flex-wrap gap-1">
+                          {/* The label comes from NAV_MODULES, never retyped here — the card and
+                              the sidebar name a module identically because they read one source. */}
                           {g.modules.map((m) => (
                             <span key={m} className="rounded bg-secondary-fixed px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-on-secondary-fixed">
-                              {m}
+                              {NAV_LABELS[m]}
                             </span>
                           ))}
                         </span>
