@@ -62,8 +62,12 @@ export function createTelemetryMiddleware(apm: Pick<ApmPort, 'exportSpans'>): Mi
  */
 export function errorFrames(error: unknown, limit = 8): string {
   if (!(error instanceof Error) || typeof error.stack !== 'string') return ''
-  return error.stack
-    .split('\n')
+  const lines = error.stack.split('\n')
+  // The message occupies exactly as many leading lines as it has, because `stack` opens with
+  // `Name: <message>`. MEASURED, not guessed — see below.
+  const messageLines = typeof error.message === 'string' ? error.message.split('\n').length : 1
+  return lines
+    .slice(messageLines)
     .filter((line) => STACK_FRAME.test(line))
     .slice(0, limit)
     .map((line) => line.trim())
@@ -71,17 +75,24 @@ export function errorFrames(error: unknown, limit = 8): string {
 }
 
 /**
- * A frame is recognised by its SHAPE, not by starting with `at `.
+ * Two independent guards, because one of them is a heuristic and the other is not.
  *
- * `stack` is `Name: message\n…frames`, so dropping the first line only removes a SINGLE-line
- * message. A multi-line one — an aggregated validation error, or a driver error that appends a
- * `detail:` naming the offending parameter — puts its continuation lines in front of the filter on
- * equal terms with the frames, and a line reading `  at the point of conflict` sails through a
- * `startsWith('at ')` test carrying message content into the log this function exists to keep it
- * out of.
+ * The message is REMOVED BY MEASUREMENT. `stack` opens with `Name: <message>`, so the message
+ * occupies exactly `message.split('\n').length` leading lines and those lines are dropped without
+ * inspecting them. That is arithmetic, not pattern-matching, and it cannot be defeated by what the
+ * message happens to contain.
  *
- * Requiring the trailing `:line:column` is what separates them: every V8 frame ends in one, and
- * prose essentially never does.
+ * Which matters, because the obvious alternatives can be. Filtering for lines that start with
+ * `at ` keeps a continuation line reading `  at the point of conflict`. Tightening that to require
+ * a trailing `:line:column` keeps `  at psu_id 999-… in accounts.sql:12:5` — and driver and parser
+ * errors quote source positions in exactly that form, which is precisely the class of error that
+ * also quotes the offending parameter. Any shape filter is a guess about what a message cannot
+ * look like, and this function exists to keep message content out of the operational log.
+ *
+ * The shape filter stays as the SECOND guard, for the residue measurement cannot cover: a stack
+ * whose first line is not the message at all (a re-thrown error with a rewritten `stack`, a
+ * non-V8 runtime). There it is the only thing standing, so it is worth having — it is just not
+ * worth relying on alone.
  */
 const STACK_FRAME = /^\s*at\s+.*:\d+:\d+\)?\s*$/
 

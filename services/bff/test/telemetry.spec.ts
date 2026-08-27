@@ -113,6 +113,24 @@ describe('BACKOFFICE-48 — OTel emission, x-fapi-interaction-id end-to-end', ()
       expect(frames).toContain('telemetry.spec')
     })
 
+    /**
+     * The adversarial case, and the reason the message is measured rather than pattern-matched.
+     *
+     * A shape filter — "starts with `at `, ends in `:line:col`" — is a guess about what a message
+     * cannot look like, and this is a message that looks exactly like that. Driver and parser
+     * errors quote source positions in precisely this form. Counting the message's own lines is
+     * not a better guess; it is not a guess.
+     */
+    it('drops a message line that is shaped like a frame', () => {
+      const psu = '999-1990-1234567-1'
+      const error = new Error(`insert failed\n  at psu_id ${psu} in accounts.sql:12:5`)
+      const frames = errorFrames(error)
+      expect(frames).not.toContain(psu)
+      expect(frames).not.toContain('accounts.sql')
+      expect(frames).not.toContain('insert failed')
+      expect(frames).toContain('telemetry.spec')
+    })
+
     it('caps the frame count so one error cannot flood the log', () => {
       const frames = errorFrames(new Error('deep'), 2)
       expect(frames.split(' | ')).toHaveLength(2)
