@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { DEMO_BANK_ID, DEMO_TENANTS } from '@ofbo/synthetic-data'
+import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 
@@ -51,11 +51,36 @@ async function seedBillingConsoleEvidence(pool: pg.Pool): Promise<void> {
 
   const period = new Date().toISOString().slice(0, 7)
   const inputHash = `sha256:demo-billing-console:${period}`
+  // The expected memo IS the book, not a two-line stand-in.
+  //
+  // It used to be exactly two hardcoded lines — one of them `org-fictional-fintech-01`, a
+  // counterparty that exists nowhere else in the repo — totalling AED 200. So the Billing Control
+  // Plane reported a monthly profit of AED 200 while the registry next door showed a book of
+  // AED 475,000, and its profitability ledger named an institution no other screen had heard of.
+  // Two screens over the same month disagreeing by three orders of magnitude is not a demo, it is
+  // a bug report waiting to happen.
+  //
+  // Priced from the same book as the registry accruals, so the two reconcile by construction.
+  const book = [...accrualByTpp(period).values()].filter((entry) => entry.accrualMilliFils > 0)
+  const lines = book.flatMap((entry) =>
+    entry.breakdown.map((line, i) => ({
+      lineRef: `${period}|${entry.organisationId}|${line.feeClass}`,
+      tppId: entry.organisationId,
+      feeClass: line.feeClass,
+      units: line.units,
+      events: 1,
+      amountMilliFils: line.amountMilliFils,
+      valueMilliFils: line.amountMilliFils,
+      eventIds: [`demo-billing-${entry.organisationId}-${i}`],
+      traceIds: [`demo-billing-trace-${entry.organisationId}-${i}`]
+    }))
+  )
+  const memoTotalMilliFils = lines.reduce((sum, line) => sum + line.amountMilliFils, 0)
   const meter = await pool.query(
     `WITH inserted AS (
        INSERT INTO billing_meter_run
          (bank_id,channel,period,rate_card_version,input_hash,event_count,stats,evidence)
-       VALUES ($1,$2,$3,'2026.06.02',$4,2,$5::jsonb,$6::jsonb)
+       VALUES ($1,$2,$3,'2026.06.02',$4,$7::int,$5::jsonb,$6::jsonb)
        ON CONFLICT (bank_id,period,rate_card_version,input_hash) DO NOTHING
        RETURNING id
      )
@@ -65,36 +90,22 @@ async function seedBillingConsoleEvidence(pool: pg.Pool): Promise<void> {
       WHERE bank_id=$1 AND period=$3 AND rate_card_version='2026.06.02' AND input_hash=$4
      LIMIT 1`,
     [DEMO_BANK_ID, CH, period, inputHash,
-      JSON.stringify({ demo: true, receivable_lines: 2 }),
-      JSON.stringify({ source: 'seed-demo-scenario', period })]
+      JSON.stringify({ demo: true, receivable_lines: lines.length }),
+      JSON.stringify({ source: 'seed-demo-scenario', period }), lines.length]
   )
   const meterRunId = meter.rows[0].id as string
   const generatedAt = `${period}-01T00:00:00.000Z`
   const dueAt = `${period}-03T23:59:59.999Z`
-  const lines = [
-    {
-      lineRef: `${period}|org-fictional-fintech-01|data.retail_page`,
-      tppId: 'org-fictional-fintech-01', feeClass: 'data.retail_page', units: 12500,
-      events: 1, amountMilliFils: 12500000, valueMilliFils: 12500000,
-      eventIds: ['demo-billing-data-01'], traceIds: ['demo-billing-trace-01']
-    },
-    {
-      lineRef: `${period}|org-yap|payment.initiation`,
-      tppId: 'org-yap', feeClass: 'payment.initiation', units: 7500,
-      events: 1, amountMilliFils: 7500000, valueMilliFils: 7500000,
-      eventIds: ['demo-billing-payment-01'], traceIds: ['demo-billing-trace-02']
-    }
-  ]
   const statement = {
     period, rateCardVersion: '2026.06.02', generatedAt, dueAt, generatedOnTime: true,
-    lines, totalMilliFils: 20000000
+    lines, totalMilliFils: memoTotalMilliFils
   }
   const memo = await pool.query(
     `WITH inserted AS (
        INSERT INTO billing_expected_memo
          (bank_id,channel,meter_run_id,meter_input_hash,period,rate_card_version,
           generated_at,due_at,generated_on_time,total_milli_fils,statement_payload)
-       VALUES ($1,$2,$3,$4,$5,'2026.06.02',$6,$7,true,20000000,$8::jsonb)
+       VALUES ($1,$2,$3,$4,$5,'2026.06.02',$6,$7,true,$9::bigint,$8::jsonb)
        ON CONFLICT (bank_id,meter_run_id,rate_card_version) DO NOTHING
        RETURNING id
      )
@@ -103,7 +114,7 @@ async function seedBillingConsoleEvidence(pool: pg.Pool): Promise<void> {
      SELECT id FROM billing_expected_memo
       WHERE bank_id=$1 AND meter_run_id=$3 AND rate_card_version='2026.06.02'
      LIMIT 1`,
-    [DEMO_BANK_ID, CH, meterRunId, inputHash, period, generatedAt, dueAt, JSON.stringify(statement)]
+    [DEMO_BANK_ID, CH, meterRunId, inputHash, period, generatedAt, dueAt, JSON.stringify(statement), memoTotalMilliFils]
   )
   const memoId = memo.rows[0].id as string
   for (const line of lines) {
@@ -644,15 +655,30 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     //       Contacts are role labels only (no PSU/person PII). The base three (Tarabut/Lean/Tabby)
     //       are seeded by seedDemoDataset — these add further registry depth.
     const CONTACTS = JSON.stringify([{ role: 'technical', label: 'Integration Desk' }, { role: 'commercial', label: 'Partnerships' }])
+
+    // Accruals come from the demo book of business (@ofbo/synthetic-data/billing-book): declared
+    // monthly volumes priced by `rateUsage` against the published scheme card. They used to be
+    // hand-written round numbers, which meant no volume explained any figure — and because only
+    // the institutions seeded HERE were given one, the recognisable UAE names (Lean, Tabby,
+    // Tarabut, all seeded by the base dataset) showed a dash while the invented ones carried every
+    // dirham of revenue. The registry's credible half looked inert. The book covers all nine.
+    const currentPeriod = new Date().toISOString().slice(0, 7)
+    const book = accrualByTpp(currentPeriod)
+    /** Month-to-date receivable in FILS — the column's unit; the book works in milli-fils. */
+    const mtdFils = (orgId: string): number | null => {
+      const milliFils = book.get(orgId)?.accrualMilliFils ?? 0
+      return milliFils > 0 ? Math.round(milliFils / 1_000) : null
+    }
+
     type Tpp = [string, string, string, string, string, boolean, number | null]
     const tpps: Tpp[] = [
       // organisation_id, legal_name, registration_number, production_status, registration_state, unbilled_traffic, mtd_fee_accrual (fils)
-      ['org-yap', 'YAP Digital Ltd', 'CN-1005537', 'active_traffic', 'registered', false, 2450000],       // real, healthy
-      ['org-sarwa', 'Sarwa Digital Wealth Ltd', 'CN-1006644', 'active_traffic', 'registered', false, 970000], // real, healthy
-      ['org-mamo', 'Mamo Pay FZ-LLC', 'CN-1008899', 'active_traffic', 'registered', false, 1610000],      // real, healthy
-      ['org-baraka', 'Baraka Financial Ltd', 'CN-1009912', 'directory_only', 'onboarding', false, null],  // real, onboarding (neutral)
-      ['org-meydan-pay', 'Meydan Pay Technologies FZ-LLC', 'CN-1004120', 'active_traffic', 'registered', true, 1890000], // FICTIONAL — unbilled alert
-      ['org-falaj-money', 'Falaj Money Ltd', 'CN-1007788', 'dormant', 'suspended', false, null]           // FICTIONAL — suspended
+      ['org-yap', 'YAP Digital Ltd', 'CN-1005537', 'active_traffic', 'registered', false, mtdFils('org-yap')],
+      ['org-sarwa', 'Sarwa Digital Wealth Ltd', 'CN-1006644', 'active_traffic', 'registered', false, mtdFils('org-sarwa')],
+      ['org-mamo', 'Mamo Pay FZ-LLC', 'CN-1008899', 'active_traffic', 'registered', false, mtdFils('org-mamo')],
+      ['org-baraka', 'Baraka Financial Ltd', 'CN-1009912', 'directory_only', 'onboarding', false, mtdFils('org-baraka')],
+      ['org-meydan-pay', 'Meydan Pay Technologies FZ-LLC', 'CN-1004120', 'active_traffic', 'registered', true, mtdFils('org-meydan-pay')], // FICTIONAL — unbilled alert
+      ['org-falaj-money', 'Falaj Money Ltd', 'CN-1007788', 'dormant', 'suspended', false, mtdFils('org-falaj-money')]                     // FICTIONAL — suspended
     ]
     for (const [orgId, legalName, regNum, prodStatus, regState, unbilled, mtd] of tpps) {
       await pool.query(
@@ -670,21 +696,65 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
+    // The base dataset (seed.ts) inserts Lean, Tabby and Tarabut from the billing lines, with no
+    // production status and no accrual — so the three most recognisable names in the registry
+    // rendered as a dash next to invented institutions showing real money. They are the bank's
+    // largest counterparties in the book, so give them their standing and their revenue.
+    // UPDATE rather than INSERT: those rows already exist by the time this runs.
+    type BookRow = [string, string, string, string]
+    const bookRows: BookRow[] = [
+      // organisation_id, registration_number, production_status, registration_state
+      ['org-lean-technologies', 'CN-1002210', 'active_traffic', 'registered'],
+      ['org-tabby', 'CN-1003318', 'active_traffic', 'registered'],
+      ['org-tarabut-gateway', 'CN-1001104', 'active_traffic', 'registered']
+    ]
+    for (const [orgId, regNum, prodStatus, regState] of bookRows) {
+      await pool.query(
+        `UPDATE tpp_counterparty
+            SET registration_number = COALESCE(registration_number, $3),
+                directory_contacts = CASE WHEN directory_contacts = '[]'::jsonb THEN $4::jsonb ELSE directory_contacts END,
+                production_status = $5,
+                registration_state = $6,
+                first_traffic_at = COALESCE(first_traffic_at, now() - interval '11 months'),
+                financial_system_ref = COALESCE(financial_system_ref, 'fms-' || $2),
+                mtd_fee_accrual_amount = $7::bigint,
+                mtd_fee_accrual_currency = CASE WHEN $7::bigint IS NULL THEN NULL ELSE 'AED' END
+          WHERE bank_id = $1 AND organisation_id = $2`,
+        [DEMO_BANK_ID, orgId, regNum, CONTACTS, prodStatus, regState, mtdFils(orgId)]
+      )
+    }
+
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the
     //       current period awaiting four-eyes approval (coherent with the billing:write approval in
     //       section 4, period 2026-05). invoices carry per-TPP amounts (money values, no PII).
+    // Periods are RELATIVE to now. They used to be hard-coded 2026-03/04/05, so the invoicing
+    // surface silently aged: by August the "current" run awaiting approval was three months old
+    // and the two consoles disagreed about which month the demo was in.
+    const invoiceNow = new Date()
+    const invMonth = (back: number) => {
+      const d = new Date(Date.UTC(invoiceNow.getUTCFullYear(), invoiceNow.getUTCMonth() - back, 1))
+      return d.toISOString().slice(0, 7)
+    }
     type Inv = [string, string, number, number, number]
     const invoiceRuns: Inv[] = [
       // billing_period, status, invoice_count, withheld_line_count, age_days
-      ['2026-03', 'settled', 6, 0, 95],
-      ['2026-04', 'settled', 6, 1, 64],
-      ['2026-05', 'pending_approval', 5, 2, 3]
+      [invMonth(3), 'settled', 7, 0, 95],
+      [invMonth(2), 'settled', 7, 1, 64],
+      [invMonth(1), 'pending_approval', 7, 2, 3]
     ]
     for (const [period, status, count, withheld, ageD] of invoiceRuns) {
+      // Invoice amounts are that period's priced book, not a synthetic ramp — so the invoice a
+      // Finance Analyst opens reconciles against the accrual shown on the registry, which is the
+      // whole point of the screen. Only counterparties that actually billed get an invoice.
+      const periodBook = [...accrualByTpp(period, currentPeriod).values()]
+        .filter((entry) => entry.accrualMilliFils > 0)
+        .sort((a, b) => b.accrualMilliFils - a.accrualMilliFils)
+        .slice(0, count)
       const invoices = JSON.stringify(
-        Array.from({ length: count }, (_, i) => ({
-          organisation_id: tpps[i % tpps.length]![0],
-          amount: { amount: 500000 + i * 137000, currency: 'AED' }
+        periodBook.map((entry) => ({
+          organisation_id: entry.organisationId,
+          // Money at the wire is integer minor units (fils) + ISO 4217, per CLAUDE.md.
+          amount: { amount: Math.round(entry.accrualMilliFils / 1_000), currency: 'AED' }
         }))
       )
       await pool.query(

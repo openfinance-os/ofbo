@@ -138,7 +138,19 @@ const simIdentityProvider: IdentityProviderPort = {
     const persona = match[1]!
     const tenantSlug = match[2]
     if (!PERSONAS.some(([p]) => p === persona)) throw new Error('unknown demo token')
-    const bank_id = tenantSlug ? DEMO_TENANT_BANK_IDS[tenantSlug] : undefined
+    // A token with no tenant suffix belongs to the DEFAULT demo tenant, not to no tenant at all.
+    //
+    // It used to mint no bank_id, and the whole LFI half of the Billing Control Plane is gated on
+    // one: `tenantId()` in billing/console.ts throws BILLING_TENANT_REQUIRED without it. The
+    // sign-in screen only ever offers unsuffixed tokens, so in the single-tenant demo — the
+    // default deployment — every persona hit "A verified bank tenant claim is required for billing
+    // access" and the console rendered empty. Only the flagged three-tenant demo could reach it.
+    //
+    // Alpha Bank IS the tenant in a single-tenant demo; the claim now says so. This does not widen
+    // access: the same id already backs every seeded row, `bank_id` still carries no scope of its
+    // own, and a suffixed token is still validated against the known tenants and still rejected
+    // when the slug is unknown.
+    const bank_id = tenantSlug ? DEMO_TENANT_BANK_IDS[tenantSlug] : DEMO_TENANT_BANK_IDS['alpha-bank']
     if (tenantSlug && !bank_id) throw new Error('unknown demo tenant claim')
     return { subject: `demo:${persona}${tenantSlug ? `@${tenantSlug}` : ''}`, persona, mfa: true, ...(bank_id ? { bank_id } : {}) }
   },

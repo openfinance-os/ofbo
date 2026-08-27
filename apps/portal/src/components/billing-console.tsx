@@ -274,7 +274,16 @@ export function BillingConsole({ view, error, errorRemediation, errorDocsUrl, si
           <AssurancePanel view={view} />
           <ProfitabilityPanel view={view} />
 
-          <SectionCard title="Fee simulation" testid="simulation-panel" action={<ExportActions period={period} />}>
+          {/* The two export controls live in the card BODY, not the header's `action` slot.
+              SectionCard marks that slot `shrink-0` — correct for a short button, but these two
+              labels come to 207px and 233px, so beside a title on a 390px screen they pushed the
+              whole document 90px sideways. They were invisible until this PR made the console
+              render at all, which is why the containment gate is only catching them now.
+              In the body they get the full card width and wrap on their own. */}
+          <SectionCard title="Fee simulation" testid="simulation-panel">
+            <div className="border-b border-outline-variant px-4 py-3">
+              <ExportActions period={period} />
+            </div>
             {simulateAction ? <ProfitabilitySimulator period={period} action={simulateAction} /> : null}
           </SectionCard>
 

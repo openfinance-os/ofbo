@@ -226,12 +226,23 @@ describe('BILL production billing console', () => {
     await expect(simulation.json()).resolves.toMatchObject({ data: { scenario_id: scenario.scenarioId } })
   })
 
-  it('requires a verified tenant and idempotency for the audited regulator export', async () => {
+  it('requires idempotency for the audited regulator export, and resolves the default demo tenant', async () => {
     const { app, audit } = routeHarness()
-    const noTenant = await app.request('/back-office/billing/console', {
+
+    // A plain `demo-token:<persona>` now carries the DEFAULT demo tenant, because in a
+    // single-tenant demo the principal genuinely belongs to Alpha Bank and the sim IdP says so.
+    // It used to mint no bank_id at all, which made the entire LFI half of the Billing Control
+    // Plane unreachable in the default deployment — the sign-in screen only ever issues unsuffixed
+    // tokens, so every persona hit BILLING_TENANT_REQUIRED and the console rendered empty.
+    //
+    // THE GATE ITSELF IS UNCHANGED AND STILL PROVEN — see 'rejects reads without the verified
+    // tenant claim' above, which drives the service with `bankId: undefined` and asserts
+    // BILLING_TENANT_REQUIRED / 403. What moved is what the DEMO IdP issues, not what the console
+    // demands, and the enterprise adapter (p2-entra) is untouched.
+    const defaultTenant = await app.request('/back-office/billing/console?period=2026-07', {
       headers: { ...FAPI_HEADERS, authorization: 'Bearer demo-token:finance-analyst' }
     })
-    expect(noTenant.status).toBe(403)
+    expect(defaultTenant.status).toBe(200)
 
     const request = {
       method: 'POST',

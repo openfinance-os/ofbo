@@ -3,6 +3,13 @@ import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { seedDemoDataset } from '../src/seed.js'
 import { seedDemoScenario } from '../src/seed-demo.js'
+import { accrualByTpp } from '@ofbo/synthetic-data'
+
+/** The same relative months the seed writes — month-1/-2/-3 from today. */
+const month = (back: number) => {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1)).toISOString().slice(0, 7)
+}
 
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is required for integration tests')
@@ -84,8 +91,18 @@ describe('demo scenario seed', () => {
   })
 
   it('seeds 3 invoice runs and 3 scheme notifications', async () => {
-    const inv = await admin.query(`SELECT count(*)::int AS n FROM invoice_run WHERE billing_period IN ('2026-03','2026-04','2026-05')`)
+    // Periods are RELATIVE to today. This used to pin '2026-03','2026-04','2026-05', which meant
+    // the assertion aged out alongside the data it was guarding: by August the seed's "current" run
+    // was three months old and this test still passed. Asserting the relative contract is strictly
+    // stronger — it now fails if the runs ever drift away from month-1/-2/-3.
+    const inv = await admin.query(
+      `SELECT count(*)::int AS n FROM invoice_run WHERE billing_period = ANY($1::text[])`,
+      [[month(1), month(2), month(3)]]
+    )
     expect(inv.rows[0].n).toBe(3)
+    // The most recent complete month is the one still awaiting four-eyes approval.
+    const current = await admin.query(`SELECT status FROM invoice_run WHERE billing_period = $1`, [month(1)])
+    expect(current.rows[0].status).toBe('pending_approval')
     const notif = await admin.query(`SELECT count(DISTINCT notification_type)::int AS n FROM scheme_notification WHERE created_by = 'demo:operations-analyst'`)
     expect(notif.rows[0].n).toBe(3)
     const breaking = await admin.query(`SELECT dual_running_required FROM scheme_notification WHERE notification_type = 'breaking_change' LIMIT 1`)
@@ -104,7 +121,25 @@ describe('demo scenario seed', () => {
         GROUP BY m.total_milli_fils`,
       ['11111111-1111-4111-8111-111111111111', period, `sha256:demo-billing-console:${period}`]
     )
-    expect(memo.rows).toEqual([{ total_milli_fils: '20000000', line_count: 2 }])
+    // Tied to the PRICED BOOK rather than to two magic numbers. It used to pin
+    // total_milli_fils '20000000' / line_count 2 — the hardcoded two-line memo, one line of which
+    // named `org-fictional-fintech-01`, a counterparty on no other screen. Deriving the expectation
+    // from the same book the seed prices means this now fails if the memo and the registry ever
+    // disagree, which is the defect it exists to catch and the old constants could not see.
+    const book = [...accrualByTpp(period).values()].filter((entry) => entry.accrualMilliFils > 0)
+    const expectedTotal = book.reduce((sum, entry) => sum + entry.accrualMilliFils, 0)
+    const expectedLines = book.reduce((sum, entry) => sum + entry.breakdown.length, 0)
+    expect(memo.rows).toEqual([{ total_milli_fils: String(expectedTotal), line_count: expectedLines }])
+    expect(expectedLines).toBeGreaterThan(2) // the book, not a two-line stand-in
+
+    // And no memo line may name a counterparty the registry does not carry.
+    const orphans = await admin.query(
+      `SELECT DISTINCT l.tpp_id FROM billing_expected_memo_line l
+        WHERE l.bank_id = $1
+          AND NOT EXISTS (SELECT 1 FROM tpp_counterparty c WHERE c.bank_id = l.bank_id AND c.organisation_id = l.tpp_id)`,
+      ['11111111-1111-4111-8111-111111111111']
+    )
+    expect(orphans.rows).toEqual([])
   })
 
   it('seeds the four previously-empty consoles (reports, trust-framework, respondent, agents)', async () => {
