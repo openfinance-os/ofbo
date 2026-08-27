@@ -190,7 +190,11 @@ describe('OFBO design tokens — Institutional Blue', () => {
       ['TRAINING marker on ground', ext.training, color.surface],
       // …and on the navy shell, which is a ground the portal genuinely paints text on.
       ['DEMO marker on shell', ext.nav.demo, ext.nav.surface],
-      ['TRAINING marker on shell', ext.nav.training, ext.nav.surface]
+      ['TRAINING marker on shell', ext.nav.training, ext.nav.surface],
+      // …and on the top bar, where BACKOFFICE-83 docked them. Adding a placement means adding
+      // its pair — the rule this block already states, applied to the change that followed it.
+      ['DEMO marker on top bar', ext.demo, color['surface-container-lowest']],
+      ['TRAINING marker on top bar', ext.training, color['surface-container-lowest']]
     ]
 
     it.each(textPairs)('%s meets 4.5:1', (_label, fg, bg) => {

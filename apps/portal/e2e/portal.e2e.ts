@@ -295,3 +295,77 @@ test.describe('layout containment (BACKOFFICE-82)', () => {
     })
   }
 })
+
+/**
+ * BACKOFFICE-83 — the non-prod marker is a regulatory hard stop, and it now ships in two
+ * placements: docked in the shell's sticky top bar, and floating on the surfaces that have no
+ * shell. A CSS rule decides which one shows. That rule is the kind of thing that breaks silently
+ * — a renamed testid, a "tidied" root mount — and both failure directions matter:
+ *
+ *   no marker anywhere   → a hard-stop breach on a screen nobody screenshots
+ *   two markers at once  → the suppression rule stopped matching
+ *
+ * Unit tests cover each component in isolation; only the browser can tell you which one the
+ * cascade actually resolved. So assert the resolved outcome, on a real page, both ways round.
+ */
+test.describe('non-prod marker placement (BACKOFFICE-83)', () => {
+  const shown = async (page: Page, testid: string) =>
+    page.locator(`[data-testid="${testid}"]`).evaluateAll((els) =>
+      els.filter((e) => getComputedStyle(e).display !== 'none').length
+    )
+
+  test('shell-less surfaces keep the floating marker — the hard stop holds where there is no shell', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.getByTestId('persona-login-list')).toBeVisible()
+    expect(await shown(page, 'app-shell')).toBe(0)
+    expect(await shown(page, 'demo-banner')).toBe(1)
+    expect(await shown(page, 'demo-marker')).toBe(0)
+    // …and it announces the full statement, not just the short label.
+    await expect(page.getByRole('note', { name: /synthetic data only.*no real PSU data/i })).toBeAttached()
+  })
+
+  test('authenticated screens show the docked marker and exactly one of it', async ({ page }) => {
+    await login(page, SUPER)
+    for (const route of ['/dashboard', '/analytics', '/risk', '/audit']) {
+      await page.goto(route)
+      await expect(page.getByTestId('app-shell')).toBeVisible()
+      expect(await shown(page, 'demo-marker'), `${route}: docked marker`).toBe(1)
+      expect(await shown(page, 'demo-banner'), `${route}: floating marker suppressed`).toBe(0)
+    }
+  })
+
+  test('the docked marker rides the sticky bar and never covers content', async ({ page }) => {
+    await login(page, SUPER)
+    await page.goto('/analytics')
+    const marker = page.getByTestId('demo-marker')
+    await expect(marker).toBeVisible()
+
+    // At rest, the marker sits in the header's own reserved band and nothing is under it.
+    // (Once scrolled, content passes BEHIND the sticky bar — that is what sticky does, and the
+    // bar is opaque, so it hides rather than obscures. The overlap that mattered was the old
+    // floating pill, which had no band of its own at any scroll position.)
+    const coveredAtRest = await page.evaluate(() => {
+      const m = document.querySelector('[data-testid="demo-marker"]')!.getBoundingClientRect()
+      return Array.from(document.querySelectorAll('body *')).filter((el) => {
+        if (el.closest('[data-testid="demo-marker"]')) return false
+        if (el.closest('header')) return false // siblings in the bar are laid out, not overlapped
+        if (!Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent!.trim())) return false
+        const b = el.getBoundingClientRect()
+        if (b.width < 2 || b.height < 2) return false
+        return b.left < m.right && b.right > m.left && b.top < m.bottom && b.bottom > m.top
+      }).length
+    })
+    expect(coveredAtRest, 'content overlapped by the marker at rest').toBe(0)
+
+    // Still on screen at the bottom of a long page — "persistent" now rests on sticky, not fixed.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await expect(marker).toBeInViewport()
+
+    // And the bar it rides is opaque, so what scrolls under it is hidden, never half-legible.
+    const barBg = await page.evaluate(() => {
+      const header = document.querySelector('[data-testid="demo-marker"]')!.closest('header')!
+      return getComputedStyle(header).backgroundColor
+    })
+    expect(barBg, 'the sticky bar must be opaque').not.toMatch(/rgba\([^)]*,\s*0?\.\d+\)/)
+  })
+})
