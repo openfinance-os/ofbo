@@ -184,7 +184,7 @@ import { trustFrameworkRoutes } from './trust-framework/routes.js'
 import { ServiceDeskService, InMemoryServiceDeskCaseStore, type ServiceDeskCaseStore } from './service-desk/service.js'
 import { serviceDeskRoutes } from './service-desk/routes.js'
 import { hasHighClassEmit, InMemoryHighClassAuditSink, type HighClassAuditSink } from './high-class-audit.js'
-import { createTelemetryMiddleware, redactingLog } from './telemetry.js'
+import { createTelemetryMiddleware, errorFrames, redactingLog } from './telemetry.js'
 import { IdempotencyCache, type IdempotencyStore } from './idempotency.js'
 
 /** Route keys (`method path`) handled by real story services — used by the test
@@ -1001,7 +1001,11 @@ export function createApp(deps: AppDeps = {}) {
       trace_id: traceId,
       path: c.req.path,
       method: c.req.method,
-      error_name: error.name
+      error_name: error.name,
+      // The frames, not the message. The message can quote the offending input; the frames are
+      // build-time code locations and carry no request data. Without these the envelope told the
+      // operator to quote a trace id at a log line that named no cause — see errorFrames().
+      error_frames: errorFrames(error)
     })
     return c.json(
       errorEnvelope(

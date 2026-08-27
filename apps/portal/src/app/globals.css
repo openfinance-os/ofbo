@@ -45,6 +45,23 @@
   }
 }
 
+/*
+ * The DEMO / TRAINING markers ship in two placements (see demo-banner.tsx): docked in the app
+ * shell's sticky top bar, and floating for the surfaces that have no shell — sign-in,
+ * global-error, not-found, access-denied. The floating one is mounted unconditionally in the
+ * ROOT layout, which is what makes the hard stop impossible to forget on a new page; this hides
+ * it wherever the shell is mounted, so exactly one of each shows.
+ *
+ * Deliberately CSS and not a React flag: it applies during SSR with no hydration flash, and it
+ * fails in the safe direction. If :has() is unsupported the rule simply never matches and the
+ * floating marker still renders — the worst case is two markers, never zero. A JS-gated hide
+ * would fail the other way, which is not a trade you make with a regulatory marker.
+ */
+body:has([data-testid='app-shell']) [data-testid='demo-banner'],
+body:has([data-testid='app-shell']) [data-testid='training-banner'] {
+  display: none;
+}
+
 /* Respect reduced-motion preferences (WCAG 2.3.3 / vestibular safety). */
 @media (prefers-reduced-motion: reduce) {
   *,

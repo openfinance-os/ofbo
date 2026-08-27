@@ -43,7 +43,11 @@ describe('M1-PORTAL-SHELL — sign-in audit emitted and visible', () => {
       event_type: 'signin_success',
       acting_principal: principal.subject,
       acting_persona: 'risk-analyst',
-      response_status: 200,
+      // BACKOFFICE-84 — re-pointed from 200. That was the status the emitter INFERS from the event
+      // type, which is right for the BFF and wrong here: the portal answers a sign-in POST with a
+      // 303 redirect to /dashboard, so 200 named a response no caller received — in an INSERT-only
+      // trail whose spec defines this field as "the HTTP status returned to the caller".
+      response_status: 303,
       superadmin_marker: false
     })
     expect(events[0]?.created_at).toBeTruthy()
