@@ -8,6 +8,13 @@
 
 import { SCOPES } from './scopes'
 
+/** One entry of NAV_MODULES, with its key kept literal rather than widened to `string`. */
+export type NavEntry = (typeof NAV_MODULES)[number]
+
+/** The nav module keys, as a literal union — so a persona card cannot cite one that does not
+ *  exist and a typo fails the build rather than rendering an empty tag. */
+export type NavKey = NavEntry['key']
+
 export interface NavModule {
   key: string
   label: string
@@ -18,7 +25,7 @@ export interface NavModule {
   scope: string | string[] | null
 }
 
-export const NAV_MODULES: NavModule[] = [
+export const NAV_MODULES = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: 'dashboard', scope: null },
   // Four-eyes approvals are cross-cutting (any persona may hold an approver scope); the
   // queue self-filters by approver_required_scope, so the entry is always visible (UI-05).
@@ -46,7 +53,7 @@ export const NAV_MODULES: NavModule[] = [
   // outside the §2 matrix (scope: null = always visible) at the foot of the nav. It explains
   // why each console exists from an Open Finance ecosystem perspective (see lib/screen-guide.ts).
   { key: 'guide', label: 'Guide', href: '/guide', icon: 'menu_book', scope: null }
-]
+] as const satisfies readonly NavModule[]
 
 /**
  * The nav key for a pathname — so the shell highlights the active module from the URL
@@ -68,7 +75,7 @@ export function activeModuleKey(pathname: string): string | undefined {
  * satisfies any scope, BACKOFFICE-80); otherwise a module shows only when its
  * scope is held (or it has no scope requirement).
  */
-export function visibleModules(scopes: readonly string[], superadmin: boolean): NavModule[] {
+export function visibleModules(scopes: readonly string[], superadmin: boolean): readonly NavEntry[] {
   if (superadmin) return NAV_MODULES
   return NAV_MODULES.filter((m) => {
     if (m.scope === null) return true
