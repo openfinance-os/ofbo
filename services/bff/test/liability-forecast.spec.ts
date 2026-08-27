@@ -97,6 +97,69 @@ describe('LiabilityForecastService.forecastView', () => {
   })
 })
 
+/**
+ * STD-09 follow-up — the fail-loud rule must not take down a documented 200-only read.
+ *
+ * `liabilityAmount` raises on a class the matrix does not price. That is right for a scheduled job:
+ * there is no correct exposure figure to record. But the same function is reached SYNCHRONOUSLY
+ * from `GET /back-office/analytics/nebras-liability-monitor` via the forecast, and the route's
+ * catch handles only `scopeDenied` — so one unpriced class in telemetry reached `app.onError` and
+ * returned `500 BACKOFFICE.INTERNAL_ERROR`, taking down the entire risk view including every part
+ * that did not depend on it. That trades a wrong number for no screen at all.
+ *
+ * The third answer is the honest one: the class is named as unpriced, excluded from the priced
+ * arithmetic, and the rest of the view renders.
+ */
+describe('an unpriced class in telemetry — reported, not fatal, not zero', () => {
+  const days = (issue: string, liable_party: 'LFI' | 'TPP', n: number): LiabilityTelemetryPoint[] =>
+    Array.from({ length: MIN_TELEMETRY_DAYS }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 2, 1 + i)).toISOString().slice(0, 10),
+      issue,
+      liable_party,
+      incident_count: n
+    }))
+
+  const mixedTelemetry = {
+    async getDailyTelemetry(): Promise<LiabilityTelemetryPoint[]> {
+      return [...days('fraud_prevention_failure', 'TPP', 2), ...days('brand_new_scheme_class', 'LFI', 3)]
+    }
+  }
+
+  it('keeps forecasting the priced classes and names the unpriced one', async () => {
+    const view = await new LiabilityForecastService({ telemetry: mixedTelemetry, now: () => NOW }).forecastView()
+
+    expect(view.forecasts.map((f) => f.issue)).toEqual(['fraud_prevention_failure'])
+    expect(view.unpriced_classes).toHaveLength(1)
+    expect(view.unpriced_classes[0]).toMatchObject({
+      issue: 'brand_new_scheme_class',
+      liable_party: 'LFI',
+      observed_days: MIN_TELEMETRY_DAYS,
+      recent_incidents_7d: 21
+    })
+    // The reason names the gap in OUR model — it is the message the matrix raises, carried through.
+    expect(view.unpriced_classes[0]!.reason).toMatch(/no entry in LIABILITY_MATRIX/)
+  })
+
+  it('does NOT invent a forecast for it — a visible gap, never a confident zero', async () => {
+    const view = await new LiabilityForecastService({ telemetry: mixedTelemetry, now: () => NOW }).forecastView()
+    const invented = view.forecasts.filter((f) => f.issue === 'brand_new_scheme_class')
+    expect(invented).toEqual([])
+    // Nothing anywhere in the payload prices it at zero, which is the shape this story removed.
+    expect(JSON.stringify(view)).not.toMatch(/"expected_accrual":\{"amount":0/)
+  })
+
+  it('a genuine forecast defect still surfaces — only the unmodelled class is absorbed', async () => {
+    const exploding = {
+      async getDailyTelemetry(): Promise<LiabilityTelemetryPoint[]> {
+        throw new TypeError('telemetry reader is broken')
+      }
+    }
+    await expect(
+      new LiabilityForecastService({ telemetry: exploding, now: () => NOW }).forecastView()
+    ).rejects.toThrow(/telemetry reader is broken/)
+  })
+})
+
 describe('LiabilityForecastMonitor (headless)', () => {
   // a class with a high recent incident rate → high 24h probability
   const hot: LiabilityTelemetryPoint[] = Array.from({ length: MIN_TELEMETRY_DAYS }, (_, i) => ({

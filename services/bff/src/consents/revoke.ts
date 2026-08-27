@@ -18,7 +18,10 @@ import type { IdempotencyStore } from '../idempotency.js'
 
 export const REVOKE_SCOPE = 'consents:admin'
 export const VALID_REASON_CODES = ['TPP_REQUEST', 'CLIENT_INSTRUCTION', 'REGULATORY'] as const
-export const NEBRAS_SLA_MS = 5000
+/** NFR-18's revoke SLA — re-exported from its single definition so existing importers of
+ *  this module keep working, without a second literal that can drift from the first. */
+import { NEBRAS_SLA_MS } from './nebras-sla.js'
+export { NEBRAS_SLA_MS }
 
 export interface RevocationResult {
   consent_id: string

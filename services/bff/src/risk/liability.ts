@@ -30,10 +30,40 @@ export const LIABILITY_MATRIX: Record<string, number> = {
   consumer_protection_violation: 1000,
   deprecation_mismanagement: 2500,
   lfi_breaking_change: 5000,
-  fraud_prevention_failure: 10000
+  fraud_prevention_failure: 10000,
+  /**
+   * International-payment new-beneficiary breach. The scheme caps exposure at AED 15,000 for 48
+   * hours after beneficiary creation, per customer per TPP per bank; redress is AED 1,000 plus
+   * direct losses, and the AED 1,000 is what this matrix prices — the cap bounds the aggregate,
+   * not the per-incident liability the monitor accrues.
+   *
+   * It was missing entirely, which under the old zero-default meant the class priced at 0 and
+   * crossed its threshold on the first incident.
+   */
+  new_beneficiary_breach: 1000
 }
+
+/** The scheme's aggregate cap on a new-beneficiary breach — 48h, per customer per TPP per bank. */
+export const NEW_BENEFICIARY_EXPOSURE_CAP_AED = 15000
 /** SLA-execution failure is tiered 350/250/200 by delay severity (v2.1). */
 export const SLA_TIERS: Record<number, number> = { 1: 350, 2: 250, 3: 200 }
+
+/**
+ * A liability class the scheme publishes and this matrix has not priced.
+ *
+ * Named, rather than a bare Error, because the two callers must answer it differently. A scheduled
+ * job (worker.ts) should fail its run — there is no correct exposure figure to record. A
+ * synchronous READ must not: `GET /back-office/analytics/nebras-liability-monitor` is documented as
+ * a 200, and one unpriced class in telemetry taking down the whole risk view — including the parts
+ * that do not depend on it — trades a wrong number for no screen at all. The read reports the gap
+ * as a gap instead (see `unpriced_classes` in liability-forecast.ts).
+ */
+export class UnmodelledLiabilityClassError extends Error {
+  constructor(public readonly issue: string, message: string) {
+    super(message)
+    this.name = 'UnmodelledLiabilityClassError'
+  }
+}
 
 export interface LiabilityEvent {
   issue: string
@@ -42,9 +72,48 @@ export interface LiabilityEvent {
   sla_tier?: number
 }
 
+/**
+ * The per-incident liability for an issue class. RAISES on a class the matrix does not model.
+ *
+ * It used to return 0, and the threshold in `evaluate` derives from THE SAME lookup — so both
+ * sides were 0, `accrued >= threshold` was `0 >= 0`, and an unmodelled class crossed on its first
+ * incident. The result was not silence, which would at least have been investigated: it emitted a
+ * `nebras_liability_approach` signal and two P3 ITSM tickets reporting the bank's exposure as
+ * `AED 0` at `low` severity. A queue full of confident zeroes looks like a monitor that is working.
+ *
+ * A class the scheme has published and this matrix has not priced is a gap in OUR model, and the
+ * only safe answer is to say so loudly. Callers are scheduled jobs (worker.ts) and the monitor,
+ * both of which surface a throw; none of them can do anything useful with a fabricated zero.
+ */
 export function liabilityAmount(event: { issue: string; sla_tier?: number }): number {
-  if (event.issue === 'sla_execution_failure') return SLA_TIERS[event.sla_tier ?? 1] ?? SLA_TIERS[1]!
-  return LIABILITY_MATRIX[event.issue] ?? 0
+  if (event.issue === 'sla_execution_failure') {
+    // An UNMODELLED TIER is the same defect as an unmodelled class, one line apart. This used to
+    // read `SLA_TIERS[event.sla_tier ?? 1] ?? SLA_TIERS[1]!`, so an `sla_tier` of 4 — or 0, or
+    // anything the scheme adds — was silently priced at tier 1's AED 350 and went on to accrue,
+    // signal and ticket under a number nobody chose. The tier defaults to 1 when ABSENT, which is
+    // the documented v2.1 default and a real answer; a tier that is present and unknown is not.
+    const tier = event.sla_tier ?? 1
+    const tiered = SLA_TIERS[tier]
+    if (tiered === undefined) {
+      throw new UnmodelledLiabilityClassError(
+        `sla_execution_failure:tier-${tier}`,
+        `unmodelled Nebras SLA-execution tier ${tier} — SLA_TIERS prices tiers `
+        + `${Object.keys(SLA_TIERS).join(', ')} only, so this delay severity cannot be priced. `
+        + 'Add the tier with its scheme citation rather than pricing it as tier 1.'
+      )
+    }
+    return tiered
+  }
+  const amount = LIABILITY_MATRIX[event.issue]
+  if (amount === undefined) {
+    throw new UnmodelledLiabilityClassError(
+      event.issue,
+      `unmodelled Nebras liability class '${event.issue}' — it has no entry in LIABILITY_MATRIX, `
+      + 'so its exposure cannot be priced. Add the class with its scheme citation rather than '
+      + 'letting it accrue as zero.'
+    )
+  }
+  return amount
 }
 function severityFor(accruedAed: number): 'low' | 'medium' | 'high' | 'critical' {
   if (accruedAed >= 5000) return 'critical'
@@ -104,6 +173,15 @@ export class LiabilityMonitorService {
    * (issue × party) that crosses its threshold and has no OPEN signal yet (dedup).
    */
   async evaluate(events: LiabilityEvent[], openRefs: Set<string>, traceId: string): Promise<EvaluatedSignal[]> {
+    // PRICE THE WHOLE BATCH FIRST, before anything is emitted.
+    //
+    // The throw used to fire from inside the loop below, which meant an unmodelled class at
+    // position 2 left position 1's risk signal and two P3 ITSM tickets already written — and
+    // worker.ts retries the whole batch on its next run, so the survivors are re-evaluated against
+    // a dedup set that now contains them. Half a batch is the worst of both answers: it neither
+    // completes nor leaves the queue clean. Pricing up front makes the batch all-or-nothing.
+    for (const e of events) liabilityAmount(e)
+
     const out: EvaluatedSignal[] = []
     for (const e of events) {
       const accrued = liabilityAmount(e) * Math.max(e.incident_count, 0)
@@ -160,7 +238,16 @@ export class LiabilityViewService {
     }
 
     const data: Record<string, unknown> = {
-      liability_matrix: { per_incident_aed: LIABILITY_MATRIX, sla_execution_tiers_aed: SLA_TIERS },
+      liability_matrix: {
+        per_incident_aed: LIABILITY_MATRIX,
+        sla_execution_tiers_aed: SLA_TIERS,
+        // The aggregate cap that QUALIFIES new_beneficiary_breach. This block is the authoritative
+        // statement of scheme amounts for a `risk:read` consumer, and publishing the AED 1,000
+        // per-incident redress without it invites the reading that exposure is unbounded — the cap
+        // is a different KIND of number (48h aggregate, per customer per TPP per bank), not a
+        // per-incident price, which is why it sits beside the matrix rather than inside it.
+        new_beneficiary_exposure_cap_aed: NEW_BENEFICIARY_EXPOSURE_CAP_AED
+      },
       open_count: monitor.open_count,
       by_severity: monitor.by_severity,
       approaching_triggers: accrual,
