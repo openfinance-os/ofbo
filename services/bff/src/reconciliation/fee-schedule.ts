@@ -15,6 +15,12 @@
  * docs)"; the PRD half of that hedge was retired by the standards-conformance review, and the
  * scheme is unambiguous. A stale uncertainty note is worse than none: it invites the next reader
  * to re-derive a rule that is already settled, or to treat a modelled value as provisional.
+ *
+ * ONLY THE PER-CALL RATE IS MODELLED HERE, and that is still true — `applyFeeScheduleV1` multiplies
+ * a flat per-unit rate by a call count and applies no pairing discount at all. The line stating so
+ * was dropped along with the stale hedge, which left this module asserting a confirmed window it
+ * does not implement; a reader would reasonably infer the bundling is handled here. It is not. The
+ * window lives in `rate-card.ts`, and anything that needs it must read it from there.
  */
 
 import { SCHEME_RATE_CARD_2026_06_02 } from '@ofbo/billing'

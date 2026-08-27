@@ -102,6 +102,12 @@ export function makeFraudRevokeOperation(deps: {
         consent_id: consentId,
         status: 'Revoked',
         nebras_propagation_ms: ack.acknowledged_in_ms,
+        // The verdict rides the EXECUTION RESULT too, not only the audit body. `consents.bulk_revoke`
+        // already returns `sla_met` alongside its timing, so an approver reading the
+        // `:approve` response for the bulk route got the verdict and an approver reading it for the
+        // fraud route — the higher-risk one — got a raw millisecond count to interpret themselves.
+        // The audit record is for the review afterwards; this is what the approver sees at the time.
+        sla_met: ack.acknowledged_in_ms < NEBRAS_SLA_MS,
         psu_notified: false,
         str_draft_ref: strDraftRef
       }

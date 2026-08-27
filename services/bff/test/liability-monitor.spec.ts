@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.js'
-import { LiabilityMonitorService, LiabilityViewService, liabilityAmount, LIABILITY_MATRIX, type LiabilityEvent } from '../src/risk/liability.js'
+import {
+  LiabilityMonitorService,
+  LiabilityViewService,
+  liabilityAmount,
+  LIABILITY_MATRIX,
+  NEW_BENEFICIARY_EXPOSURE_CAP_AED,
+  type LiabilityEvent
+} from '../src/risk/liability.js'
 import { ScopeDeniedError } from '../src/rbac.js'
 import type { Principal } from '../src/auth.js'
 import { FAPI_HEADERS } from './helpers.js'
@@ -151,9 +158,51 @@ describe('STD-09 — an unmodelled liability class fails loud', () => {
     const events: LiabilityEvent[] = [{ issue: 'brand_new_scheme_class', liable_party: 'LFI', incident_count: 1 }]
 
     await expect(svc.evaluate(events, new Set(), 'trace-std09')).rejects.toThrow(/brand_new_scheme_class/)
-    // And nothing was emitted on the way out — no half-written queue of zero-value alerts.
     expect(sink.signals).toHaveLength(0)
     expect(itsm.tickets).toHaveLength(0)
+  })
+
+  /**
+   * The batch is ALL-OR-NOTHING, and a one-element array could never have shown that.
+   *
+   * The throw used to fire from inside the emit loop, so a modelled event ahead of the unmodelled
+   * one had already written its risk signal and both P3 tickets before the batch failed. The
+   * assertion above passed only because its array had a single element — it proved the ordering it
+   * happened to have, not the property it claimed. worker.ts then retries the whole batch against a
+   * dedup set that already contains the survivors, so the half-written state persists.
+   *
+   * The modelled event here crosses its threshold comfortably (fraud_prevention_failure at AED
+   * 10,000), so if anything were emitted before the throw, it would be.
+   */
+  it('emits NOTHING when a later event in the batch is unpriced', async () => {
+    const sink = new FakeSink()
+    const itsm = new FakeItsm()
+    const svc = new LiabilityMonitorService({ signals: sink, itsm })
+    const events: LiabilityEvent[] = [
+      { issue: 'fraud_prevention_failure', liable_party: 'TPP', incident_count: 3 },
+      { issue: 'brand_new_scheme_class', liable_party: 'LFI', incident_count: 1 }
+    ]
+
+    await expect(svc.evaluate(events, new Set(), 'trace-std09-batch')).rejects.toThrow(/brand_new_scheme_class/)
+    expect(sink.signals).toHaveLength(0)
+    expect(itsm.tickets).toHaveLength(0)
+  })
+
+  /**
+   * An unmodelled TIER is the same defect as an unmodelled class, one line apart in the same
+   * function — and the story that removed default pricing left it in place. Tier 4 (or 0, or
+   * anything the scheme adds) was silently priced at tier 1's AED 350 and accrued under it.
+   */
+  it('raises on an SLA tier the scheme prices and this table does not', () => {
+    expect(liabilityAmount({ issue: 'sla_execution_failure', sla_tier: 1 })).toBe(350)
+    expect(liabilityAmount({ issue: 'sla_execution_failure', sla_tier: 3 })).toBe(200)
+    // Absent is still tier 1 — that is the documented v2.1 default, a real answer rather than a
+    // guess at an unknown one.
+    expect(liabilityAmount({ issue: 'sla_execution_failure' })).toBe(350)
+    expect(() => liabilityAmount({ issue: 'sla_execution_failure', sla_tier: 4 }))
+      .toThrow(/unmodelled Nebras SLA-execution tier 4/)
+    expect(() => liabilityAmount({ issue: 'sla_execution_failure', sla_tier: 0 }))
+      .toThrow(/unmodelled Nebras SLA-execution tier 0/)
   })
 
   /**
@@ -163,5 +212,23 @@ describe('STD-09 — an unmodelled liability class fails loud', () => {
   it('models the new-beneficiary breach the matrix was missing', () => {
     expect(LIABILITY_MATRIX.new_beneficiary_breach).toBe(1000)
     expect(liabilityAmount({ issue: 'new_beneficiary_breach' })).toBe(1000)
+  })
+
+  /**
+   * The 48h aggregate cap has to reach a consumer, or modelling it changed nothing observable.
+   *
+   * `liability_matrix` is what a `risk:read` consumer treats as the authoritative statement of
+   * scheme amounts. Publishing the AED 1,000 per-incident redress without the cap that qualifies it
+   * invites the reading that exposure on this class is unbounded.
+   */
+  it('publishes the aggregate exposure cap alongside the matrix it qualifies', async () => {
+    expect(NEW_BENEFICIARY_EXPOSURE_CAP_AED).toBe(15000)
+    const emptyMonitor = {
+      liabilityMonitor: async () => ({ open_count: 0, by_severity: {}, recent: [] })
+    }
+    const { data } = await new LiabilityViewService({ riskMetrics: emptyMonitor }).view(risk)
+    const matrix = data.liability_matrix as Record<string, unknown>
+    expect(matrix.new_beneficiary_exposure_cap_aed).toBe(NEW_BENEFICIARY_EXPOSURE_CAP_AED)
+    expect((matrix.per_incident_aed as Record<string, number>).new_beneficiary_breach).toBe(1000)
   })
 })

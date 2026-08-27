@@ -57,7 +57,15 @@ export class DemoSloReader implements SloReader {
       // Description DERIVED from the enforced constant (STD-09). It used to restate the
       // threshold as prose in a different unit, so a scheme amendment could move what the code
       // enforces while this row kept telling operators the old number.
-      { key: 'nebras_propagation_5s', description: `Nebras consent-revoke propagation < ${NEBRAS_SLA_SECONDS}s (NFR-18)`, target_pct: 99.0, observed_pct: 99.6, window_days: 30 },
+      //
+      // The KEY carries no threshold either. It was `nebras_propagation_5s`, which is the same
+      // defect in the one field with identifier semantics — the field consumers match on, where a
+      // stale number is worse than in prose: an amendment to 3s would have produced a row keyed
+      // `…_5s` and described as "< 3s". Deriving the key instead would have been worse again,
+      // since the identifier would then CHANGE under consumers on a scheme amendment. An
+      // identifier should not encode a value that can move, so it names the SLO and the
+      // description carries the number.
+      { key: 'nebras_propagation_sla', description: `Nebras consent-revoke propagation < ${NEBRAS_SLA_SECONDS}s (NFR-18)`, target_pct: 99.0, observed_pct: 99.6, window_days: 30 },
       { key: 'reconciliation_completeness', description: 'Daily three-way reconciliation completeness', target_pct: 99.9, observed_pct: 99.97, window_days: 30 },
       { key: 'nebras_connectivity_uptime', description: 'Nebras Hub connectivity uptime', target_pct: 99.5, observed_pct: 99.55, window_days: 30 },
       { key: 'api_p95_latency', description: 'Back Office API p95 < 1.5s', target_pct: 99.5, observed_pct: 99.3, window_days: 30 }

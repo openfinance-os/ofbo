@@ -14,6 +14,14 @@
  *
  * Every consumer imports from here, and the SLO description is DERIVED rather than written, so the
  * number a screen displays cannot drift from the number the code enforces.
+ *
+ * ONE COPY REMAINS, and it is outside this module's reach: `specs/backoffice-openapi.yaml` states
+ * the bound in the `nebras_propagation_ms` description ("Must be < 5000 p99 (NFR-18)"). Nothing
+ * derives it and no test compares it, so an amendment to 3s would leave the PUBLISHED CONTRACT —
+ * the artifact with the widest audience — telling integrators 5000 while the code enforced 3000.
+ * It is not fixed here because the contract is ground truth and changes through the spec-change
+ * workflow, not a code edit; filed as BACKOFFICE-91. Recorded in this file so the next reader does
+ * not take "declared once" more literally than it is true.
  */
 export const NEBRAS_SLA_MS = 5000
 
