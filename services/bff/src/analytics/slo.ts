@@ -1,3 +1,4 @@
+import { NEBRAS_SLA_SECONDS } from '../consents/nebras-sla.js'
 /**
  * BACKOFFICE-58 — SLO observability for the Operations Console. Surfaces, per SLO,
  * the target, observed attainment, error-budget remaining and burn rate so operators
@@ -53,7 +54,10 @@ export function summarizeSlos(slos: SloStatus[]): { healthy: number; at_risk: nu
 export class DemoSloReader implements SloReader {
   async getSloObservations(): Promise<SloObservation[]> {
     return [
-      { key: 'nebras_propagation_5s', description: 'Nebras consent-revoke propagation < 5s (NFR-18)', target_pct: 99.0, observed_pct: 99.6, window_days: 30 },
+      // Description DERIVED from the enforced constant (STD-09). It used to restate the
+      // threshold as prose in a different unit, so a scheme amendment could move what the code
+      // enforces while this row kept telling operators the old number.
+      { key: 'nebras_propagation_5s', description: `Nebras consent-revoke propagation < ${NEBRAS_SLA_SECONDS}s (NFR-18)`, target_pct: 99.0, observed_pct: 99.6, window_days: 30 },
       { key: 'reconciliation_completeness', description: 'Daily three-way reconciliation completeness', target_pct: 99.9, observed_pct: 99.97, window_days: 30 },
       { key: 'nebras_connectivity_uptime', description: 'Nebras Hub connectivity uptime', target_pct: 99.5, observed_pct: 99.55, window_days: 30 },
       { key: 'api_p95_latency', description: 'Back Office API p95 < 1.5s', target_pct: 99.5, observed_pct: 99.3, window_days: 30 }

@@ -30,8 +30,21 @@ export const LIABILITY_MATRIX: Record<string, number> = {
   consumer_protection_violation: 1000,
   deprecation_mismanagement: 2500,
   lfi_breaking_change: 5000,
-  fraud_prevention_failure: 10000
+  fraud_prevention_failure: 10000,
+  /**
+   * International-payment new-beneficiary breach. The scheme caps exposure at AED 15,000 for 48
+   * hours after beneficiary creation, per customer per TPP per bank; redress is AED 1,000 plus
+   * direct losses, and the AED 1,000 is what this matrix prices — the cap bounds the aggregate,
+   * not the per-incident liability the monitor accrues.
+   *
+   * It was missing entirely, which under the old zero-default meant the class priced at 0 and
+   * crossed its threshold on the first incident.
+   */
+  new_beneficiary_breach: 1000
 }
+
+/** The scheme's aggregate cap on a new-beneficiary breach — 48h, per customer per TPP per bank. */
+export const NEW_BENEFICIARY_EXPOSURE_CAP_AED = 15000
 /** SLA-execution failure is tiered 350/250/200 by delay severity (v2.1). */
 export const SLA_TIERS: Record<number, number> = { 1: 350, 2: 250, 3: 200 }
 
@@ -42,9 +55,30 @@ export interface LiabilityEvent {
   sla_tier?: number
 }
 
+/**
+ * The per-incident liability for an issue class. RAISES on a class the matrix does not model.
+ *
+ * It used to return 0, and the threshold in `evaluate` derives from THE SAME lookup — so both
+ * sides were 0, `accrued >= threshold` was `0 >= 0`, and an unmodelled class crossed on its first
+ * incident. The result was not silence, which would at least have been investigated: it emitted a
+ * `nebras_liability_approach` signal and two P3 ITSM tickets reporting the bank's exposure as
+ * `AED 0` at `low` severity. A queue full of confident zeroes looks like a monitor that is working.
+ *
+ * A class the scheme has published and this matrix has not priced is a gap in OUR model, and the
+ * only safe answer is to say so loudly. Callers are scheduled jobs (worker.ts) and the monitor,
+ * both of which surface a throw; none of them can do anything useful with a fabricated zero.
+ */
 export function liabilityAmount(event: { issue: string; sla_tier?: number }): number {
   if (event.issue === 'sla_execution_failure') return SLA_TIERS[event.sla_tier ?? 1] ?? SLA_TIERS[1]!
-  return LIABILITY_MATRIX[event.issue] ?? 0
+  const amount = LIABILITY_MATRIX[event.issue]
+  if (amount === undefined) {
+    throw new Error(
+      `unmodelled Nebras liability class '${event.issue}' — it has no entry in LIABILITY_MATRIX, `
+      + 'so its exposure cannot be priced. Add the class with its scheme citation rather than '
+      + 'letting it accrue as zero.'
+    )
+  }
+  return amount
 }
 function severityFor(accruedAed: number): 'low' | 'medium' | 'high' | 'critical' {
   if (accruedAed >= 5000) return 'critical'

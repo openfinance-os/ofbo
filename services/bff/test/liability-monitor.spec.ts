@@ -118,3 +118,50 @@ describe('GET /back-office/analytics/nebras-liability-monitor (HTTP)', () => {
     expect(res.status).toBe(403)
   })
 })
+
+/**
+ * STD-09 — an unmodelled liability class must RAISE, not silently accrue nothing.
+ *
+ * `liabilityAmount` returned 0 for any issue absent from the v2.1 matrix, and the threshold derives
+ * from THE SAME lookup — so both sides were 0, `accrued >= threshold` was `0 >= 0`, and the class
+ * crossed on its first incident.
+ *
+ * It did not go quiet, which is what makes this worse than a missed signal. It emitted a
+ * `nebras_liability_approach` signal plus two P3 ITSM tickets reporting the bank's exposure as
+ * AED 0 at low severity — a queue that looks like it is working, on a class nobody has priced.
+ * Silence gets investigated; a confident zero does not.
+ */
+describe('STD-09 — an unmodelled liability class fails loud', () => {
+  it('refuses to price an issue the matrix does not model', () => {
+    expect(() => liabilityAmount({ issue: 'not_a_modelled_class' }))
+      .toThrow(/not_a_modelled_class/)
+  })
+
+  it('still prices every class the scheme does model', () => {
+    for (const [issue, aed] of Object.entries(LIABILITY_MATRIX)) {
+      if (issue === 'sla_execution_failure') continue // tiered — asserted separately
+      expect(liabilityAmount({ issue })).toBe(aed)
+    }
+  })
+
+  it('never emits an AED 0 signal for an unpriced class', async () => {
+    const sink = new FakeSink()
+    const itsm = new FakeItsm()
+    const svc = new LiabilityMonitorService({ signals: sink, itsm })
+    const events: LiabilityEvent[] = [{ issue: 'brand_new_scheme_class', liable_party: 'LFI', incident_count: 1 }]
+
+    await expect(svc.evaluate(events, new Set(), 'trace-std09')).rejects.toThrow(/brand_new_scheme_class/)
+    // And nothing was emitted on the way out — no half-written queue of zero-value alerts.
+    expect(sink.signals).toHaveLength(0)
+    expect(itsm.tickets).toHaveLength(0)
+  })
+
+  /**
+   * The scheme's international-payment new-beneficiary breach. The AED 15,000 cap appears nowhere
+   * in the repo, so the class it belongs to could only ever have priced at zero.
+   */
+  it('models the new-beneficiary breach the matrix was missing', () => {
+    expect(LIABILITY_MATRIX.new_beneficiary_breach).toBe(1000)
+    expect(liabilityAmount({ issue: 'new_beneficiary_breach' })).toBe(1000)
+  })
+})

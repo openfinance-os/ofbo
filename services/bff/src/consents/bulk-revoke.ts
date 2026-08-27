@@ -23,7 +23,10 @@ import type { ConsentDirectory, IdentifierType } from './directory.js'
 
 export const BULK_REVOKE_SCOPE = 'consents:admin'
 export const BULK_REVOKE_OPERATION = 'consents.bulk_revoke'
-export const NEBRAS_SLA_MS = 5000
+/** NFR-18's revoke SLA — re-exported from its single definition so existing importers of
+ *  this module keep working, without a second literal that can drift from the first. */
+import { NEBRAS_SLA_MS } from './nebras-sla.js'
+export { NEBRAS_SLA_MS }
 
 // Emergency bulk revoke is PSU-instruction-driven; fraud takes the narrow :revoke-fraud path.
 const VALID_REASON_CODES = ['CLIENT_INSTRUCTION'] as const

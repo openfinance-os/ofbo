@@ -24,6 +24,13 @@ class FakeEgress {
   }
 }
 
+/** Acknowledges too late — NFR-18 allows 5s. */
+class SlowEgress {
+  async revokeConsent() {
+    return { acknowledged_in_ms: 6_100 }
+  }
+}
+
 describe('fraud revoke — audit persistence + PII redaction', () => {
   const admin = new pg.Pool({ connectionString: url! })
   const lineage = new PgLineageEmitter(url!, TENANCY)
@@ -65,5 +72,37 @@ describe('fraud revoke — audit persistence + PII redaction', () => {
     // the Emirates ID embedded in the case context is redacted at emission
     expect(JSON.stringify(rows[0].request_body_redacted)).not.toContain(EMIRATES_ID)
     expect(JSON.stringify(rows[0].request_body_redacted)).toContain('[REDACTED:emirates_id]')
+    // STD-09 — the VERDICT is recorded, not just the measurement. 420ms is inside NFR-18's 5s.
+    expect(rows[0].request_body_redacted.sla_met).toBe(true)
+  })
+
+  /**
+   * STD-09 — an SLA BREACH on the fraud path must be visible in the audit record.
+   *
+   * This path recorded `nebras_propagation_ms` and never compared it, so of the three revoke
+   * routes the fraud one — highest-risk, four-eyes-gated, STR-adjacent — was the only one whose
+   * audit record could not answer "did this meet NFR-18?". A breach was invisible to exactly the
+   * review most likely to ask about it.
+   */
+  it('records sla_met=false when Nebras acknowledges outside NFR-18', async () => {
+    const trace = randomUUID()
+    const op = makeFraudRevokeOperation({ egress: new SlowEgress(), audit })
+    const result = (await op.execute({
+      consent_id: randomUUID(),
+      case_context: 'fraud ring, delayed acknowledgment',
+      initiated_by: 'demo:risk-analyst',
+      initiated_by_persona: 'risk-analyst',
+      trace_id: trace
+    })) as { status: string; nebras_propagation_ms: number }
+    expect(result.status).toBe('Revoked') // the revoke still HAPPENS — the SLA is a verdict, not a gate
+
+    const { rows } = await admin.query(
+      `SELECT request_body_redacted FROM audit_high_sensitivity
+         WHERE request_trace_id = $1 AND event_type = 'consent_revoked'`,
+      [trace]
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].request_body_redacted.sla_met).toBe(false)
+    expect(rows[0].request_body_redacted.nebras_propagation_ms).toBe(6_100)
   })
 })

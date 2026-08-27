@@ -262,7 +262,7 @@ milestones:
     items:
       - id: STD-09
         title: Liability and revoke-SLA completeness — fail loud, one source, cover the fraud path
-        status: pending
+        status: done
         research: docs/reviews/standards-conformance-2026-08.md
         note: >-
           Three defects on one theme, all found while verifying. services/bff/src/risk/liability.ts:47

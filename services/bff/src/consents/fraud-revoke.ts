@@ -10,6 +10,7 @@ import type { ApprovalRecord, GatedOperation } from '../approvals/service.js'
 import { ApprovalError, toWire } from '../approvals/service.js'
 import { dataEnvelope, errorEnvelope, DOCS_BASE } from '../envelope.js'
 import type { IdempotencyStore } from '../idempotency.js'
+import { NEBRAS_SLA_MS } from './nebras-sla.js'
 
 /**
  * BACKOFFICE-22 — fraud-suspected revocation. Narrow Risk scope
@@ -86,7 +87,13 @@ export function makeFraudRevokeOperation(deps: {
           psu_notified: false, // deferred per fraud policy
           compliance_notified: true,
           four_eyes_approved: true,
-          nebras_propagation_ms: ack.acknowledged_in_ms
+          nebras_propagation_ms: ack.acknowledged_in_ms,
+          // STD-09 — the VERDICT, not just the measurement. This path recorded
+          // `nebras_propagation_ms` and never compared it, so of the three revoke routes the
+          // fraud one — the highest-risk, four-eyes-gated, STR-adjacent path — was the only one
+          // whose audit record could not answer "did this meet NFR-18?". A breach here was
+          // invisible to exactly the review most likely to ask.
+          sla_met: ack.acknowledged_in_ms < NEBRAS_SLA_MS
         },
         response_status: 200
       })
