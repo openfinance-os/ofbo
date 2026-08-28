@@ -310,8 +310,22 @@ function toSignalRecord(r: Record<string, unknown>): StoredRiskSignal {
     created_at: isoR(r.created_at)
   }
 }
-const encodeSignalCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
-function decodeSignalCursor(cursor: string): { createdAt: string; id: string } | null {
+/**
+ * The risk-signal keyset cursor codec — EXPORTED so both adapters behind this port share one format.
+ *
+ * The in-memory store previously returned `next_cursor: null` unconditionally, so the two
+ * implementations behind `GET /back-office/risk-signals` disagreed about whether the endpoint was
+ * paginated at all: the Postgres one honoured `limit` and emitted cursors, the in-memory one
+ * returned every matching row. A client that follows the cursor is correct against one and a no-op
+ * against the other, which is exactly the port-parity rule — an adapter must pass the tests its
+ * sibling passes.
+ *
+ * One codec rather than two, because two encodings that agree today are a format that diverges
+ * later, and a cursor minted by one adapter must be readable by the other for the swap to mean
+ * anything.
+ */
+export const encodeSignalCursor = (createdAt: string, id: string) => Buffer.from(`${createdAt}|${id}`, 'utf8').toString('base64url')
+export function decodeSignalCursor(cursor: string): { createdAt: string; id: string } | null {
   try {
     const [createdAt, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|')
     return createdAt && id ? { createdAt, id } : null

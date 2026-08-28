@@ -19,6 +19,66 @@ function appWith(seed: StoredRiskSignal[] = []) {
   return { app: createApp({ highClassAudit: audit, riskSignalStore: new InMemoryRiskSignalStore(seed) }), audit }
 }
 
+/**
+ * BACKOFFICE-94 — the in-memory adapter must paginate like its Postgres sibling.
+ *
+ * It used to apply the filters and return EVERY matching row with `next_cursor: null`, so the two
+ * implementations behind this one route disagreed about whether the endpoint was paginated at all.
+ * A client following the cursor is correct against Postgres and a no-op against this one — and this
+ * is the default store whenever no `riskSignalStore` dep is wired, which is exactly the
+ * configuration a demo runs in without a database.
+ *
+ * The port-contract rule is that an adapter passes the tests its sibling passes. These are those
+ * tests, expressed against the route so they bind the interface rather than the implementation.
+ */
+describe('GET /back-office/risk-signals — pagination parity between the two adapters', () => {
+  const page = async (app: ReturnType<typeof appWith>['app'], query: string) => {
+    const res = await app.request(`/back-office/risk-signals${query}`, { headers: risk() })
+    expect(res.status).toBe(200)
+    return (await res.json()) as { data: StoredRiskSignal[]; meta: { next_cursor: string | null } }
+  }
+
+  it('honours `limit` and hands back a cursor when more remain', async () => {
+    const { app } = appWith([sig('sig-1'), sig('sig-2'), sig('sig-3')])
+    const first = await page(app, '?limit=2')
+    expect(first.data).toHaveLength(2)
+    expect(first.meta.next_cursor).toBeTruthy()
+  })
+
+  it('continues from the cursor without repeating or dropping a row', async () => {
+    const { app } = appWith([sig('sig-1'), sig('sig-2'), sig('sig-3'), sig('sig-4')])
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let i = 0; i < 5; i++) {
+      const body: { data: StoredRiskSignal[]; meta: { next_cursor: string | null } } =
+        await page(app, `?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`)
+      seen.push(...body.data.map((r) => r.id))
+      cursor = body.meta.next_cursor
+      if (!cursor) break
+    }
+    // Every row exactly once — the two failure modes of a keyset walk are a repeat and a gap.
+    expect(seen.sort()).toEqual(['sig-1', 'sig-2', 'sig-3', 'sig-4'])
+    expect(cursor).toBeNull()
+  })
+
+  it('nulls the cursor on the last page rather than looping for ever', async () => {
+    const { app } = appWith([sig('sig-1'), sig('sig-2')])
+    expect((await page(app, '?limit=2')).meta.next_cursor).toBeNull()
+  })
+
+  it('applies the filters BEFORE paginating, so a filtered page is not a filtered slice of one', async () => {
+    const { app } = appWith([
+      sig('sig-1', { severity: 'low' }),
+      sig('sig-2'),
+      sig('sig-3', { severity: 'low' }),
+      sig('sig-4')
+    ])
+    const body = await page(app, '?severity=low&limit=2')
+    expect(body.data.map((r) => r.id).sort()).toEqual(['sig-1', 'sig-3'])
+    expect(body.meta.next_cursor).toBeNull() // both matches fit, so there is no second page
+  })
+})
+
 describe('GET /back-office/risk-signals', () => {
   it('lists signals with {data,meta} (risk:read) and filters by status/severity/type', async () => {
     const { app } = appWith([sig('sig-1'), sig('sig-2', { severity: 'low', status: 'acknowledged' }), sig('sig-3', { signal_type: 'tpp_behaviour' })])

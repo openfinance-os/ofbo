@@ -30,7 +30,7 @@ function TrendChart({ points }: { points: TrendPoint[] }) {
     <div data-testid="recon-trend-chart">
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Reconciliation pass rate · {points.length}d</p>
-        <p className="font-mono text-sm font-semibold text-reconciled tabular-nums">{last.pct}%</p>
+        <p className="text-sm font-semibold text-reconciled tabular-nums">{last.pct}%</p>
       </div>
       <div className="text-reconciled">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-28" role="img" aria-label="reconciliation pass-rate trend">
@@ -61,13 +61,20 @@ function SeverityChart({ bars }: { bars: SeverityBar[] }) {
     <div data-testid="risk-severity-chart">
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Open risk signals by severity</p>
-        <p className="font-mono text-sm font-semibold text-primary tabular-nums">{total}</p>
+        <p className="text-sm font-semibold text-primary tabular-nums">{total}</p>
       </div>
       <div className="flex items-end gap-3 h-28">
         {bars.map((b) => (
           <div key={b.label} className="flex-1 flex flex-col items-center justify-end h-full" data-testid={`sev-${b.label.toLowerCase()}`}>
-            <span className="font-mono text-xs font-semibold text-on-surface tabular-nums mb-1">{b.count}</span>
-            <div className="w-full flex items-end h-full">
+            <span className="text-xs font-semibold text-on-surface tabular-nums mb-1">{b.count}</span>
+            {/* `flex-1 min-h-0`, NOT `h-full`. As `h-full` this asked for the column's FULL height
+                while sitting between two labels inside that same column, so the content came to
+                roughly 144px in a 112px box. The column overflowed and — because the row is
+                `items-end` — the overflow went UPWARDS: the count labels climbed out of the card
+                and landed on top of the panel title, with the chart total colliding with the
+                highest bar's own label. It rendered as loose numbers floating above a heading.
+                Taking the REMAINING space after the labels is what was meant all along. */}
+            <div className="w-full flex items-end flex-1 min-h-0">
               <svg viewBox="0 0 10 100" preserveAspectRatio="none" className="w-full h-full" role="img" aria-label={`${b.label}: ${b.count}`}>
                 <rect x="1" y={100 - (b.count / max) * 100} width="8" height={(b.count / max) * 100} className={FILL[b.tone]} rx="0.5" />
               </svg>

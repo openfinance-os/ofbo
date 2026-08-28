@@ -294,6 +294,52 @@ test.describe('layout containment (BACKOFFICE-82)', () => {
       expect(offenders, 'routes scrolling the page body sideways').toEqual([])
     })
   }
+
+  /**
+   * BACKOFFICE-94 — the sibling failure the check above cannot see.
+   *
+   * That one measures the DOCUMENT scrolling sideways. A child escaping its own card upward never
+   * touches `document.scrollWidth`, so it passed every gate and shipped: the severity chart's
+   * column asked for `h-full` while sitting between two labels inside that same full-height
+   * column, so ~144px of content went into a 112px box. Because the row is `items-end`, the
+   * overflow went UP — the count labels climbed out of the card and landed on top of the panel
+   * title, colliding with the chart total. On the demo it read as loose numbers floating above a
+   * heading, and nothing in CI objected.
+   *
+   * Scoped to chart containers rather than every card: this is where the pattern lives (a fixed
+   * -height row of labels plus a flexible plot area), and a blanket assertion would fight the
+   * legitimate overflows elsewhere — sticky headers, tooltips, notification badges hung off a
+   * corner. A gate nobody trusts gets skipped.
+   */
+  test('chart content stays inside its own card', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await login(page, SUPER)
+
+    const offenders: string[] = []
+    for (const route of ROUTES) {
+      await page.goto(route, { waitUntil: 'networkidle' })
+      const escaped = await page.evaluate(() => {
+        const out: string[] = []
+        for (const chart of document.querySelectorAll('[data-testid$="-chart"]')) {
+          const box = chart.getBoundingClientRect()
+          if (box.height === 0) continue
+          for (const child of chart.querySelectorAll('*')) {
+            const c = child.getBoundingClientRect()
+            if (c.width === 0 || c.height === 0) continue
+            // 2px of slack for sub-pixel rounding and 1px borders; the real defect was 30px+.
+            if (c.top < box.top - 2 || c.bottom > box.bottom + 2) {
+              const label = (child.textContent || child.tagName).trim().slice(0, 20)
+              out.push(`${chart.getAttribute('data-testid')} → "${label}"`)
+              break // one report per chart is enough to fail and to diagnose
+            }
+          }
+        }
+        return out
+      })
+      offenders.push(...escaped.map((e) => `${route}: ${e}`))
+    }
+    expect(offenders, 'chart content rendering outside its card').toEqual([])
+  })
 })
 
 /**
