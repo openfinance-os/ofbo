@@ -23,7 +23,11 @@
  *
  * `specs/backoffice-openapi.yaml` now carries the bound on `nebras_propagation_ms` as
  * `x-nfr18-p99-exclusive-max-ms`, and `services/bff/test/nebras-sla.spec.ts` fails if it and this
- * constant disagree — in magnitude, in comparator, or by a third unbound copy appearing in the file.
+ * constant disagree — in magnitude, in comparator, or by a third unbound copy appearing in that
+ * field's own schema NODE. Not in the file: the guard is deliberately node-scoped, because scanning
+ * all 3,900 lines for the bare number made it fire on any unrelated `5000` (a rate limit, a
+ * `maxLength`, money in minor units where 5000 is AED 50.00) and accuse its author of NFR-18 drift.
+ * Stating the narrower truth because the wider claim is the exact habit this file exists to break.
  *
  * WHAT THAT DOES NOT BUY, stated so nobody over-reads it: `openapi-typescript` drops `x-`
  * extensions and the response validator strips them, so every consumer downstream of codegen — the

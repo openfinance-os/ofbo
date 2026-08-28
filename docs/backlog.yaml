@@ -346,8 +346,9 @@ milestones:
 
           The guard binds three axes, each verified by breaking it: the magnitude (edit the
           extension to 3000 - fails), the comparator (rename the key inclusive and soften the prose
-          to a fifth-symbol - fails), and the COPY COUNT (add a third statement of the number in a
-          comment - fails). The last one matters because the acceptance criterion says "exactly one
+          to a fifth-symbol - fails), and the COPY COUNT within the field's own schema NODE (add a
+          third statement of the number there, in any unit - fails). Node-scoped on purpose: a
+          document-wide scan fired on unrelated 5000s and accused their authors of NFR-18 drift. The last one matters because the acceptance criterion says "exactly one
           place", and a numeral in an unchecked comment is the original defect at smaller scale.
 
           WHAT IT DOES NOT BUY, recorded so the claim is not over-read: openapi-typescript drops x-
