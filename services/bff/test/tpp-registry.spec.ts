@@ -73,6 +73,27 @@ describe('POST /back-office/tpp-counterparties:sync-directory', () => {
     expect(body.data.directory_contacts, 'the sync emptied contacts it never carried').toHaveLength(1)
   })
 
+  /**
+   * `channel` is store-configurable, like its Postgres sibling's.
+   *
+   * It was hardcoded `'external_tpp_aas'` here while the Pg store wrote `config.channel` (the
+   * worker sets `internal_retail`), so one endpoint returned a different value for a spec-defined
+   * enum field depending on which store was mounted. Both are enum members, so nothing was
+   * schema-invalid — it is the same parity divergence the two fields above were fixed for, four
+   * lines away in the same method.
+   */
+  it('stamps a sync-created row with the channel it was configured with', async () => {
+    const scoped = createApp({
+      tppCounterpartyStore: new InMemoryTppCounterpartyStore('internal_retail'),
+      tppDirectoryEgress: egress,
+      highClassAudit: audit
+    })
+    await scoped.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'ch1' }) })
+    const res = await scoped.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
+    const body = (await res.json()) as { data: { channel: string } }
+    expect(body.data.channel).toBe('internal_retail')
+  })
+
   it('syncs the directory into the registry, flags new TPPs, and audits (202)', async () => {
     const res = await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 's1' }) })
     expect(res.status).toBe(202)

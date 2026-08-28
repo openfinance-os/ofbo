@@ -5,6 +5,22 @@ import type { StoredTppCounterparty, TppCounterpartyListQuery, TppCounterpartyPa
 
 export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
   private readonly rows = new Map<string, StoredTppCounterparty>()
+
+  /**
+   * The channel a sync-created row is stamped with — configurable for the same reason the Postgres
+   * sibling takes it from `config.channel` rather than hardcoding it.
+   *
+   * This store hardcoded `'external_tpp_aas'` while the Pg store wrote whatever its tenancy config
+   * said (the worker sets `internal_retail`), so one endpoint returned a different `TppCounterparty.
+   * channel` depending on which store was mounted. Both values are enum members, so nothing was
+   * schema-invalid — it is the same store-parity divergence this class was just edited to close for
+   * `registration_number` and `directory_contacts`, four lines below them, and the comment there
+   * states the rule it did not follow.
+   *
+   * The default preserves today's behaviour for every existing caller; a caller that knows its
+   * tenancy passes it, exactly as the Pg store is constructed.
+   */
+  constructor(private readonly channel: string = 'external_tpp_aas') {}
   async syncDirectory(
     participants: { organisation_id: string; legal_name: string; registration_number?: string | null; directory_contacts?: unknown[] }[],
     _traceId: string
@@ -28,7 +44,7 @@ export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
           financial_system_ref: null,
           unbilled_traffic: false,
           mtd_fee_accrual: null,
-          channel: 'external_tpp_aas',
+          channel: this.channel,
           created_at: new Date().toISOString()
         })
       } else {
