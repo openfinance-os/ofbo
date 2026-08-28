@@ -47,7 +47,7 @@ export function ContributionBar({ label, segments }: { label: string; segments: 
         {segments.map((seg) => (
           <li key={seg.label} className="flex items-center justify-between text-xs">
             <span className="text-on-surface-variant">{seg.label}</span>
-            <span className="font-mono tabular-nums text-on-surface">{Math.round(pct(seg.value))}%</span>
+            <span className="tabular-nums text-on-surface">{Math.round(pct(seg.value))}%</span>
           </li>
         ))}
       </ul>

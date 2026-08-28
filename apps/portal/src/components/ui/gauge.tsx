@@ -63,7 +63,8 @@ export function Gauge({
           />
         </g>
       </svg>
-      <span className="absolute font-mono text-lg font-bold tabular-nums text-on-surface">
+      {/* Summary figure → DM Sans (design/tokens.ts: mono is for ids, exact amounts, trace ids). */}
+      <span className="absolute text-lg font-bold tabular-nums text-on-surface">
         {fmt(clamped)}
         {unit}
       </span>

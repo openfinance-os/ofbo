@@ -252,6 +252,110 @@ milestones:
           - The test states its own precondition, so it holds on a shared database and on a re-run,
             not only against a freshly seeded one.
           - Verified by reverting the sync - the orphan then stays live and the test fails.
+      - id: BACKOFFICE-96
+        title: List endpoints accept an over-maximum limit and unvalidated enum filters
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — two conformance defects on shipped list endpoints, raised by the advisory
+          contract-conformance reviewer on PR 345. No product question for a discovery run.
+        note: >-
+          (a) OVER-LIMIT IS SILENTLY CLAMPED. services/bff/src/pagination.ts rejects only
+          non-integer and non-positive values, so limit=100000 passes through - Postgres clamps it
+          to 200, the in-memory store used to ignore it entirely. A caller asking for more than the
+          contract permits gets a 200 with a quietly different page size and no error. The spec
+          declares maximum 200 but specifies no response for exceeding it, so clamp-vs-400 is
+          currently undefined and the two stores resolved it differently.
+
+          (b) ENUM FILTERS ARE UNVALIDATED. services/bff/src/risk-signals/service.ts passes status,
+          severity and signal_type to the store unchecked, while the spec declares closed enums for
+          all three. So ?status=Open or ?status=nonsense returns 200 with an empty data array -
+          indistinguishable, to a client, from "there are genuinely no open signals". The PATCH path
+          on the SAME service does validate its enum and raises BACKOFFICE.INVALID_STATUS, so the
+          service already knows how; the read path just does not. This matters more after PR 345,
+          whose dashboard correctness argument rests on status=open meaning what it says.
+
+          SPEC FIRST for both. The contract has to say what an over-limit request and a bad enum
+          value get - a 400 or a clamp - before the implementation picks one, or the fix is just
+          this author's preference encoded in two more places.
+        acceptance:
+          - Spec-only PR first, settling the over-limit response and the bad-enum response ONCE for
+            every list endpoint rather than per-endpoint.
+          - The BFF enforces whatever the contract then says, and the two stores behind each port
+            agree - the port-contract suite binds both.
+          - A bad enum value is distinguishable from an empty result, asserted.
+      - id: BACKOFFICE-97
+        title: The Envelope schema makes meta optional, so the binding response convention is unenforceable
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a spec-side underspecification raised by the advisory
+          contract-conformance reviewer on PR 345. No product question for a discovery run.
+        note: >-
+          CLAUDE.md binds every success body to { data, meta: { request_id, timestamp } }. The
+          Envelope schema (specs/backoffice-openapi.yaml) declares NO required list, so meta,
+          meta.request_id and meta.timestamp are all optional and a response omitting meta entirely
+          validates. The convention is therefore enforced by review and by nothing else, on every
+          endpoint.
+
+          Surfaced because PR 345's test fixture is STRICTER than the contract it cites - it emits
+          request_id and timestamp on every route on the argument that a fixture weaker than the
+          contract teaches the wrong thing. That instinct is right and it left the fixture enforcing
+          a convention the OpenAPI does not.
+
+          Related in the same schema - Envelope does not declare data at all (each path adds it via
+          allOf), and it offers next_cursor on every response including single-object ones, where
+          the cursor-only pagination rule has nothing to say.
+        acceptance:
+          - Envelope declares required - [meta] and meta declares required - [request_id, timestamp],
+            via the spec-change workflow.
+          - next_cursor is expressed so it belongs to list responses rather than every response.
+          - A contract test fails if a success body omits the required meta fields, so the
+            convention stops depending on reviewers noticing.
+      - id: BACKOFFICE-94
+        title: "Institutional Blue: the dashboard spoke in tokens but said the wrong things"
+        status: done
+        adr: docs/adrs/0033-portal-design-system-institutional-blue.md
+        note: >-
+          Raised from the deployed demo, not from CI - every gate was green. Three defects, one
+          theme: the token gates check that a screen speaks in TOKENS, not that it says something
+          TRUE with them, so all three were legal token usage.
+
+          (1) SUMMARY FIGURES SET IN A CODE FACE. dashboard-overview.tsx put the headline KPI in
+          font-mono at 30px "per the Stitch financial-numerals rule" - a rule from a design source
+          ADR 0033 RETIRED. The system that replaced it says the opposite in as many words
+          (design/tokens.ts): DM Sans is for "UI + summary figures", JetBrains Mono for "ids, exact
+          amounts, trace ids". The same drift had spread to the gauge, the chart totals and the
+          contribution bars. Exact money amounts and trace ids keep mono - that is the rule, not an
+          exception to it.
+
+          (2) COUNTS PAINTED AS STATUSES. Both dashboard KPIs spent ext.status.aging - defined in
+          the token set as "open, approaching its clock" - on mere presence. Any pending approval
+          was amber, so approvals sitting comfortably inside their two-hour window (PRD section 10)
+          looked like they were running out of it; and any open signal was amber, so 200
+          info-severity signals rendered in "approaching its clock" directly above a caption reading
+          "none high-severity". The colour contradicted the words beneath it. A dashboard that is
+          always amber cannot report the day something genuinely ages.
+
+          (3) THE SEVERITY CHART TORE ITS OWN CARD OPEN. Each column asked for h-full while sitting
+          between two labels inside that same full-height column - about 144px of content in a 112px
+          box. Because the row is items-end the overflow went UP: the count labels climbed out of
+          the card onto the panel title and collided with the chart total. It rendered as loose
+          numbers floating above a heading.
+
+          WHY NO GATE CAUGHT IT. design-conformance.spec.ts checks vocabulary (no raw hex, no
+          arbitrary px). The BACKOFFICE-82 containment gate measures the DOCUMENT scrolling
+          sideways, and a child escaping its card UPWARD never touches document.scrollWidth. Both
+          passed. Guards added for all three - two unit assertions (proved to fail on the reverted
+          fix) and a Playwright containment check scoped to chart cards.
+        acceptance:
+          - Summary figures render in DM Sans with tabular numerals; mono is reserved for ids, exact
+            amounts and trace ids, and a unit test fails if the KPI figure regains font-mono.
+          - KPI tone follows the CONDITION, not the count - a plain volume of low-severity signals
+            and a queue of unexpired approvals both read neutral, while a high/critical signal still
+            escalates. Both directions asserted.
+          - No chart content renders outside its card, asserted in the browser across every route.
+          - Verified by rendering the built screen locally, not only by the suite passing.
       - { id: BACKOFFICE-83, title: "Dock the non-prod marker in the sticky top bar; quiet its treatment", status: done, depends_on: [BACKOFFICE-82], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Discharges the follow-up BACKOFFICE-82 deferred. The DEMO marker satisfied 'persistent on every screen' by floating fixed at bottom-3 right-3, which met the hard stop by covering whatever sat underneath — 128 of the 140px of the footer call-to-action on every authenticated route, and live figures on the data-dense consoles. BACKOFFICE-82 reserved gutters around it; this removes the cause instead and takes the gutters back out. TWO placements now: DemoMarker docked in the app shell top bar (which is sticky top-0, so it is on screen at every scroll position while sitting in normal flow where it cannot overlap), and DemoPill still mounted unconditionally in the ROOT layout so the marker rides the shell-less surfaces — sign-in, global-error, not-found, access-denied — and no new page can forget it. globals.css suppresses the floating one under body:has([data-testid=app-shell]); chosen as CSS not a React flag because it applies during SSR with no hydration flash and fails safe (unsupported :has() leaves the floating marker rendering, so worst case is two markers, never zero). TrainingMarker mirrors it. Treatment quieted per user request: fill, border, shadow and backdrop-blur removed from both placements, leaving a dot plus a short label in the marker colour — presence is the regulatory requirement, not prominence. Full statement still rides aria-label. AA gate widened to 18 pairs (the top-bar ground added, per its own rule that a new placement means a new pair): demo 4.98:1 and training 7.10:1 on surface-container-lowest. Verified in a browser across 14 routes x 2 viewports plus two shell-less surfaces: exactly one marker each, zero overlap, zero overflow. 1721 unit tests, E2E 32/32 against seeded Postgres; the new E2E was confirmed to fail when the suppression selector is broken." }
 
   - name: M6

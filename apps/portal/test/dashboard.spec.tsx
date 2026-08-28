@@ -4,21 +4,69 @@ import { cleanup, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { getDashboardKpis } from '../src/lib/dashboard.js'
 import { DashboardOverview } from '../src/components/dashboard-overview.js'
+import { getDashboardCharts } from '../src/lib/dashboard.js'
 
 afterEach(cleanup)
 
-/** Routes a mock BFF by path. `risk` null → that endpoint 403s (out-of-scope persona). */
-function mockFetch(opts: { runs: unknown[]; breaks: unknown[]; pending: unknown[]; risk: unknown[] | null }): typeof fetch {
+/**
+ * Routes a mock BFF by path. `risk` null → that endpoint 403s (out-of-scope persona).
+ *
+ * The envelope is the CONTRACT envelope, not a convenient subset: `meta` carries `request_id` and
+ * `timestamp` on every success body and `next_cursor` on every list (spec Envelope; CLAUDE.md
+ * §"API conventions"). It used to default `meta` to `{}` for the approvals and risk routes. A
+ * fixture weaker than the contract cannot catch a client that starts depending on the parts it
+ * omits — which is exactly what happened here: nothing noticed that the risk readers ignored
+ * `next_cursor`, because the fixture never sent one.
+ *
+ * `risk` may be a flat list (one page) or an array of pages, which the route serves in sequence so
+ * a cursor-following client can be tested against real continuation.
+ */
+function mockFetch(opts: {
+  runs: unknown[]
+  breaks: unknown[] | unknown[][]
+  pending: unknown[] | unknown[][]
+  risk: unknown[] | unknown[][] | null
+}): typeof fetch {
+  /** A flat list is one page; an array of arrays is served as real continuation. */
+  const pagesOf = (v: unknown[] | unknown[][]): unknown[][] =>
+    Array.isArray(v[0]) ? (v as unknown[][]) : [v as unknown[]]
+  const riskPages: unknown[][] | null = opts.risk === null ? null : pagesOf(opts.risk)
+  const pendingPages = pagesOf(opts.pending)
+  const breakPages = pagesOf(opts.breaks)
   return (async (url: string) => {
     const u = String(url)
-    const ok = (data: unknown, meta: Record<string, unknown> = {}) => new Response(JSON.stringify({ data, meta }), { status: 200 })
-    if (u.includes('/approvals/pending')) return ok(opts.pending)
+    const ok = (data: unknown, meta: Record<string, unknown> = {}) =>
+      new Response(
+        JSON.stringify({
+          data,
+          // `meta.request_id` is a plain `string` in the contract — NOT `format: uuid`, which the
+          // first version of this comment claimed. A v4-shaped value is a valid string and is what
+          // the BFF emits, so the fixture is right; the justification was not. (The
+          // `approval_request_id` citation below IS `format: uuid`, which is what made the mix-up
+          // easy.) A comment is the reason the next reader believes a fixture is contract-shaped.
+          meta: { request_id: '3f1a5c8e-0000-4000-8000-000000000001', timestamp: '2026-08-28T00:00:00.000Z', ...meta }
+        }),
+        { status: 200 }
+      )
+    /** Serve page N and hand back a cursor for N+1 — every list endpoint is paginated. */
+    const page = (pages: unknown[][]) => {
+      const cursor = new URL(u, 'http://bff.test').searchParams.get('cursor')
+      const index = cursor ? Number(cursor) : 0
+      return ok(pages[index] ?? [], { next_cursor: index + 1 < pages.length ? String(index + 1) : null })
+    }
+    if (u.includes('/approvals/pending')) return page(pendingPages)
     if (u.includes('/reconciliation/runs')) return ok(opts.runs, { next_cursor: null })
-    if (u.includes('/reconciliation/breaks')) return ok(opts.breaks, { next_cursor: null })
-    if (u.includes('/risk-signals')) return opts.risk === null ? new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 }) : ok(opts.risk)
+    if (u.includes('/reconciliation/breaks')) return page(breakPages)
+    if (u.includes('/risk-signals')) {
+      if (riskPages === null) return new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 })
+      return page(riskPages)
+    }
     return new Response('{}', { status: 404 })
   }) as unknown as typeof fetch
 }
+
+/** A contract-shaped approval id — `format: uuid` (spec), UUID v4 (CLAUDE.md). */
+const approvalId = (n: number) => `a1b2c3d4-0000-4000-8000-00000000000${n}`
 
 const P = { subject: 'demo:super', scopes: ['*'] }
 const deps = (fetchImpl: typeof fetch) => ({ baseUrl: 'http://bff.test', fetchImpl })
@@ -28,7 +76,7 @@ describe('getDashboardKpis', () => {
     const f = mockFetch({
       runs: [{ line_count_total: 1000, line_count_matched: 992, line_count_unmatched: 8, line_count_disputed: 0 }],
       breaks: [{ status: 'flagged' }, { status: 'assigned' }, { status: 'resolved_matched' }],
-      pending: [{ approval_request_id: 'a1' }, { approval_request_id: 'a2' }],
+      pending: [{ approval_request_id: approvalId(1) }, { approval_request_id: approvalId(2) }],
       risk: [{ severity: 'critical' }, { severity: 'medium' }, { severity: 'high' }]
     })
     const kpis = await getDashboardKpis('tok', P, deps(f))
@@ -39,6 +87,142 @@ describe('getDashboardKpis', () => {
     expect(by['open-risk-signals']!.value).toBe('3')
     expect(by['open-risk-signals']!.sub).toContain('2 high / critical')
     expect(by['open-risk-signals']!.tone).toBe('breach')
+  })
+
+  /**
+   * BACKOFFICE-94 — a COUNT is not a STATUS, and the two must not share a colour.
+   *
+   * `ext.status.aging` is defined in the token set as "open, approaching its clock". Both cards
+   * spent it on mere presence: any pending approval, and any open signal of any severity, painted
+   * the figure amber. So the demo's first screen showed five approvals sitting comfortably inside
+   * their two-hour window (PRD §10) in the colour that means running out of it — and 200
+   * info-severity signals in that same amber directly above a caption reading "none
+   * high-severity", the colour contradicting the words beneath it.
+   *
+   * A dashboard that is always amber cannot tell anyone about the day something is genuinely
+   * aging, which is the whole job of a status hue.
+   */
+  it('does not paint a plain count in a status colour', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [{ approval_request_id: approvalId(1) }, { approval_request_id: approvalId(2) }],
+      risk: [{ severity: 'info' }, { severity: 'low' }, { severity: 'medium' }]
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['pending-approvals']!.value).toBe('2')
+    expect(by['pending-approvals']!.tone).toBe('neutral')
+    // Severity drives the tone; volume alone does not.
+    expect(by['open-risk-signals']!.value).toBe('3')
+    expect(by['open-risk-signals']!.sub).toBe('none high-severity')
+    expect(by['open-risk-signals']!.tone).toBe('neutral')
+  })
+
+  it('still escalates when the severity actually warrants it', async () => {
+    const f = mockFetch({ runs: [], breaks: [], pending: [], risk: [{ severity: 'high' }, { severity: 'info' }] })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['open-risk-signals']!.tone).toBe('breach')
+    expect(by['open-risk-signals']!.sub).toContain('1 high / critical')
+  })
+
+  /**
+   * BACKOFFICE-94 follow-up — the tone can only tell the truth about signals it actually read.
+   *
+   * `/back-office/risk-signals` is cursor-paginated. Both dashboard readers requested one page of
+   * 200 and treated it as the whole set. That was already wrong; making tone follow SEVERITY is
+   * what made it matter — a single high-severity signal on page two now leaves the card reading
+   * "none high-severity" in calm navy, confidently reporting the absence of something it never
+   * looked for.
+   *
+   * The old fixture could not have caught this: it never sent a `next_cursor`, so a client that
+   * ignored one looked identical to a client that honoured it.
+   */
+  it('follows the cursor, so severity on a later page still escalates', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [],
+      risk: [
+        [{ severity: 'info' }, { severity: 'low' }],
+        [{ severity: 'info' }, { severity: 'critical' }] // page two carries the one that matters
+      ]
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['open-risk-signals']!.value).toBe('4') // both pages counted, not just the first
+    expect(by['open-risk-signals']!.sub).toContain('1 high / critical')
+    expect(by['open-risk-signals']!.tone).toBe('breach')
+  })
+
+  it('buckets the severity chart across every page too', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [],
+      risk: [[{ severity: 'high' }], [{ severity: 'high' }, { severity: 'info' }]]
+    })
+    const charts = await getDashboardCharts('tok', deps(f))
+    const by = Object.fromEntries(charts.riskSeverity.map((b) => [b.label, b.count]))
+    expect(by.High).toBe(2) // one from each page — the KPI and the chart agree on "open"
+    expect(by.Info).toBe(1)
+    expect(charts.riskSeverityTruncated).toBe(false)
+  })
+
+  /**
+   * The chart must report a bounded read AS bounded. `openRiskSignals` returns `truncated` and the
+   * KPI card consumed it; the chart destructured it away and rendered a partial distribution as the
+   * complete one, with the panel's own total printed from it. Two callers of one reader disagreeing
+   * about whether the answer is complete is how a partial read becomes a confident one.
+   */
+  it('tells the chart when the severity buckets are only a bounded read', async () => {
+    // 11 pages — one more than the reader will follow.
+    const pages = Array.from({ length: 11 }, () => [{ severity: 'info' }])
+    const charts = await getDashboardCharts('tok', deps(mockFetch({ runs: [], breaks: [], pending: [], risk: pages })))
+    expect(charts.riskSeverityTruncated).toBe(true)
+    const info = charts.riskSeverity.find((b) => b.label === 'Info')!
+    expect(info.count).toBe(10) // stopped at the bound, and said so rather than implying 10 is all
+  })
+
+  /**
+   * ONE interaction id for the whole render. `authHeaders` evaluated `crypto.randomUUID()` at call
+   * time, so every request carried its own — and once the risk reader followed a cursor, a single
+   * logical read emitted up to ten. The spec calls this header the OTel trace id end-to-end.
+   */
+  it('propagates one x-fapi-interaction-id across every request of a render', async () => {
+    const seen: string[] = []
+    const base = mockFetch({ runs: [], breaks: [], pending: [], risk: [[{ severity: 'info' }], [{ severity: 'low' }]] })
+    const spy = (async (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      const id = headers.get('x-fapi-interaction-id')
+      if (id) seen.push(id)
+      return base(url as never, init as never)
+    }) as unknown as typeof fetch
+
+    await getDashboardKpis('tok', P, { baseUrl: 'http://bff.test', fetchImpl: spy, traceId: 'e7c1f2a4-0000-4000-8000-00000000abcd' })
+    expect(seen.length).toBeGreaterThan(2) // several reads, including a second risk page
+    expect(new Set(seen).size, `expected one trace id, saw ${new Set(seen).size}`).toBe(1)
+    expect(seen[0]).toBe('e7c1f2a4-0000-4000-8000-00000000abcd') // and the CALLER's id, when given
+  })
+
+  /**
+   * The adjacent cards had the same defect and the same rationale. Approvals sends no `limit`, so
+   * the BFF applies the spec default of 50 and the card read "50" as though that were the queue;
+   * breaks saturated at 200, where `open > 8 ? 'breach'` silently stops escalating — a saturated
+   * count cannot report a queue getting worse, which is the only thing that card is for.
+   */
+  it('counts every page of the approvals queue and the break queue, not the first', async () => {
+    const f = mockFetch({
+      runs: [],
+      // Two pages each — the second is what the old single-page read threw away.
+      breaks: [[{ status: 'flagged' }, { status: 'assigned' }], [{ status: 'flagged' }, { status: 'resolved_matched' }]],
+      pending: [[{ approval_request_id: approvalId(1) }], [{ approval_request_id: approvalId(2) }]],
+      risk: []
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['pending-approvals']!.value).toBe('2') // both pages
+    expect(by['open-breaks']!.value).toBe('3') // flagged + assigned + flagged; resolved excluded
+    // Neither is a bounded read here, so neither claims to be one.
+    expect(by['pending-approvals']!.sub).toBe('awaiting a second principal')
+    expect(by['open-breaks']!.sub).toBe('awaiting claim / resolution')
   })
 
   it('gracefully omits a card whose source the persona cannot access (risk 403)', async () => {
@@ -58,13 +242,33 @@ describe('DashboardOverview', () => {
     expect(card.closest('a')).toHaveAttribute('href', '/reconciliation')
   })
 
+  /**
+   * BACKOFFICE-94 — the headline figure is a SUMMARY FIGURE, so it is DM Sans.
+   *
+   * `design/tokens.ts` divides the three faces explicitly: DM Sans for "UI + summary figures",
+   * JetBrains Mono for "ids, exact amounts, trace ids". This card carried `font-mono` "per the
+   * Stitch financial-numerals rule" — a rule from a design source ADR 0033 RETIRED, still being
+   * followed after the system that replaced it said the opposite. At 30px it read as terminal
+   * output in the middle of a financial console.
+   *
+   * The gate next door (`design-conformance.spec.ts`) could not catch this: `font-mono` is a
+   * perfectly good token utility, and that gate checks that screens speak in tokens, not that they
+   * say something true with them. `tabular-nums` is asserted alongside because dropping mono must
+   * not cost the digit alignment — DM Sans carries the feature itself.
+   */
+  it('sets the headline figure in DM Sans with tabular numerals, not a code face', () => {
+    render(<DashboardOverview kpis={[{ key: 'open-breaks', label: 'Open breaks', value: '5', tone: 'break' }]} />)
+    const figure = screen.getByText('5')
+    expect(figure.className).not.toContain('font-mono')
+    expect(figure.className).toContain('tabular-nums')
+  })
+
   it('renders nothing when there are no entitled KPIs', () => {
     render(<DashboardOverview kpis={[]} />)
     expect(screen.queryByTestId('dashboard-overview')).not.toBeInTheDocument()
   })
 })
 
-import { getDashboardCharts } from '../src/lib/dashboard.js'
 import { DashboardCharts } from '../src/components/dashboard-charts.js'
 
 describe('getDashboardCharts', () => {

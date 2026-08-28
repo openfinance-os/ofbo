@@ -82,7 +82,10 @@ export {
   type RiskSignalHeader,
   type StoredRiskSignal,
   type RiskSignalListQuery,
-  type RiskSignalPage
+  type RiskSignalPage,
+  // Shared by both adapters behind the risk-signals port — one cursor format, or the swap is a lie.
+  encodeSignalCursor,
+  decodeSignalCursor
 } from './risk-signal.js'
 export {
   PgAnomalyDetectionStore,
