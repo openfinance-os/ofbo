@@ -15,7 +15,7 @@ import type { Principal } from '../src/auth.js'
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('integration tests require DATABASE_URL')
 
-const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' as const }
 const now = () => new Date('2026-05-15T12:00:00.000Z') // period 2026-05 (the sim's margin period)
 const superAdmin: Principal = { subject: 'demo:super', persona: 'platform-super-admin', scopes: ['platform:superadmin'] }
 

@@ -47,22 +47,34 @@ describe('POST /back-office/tpp-counterparties:sync-directory', () => {
    * not — two implementations behind one endpoint returning different values for the same field.
    * This is the store a BFF running without a database falls back to.
    *
-   * Driven entirely through the endpoint: sync once with the richer fields present, then again in
-   * the bare P6 shape. Reaching into the store's private `rows` passes vitest and fails
-   * `tsc --noEmit`, which is its own defect class.
+   * SET UP AT THE STORE, ASSERTED THROUGH THE ENDPOINT, and each half by a route that can really
+   * happen. An earlier version put the rich fields on the fake egress and cast the participant
+   * `as never`, under a docblock claiming it was "driven entirely through the endpoint" — but the P6
+   * port declares `{ organisation_id, legal_name }` and nothing else, so the cast was there precisely
+   * to manufacture a state the endpoint cannot produce. A test that needs `as never` to reach its
+   * premise is asserting something about a shape the system does not have.
+   *
+   * The real scenario needs no cast, because the two writers genuinely differ: a SEED calls
+   * `syncDirectory` with the richer shape (that is the store's actual signature, and
+   * `packages/db/src/seed-demo.ts` does exactly this), and an OPERATOR then triggers a directory sync
+   * that carries only what P6 carries. The question — does the operator's sync null what the seed
+   * wrote? — is the one that matters, and it is reachable honestly.
    */
   it('preserves registration_number and contacts the directory does not carry', async () => {
-    egress.participants = [
-      {
-        organisation_id: 'org-fictional-fintech-01',
-        legal_name: 'Fictional Fintech One FZ-LLC',
-        registration_number: 'CN-9990001',
-        directory_contacts: [{ role: 'technical', label: 'Integration Desk' }]
-      } as never
-    ]
-    await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'sp1' }) })
+    // The seed's write: the store's true signature, no cast.
+    await store.syncDirectory(
+      [
+        {
+          organisation_id: 'org-fictional-fintech-01',
+          legal_name: 'Fictional Fintech One FZ-LLC',
+          registration_number: 'CN-9990001',
+          directory_contacts: [{ role: 'technical', label: 'Integration Desk' }]
+        }
+      ],
+      'test-seed-trace'
+    )
 
-    // Now the bare P6 shape — the two fields are simply absent.
+    // The operator's sync, through the endpoint, in the bare P6 shape the port actually carries.
     egress.participants = [{ organisation_id: 'org-fictional-fintech-01', legal_name: 'Fictional Fintech One Renamed' }]
     await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'sp2' }) })
 

@@ -12,7 +12,7 @@ import { applyMigrations, PgLineageEmitter, PgTppCounterpartyStore } from '../sr
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('integration tests require DATABASE_URL')
 
-const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' as const }
 const ORG = `org-onb-int-${randomUUID().slice(0, 8)}`
 
 describe('TPP onboarding — register + observe-traffic transitions + lineage', () => {

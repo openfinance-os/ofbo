@@ -171,7 +171,7 @@ async function runTenantBillingProjection(
   rateCard: RateCard,
   billingRunAt: Date
 ): Promise<void> {
-  const tenancy = { bankId, channel: 'internal_retail' }
+  const tenancy = { bankId, channel: 'internal_retail' as const }
   const lineage = new PgLineageEmitter(url, tenancy)
   const audit = new PgAuditEmitter(url, tenancy, lineage)
   const reconciliationStore = new PgReconciliationLogStore(url, tenancy, lineage)
@@ -228,7 +228,7 @@ export default {
     const idp = getAdapter('p2-identity-provider', profile)
     const tenancy = {
       bankId: await resolveRequestBankId(request, env, idp),
-      channel: 'internal_retail'
+      channel: 'internal_retail' as const
     }
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     const lineage = url ? new PgLineageEmitter(url, tenancy) : undefined
@@ -352,12 +352,12 @@ export default {
   async scheduled(event: ScheduledEvent, env: WorkerEnv, ctx: WorkerContext): Promise<void> {
     const url = env.HYPERDRIVE?.connectionString ?? env.DATABASE_URL
     if (!url) return
-    const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+    const tenancy = { bankId: env.BANK_ID ?? '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' as const }
     if (event.cron === BILLING_RATE_CARD_WATCH_CRON) {
       const itsm = getAdapter('p3-itsm', profileFromConfig(env as Record<string, string | undefined>))
       const billingProfiles = await configuredBillingProfiles(url, env)
       ctx.waitUntil(Promise.allSettled(billingProfiles.map(({ bankId, rateCard }) => {
-        const tenant = { bankId, channel: 'internal_retail' }
+        const tenant = { bankId, channel: 'internal_retail' as const }
         const lineage = new PgLineageEmitter(url, tenant)
         return runBillingRateCardWatch({
           databaseUrl: url,
