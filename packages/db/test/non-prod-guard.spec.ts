@@ -60,6 +60,32 @@ describe('the non-prod guard', () => {
     }
   })
 
+  /**
+   * It FAILS CLOSED on a value it does not recognise.
+   *
+   * The first version was a denylist — `=== 'enterprise' || NODE_ENV === 'production'` — so
+   * `DEPLOY_PROFILE=production`, `Enterprise`, or any typo passed straight through to a bulk
+   * lifecycle UPDATE over retained records. Unset still means `demo`, matching `profileFromConfig`
+   * in packages/ports, so local dev and CI are unaffected; an unrecognised value is a configuration
+   * error, not a silent permit.
+   */
+  it('refuses a profile it does not recognise, and still permits unset', () => {
+    const prior = process.env.DEPLOY_PROFILE
+    try {
+      for (const bad of ['production', 'Enterprise', 'prod', '']) {
+        process.env.DEPLOY_PROFILE = bad
+        expect(() => assertNonProdBulkMutation('probe'), `'${bad}' must not pass`).toThrow()
+      }
+      delete process.env.DEPLOY_PROFILE
+      expect(() => assertNonProdBulkMutation('probe')).not.toThrow() // unset === demo
+      process.env.DEPLOY_PROFILE = 'demo'
+      expect(() => assertNonProdBulkMutation('probe')).not.toThrow()
+    } finally {
+      if (prior === undefined) delete process.env.DEPLOY_PROFILE
+      else process.env.DEPLOY_PROFILE = prior
+    }
+  })
+
   it('names the operation it refused, so the message says what was blocked', () => {
     const prior = process.env.DEPLOY_PROFILE
     process.env.DEPLOY_PROFILE = 'enterprise'

@@ -30,7 +30,23 @@ const PRESERVE = new Set(['_migrations', 'retention_policy', 'classification_pol
  * did not write, it needs the same refusal its destructive sibling has always had.
  */
 export function assertNonProdBulkMutation(operation: string): void {
-  if (process.env.DEPLOY_PROFILE === 'enterprise' || process.env.NODE_ENV === 'production') {
+  // ALLOWLIST, not denylist: proceed only for a profile that resolves to `demo`.
+  //
+  // This was `=== 'enterprise' || NODE_ENV === 'production'`, which fails OPEN on anything it does
+  // not recognise — `DEPLOY_PROFILE=production`, `Enterprise`, a typo — all of which reached a bulk
+  // lifecycle UPDATE over retained records. While both seeds were strictly additive a mis-set
+  // environment was harmless; it is not any more, which is exactly what makes the default matter.
+  //
+  // The resolution mirrors `profileFromConfig` in packages/ports: unset means `demo`, so local dev
+  // and CI (which set nothing) are unaffected; `demo` and `enterprise` are the only valid values;
+  // anything else is a configuration error rather than a silent permit. Mirrored rather than
+  // imported because `packages/db` sits below `packages/ports` and must not depend on it — the
+  // convention is named here so the two cannot drift unnoticed.
+  const profile = process.env.DEPLOY_PROFILE ?? 'demo'
+  if (profile !== 'demo' && profile !== 'enterprise') {
+    throw new Error(`${operation} refuses to run: DEPLOY_PROFILE must be demo|enterprise, got: ${profile}`)
+  }
+  if (profile !== 'demo' || process.env.NODE_ENV === 'production') {
     throw new Error(`${operation} is non-prod only and refuses to run under the enterprise/production profile (regulated records are not bulk-mutated by tooling).`)
   }
 }

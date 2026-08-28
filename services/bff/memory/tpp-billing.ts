@@ -2,25 +2,33 @@
 // Behaviour unchanged; see ./README.md for why they live outside src/.
 import type { TppCounterpartyStore } from '../src/tpp-billing/service.js'
 import type { StoredTppCounterparty, TppCounterpartyListQuery, TppCounterpartyPage, DirectorySyncResult } from '@ofbo/db'
+import type { components } from '@ofbo/contracts'
+
+/** The contract's channel enum — a non-member must not reach a spec-enum response field. */
+type Channel = components['schemas']['Channel']
 
 export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
   private readonly rows = new Map<string, StoredTppCounterparty>()
 
   /**
-   * The channel a sync-created row is stamped with — configurable for the same reason the Postgres
-   * sibling takes it from `config.channel` rather than hardcoding it.
+   * The channel a sync-created row is stamped with.
    *
-   * This store hardcoded `'external_tpp_aas'` while the Pg store wrote whatever its tenancy config
-   * said (the worker sets `internal_retail`), so one endpoint returned a different `TppCounterparty.
-   * channel` depending on which store was mounted. Both values are enum members, so nothing was
-   * schema-invalid — it is the same store-parity divergence this class was just edited to close for
-   * `registration_number` and `directory_contacts`, four lines below them, and the comment there
-   * states the rule it did not follow.
+   * This hardcoded `'external_tpp_aas'` while the Pg store wrote its tenancy `config.channel` — and
+   * every construction of the Pg store in this repository passes `internal_retail`
+   * (`worker.ts:174, 231, 355`, `scripts/serve.ts`). So one endpoint returned a different
+   * `TppCounterparty.channel` depending on which store was mounted.
    *
-   * The default preserves today's behaviour for every existing caller; a caller that knows its
-   * tenancy passes it, exactly as the Pg store is constructed.
+   * THE DEFAULT IS THE FIX, not the parameter. A first pass added the parameter and left the
+   * default at `external_tpp_aas` — but `services/bff/src/app.ts` constructs the fallback with no
+   * arguments and has no tenancy to pass, so the only runtime path took the old value and the
+   * divergence stood. The knob was added and nothing turned it. The default is now what every
+   * deployment actually configures; a caller with a different tenancy passes it, as the Pg store
+   * is constructed.
+   *
+   * Typed to the contract's `Channel` enum rather than `string`, so a non-member cannot reach a
+   * spec-enum response field through this constructor.
    */
-  constructor(private readonly channel: string = 'external_tpp_aas') {}
+  constructor(private readonly channel: Channel = 'internal_retail') {}
   async syncDirectory(
     participants: { organisation_id: string; legal_name: string; registration_number?: string | null; directory_contacts?: unknown[] }[],
     _traceId: string
