@@ -295,6 +295,43 @@ milestones:
             exists to remove. They pin CURRENT behaviour, which is the right thing for them to do
             until the data model is decided, but they are not evidence the split is intended and
             this story replaces them rather than working around them.
+      - id: BACKOFFICE-100
+        title: Store-layer enum and currency validation fails outside the contract's error surface
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature - two read-boundary validation gaps on already-specified endpoints, surfaced
+          by the advisory contract-conformance reviewer on PR 346.
+        note: >-
+          TWO HALVES, both in toRow (packages/db/src/tpp-counterparty-store.ts).
+
+          1. enumOr throws a plain Error when a column holds a value outside the contract enum. The
+          decision to throw rather than cast is right - a bare `as` asserts the one thing not checked
+          but fail() in services/bff/src/tpp-billing/routes.ts handles TppRegistryError,
+          InvoicingError, ApprovalError and scope denial, then rethrows. A plain Error is none of
+          those, so it escapes to the framework default handler: not the spec's ErrorEnvelope, and
+          not a status either path declares. The failure mode chosen has no room in the contract.
+
+          Unreachable today - the DB CHECK constraints match the contract enums exactly - and
+          reachable the moment a migration adds a status the spec has not, which is precisely the
+          drift the guard exists to catch. So the throw path is not dead code.
+
+          2. mtd_fee_accrual.currency is still `r.mtd_fee_accrual_currency as string`, four lines
+          below the three fields narrowed in PR 346, while the contract constrains it to
+          pattern ^[A-Z]{3}$. The column is char(3), which bounds length but not case or alphabet.
+          The docblock added in that PR rejects exactly this shape of unchecked claim, and did not
+          apply it to the field next door.
+
+          Both were left in PR 346 rather than fixed: the first spans packages/db to services/bff
+          error types, and that PR was already well past its subject.
+        depends_on: [BACKOFFICE-96]
+        acceptance:
+          - A store-layer validation failure reaches the client as the spec's error envelope with a
+            declared status, not as an undeclared 500 - which needs the paths to declare an error
+            response at all (see BACKOFFICE-96 and the missing default Error on all four).
+          - currency is validated rather than cast, by the same rule as the three enums beside it.
+          - A test drives a row holding an out-of-contract value and asserts the response envelope,
+            so the failure mode is pinned rather than reasoned about.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
