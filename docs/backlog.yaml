@@ -440,6 +440,40 @@ milestones:
           - A test fails if the emitted keys and the enumerated set disagree.
           - No key encodes a threshold that can move - the identifier names the SLO, the description
             carries the number.
+      - id: BACKOFFICE-99
+        title: The 0 propagation sentinel is audited as an NFR-18-conformant measurement
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a contradiction between a semantic the contract asserts and the comparator
+          that records conformance. Surfaced by the advisory contract-conformance reviewer on PR 347.
+        note: >-
+          BACKOFFICE-91 gave the 0 value contractual meaning: it is a sentinel, not a measurement -
+          the revocation was acknowledged without leaving the deployment, so nothing propagated - and
+          the description tells consumers to exclude it from latency statistics.
+
+          No code honours that. Every comparator is a bare less-than (consents/revoke.ts,
+          fraud-revoke.ts twice, bulk-revoke.ts), so sla_met evaluates 0 < the bound as TRUE and the
+          sentinel is written into the audit trail as a conformant propagation - the opposite of "no
+          propagation occurred, exclude it".
+
+          The producer is real: the training sandbox egress returns acknowledged_in_ms 0 and the
+          training app wires it into this route, so a training revoke does emit it.
+
+          Exposure is contained rather than absent, which is why this is filed and not urgent:
+          training audit events go to a segregated sink and cannot reach production compliance
+          reporting. The reviewer stated its own uncertainty on both points and I agree with the
+          framing. What is not contained is the contradiction itself - the contract now promises an
+          exclusion that nothing performs, which is the same shape as the defect BACKOFFICE-91 was
+          filed to remove, one layer down. Filed rather than fixed in that PR because changing an
+          audit-trail comparator is not a spec-description change's business.
+        acceptance:
+          - The sentinel is excluded from conformance scoring wherever sla_met is computed, or the
+            contract stops promising an exclusion nothing performs - decided, not left to drift.
+          - Whichever way it goes, one test drives a sentinel revocation and asserts what the audit
+            row says about it, so the answer is pinned rather than reasoned about.
+          - All three routes agree, since the same expression is written four times across three
+            files.
       - id: BACKOFFICE-93
         title: The revoke SLA verdict reaches approvers on two of three routes, and the contract documents it on none
         status: pending
