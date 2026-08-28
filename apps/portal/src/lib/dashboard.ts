@@ -80,20 +80,66 @@ async function approvalsKpi(token: string, deps: DashboardDeps): Promise<Kpi[]> 
   ]
 }
 
+/** The contract's maximum page size for this list (spec: `limit` max 200). */
+const RISK_PAGE_LIMIT = 200
+/**
+ * A bound on how far the dashboard will follow the cursor: 10 pages = 2,000 open signals. Not a
+ * correctness limit but a latency one — a dashboard card must not turn into an unbounded crawl
+ * because a demo dataset went strange. Beyond it the reader reports `truncated` and the caller
+ * says so rather than describing a partial set as if it were the whole one.
+ */
+const RISK_MAX_PAGES = 10
+
+/**
+ * Every open risk signal, following the cursor — not the first page pretending to be the set.
+ *
+ * `/back-office/risk-signals` is cursor-paginated and signals continuation through
+ * `meta.next_cursor`; both dashboard readers used to request `limit=200` once and treat whatever
+ * came back as complete. That was already wrong, and BACKOFFICE-94 made it MATTER: once tone
+ * follows severity rather than mere volume, a single high-severity signal sitting on page two
+ * leaves the card reading "none high-severity" in calm navy — the card confidently reporting the
+ * absence of something it never looked for. That is the same defect class as pricing an unmodelled
+ * liability at zero: not silence, which gets investigated, but a confident wrong answer.
+ *
+ * One reader for both callers, so the KPI count and the severity buckets cannot disagree about
+ * what "open" means.
+ */
+async function openRiskSignals(
+  token: string,
+  deps: DashboardDeps
+): Promise<{ signals: { severity: string }[]; truncated: boolean }> {
+  const { base, f } = bffClient(deps)
+  const signals: { severity: string }[] = []
+  let cursor: string | null = null
+
+  for (let page = 0; page < RISK_MAX_PAGES; page++) {
+    const query = `status=open&limit=${RISK_PAGE_LIMIT}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+    const res = await f(`${base}/back-office/risk-signals?${query}`, { headers: authHeaders(token) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const body = (await res.json()) as { data?: { severity: string }[]; meta?: { next_cursor?: string | null } }
+    signals.push(...(body.data ?? []))
+    cursor = body.meta?.next_cursor ?? null
+    if (!cursor) return { signals, truncated: false }
+  }
+  return { signals, truncated: true }
+}
+
 /** Open risk signals by severity from the risk-signals list (risk:read). */
 async function riskKpi(token: string, deps: DashboardDeps): Promise<Kpi[]> {
-  const { base, f } = bffClient(deps)
-  const res = await f(`${base}/back-office/risk-signals?status=open&limit=200`, { headers: authHeaders(token) })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const body = (await res.json()) as { data?: { severity: string }[] }
-  const signals = body.data ?? []
+  const { signals, truncated } = await openRiskSignals(token, deps)
   const critical = signals.filter((s) => s.severity === 'critical' || s.severity === 'high').length
   return [
     {
       key: 'open-risk-signals',
       label: 'Open risk signals',
-      value: String(signals.length),
-      sub: critical > 0 ? `${critical} high / critical` : 'none high-severity',
+      value: truncated ? `${signals.length}+` : String(signals.length),
+      // When the set is truncated, "none high-severity" would be a claim about signals nobody
+      // read. Say what was actually looked at instead.
+      sub: critical > 0
+        ? `${critical} high / critical`
+        : truncated
+          ? `none high-severity in the first ${signals.length}`
+          : 'none high-severity',
       // The tone must agree with the sub-label directly beneath it. It used to read
       // `signals.length > 0 ? 'break'`, so 200 INFO-severity signals rendered in the amber that
       // means "approaching its clock" above a caption reading "none high-severity" — the colour
@@ -146,12 +192,9 @@ const SEVERITY_ORDER: { key: string; label: string; tone: KpiTone }[] = [
 
 /** Open risk signals bucketed by severity (risk:read). */
 async function riskSeverity(token: string, deps: DashboardDeps): Promise<SeverityBar[]> {
-  const { base, f } = bffClient(deps)
-  const res = await f(`${base}/back-office/risk-signals?status=open&limit=200`, { headers: authHeaders(token) })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const body = (await res.json()) as { data?: { severity: string }[] }
+  const { signals } = await openRiskSignals(token, deps)
   const counts = new Map<string, number>()
-  for (const s of body.data ?? []) counts.set(s.severity, (counts.get(s.severity) ?? 0) + 1)
+  for (const s of signals) counts.set(s.severity, (counts.get(s.severity) ?? 0) + 1)
   return SEVERITY_ORDER.map(({ key, label, tone }) => ({ label, tone, count: counts.get(key) ?? 0 }))
 }
 

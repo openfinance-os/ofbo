@@ -4,21 +4,59 @@ import { cleanup, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { getDashboardKpis } from '../src/lib/dashboard.js'
 import { DashboardOverview } from '../src/components/dashboard-overview.js'
+import { getDashboardCharts } from '../src/lib/dashboard.js'
 
 afterEach(cleanup)
 
-/** Routes a mock BFF by path. `risk` null → that endpoint 403s (out-of-scope persona). */
-function mockFetch(opts: { runs: unknown[]; breaks: unknown[]; pending: unknown[]; risk: unknown[] | null }): typeof fetch {
+/**
+ * Routes a mock BFF by path. `risk` null → that endpoint 403s (out-of-scope persona).
+ *
+ * The envelope is the CONTRACT envelope, not a convenient subset: `meta` carries `request_id` and
+ * `timestamp` on every success body and `next_cursor` on every list (spec Envelope; CLAUDE.md
+ * §"API conventions"). It used to default `meta` to `{}` for the approvals and risk routes. A
+ * fixture weaker than the contract cannot catch a client that starts depending on the parts it
+ * omits — which is exactly what happened here: nothing noticed that the risk readers ignored
+ * `next_cursor`, because the fixture never sent one.
+ *
+ * `risk` may be a flat list (one page) or an array of pages, which the route serves in sequence so
+ * a cursor-following client can be tested against real continuation.
+ */
+function mockFetch(opts: {
+  runs: unknown[]
+  breaks: unknown[]
+  pending: unknown[]
+  risk: unknown[] | unknown[][] | null
+}): typeof fetch {
+  const riskPages: unknown[][] | null =
+    opts.risk === null ? null : Array.isArray(opts.risk[0]) ? (opts.risk as unknown[][]) : [opts.risk as unknown[]]
   return (async (url: string) => {
     const u = String(url)
-    const ok = (data: unknown, meta: Record<string, unknown> = {}) => new Response(JSON.stringify({ data, meta }), { status: 200 })
-    if (u.includes('/approvals/pending')) return ok(opts.pending)
+    const ok = (data: unknown, meta: Record<string, unknown> = {}) =>
+      new Response(
+        JSON.stringify({
+          data,
+          // A UUID because the contract says `format: uuid`, and a real ISO timestamp — the two
+          // fields every success body carries.
+          meta: { request_id: '3f1a5c8e-0000-4000-8000-000000000001', timestamp: '2026-08-28T00:00:00.000Z', ...meta }
+        }),
+        { status: 200 }
+      )
+    if (u.includes('/approvals/pending')) return ok(opts.pending, { next_cursor: null })
     if (u.includes('/reconciliation/runs')) return ok(opts.runs, { next_cursor: null })
     if (u.includes('/reconciliation/breaks')) return ok(opts.breaks, { next_cursor: null })
-    if (u.includes('/risk-signals')) return opts.risk === null ? new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 }) : ok(opts.risk)
+    if (u.includes('/risk-signals')) {
+      if (riskPages === null) return new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 })
+      const cursor = new URL(u, 'http://bff.test').searchParams.get('cursor')
+      const index = cursor ? Number(cursor) : 0
+      const next = index + 1 < riskPages.length ? String(index + 1) : null
+      return ok(riskPages[index] ?? [], { next_cursor: next })
+    }
     return new Response('{}', { status: 404 })
   }) as unknown as typeof fetch
 }
+
+/** A contract-shaped approval id — `format: uuid` (spec), UUID v4 (CLAUDE.md). */
+const approvalId = (n: number) => `a1b2c3d4-0000-4000-8000-00000000000${n}`
 
 const P = { subject: 'demo:super', scopes: ['*'] }
 const deps = (fetchImpl: typeof fetch) => ({ baseUrl: 'http://bff.test', fetchImpl })
@@ -28,7 +66,7 @@ describe('getDashboardKpis', () => {
     const f = mockFetch({
       runs: [{ line_count_total: 1000, line_count_matched: 992, line_count_unmatched: 8, line_count_disputed: 0 }],
       breaks: [{ status: 'flagged' }, { status: 'assigned' }, { status: 'resolved_matched' }],
-      pending: [{ approval_request_id: 'a1' }, { approval_request_id: 'a2' }],
+      pending: [{ approval_request_id: approvalId(1) }, { approval_request_id: approvalId(2) }],
       risk: [{ severity: 'critical' }, { severity: 'medium' }, { severity: 'high' }]
     })
     const kpis = await getDashboardKpis('tok', P, deps(f))
@@ -58,7 +96,7 @@ describe('getDashboardKpis', () => {
     const f = mockFetch({
       runs: [],
       breaks: [],
-      pending: [{ approval_request_id: 'a1' }, { approval_request_id: 'a2' }],
+      pending: [{ approval_request_id: approvalId(1) }, { approval_request_id: approvalId(2) }],
       risk: [{ severity: 'info' }, { severity: 'low' }, { severity: 'medium' }]
     })
     const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
@@ -75,6 +113,47 @@ describe('getDashboardKpis', () => {
     const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
     expect(by['open-risk-signals']!.tone).toBe('breach')
     expect(by['open-risk-signals']!.sub).toContain('1 high / critical')
+  })
+
+  /**
+   * BACKOFFICE-94 follow-up — the tone can only tell the truth about signals it actually read.
+   *
+   * `/back-office/risk-signals` is cursor-paginated. Both dashboard readers requested one page of
+   * 200 and treated it as the whole set. That was already wrong; making tone follow SEVERITY is
+   * what made it matter — a single high-severity signal on page two now leaves the card reading
+   * "none high-severity" in calm navy, confidently reporting the absence of something it never
+   * looked for.
+   *
+   * The old fixture could not have caught this: it never sent a `next_cursor`, so a client that
+   * ignored one looked identical to a client that honoured it.
+   */
+  it('follows the cursor, so severity on a later page still escalates', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [],
+      risk: [
+        [{ severity: 'info' }, { severity: 'low' }],
+        [{ severity: 'info' }, { severity: 'critical' }] // page two carries the one that matters
+      ]
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['open-risk-signals']!.value).toBe('4') // both pages counted, not just the first
+    expect(by['open-risk-signals']!.sub).toContain('1 high / critical')
+    expect(by['open-risk-signals']!.tone).toBe('breach')
+  })
+
+  it('buckets the severity chart across every page too', async () => {
+    const f = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [],
+      risk: [[{ severity: 'high' }], [{ severity: 'high' }, { severity: 'info' }]]
+    })
+    const charts = await getDashboardCharts('tok', deps(f))
+    const by = Object.fromEntries(charts.riskSeverity.map((b) => [b.label, b.count]))
+    expect(by.High).toBe(2) // one from each page — the KPI and the chart agree on "open"
+    expect(by.Info).toBe(1)
   })
 
   it('gracefully omits a card whose source the persona cannot access (risk 403)', async () => {
@@ -121,7 +200,6 @@ describe('DashboardOverview', () => {
   })
 })
 
-import { getDashboardCharts } from '../src/lib/dashboard.js'
 import { DashboardCharts } from '../src/components/dashboard-charts.js'
 
 describe('getDashboardCharts', () => {
