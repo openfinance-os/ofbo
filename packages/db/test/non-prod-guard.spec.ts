@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { assertNonProdBulkMutation } from '../src/reset.js'
 
 /**
@@ -22,42 +22,62 @@ import { assertNonProdBulkMutation } from '../src/reset.js'
  * the enterprise/production profile is the whole point. A request-path module appearing here would
  * be the actual rule-7 violation.
  */
-const PROFILE_GUARDED_MODULES: readonly string[] = ['reset.ts', 'seed-demo.ts', 'seed-tenants.ts', 'seed.ts']
+const PROFILE_GUARDED_MODULES: readonly string[] = [
+  'packages/db/src/reset.ts',
+  'packages/db/src/seed-demo.ts',
+  'packages/db/src/seed-tenants.ts',
+  'packages/db/src/seed.ts',
+  // This file. It calls the guard below to assert the refusal, which makes it a caller like any
+  // other; declaring it is cheaper than an exemption that would have to be justified every round.
+  'packages/db/test/non-prod-guard.spec.ts',
+]
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
 /**
- * Every module that CALLS the guard, anywhere in the workspace.
+ * Every module that CALLS the guard, anywhere in the repository.
  *
- * The first cut scanned one flat directory non-recursively and matched
- * `/assertNonProdBulkMutation\s*\(/` — which also matches the function's own DECLARATION, so
- * `reset.ts` satisfied membership even if it stopped calling the guard, and no caller outside
- * `packages/db/src` was visible at all. The ESLint comment nominates this test as the enforcement
- * the lint rule "structurally cannot provide"; that claim only holds if the scan covers where a
- * caller could actually appear.
+ * THIS SCAN HAS BEEN WRONG THREE TIMES, each time in a way that let the set look closed while it
+ * was not. Recorded in full, because the ESLint exemption at `eslint.config.mjs` nominates this test
+ * as the enforcement the lint rule "structurally cannot provide" — a claim worth exactly as much as
+ * the scan under it.
+ *
+ *   1. It scanned one flat directory non-recursively, and its regex also matched the function's own
+ *      DECLARATION — so `reset.ts` satisfied membership even if it stopped calling the guard, and no
+ *      caller outside `packages/db/src` was visible at all.
+ *   2. It then recursed, but keyed the set on `entry.name` — the BASENAME. Any new caller in a file
+ *      already called `seed.ts` or `reset.ts`, anywhere in the workspace, collapsed into an existing
+ *      declared entry and passed silently. A namespace collision in the gate that stands in for the
+ *      profile-branching rule.
+ *   3. It walked only `packages`, `services` and `apps`, so a caller under `scripts/` or at the root
+ *      was invisible; and it skipped `*.spec.ts`, so a test calling the guard was never surfaced.
+ *
+ * All three are fixed here: keyed on the repo-relative PATH, walking from the repository root, and
+ * no longer skipping specs. `.claude` is excluded because this repo keeps its worktrees there — a
+ * root walk would otherwise recurse into every other branch's checkout and report their callers as
+ * this one's.
  */
 function callers(): string[] {
+  const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.turbo', '.claude'])
   const found = new Set<string>()
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue
+      if (SKIP.has(entry.name)) continue
       const full = join(dir, entry.name)
       if (entry.isDirectory()) {
         walk(full)
         continue
       }
-      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts')) continue
+      if (!entry.name.endsWith('.ts')) continue
       const text = readFileSync(full, 'utf8')
       // A CALL, not the declaration — `export function assertNonProdBulkMutation(` must not count
       // its own definition as a caller.
       if (/(?<!function\s)assertNonProdBulkMutation\s*\(/.test(text.replace(/export function assertNonProdBulkMutation\s*\(/g, ''))) {
-        found.add(entry.name)
+        found.add(relative(REPO, full).split(sep).join('/'))
       }
     }
   }
-  walk(join(REPO, 'packages'))
-  walk(join(REPO, 'services'))
-  walk(join(REPO, 'apps'))
+  walk(REPO)
   return [...found].sort()
 }
 

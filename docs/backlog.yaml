@@ -286,8 +286,15 @@ milestones:
           - A decision on what channel means for a counterparty is recorded - the tenancy that
             observes it, or the channel it transacts on - and the spec description says which.
           - Every writer of tpp_counterparty agrees with that decision, seeds and both stores.
-          - A test asserts one value across the seeded demo registry, so a future writer cannot
-            reintroduce the split silently.
+          - >-
+            A test asserts one value across the seeded demo registry, so a future writer cannot
+            reintroduce the split silently. NOTE FOR WHOEVER TAKES THIS: two tests in
+            services/bff/test/tpp-registry.spec.ts currently pin BOTH values as expected - one the
+            in-memory default, one the configured channel. The advisory reviewer flagged that as in
+            direct conflict with this criterion, and it is: they assert the divergence this story
+            exists to remove. They pin CURRENT behaviour, which is the right thing for them to do
+            until the data model is decided, but they are not evidence the split is intended and
+            this story replaces them rather than working around them.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
