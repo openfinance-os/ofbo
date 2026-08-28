@@ -15,13 +15,25 @@
  * Every consumer imports from here, and the SLO description is DERIVED rather than written, so the
  * number a screen displays cannot drift from the number the code enforces.
  *
- * ONE COPY REMAINS, and it is outside this module's reach: `specs/backoffice-openapi.yaml` states
- * the bound in the `nebras_propagation_ms` description ("Must be < 5000 p99 (NFR-18)"). Nothing
- * derives it and no test compares it, so an amendment to 3s would leave the PUBLISHED CONTRACT —
- * the artifact with the widest audience — telling integrators 5000 while the code enforced 3000.
- * It is not fixed here because the contract is ground truth and changes through the spec-change
- * workflow, not a code edit; filed as BACKOFFICE-91. Recorded in this file so the next reader does
- * not take "declared once" more literally than it is true.
+ * THE CONTRACT AGREES, and a test holds it there (BACKOFFICE-91). An earlier version of this
+ * docblock said the spec still carried an underived prose copy — true when written, false the
+ * moment that story shipped, and left in place it would have sent the next reader to re-file work
+ * already done. A comment whose whole subject is the state of the contract, drifting from the
+ * contract, is this module's own defect one artifact over.
+ *
+ * `specs/backoffice-openapi.yaml` now carries the bound on `nebras_propagation_ms` as
+ * `x-nfr18-p99-exclusive-max-ms`, and `services/bff/test/nebras-sla.spec.ts` fails if it and this
+ * constant disagree — in magnitude, in comparator, or by a third unbound copy appearing in the file.
+ *
+ * WHAT THAT DOES NOT BUY, stated so nobody over-reads it: `openapi-typescript` drops `x-`
+ * extensions and the response validator strips them, so every consumer downstream of codegen — the
+ * portal client, `verify:contract`, an external SDK — still reads the bound as prose. The extension
+ * buys an in-repo regression guard, not machine-readability for downstream consumers.
+ *
+ * The prose copies in `revoke.ts` and `bulk-revoke.ts` are narrative rather than enforcement, and
+ * `services/nebras-sim/src/app.ts` states the threshold independently on purpose — it EMULATES the
+ * counterparty rather than consuming the constant, and a simulator that imported the bound it is
+ * meant to test against would be checking the code against itself.
  */
 export const NEBRAS_SLA_MS = 5000
 

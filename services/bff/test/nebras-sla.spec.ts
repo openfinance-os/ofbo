@@ -6,7 +6,8 @@ import { DemoSloReader } from '../src/analytics/slo.js'
 // Build/test-time spec access, on the same subpath family as `@ofbo/contracts/testing` —
 // deliberately NOT the runtime index, which Workers load and which must stay generated-artifacts
 // only (packages/contracts/src/spec.ts).
-import { loadSpec } from '@ofbo/contracts/spec'
+import { readFileSync } from 'node:fs'
+import { loadSpec, SPEC_PATH } from '@ofbo/contracts/spec'
 
 /**
  * STD-09 — NFR-18's revoke SLA had three declarations and no single source.
@@ -76,10 +77,51 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const field =
       spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
         .properties.nebras_propagation_ms
-    expect(field['x-nfr18-p99-max-ms']).toBe(NEBRAS_SLA_MS)
+    expect(field['x-nfr18-p99-exclusive-max-ms']).toBe(NEBRAS_SLA_MS)
     // The human-readable half must carry the same number as the machine-readable half — a
     // description that drifts from its own extension is the original defect in miniature.
     expect(field.description).toContain(String(NEBRAS_SLA_MS))
+  })
+
+  /**
+   * The VALUE agreeing is not the whole claim — the COMPARATOR has to agree too.
+   *
+   * The first cut of this asserted the integers matched and that the description mentioned the
+   * number. Both pass on `p99 ≤ 5000 ms`, which is a different bound: every comparator that decides
+   * conformance is strict (`< NEBRAS_SLA_MS` in revoke.ts, fraud-revoke.ts and bulk-revoke.ts), so
+   * an acknowledgment landing exactly on the bound is a breach to the code and conformant to a
+   * consumer reading an inclusive `max`. A one-millisecond window — and precisely the
+   * machine-versus-prose disagreement this story exists to remove, reintroduced by a key NAME.
+   *
+   * So the exclusivity is asserted on both halves: the extension carries it in its key, and the
+   * description states it in words.
+   */
+  it('agrees about the COMPARATOR, not only the magnitude', () => {
+    const spec = loadSpec()
+    const field =
+      spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
+        .properties.nebras_propagation_ms
+    // The key names the bound exclusive; an inclusive-sounding key is the defect.
+    expect(Object.keys(field).some((k) => /^x-nfr18-.*exclusive-max-ms$/.test(k))).toBe(true)
+    expect(field['x-nfr18-p99-max-ms'], 'an inclusive-sounding key must not reappear').toBeUndefined()
+    // And the prose says strictly-less-than rather than at-most.
+    expect(field.description).toMatch(new RegExp(`<\\s*${NEBRAS_SLA_MS}\\s*ms`))
+    expect(field.description).not.toMatch(/≤|<=|at most|no more than/)
+  })
+
+  /**
+   * ONE stated bound in the contract, and the test binds every statement of it.
+   *
+   * The acceptance criterion is "states the revoke-SLA bound in exactly one place". The schema node
+   * necessarily states it twice — machine-readable and human-readable — and both are bound above.
+   * What must never appear is a THIRD, in a comment or elsewhere in the node, that nothing compares:
+   * that is the original defect at smaller scale.
+   */
+  it('states the bound nowhere in the contract that a test does not bind', () => {
+    const raw = readFileSync(SPEC_PATH, 'utf8')
+    const occurrences = raw.split('\n').filter((line) => new RegExp(`\\b${NEBRAS_SLA_MS}\\b`).test(line))
+    // Exactly two: the extension and the description. Both asserted above.
+    expect(occurrences.map((l) => l.trim())).toHaveLength(2)
   })
 
   /**

@@ -333,11 +333,27 @@ milestones:
         progress: >-
           SHIPPED. The bound stays IN the contract - a contract that says "see NFR-18" is worse for
           an integrator than one that states the number - and what was missing, the link, is now
-          there. nebras_propagation_ms carries x-nfr18-p99-max-ms - 5000, using the same
+          there. nebras_propagation_ms carries x-nfr18-p99-exclusive-max-ms, using the same
           vendor-extension mechanism the spec already uses for x-required-scope and x-four-eyes, and
-          a test asserts it equals NEBRAS_SLA_MS and that the prose half carries the same number.
-          Verified by editing the extension to 3000, simulating an amendment landing in the spec
-          only - the test fails.
+          the spec header now enumerates it beside x-rate-limit-per-min.
+
+          THE KEY NAMES THE COMPARATOR, not just the magnitude. The first cut called it
+          x-nfr18-p99-max-ms, which a machine consumer reads the way JSON Schema reads maximum -
+          inclusive - while every comparator that decides conformance is strict. An acknowledgment
+          landing exactly on the bound would have been a breach to the code and conformant to the
+          consumer: a one-millisecond window, and exactly the machine-versus-prose disagreement this
+          story exists to remove, reintroduced by a key name. Caught by the advisory reviewer.
+
+          The guard binds three axes, each verified by breaking it: the magnitude (edit the
+          extension to 3000 - fails), the comparator (rename the key inclusive and soften the prose
+          to a fifth-symbol - fails), and the COPY COUNT (add a third statement of the number in a
+          comment - fails). The last one matters because the acceptance criterion says "exactly one
+          place", and a numeral in an unchecked comment is the original defect at smaller scale.
+
+          WHAT IT DOES NOT BUY, recorded so the claim is not over-read: openapi-typescript drops x-
+          extensions and the response validator strips them, so every consumer downstream of codegen
+          - the portal client, verify:contract, an external SDK - still reads the bound as prose.
+          The extension buys an in-repo regression guard, not machine-readability downstream.
 
           It is deliberately NOT a maximum. That would be the obvious-looking tightening and it
           would be wrong - the field records what HAPPENED, and STD-09 added a fraud-revoke test
