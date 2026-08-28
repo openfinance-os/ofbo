@@ -306,8 +306,8 @@ milestones:
         note: >-
           STD-09 collapsed three declarations of NFR-18's 5-second revoke SLA into one
           (services/bff/src/consents/nebras-sla.ts). It enumerated the copies in CODE and missed the
-          one in the ground-truth document: specs/backoffice-openapi.yaml:3264 describes
-          nebras_propagation_ms as "Must be < 5000 p99 (NFR-18)".
+          one in the ground-truth document: the RevocationResult response in
+          specs/backoffice-openapi.yaml described nebras_propagation_ms as "Must be < 5000 p99 (NFR-18)".
 
           Nothing derives that description from NEBRAS_SLA_MS and no test compares them, so a scheme
           amendment to 3s would leave the PUBLISHED CONTRACT telling integrators the bound is 5000
@@ -327,7 +327,13 @@ milestones:
         acceptance:
           - The contract states the revoke-SLA bound in exactly one place, and the relationship
             between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
-          - A test fails if the two disagree, so an amendment cannot land in one and not the other.
+          - >-
+            A test fails if the two disagree, so an amendment cannot land in one and not the other.
+            Both directions: the contract must state the CURRENT bound, and must state no other
+            duration. The second half was missing in the first implementation - every assertion was
+            parameterised on the current constant, so a stale prior bound left in the description
+            passed the whole suite while the services enforced the new one. Verified by walking the
+            amendment, not by reading the assertions.
           - The change goes spec-first through the spec-change skill, with the contract PR
             human-approved before any code follows it.
         progress: >-
@@ -425,7 +431,7 @@ milestones:
           admin one, for a reason worth recording. The fraud and bulk routes return through the
           four-eyes :approve response, whose execution_result is typed { type - object } - free-form,
           so a field can be added without a contract change. The admin route returns the DOCUMENTED
-          RevocationResult schema (specs/backoffice-openapi.yaml:3250), which names consent_id,
+          RevocationResult schema (a named node in specs/backoffice-openapi.yaml), which names consent_id,
           status, nebras_propagation_ms and psu_notified and nothing else. Adding sla_met there is a
           spec change, and doing it as a side edit in a code story is exactly the shortcut the
           spec-first rule exists to stop.

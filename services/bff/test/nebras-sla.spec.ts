@@ -43,7 +43,7 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
    * story fixed came about.
    */
   it('is written down in exactly one file', async () => {
-    const { readdirSync, readFileSync } = await import('node:fs')
+    const { readdirSync } = await import('node:fs')
     const dir = new URL('../src/consents/', import.meta.url)
     const offenders: string[] = []
     for (const file of readdirSync(dir)) {
@@ -69,7 +69,7 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
    *
    * The bound stays IN the contract, because a contract that says "see NFR-18" is worse for the
    * integrator than one that states the number. What was missing is the link, so the number is now
-   * machine-readable (`x-nfr18-p99-exclusive-max-ms`, the same vendor-extension mechanism the spec
+   * machine-readable (`x-nfr18-exclusive-max-ms`, the same vendor-extension mechanism the spec
    * already uses for `x-required-scope` and `x-four-eyes`) and this test is the link.
    */
   it('agrees with the contract, which states the same bound machine-readably', () => {
@@ -77,7 +77,7 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const field =
       spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
         .properties.nebras_propagation_ms
-    expect(field['x-nfr18-p99-exclusive-max-ms']).toBe(NEBRAS_SLA_MS)
+    expect(field['x-nfr18-exclusive-max-ms']).toBe(NEBRAS_SLA_MS)
     // The human-readable half must carry the same number as the machine-readable half — a
     // description that drifts from its own extension is the original defect in miniature.
     expect(field.description).toContain(String(NEBRAS_SLA_MS))
@@ -158,7 +158,8 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     let end = start + 1
     while (end < lines.length && (lines[end]!.trim() === '' || lines[end]!.search(/\S/) > indent)) end++
 
-    const seconds = NEBRAS_SLA_MS / 1000
+    // Escaped: at a non-round bound (2500 → `2.5`) the `.` would interpolate as a wildcard.
+    const seconds = String(NEBRAS_SLA_MS / 1000).replace('.', '\\.')
     const grouped = String(NEBRAS_SLA_MS).replace(/\B(?=(\d{3})+$)/g, '[,_ ]?')
     // Every spelling of the same bound — and "every" now means it.
     //
@@ -183,6 +184,55 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     // Three: the extension, and the description's two ("strictly below 5000 ms", "exactly 5000").
     // Each is asserted by the tests above; a fourth would be an unbound copy.
     expect(statements, 'an unbound statement of the bound appeared in this node').toBe(3)
+  })
+
+  /**
+   * ...and states no OTHER duration either — the half the count above cannot see.
+   *
+   * The acceptance criterion this suite is cited for reads "a test fails if the two disagree, so an
+   * amendment cannot land in one and not the other". It did not hold, and I verified that by walking
+   * the amendment rather than by reading the assertions: with `NEBRAS_SLA_MS` moved to 3000, its
+   * literal pin updated, the extension updated, the description reworded to 3000 and the sentence
+   * "Prior to the amendment this bound was 5000 ms" left behind, all eight tests passed.
+   *
+   * Every assertion in this file is parameterised on the CURRENT constant, so each one asks "is the
+   * new number here?" and none asks "is any other number here?". The published contract could
+   * therefore go on telling integrators 5000 while the services enforced 3000 — which is verbatim
+   * the defect BACKOFFICE-91 was filed against, surviving inside the guard written to close it.
+   *
+   * So this reads the node the other way round: find every duration-shaped quantity, and require
+   * each one to BE the bound. Unit-aware for the same reason the count above is — the copy STD-09
+   * missed was in a different unit.
+   */
+  it('states no duration in its own schema node that is not the bound', () => {
+    const raw = readFileSync(SPEC_PATH, 'utf8')
+    const lines = raw.split('\n')
+    const anchor = lines.findIndex((l) => /^\s*RevocationResult:/.test(l))
+    const start = lines.findIndex((l, i) => i > anchor && /^\s*nebras_propagation_ms:/.test(l))
+    expect(start, 'the field must be findable inside RevocationResult').toBeGreaterThan(anchor)
+    const indent = lines[start]!.search(/\S/)
+    let end = start + 1
+    while (end < lines.length && (lines[end]!.trim() === '' || lines[end]!.search(/\S/) > indent)) end++
+
+    // `0` is the training sentinel, documented in this very node as "not a measurement". Allowed by
+    // NAME rather than by a rule that quietly tolerates small numbers, so adding another exemption
+    // is a visible edit.
+    const DOCUMENTED_NON_BOUND = new Set([0])
+
+    // A number that stands on its own, carrying an optional time unit. The lookbehind is what keeps
+    // identifiers out: `NFR-18` and `p99` are requirement and statistic names, not durations, and
+    // both are preceded by a letter or a hyphen.
+    const quantity = /(?<![A-Za-z\d.-])(\d[\d,_ ]*\d|\d)\s*(ms|milliseconds?|s|seconds?)?\b/gi
+
+    const strays: string[] = []
+    for (const line of lines.slice(start, end)) {
+      for (const [text, digits, unit] of line.matchAll(quantity)) {
+        const n = Number(digits!.replace(/[,_ ]/g, ''))
+        const ms = /^s/i.test(unit ?? '') ? n * 1000 : n
+        if (ms !== NEBRAS_SLA_MS && !DOCUMENTED_NON_BOUND.has(ms)) strays.push(`${text.trim()} (→ ${ms} ms)`)
+      }
+    }
+    expect(strays, 'a duration that is not the NFR-18 bound appears in this node').toEqual([])
   })
 
   /**

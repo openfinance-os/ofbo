@@ -22,22 +22,32 @@
  * contract, is this module's own defect one artifact over.
  *
  * `specs/backoffice-openapi.yaml` now carries the bound on `nebras_propagation_ms` as
- * `x-nfr18-p99-exclusive-max-ms`, and `services/bff/test/nebras-sla.spec.ts` fails if it and this
- * constant disagree — in magnitude, in comparator, or by a third unbound copy appearing in that
- * field's own schema NODE. Not in the file: the guard is deliberately node-scoped, because scanning
- * all 3,900 lines for the bare number made it fire on any unrelated `5000` (a rate limit, a
- * `maxLength`, money in minor units where 5000 is AED 50.00) and accuse its author of NFR-18 drift.
- * Stating the narrower truth because the wider claim is the exact habit this file exists to break.
+ * `x-nfr18-exclusive-max-ms`, and `services/bff/test/nebras-sla.spec.ts` fails if it and this
+ * constant disagree — in magnitude, in comparator, by a third unbound copy, or by a STALE one: a
+ * previous bound left in the prose when the constant moves. That last check was missing, and its
+ * absence was the whole defect one artifact over. Every other assertion is parameterised on the
+ * current value, so each asks "is the new number here?" and none asked "is any other number here?" —
+ * which let the published contract keep telling integrators the old bound while the services
+ * enforced the new one.
+ *
+ * All of it is scoped to that field's own schema NODE, not the file: scanning all 3,900 lines for
+ * the bare number made it fire on any unrelated `5000` (a rate limit, a `maxLength`, money in minor
+ * units where 5000 is AED 50.00) and accuse its author of NFR-18 drift.
  *
  * WHAT THAT DOES NOT BUY, stated so nobody over-reads it: `openapi-typescript` drops `x-`
  * extensions and the response validator strips them, so every consumer downstream of codegen — the
  * portal client, `verify:contract`, an external SDK — still reads the bound as prose. The extension
- * buys an in-repo regression guard, not machine-readability for downstream consumers.
+ * buys an in-repo regression guard, not machine-readability for downstream consumers. Whether this
+ * mechanism should become a convention is raised in ADR 0034 and is not settled here.
  *
- * The prose copies in `revoke.ts` and `bulk-revoke.ts` are narrative rather than enforcement, and
- * `services/nebras-sim/src/app.ts` states the threshold independently on purpose — it EMULATES the
- * counterparty rather than consuming the constant, and a simulator that imported the bound it is
- * meant to test against would be checking the code against itself.
+ * The prose copies in `revoke.ts` and `bulk-revoke.ts` are narrative rather than enforcement. The
+ * simulator is deliberately NOT wired to this constant — a simulator that imported the bound it is
+ * meant to test against would be checking the code against itself. Stated precisely, because an
+ * earlier version of this line said `services/nebras-sim/src/app.ts` "states the threshold
+ * independently on purpose", which overstates what is there: the sim has no numeric threshold and
+ * no comparator anywhere in its source, only the prose "<5s revoke ack" in a file-header comment.
+ * The reasoning is sound; the claim about the file was not, in the docblock of the module whose
+ * subject is claims about other files drifting.
  */
 export const NEBRAS_SLA_MS = 5000
 
