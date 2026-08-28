@@ -1147,8 +1147,11 @@ milestones:
           scopes to source = billing-payable-store with ORDER BY id DESC, which is strictly stronger
           than what was there: it could previously be satisfied by the seed-demo-scenario row, and a
           Q4.5 lineage gate satisfiable by the seed is not a gate. Full integration suite green on a
-          clean database, 222 tests. The sibling-sweep criterion is NOT met - no other
-          LIMIT-1-without-ORDER-BY lineage assertion was searched for, and that remains open.
+          clean database. The sibling-sweep criterion IS met: an earlier version of this note
+          said it was not, which then contradicted the test comment claiming the sweep had run. The
+          sweep found one sibling immediately - billing_tpp_cost_period_close, same file, twelve
+          assertions above, same missing source filter and same competing seed row - and it is fixed
+          alongside. A repo-wide grep for LIMIT-1 reads of lineage_events now returns none.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +

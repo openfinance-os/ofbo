@@ -37,6 +37,42 @@ beforeEach(() => {
 })
 
 describe('POST /back-office/tpp-counterparties:sync-directory', () => {
+  /**
+   * PORT PARITY — the in-memory store must preserve what a participant does not carry, like its
+   * Postgres sibling.
+   *
+   * The P6 participant shape is `{ organisation_id, legal_name }`, and this store assigned
+   * `p.registration_number ?? null` / `p.directory_contacts ?? []`, so every sync emptied two
+   * spec-defined `TppCounterparty` fields. The Pg store was fixed for exactly this and this one was
+   * not — two implementations behind one endpoint returning different values for the same field.
+   * This is the store a BFF running without a database falls back to.
+   *
+   * Driven entirely through the endpoint: sync once with the richer fields present, then again in
+   * the bare P6 shape. Reaching into the store's private `rows` passes vitest and fails
+   * `tsc --noEmit`, which is its own defect class.
+   */
+  it('preserves registration_number and contacts the directory does not carry', async () => {
+    egress.participants = [
+      {
+        organisation_id: 'org-fictional-fintech-01',
+        legal_name: 'Fictional Fintech One FZ-LLC',
+        registration_number: 'CN-9990001',
+        directory_contacts: [{ role: 'technical', label: 'Integration Desk' }]
+      } as never
+    ]
+    await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'sp1' }) })
+
+    // Now the bare P6 shape — the two fields are simply absent.
+    egress.participants = [{ organisation_id: 'org-fictional-fintech-01', legal_name: 'Fictional Fintech One Renamed' }]
+    await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'sp2' }) })
+
+    const res = await app.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
+    const body = (await res.json()) as { data: { legal_name: string; registration_number: string | null; directory_contacts: unknown[] } }
+    expect(body.data.legal_name).toBe('Fictional Fintech One Renamed') // what the directory DOES say wins
+    expect(body.data.registration_number, 'the sync nulled a registration number it never carried').toBe('CN-9990001')
+    expect(body.data.directory_contacts, 'the sync emptied contacts it never carried').toHaveLength(1)
+  })
+
   it('syncs the directory into the registry, flags new TPPs, and audits (202)', async () => {
     const res = await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 's1' }) })
     expect(res.status).toBe(202)

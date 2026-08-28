@@ -34,8 +34,14 @@ export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
       } else {
         if (existing.legal_name !== p.legal_name) changed.push(p.organisation_id)
         existing.legal_name = p.legal_name
-        existing.registration_number = p.registration_number ?? null
-        existing.directory_contacts = p.directory_contacts ?? []
+        // PRESERVE what the participant does not carry, exactly as the Postgres store does. The P6
+        // participant shape is { organisation_id, legal_name }, so assigning `?? null` / `?? []`
+        // emptied two spec-defined TppCounterparty fields on every sync. The Pg store was fixed and
+        // this one was not, which put the two implementations behind one endpoint into
+        // disagreement — the port-parity rule is that an adapter passes the tests its sibling
+        // passes, and this is the store a BFF without a database falls back to.
+        if (p.registration_number != null) existing.registration_number = p.registration_number
+        if (p.directory_contacts && p.directory_contacts.length > 0) existing.directory_contacts = p.directory_contacts
         existing.directory_synced_at = new Date().toISOString()
         if (existing.production_status === 'decommissioned') existing.production_status = 'directory_only'
       }

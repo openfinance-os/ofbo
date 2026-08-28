@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import pg from 'pg'
 import { DEMO_BANK_ID, DEMO_TENANTS, DEMO_TPP_DIRECTORY, accrualByTpp } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
-import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
+import { PgAuditEmitter, SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
 import { PgLineageEmitter } from './lineage.js'
@@ -805,44 +805,60 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       { bankId: DEMO_BANK_ID, channel: CH },
       new PgLineageEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH })
     )
+    const syncLineage = new PgLineageEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH })
+    const syncAudit = new PgAuditEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH }, syncLineage)
     let sync
     try {
       sync = await counterpartyStore.syncDirectory(directory, 'seed-demo-directory-sync')
+
+      // AUDITED THROUGH THE EMITTER, not hand-rolled SQL over the seed's superuser pool.
+      //
+      // The previous cut wrote this INSERT by hand and had to be added to the closed
+      // `RAW_SQL_AUDIT_WRITERS` set — the set whose members are, by definition, the writes the
+      // `scope_used` scanner cannot see. It also ran on the superuser pool, which the backlog note
+      // for this very change calls out as "the one principal that can also empty
+      // audit_high_sensitivity". `PgAuditEmitter` was in the same package the whole time: it runs
+      // every insert as `ofbo_app` inside `beginAppTx`, so the schema's `REVOKE UPDATE, DELETE` and
+      // the tenancy policies bind, and it redacts the body at emission.
+      //
+      // The only reason the hand-rolled version existed was a `WHERE NOT EXISTS` dedupe the emitter
+      // has no form for — and that dedupe was itself the defect below, so removing it is what let
+      // the sanctioned path back in.
+      //
+      // EMITTED ON ANY CHANGE, matching the operator path, which audits `synced/added/changed/
+      // decommissioned` on every invocation. Gating on decommissions alone left reinstatements and
+      // additions — the same regulated transition, through the same upsert — unrecorded when the
+      // deploy performed them, which is the exact asymmetry this emission exists to close.
+      //
+      // NO DEDUPE. Keying on a constant id audited only the first run ever; keying on the
+      // decommissioned SET then suppressed a genuine second closure of the same organisations
+      // (close X, reinstate X, close X again writes one row for two events). Neither was needed:
+      // the store only reports what it actually changed, so a steady-state re-seed reports nothing
+      // and writes nothing. Idempotency comes from the store's own `WHERE production_status <>
+      // 'decommissioned'`, not from a key.
+      const changed = sync.added.length + sync.changed.length + sync.decommissioned.length
+      if (changed > 0) {
+        if (sync.decommissioned.length > 0) {
+          // Announced as well as recorded — a state change the seed makes to rows it did not write.
+          console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
+        }
+        await syncAudit.emit({
+          event_type: 'tpp_directory_synced',
+          acting_principal: 'seed',
+          acting_persona: 'system',
+          scope_used: SEED_ACTOR_SCOPE,
+          request_trace_id: `seed-demo-directory-sync-${sync.added.length}-${sync.changed.length}-${sync.decommissioned.length}`,
+          request_body: { synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned },
+          response_status: SYSTEM_ACTOR_RESPONSE_STATUS
+        })
+      }
     } finally {
-      // Its own pool, so its own close — the seed's other pool is already ended in a finally, and
-      // a leaked one leaves the deploy's `db:seed:demo` hanging on an idle client.
+      // Every pool this block opened, including the lineage emitter's own — the previous cut closed
+      // the store and left that one holding an idle client, which is precisely what its comment
+      // claimed to prevent.
       await counterpartyStore.close().catch(() => undefined)
-    }
-    if (sync.decommissioned.length > 0) {
-      // Announced, never silent — a state change the seed makes to regulated rows it did not write.
-      console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
-    }
-    // The retained record — one row per DISTINCT decommission set, not one per database.
-    //
-    // The first cut deduped on the constant trace id `'seed-demo-directory-sync'`, so the table
-    // could hold exactly one such row for ever. The effect was inverted: on a fresh database the
-    // first run decommissions nothing, writes `decommissioned: []`, and permanently claims the
-    // trace id — so every later run that actually closed an orphan, which is the entire point of
-    // this change, went unaudited while `console.log` still announced it. "Announced, never silent"
-    // was true of run 1 only.
-    //
-    // Keying on WHAT was decommissioned keeps the seed idempotent (re-running with the same
-    // outcome writes no second row) while making each new closure its own audited event. And no
-    // row is written when nothing changed, because nothing regulated did.
-    if (sync.decommissioned.length > 0) {
-      const traceId = `seed-demo-directory-sync:${[...sync.decommissioned].sort().join(',')}`
-      await pool.query(
-        `INSERT INTO audit_high_sensitivity
-           (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
-            request_trace_id, request_body_redacted, response_status)
-         SELECT $1, $2, 'tpp_directory_synced', 'seed', 'system', $3, $4, $5::jsonb, $6
-          WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $4)`,
-        [
-          DEMO_BANK_ID, CH, SEED_ACTOR_SCOPE, traceId,
-          JSON.stringify({ synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned }),
-          SYSTEM_ACTOR_RESPONSE_STATUS
-        ]
-      )
+      await syncAudit.close().catch(() => undefined)
+      await syncLineage.close().catch(() => undefined)
     }
 
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the

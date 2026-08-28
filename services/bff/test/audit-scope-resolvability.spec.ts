@@ -263,16 +263,7 @@ function headlessEmissions(): Array<{ file: string; scope: string; principal: st
  * not parse SQL. It asserts the set of raw writers is CLOSED, so a new one has to be brought under
  * the convention deliberately rather than landing unexamined.
  */
-const RAW_SQL_AUDIT_WRITERS: readonly string[] = [
-  'audit.ts',
-  // DEMO-SEED-ORPHAN-DECOMMISSION — the demo seed's directory sync writes a `tpp_directory_synced`
-  // row for the counterparties it decommissions, using the same `seed`/`system`/SEED_ACTOR_SCOPE
-  // sentinel the other two seed writers use. REGISTERED here rather than left to land unexamined,
-  // which is the whole point of this set being closed: the gate made the addition a decision.
-  'seed-demo.ts',
-  'seed-tenants.ts',
-  'seed.ts'
-]
+const RAW_SQL_AUDIT_WRITERS: readonly string[] = ['audit.ts', 'seed-tenants.ts', 'seed.ts']
 
 function rawSqlAuditWriters(): string[] {
   const found = new Set<string>()
