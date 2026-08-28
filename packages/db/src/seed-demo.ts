@@ -41,6 +41,8 @@ function deterministicUuid(key: string): string {
 }
 
 const CH = 'internal_retail'
+/** One id for the sync's lineage AND its audit row — they describe the same mutation. */
+const SYNC_TRACE_ID = 'seed-demo-directory-sync'
 const DEFAULT_DEMO_TENANT = DEMO_TENANTS.find((tenant) => tenant.bank_id === DEMO_BANK_ID)!
 
 /**
@@ -746,7 +748,11 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     // ORPHANS ARE DECOMMISSIONED, NOT DELETED — through the application's own directory sync.
     //
     // The hosted demo carried three `Fictional fintech 0N` counterparties that exist nowhere in
-    // this repository: orphans of a seed replaced months earlier, leading the TPP registry (it
+    // this repository AS SEED DATA — they appear only as a fake P6 participant set in
+    // services/bff/test/{tpp-registry,tpp-onboarding}.spec.ts, which writes no demo row. An earlier
+    // draft of this comment said "nowhere in this repository", which is simply false; the accurate
+    // claim is that nothing seeds them. Orphans of a seed replaced months earlier, leading the TPP
+    // registry (it
     // orders by `created_at`, and they were created first) above Lean, Tabby and Tarabut. An
     // earlier draft of this comment said "sorts by directory sync time", which nothing does — the
     // list query orders by `date_trunc('milliseconds', created_at), organisation_id`. Both seeds
@@ -809,7 +815,7 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     const syncAudit = new PgAuditEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH }, syncLineage)
     let sync
     try {
-      sync = await counterpartyStore.syncDirectory(directory, 'seed-demo-directory-sync')
+      sync = await counterpartyStore.syncDirectory(directory, SYNC_TRACE_ID)
 
       // AUDITED THROUGH THE EMITTER, not hand-rolled SQL over the seed's superuser pool.
       //
@@ -825,10 +831,15 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       // has no form for — and that dedupe was itself the defect below, so removing it is what let
       // the sanctioned path back in.
       //
-      // EMITTED ON ANY CHANGE, matching the operator path, which audits `synced/added/changed/
-      // decommissioned` on every invocation. Gating on decommissions alone left reinstatements and
-      // additions — the same regulated transition, through the same upsert — unrecorded when the
-      // deploy performed them, which is the exact asymmetry this emission exists to close.
+      // EMITTED ON ANY CHANGE — deliberately NOT on every invocation, which is where this departs
+      // from the operator path, and the earlier comment claiming parity with it was wrong.
+      //
+      // The operator path audits every call because a principal ACTED: the request is the event,
+      // even when the directory turns out to match. A deploy-time re-seed that changes nothing is
+      // not an event, and recording one on every merge would append to an INSERT-only table with no
+      // deletion path for ever. Gating on decommissions ALONE was the real defect — it left
+      // additions and reinstatements, the same regulated transition through the same upsert,
+      // unrecorded.
       //
       // NO DEDUPE. Keying on a constant id audited only the first run ever; keying on the
       // decommissioned SET then suppressed a genuine second closure of the same organisations
@@ -847,7 +858,12 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
           acting_principal: 'seed',
           acting_persona: 'system',
           scope_used: SEED_ACTOR_SCOPE,
-          request_trace_id: `seed-demo-directory-sync-${sync.added.length}-${sync.changed.length}-${sync.decommissioned.length}`,
+          // THE SAME trace id the store wrote its lineage under, so the audit row and the lineage
+          // row for one mutation can be joined. The count-bearing suffix was a leftover of the
+          // dedupe key removed above; with no dedupe it bought nothing and cost the correlation the
+          // contract calls for ("used as the OTel trace ID end-to-end"). The counts are already in
+          // the body.
+          request_trace_id: SYNC_TRACE_ID,
           request_body: { synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned },
           response_status: SYSTEM_ACTOR_RESPONSE_STATUS
         })
@@ -1091,6 +1107,8 @@ if (isCli) {
     console.error('DATABASE_URL is required')
     process.exit(1)
   }
+  // No guard here: `seedDemoDataset` and `seedDemoScenario` each carry their own, so every path
+  // into either is covered rather than this one entrypoint.
   await seedDemoDataset(url)
   await seedDemoScenario(url)
   console.log('rich demo scenario seeded (base dataset + operating-state depth)')

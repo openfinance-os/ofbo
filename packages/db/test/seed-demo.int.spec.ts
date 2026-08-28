@@ -222,6 +222,27 @@ describe('demo scenario seed', () => {
    * one that runs later fails trying to connect. That distinction needs no fixture and cannot be
    * satisfied by accident.
    */
+  /**
+   * BOTH seeding entry points refuse, not just the scenario.
+   *
+   * `seedDemoScenario` carries the guard, but `db:seed:demo`'s CLI runs `seedDemoDataset` FIRST —
+   * so under the enterprise profile the whole base synthetic dataset landed before the refusal
+   * fired. Third time this guard has been in the wrong place: a guard is only as early as its
+   * earliest caller, and each round moved it one caller further out.
+   */
+  it('refuses the base dataset too, not only the scenario', async () => {
+    const prior = process.env.DEPLOY_PROFILE
+    process.env.DEPLOY_PROFILE = 'enterprise'
+    try {
+      await expect(
+        seedDemoDataset('postgres://nobody:nobody@127.0.0.1:1/unreachable')
+      ).rejects.toThrow(/non-prod only/)
+    } finally {
+      if (prior === undefined) delete process.env.DEPLOY_PROFILE
+      else process.env.DEPLOY_PROFILE = prior
+    }
+  })
+
   it('refuses before it opens a connection, not after', async () => {
     const prior = process.env.DEPLOY_PROFILE
     process.env.DEPLOY_PROFILE = 'enterprise'

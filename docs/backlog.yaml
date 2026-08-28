@@ -216,8 +216,11 @@ milestones:
           Both seeds are additive-only - every insert is ON CONFLICT DO NOTHING or WHERE NOT EXISTS,
           and neither contains a DELETE - so a row written by a seed that was later retired outlives
           every re-seed. The hosted demo carried three "Fictional fintech 0N" counterparties that
-          exist NOWHERE in this repository, leading the TPP registry above Lean, Tabby and Tarabut.
-          Confirmed by fetching the deployed registry; the string appears in no source file.
+          are seeded NOWHERE in this repository, leading the TPP registry above Lean, Tabby and
+          Tarabut. Confirmed by fetching the deployed registry. (An earlier draft said the string
+          appears in no source file, which is false - services/bff/test/tpp-registry.spec.ts and
+          tpp-onboarding.spec.ts use those ids as a fake P6 participant set. Neither seeds a row, so
+          the orphans' provenance still is not in this repo, but the claim as written was wrong.)
 
           THE FIRST ATTEMPT ADDED A DELETE AND WAS WRONG ON THE SCHEMA'S OWN TERMS. tpp_counterparty
           is registered in retention_policy under CHECK (deletion_allowed = false), carries no DELETE
