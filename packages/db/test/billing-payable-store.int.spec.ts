@@ -359,10 +359,15 @@ describe('BILL-16 — payable close and AP dispatch', () => {
       period: '2026-02', initiatedBy: 'finance.analyst', approvedBy: 'finance.controller',
       approvalRequestId: approval, feedsMonthlySignOff: true
     }, 'trace-lineage-close')
+    // BACKOFFICE-90 sibling — same `LIMIT 1`, no ORDER BY, no `source` filter, and the seed writes
+    // a competing `seed-demo-scenario` row for this table too. Found by the sweep the item's own
+    // acceptance criterion asks for, twelve assertions below the first instance.
     const row = (await admin.query(
-      `SELECT columns FROM lineage_events WHERE table_name = 'billing_tpp_cost_period_close' LIMIT 1`
+      `SELECT columns FROM lineage_events
+        WHERE table_name = 'billing_tpp_cost_period_close' AND source = 'billing-payable-store'
+        ORDER BY id DESC LIMIT 1`
     )).rows[0]
-    expect(row).toBeDefined()
+    expect(row, 'no lineage row from the store under test').toBeDefined()
     expect(row.columns).toContain('approval_request_id')
     expect(row.columns).toContain('approved_by')
   })
@@ -564,6 +569,12 @@ describe('BILL-16 — payable close and AP dispatch', () => {
    * Both outcomes were wrong. It failed when the seed row surfaced first, and when it passed it
    * might have been reading a row the store never wrote — a Q4.5 lineage gate satisfiable by the
    * seed is not a gate. Asserting the emitter's own row is strictly stronger than what was here.
+   *
+   * The `source` filter is what makes this deterministic, NOT the ORDER BY: `lineage_events.id` is
+   * a `gen_random_uuid()`, so ordering by it does not select the latest row. It is retained only to
+   * pin ONE row rather than an arbitrary one; every candidate the filter admits is emitted from a
+   * single site with a constant column list, so they are interchangeable. Saying this because the
+   * first version of this comment claimed a determinism the ordering does not provide.
    */
   it('emits BCBS 239 column lineage for AP dispatch (Q4.5)', async () => {
     const row = (await admin.query(

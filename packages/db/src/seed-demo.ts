@@ -6,6 +6,8 @@ import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp, tppDisplayName } from '@ofbo/
 import { seedDemoDataset } from './seed.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
+import { PgLineageEmitter } from './lineage.js'
+import { assertNonProdBulkMutation } from './reset.js'
 
 /**
  * Rich DEMO scenario layered ON TOP of the base seedDemoDataset — a believable
@@ -729,7 +731,10 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     //
     // The hosted demo carried three `Fictional fintech 0N` counterparties that exist nowhere in
     // this repository: orphans of a seed replaced months earlier, leading the TPP registry (it
-    // sorts by directory sync time) above Lean, Tabby and Tarabut. Both seeds are additive — every
+    // orders by `created_at`, and they were created first) above Lean, Tabby and Tarabut. An
+    // earlier draft of this comment said "sorts by directory sync time", which nothing does — the
+    // list query orders by `date_trunc('milliseconds', created_at), organisation_id`. Both seeds
+    // are additive — every
     // insert is `ON CONFLICT DO NOTHING` or `WHERE NOT EXISTS` — so re-seeding could never remove
     // them, and the deploy runs `db:apply && db:seed:demo`.
     //
@@ -743,18 +748,61 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     // this question — it upserts the participants a directory reports and marks every registry org
     // absent from that set `decommissioned`, which is precisely what an orphan is. It runs under
     // `SET LOCAL ROLE ofbo_app`, so it is bounded by the same RLS and grants that refused the
-    // DELETE, and it emits BCBS 239 lineage the way every other write to this table does.
+    // DELETE, and — given a lineage sink — it emits BCBS 239 lineage like every other write here.
+    //
+    // The sink is passed EXPLICITLY. `PgTppCounterpartyStore` takes it as an optional third
+    // argument and `emitLineage` is `this.lineage?.emitLineage(...)`, so constructing the store
+    // with two arguments makes the lineage emission a silent no-op — and this comment claimed the
+    // emission as part of why `syncDirectory` is the right mechanism. CI could not have caught it:
+    // `seed.ts` writes its own `seed-tpp-registry` lineage row for this table, so Q4.5 stays green
+    // either way.
     //
     // The regulated row is retained and its lifecycle state moves, which is what "no deletion path
     // for regulated records" asks for: a wrong record is closed, not erased.
+    //
+    // `directory_contacts` IS CARRIED, because the upsert applies
+    // `directory_contacts = EXCLUDED.directory_contacts` unconditionally and binds `[]` when a
+    // participant omits it. This sync is the seed's LAST write to the table, so omitting contacts
+    // here emptied them for all nine counterparties on every run — a spec-defined response field
+    // (`TppCounterparty.directory_contacts`) silently reporting no contacts for the whole registry.
+    // `[]` is schema-valid, so no contract test would have objected.
+    const directoryContacts = JSON.parse(CONTACTS) as unknown[]
     const directory = [
-      ...tpps.map(([orgId, legalName, regNum]) => ({ organisation_id: orgId, legal_name: legalName, registration_number: regNum })),
-      ...bookRows.map(([orgId, regNum]) => ({ organisation_id: orgId, legal_name: tppDisplayName(orgId), registration_number: regNum }))
+      ...tpps.map(([orgId, legalName, regNum]) => ({
+        organisation_id: orgId, legal_name: legalName, registration_number: regNum, directory_contacts: directoryContacts
+      })),
+      ...bookRows.map(([orgId, regNum]) => ({
+        organisation_id: orgId, legal_name: tppDisplayName(orgId), registration_number: regNum, directory_contacts: directoryContacts
+      }))
     ]
-    const sync = await new PgTppCounterpartyStore(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH }).syncDirectory(
-      directory,
-      'seed-demo-directory-sync'
+    // GUARDED, because this is the seed's first non-additive write.
+    //
+    // `syncDirectory` closes every DEMO_BANK_ID registry row absent from the participant list —
+    // rows this seed did not write, whoever did. Until now both seeds were strictly additive, and
+    // that is what made an accidental run against a non-demo database harmless. `db:reset` has
+    // always refused under the enterprise/production profile; a bulk lifecycle change needs the
+    // same refusal, from the same guard rather than a second copy of it.
+    assertNonProdBulkMutation('db:seed:demo directory sync')
+
+    // NOT emitted to `audit_high_sensitivity`, deliberately. The operator-triggered path emits
+    // `tpp_directory_synced` with an acting principal, persona and scope — because a principal
+    // acted. A seed is provisioning: there is no principal, and inventing one to satisfy the shape
+    // of an audit row would put a fabricated actor into an INSERT-only regulated trail, which is
+    // worse than the absence it papers over. The change is announced on stdout and carried in
+    // BCBS 239 lineage, which is the record that fits what actually happened.
+    const counterpartyStore = new PgTppCounterpartyStore(
+      databaseUrl,
+      { bankId: DEMO_BANK_ID, channel: CH },
+      new PgLineageEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH })
     )
+    let sync
+    try {
+      sync = await counterpartyStore.syncDirectory(directory, 'seed-demo-directory-sync')
+    } finally {
+      // Its own pool, so its own close — the seed's other pool is already ended in a finally, and
+      // a leaked one leaves the deploy's `db:seed:demo` hanging on an idle client.
+      await counterpartyStore.close().catch(() => undefined)
+    }
     if (sync.decommissioned.length > 0) {
       // Announced, never silent — a state change the seed makes to regulated rows it did not write.
       console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)

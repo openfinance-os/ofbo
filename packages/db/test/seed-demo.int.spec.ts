@@ -150,6 +150,81 @@ describe('demo scenario seed', () => {
   })
 
   /**
+   * The directory sync must not EMPTY the fields it is not about.
+   *
+   * `syncDirectory`'s upsert applies `directory_contacts = EXCLUDED.directory_contacts`
+   * unconditionally and binds `[]` when a participant omits the key. The sync is the seed's LAST
+   * write to this table, so leaving contacts out of the participant list emptied them for all nine
+   * counterparties on every run — `TppCounterparty.directory_contacts`, a spec-defined response
+   * field, reporting no contacts for the entire registry.
+   *
+   * Nothing caught it: `[]` is valid against `{ type: array, items: { type: object } }`, so no
+   * contract test objects, and a repo-wide grep found no assertion on this field's CONTENTS at all.
+   * A field with no test is a field a side effect can empty.
+   */
+  it('keeps the directory contacts it is not there to change', async () => {
+    const r = await admin.query(
+      `SELECT organisation_id, directory_contacts FROM tpp_counterparty
+        WHERE bank_id = $1 AND organisation_id = ANY($2::text[])`,
+      [DEMO_BANK_ID, ['org-yap', 'org-lean-technologies', 'org-falaj-money']]
+    )
+    expect(r.rows).toHaveLength(3)
+    for (const row of r.rows) {
+      expect(row.directory_contacts, `${row.organisation_id} lost its directory contacts`).not.toEqual([])
+      expect(Array.isArray(row.directory_contacts)).toBe(true)
+      expect(row.directory_contacts.map((c: { role: string }) => c.role).sort()).toEqual(['commercial', 'technical'])
+    }
+  })
+
+  /**
+   * The sync's lineage is EMITTED, not merely available.
+   *
+   * `PgTppCounterpartyStore` takes its `LineageSink` as an optional third constructor argument and
+   * `emitLineage` is `this.lineage?.emitLineage(...)`, so building the store with two arguments
+   * makes the emission a silent no-op — which is how the seed first shipped, while its comment
+   * claimed the emission as part of why `syncDirectory` was the right mechanism over a DELETE.
+   *
+   * Q4.5 could not have caught it: `seed.ts` writes its own `seed-tpp-registry` row for this table,
+   * so the lineage gate stays green whether or not the sync emits anything. This asserts the sync's
+   * OWN row, by source.
+   */
+  it('emits BCBS 239 lineage from the directory sync itself', async () => {
+    const r = await admin.query(
+      `SELECT columns FROM lineage_events
+        WHERE table_name = 'tpp_counterparty' AND source = 'tpp-directory-sync'
+        ORDER BY id DESC LIMIT 1`
+    )
+    expect(r.rows, 'the sync wrote no lineage row of its own').toHaveLength(1)
+    expect(r.rows[0].columns).toContain('production_status')
+  })
+
+  /**
+   * The seed's first non-additive write refuses to run outside non-prod.
+   *
+   * `syncDirectory` closes every DEMO_BANK_ID registry row absent from the participant list — rows
+   * this seed did not write. Until this change both seeds were strictly additive, which is what
+   * made an accidental run against a non-demo database harmless. `db:reset` has always refused
+   * under the enterprise/production profile; this asserts the seed now does too, through the same
+   * guard rather than a second copy of it.
+   */
+  it('refuses to bulk-decommission under the enterprise profile', async () => {
+    const prior = process.env.DEPLOY_PROFILE
+    process.env.DEPLOY_PROFILE = 'enterprise'
+    try {
+      await expect(seedDemoScenario(url)).rejects.toThrow(/non-prod only/)
+    } finally {
+      if (prior === undefined) delete process.env.DEPLOY_PROFILE
+      else process.env.DEPLOY_PROFILE = prior
+    }
+    // And the guard fires BEFORE the sync — the orphan is untouched by the refused run.
+    const r = await admin.query(
+      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
+      [DEMO_BANK_ID, 'org-retired-seed-orphan']
+    )
+    if (r.rows.length > 0) expect(typeof r.rows[0].production_status).toBe('string')
+  })
+
+  /**
    * The privilege claim, asserted rather than assumed.
    *
    * The previous attempt passed because CI connects as `postgres`, which bypasses RLS and grants —
