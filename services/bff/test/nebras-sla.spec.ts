@@ -142,10 +142,19 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
   it('states the bound nowhere in its own schema node that a test does not bind', () => {
     const raw = readFileSync(SPEC_PATH, 'utf8')
     const lines = raw.split('\n')
-    const start = lines.findIndex((l) => /^\s*nebras_propagation_ms:/.test(l))
-    expect(start, 'the nebras_propagation_ms node must be findable').toBeGreaterThan(-1)
+
+    // STRUCTURAL, not positional. The first cut used a document-wide `findIndex` for the first
+    // `nebras_propagation_ms:` line — unique today, but `nebras_propagation_ms` already appears on
+    // the fraud and bulk routes' free-form `execution_result` payloads, and BACKOFFICE-93 proposes
+    // giving those a schema. The day one lands above this node, that guard silently retargets and
+    // leaves RevocationResult unguarded with every test still green. Anchor on the response this
+    // node belongs to.
+    const anchor = lines.findIndex((l) => /^\s*RevocationResult:/.test(l))
+    expect(anchor, 'the RevocationResult response must be findable').toBeGreaterThan(-1)
+    const start = lines.findIndex((l, i) => i > anchor && /^\s*nebras_propagation_ms:/.test(l))
+    expect(start, 'the field must be findable inside RevocationResult').toBeGreaterThan(anchor)
+
     const indent = lines[start]!.search(/\S/)
-    // The node runs until the next line at or above its own indentation.
     let end = start + 1
     while (end < lines.length && (lines[end]!.trim() === '' || lines[end]!.search(/\S/) > indent)) end++
 
@@ -154,11 +163,19 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const anySpelling = new RegExp(
       `\\b${NEBRAS_SLA_MS}\\b|\\b${String(NEBRAS_SLA_MS).replace(/\B(?=(\d{3})+$)/g, '_')}\\b`
       + `|\\b${seconds}e3\\b|\\b${seconds}\\s*s\\b|\\b${seconds}\\s*seconds?\\b`,
-      'i'
+      'gi'
     )
-    const stated = lines.slice(start, end).filter((l) => anySpelling.test(l))
-    // Exactly two: the extension and the description. Both asserted above.
-    expect(stated.map((l) => l.trim())).toHaveLength(2)
+
+    // STATEMENTS, not lines. Counting lines said "two" while the description states the number
+    // twice on one of them — so a fourth statement appended to an existing line passed a guard
+    // whose own comment claimed it caught exactly that. Count every occurrence.
+    const statements = lines
+      .slice(start, end)
+      .reduce((n, l) => n + (l.match(anySpelling) ?? []).length, 0)
+
+    // Three: the extension, and the description's two ("strictly below 5000 ms", "exactly 5000").
+    // Each is asserted by the tests above; a fourth would be an unbound copy.
+    expect(statements, 'an unbound statement of the bound appeared in this node').toBe(3)
   })
 
   /**

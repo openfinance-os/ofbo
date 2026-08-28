@@ -6323,10 +6323,9 @@ export interface components {
                         /** @enum {string} */
                         status?: "Revoked";
                         /**
-                         * @description Observed Nebras acknowledgment latency in milliseconds. NFR-18 bounds this at p99 STRICTLY BELOW 5000 ms — a value of exactly 5000 is a breach.
-                         *     The bound is repeated here rather than delegated to the x-nfr18-p99-exclusive-max-ms extension beside it, because openapi-typescript drops x- extensions and the response validator strips them: a reader working from a generated SDK holds this description and not that key. Pointing them at it would send them looking for something their artifacts do not contain, which is the same defect as the sentence this description replaced. The extension exists so an in-repo test can bind the number to the constant the services compare against.
-                         *     This is deliberately NOT a `maximum`. The field records what actually happened, so a value at or above the bound is a real observation and must stay representable; constraining the schema would make a breach unreportable rather than impossible.
-                         *     (An earlier draft justified this by pointing at the fraud-revoke audit trail. That behaviour is real but the contract describes it nowhere — its execution result is an untyped object — so the sentence sent an integrator looking for something this document does not contain. A published description has to stand on what the contract itself says.)
+                         * @description Observed Nebras acknowledgment latency for this revocation, in milliseconds. A single measurement, not an aggregate.
+                         *     Each observation is compared strictly below 5000 ms; a value of exactly 5000 fails that comparison. NFR-18 is the distributional requirement over those comparisons — p99 must pass — and is reported separately on the operations SLO surface, not by this field.
+                         *     Not constrained by `maximum`, deliberately: the field records what happened, so a value at or above the bound is a real observation and must stay representable. A schema constraint would make a breach unreportable rather than impossible.
                          */
                         nebras_propagation_ms?: number;
                         psu_notified?: boolean;

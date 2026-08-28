@@ -3,17 +3,13 @@
 # kebab-case paths, snake_case JSON, cursor pagination, standard error envelope,
 # Idempotency-Key on mutating endpoints, x-fapi-interaction-id on every request.
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
-# A regulatory threshold MAY be declared machine-readably with an x-<requirement>-<bound> extension,
-# so a test can bind the contract's number to the constant the services compare against instead of
-# the two agreeing only in prose. nebras_propagation_ms does this
-# (x-nfr18-p99-exclusive-max-ms); the mechanism generalises and most thresholds have not been moved
-# to it.
-#
-# Deliberately not enumerating which ones. An earlier version of this comment listed four by name as
-# "code-enforced and still prose only" — an untested claim about the document's own state, in the
-# document whose defect-of-record is untested prose. It was accurate when written and nothing bound
-# it, so the first threshold to gain an extension would have made the header false with no test
-# objecting. Naming a rule the reader can apply beats inventorying a state that drifts.
+# nebras_propagation_ms carries its NFR-18 bound in x-nfr18-p99-exclusive-max-ms as well as in prose,
+# so a test can bind the contract's number to the constant the services compare against (BACKOFFICE-91).
+# That is a note about ONE field, not a convention this header establishes: whether regulatory
+# thresholds generally should be machine-readable is a cross-cutting question for CLAUDE.md's binding
+# conventions or an ADR, and declaring it here would be settling it in passing. An earlier draft did
+# exactly that, and a draft before it inventoried four thresholds by name — an untested claim about
+# the document's own state, in the document whose defect-of-record is untested prose.
 openapi: 3.0.3
 info:
   title: Open Finance Back Office API (delta)
@@ -3291,33 +3287,26 @@ components:
                         # code and conformant to the consumer: a one-millisecond window, and
                         # precisely the machine-vs-prose disagreement this field exists to remove.
                         #
-                        # No numeral appears in this comment. Only the two lines below state the
-                        # bound, and the test binds BOTH — a third copy in prose that nothing
-                        # compares is the shape of the original defect.
+                        # No numeral appears in this comment. The bound is stated by the extension
+                        # below and by the description, and the test binds every occurrence in this
+                        # node rather than counting lines — an earlier version counted lines and
+                        # said "only the two lines below", which was already false: the description
+                        # states the number twice on one line. An unbound copy is the shape of the
+                        # original defect, so what must be counted is statements, not lines.
                         x-nfr18-p99-exclusive-max-ms: 5000
                         description: >-
-                          Observed Nebras acknowledgment latency in milliseconds. NFR-18 bounds this
-                          at p99 STRICTLY BELOW 5000 ms — a value of exactly 5000 is a breach.
+                          Observed Nebras acknowledgment latency for this revocation, in
+                          milliseconds. A single measurement, not an aggregate.
 
-                          The bound is repeated here rather than delegated to the
-                          x-nfr18-p99-exclusive-max-ms extension beside it, because
-                          openapi-typescript drops x- extensions and the response validator strips
-                          them: a reader working from a generated SDK holds this description and not
-                          that key. Pointing them at it would send them looking for something their
-                          artifacts do not contain, which is the same defect as the sentence this
-                          description replaced. The extension exists so an in-repo test can bind the
-                          number to the constant the services compare against.
+                          Each observation is compared strictly below 5000 ms; a value of exactly
+                          5000 fails that comparison. NFR-18 is the distributional requirement over
+                          those comparisons — p99 must pass — and is reported separately on the
+                          operations SLO surface, not by this field.
 
-                          This is deliberately NOT a `maximum`. The field records what actually
+                          Not constrained by `maximum`, deliberately: the field records what
                           happened, so a value at or above the bound is a real observation and must
-                          stay representable; constraining the schema would make a breach
-                          unreportable rather than impossible.
-
-                          (An earlier draft justified this by pointing at the fraud-revoke audit
-                          trail. That behaviour is real but the contract describes it nowhere — its
-                          execution result is an untyped object — so the sentence sent an integrator
-                          looking for something this document does not contain. A published
-                          description has to stand on what the contract itself says.)
+                          stay representable. A schema constraint would make a breach unreportable
+                          rather than impossible.
                       psu_notified: { type: boolean }
     ConsentEventList:
       description: Paginated consent lifecycle events
