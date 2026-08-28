@@ -209,48 +209,49 @@ milestones:
       - { id: BACKOFFICE-85, title: "Persona cards must not promise a workspace the scope matrix denies", status: done, note: "The sign-in screen advertised Commercial Desk Head as TPP billing, registry and commercial margin with Billing Control and TPP Billing tags, while PRD section 2 gives that persona platform:analytics:read, commercial:read, pipeline:read - no billing:read. The persona whose entire stated job is TPP billing could not open either billing screen, on the first screen anyone evaluating OFBO sees. The PRD is canon and names its surface as the Executive Dashboard (Commercial angle), so the ADVERTISING was wrong; granting billing:read to make the card true would have been granting beyond the matrix, an automatic review FAIL. persona-guide.ts now carries NAV KEYS rather than hand-typed labels - its own header had asked whoever edited it to keep aligned with nav.ts and nothing enforced that - with NAV_MODULES as a literal union so an unknown key fails the build, the chip label read from the nav module so a card and the sidebar cannot name a module differently, and persona-guide.spec asserting every advertised key is reachable for that persona minted scopes via the real mintScopes rather than a copy. Confirmed to catch the original defect: re-adding billing-console to that persona fails with commercial-desk-head advertises modules it cannot open. Also added the missing platform-admin card. Corrected in passing: commercial:read / pipeline:read / programme:read DO gate real BFF data (executive-dashboard sections, onboarding-funnel) - they are data scopes, not nav gates, which is correct design and not the defect it first looked like." }
       - { id: BACKOFFICE-86, title: "Risk Analyst holds consents:admin:fraud-revoke with no portal surface to use it from", note: "PRD section 2 lists fraud-flagged revocations among the Risk Analyst core jobs and grants consents:admin:fraud-revoke; the BFF implements the route (services/bff/src/consents/fraud-revoke.ts, four-eyes gated, 202 plus approval_request). The PORTAL has no screen for it - grep finds no fraud-revoke surface anywhere under apps/portal/src - so the persona holds a power it cannot exercise, and Customer Care, where a revoke UI does exist, is gated on consents:admin which this persona does not hold. Found during BACKOFFICE-85 while auditing persona reachability. Building the surface is a feature, not a fix, so it is filed rather than folded in: it needs a four-eyes initiate flow on the Risk View and a decision on whether it belongs there or in a scoped slice of Customer Care. DELIBERATELY UN-STATUSED, not pending: HG-0007 makes a green discovery hand-off the entry condition for a new feature-bearing item, and this is a new feature by its own description. The escape hatch (discovery_exempt) is for pre-policy legacy items and would be a misuse here. The open question - Risk View or a scoped slice of Customer Care - is exactly the kind a discovery run exists to answer, and the policy grandfathers an un-statused stub precisely so a finding can be recorded without front-running that. Mark it pending when the hand-off exists." }
       - { id: BACKOFFICE-82, title: "Institutional Blue: rendered defects the token gates could not see", status: done, depends_on: [UIF-10-REAUDIT-GATE], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Post-merge review of the ADR 0033 palette change, driven in a real browser across 17 routes x 4 viewports. main was RED on merge: Q2 (15 tsc errors in the WCAG helpers added to design-tokens.spec.ts — vitest does not type-check, so 30 runtime tests passed while tsc --noEmit failed) and Q2b (this ADR was accepted as 0026, a number the Nebras VAS positioning ADR already held; renumbered to 0033 with an amendment row per ADR 0031/0032). Three rendered defects no gate covered: (1) tokens named DM Sans + Instrument Serif while layout.tsx still linked Inter, so every screen rendered in the OS sans and Inter was fetched unused — font-display had 0 call sites; (2) text-demo renders on the NAVY shell in app-shell.tsx at 3.44:1, so darkening the marker for the light ground inverted its AA failure rather than removing it — no single value clears both grounds, so the marker is now two tokens (ext.demo, ext.nav.demo = the mark orange, legible where it always was) and the gate pairs every marker with each ground it is painted on (14 -> 16 pairs); (3) status-badge.tsx still mapped awaiting -> aging, so ADR 0033s fourth state never reached a screen and Tailwinds JIT never emitted .text-awaiting. Layout: /risk tore the document open 555px @1440 (a flex <dd> at min-width:auto stopped ObjectTables overflow-x-auto engaging); the DemoPill covered 128/140px of the footer link on every authenticated route. Also styled the dashboard audit panel (had zero token utilities) and closed two 390px overflows. Verified: 0 overflow and 0 AA failures across 17 routes x 4 viewports, DM Sans + Instrument Serif confirmed loading by glyph-metric probe. 1711 unit tests (up from 1702), typecheck/lint/doc-link-check green. New gates: typefaces-served, per-ground marker contrast, awaiting reachability." }
-      - id: DEMO-SEED-RECONCILE
-        title: The demo seed states a complete set, so a retired seed's orphans cannot outlive it
+      - id: DEMO-SEED-ORPHAN-DECOMMISSION
+        title: A retired seed's orphans outlive every re-seed, and the fix is the directory sync, not a DELETE
         status: done
         note: >-
           Both seeds are additive-only - every insert is ON CONFLICT DO NOTHING or WHERE NOT EXISTS,
-          and neither contains a DELETE. That is right for the half of the contract everyone
-          remembers (running a seed twice must not duplicate a book of business) and quietly fails
-          the other half - a seed that can only ADD cannot express "this IS the set".
+          and neither contains a DELETE - so a row written by a seed that was later retired outlives
+          every re-seed. The hosted demo carried three "Fictional fintech 0N" counterparties that
+          exist NOWHERE in this repository, leading the TPP registry above Lean, Tabby and Tarabut.
+          Confirmed by fetching the deployed registry; the string appears in no source file.
 
-          The hosted demo carried three "Fictional fintech 0N" counterparties that exist NOWHERE in
-          this repository, orphans of a seed replaced months earlier. They led the TPP registry
-          (it sorts by directory sync time) above Lean, Tabby and Tarabut, and counted toward the
-          registration-state mix in the KPI strip - 3 of 18 rows. Re-seeding could never remove
-          them, and .github/workflows/deploy.yml runs "db:apply && db:seed:demo", additive, so every
-          merge re-seeded and left them exactly where they were. Confirmed by fetching the deployed
-          registry, not inferred - the string appears in no source file.
+          THE FIRST ATTEMPT ADDED A DELETE AND WAS WRONG ON THE SCHEMA'S OWN TERMS. tpp_counterparty
+          is registered in retention_policy under CHECK (deletion_allowed = false), carries no DELETE
+          policy, and grants ofbo_app only INSERT/SELECT/UPDATE. Verified against a real database -
+          as ofbo_app the DELETE is refused outright ("permission denied for table
+          tpp_counterparty"). It ran only because the seed connects as a SUPERUSER, i.e. the one
+          principal that can also empty audit_high_sensitivity - demonstrated by deleting 56 audit
+          rows inside a rolled-back transaction. The integration test passed for the wrong reason:
+          CI connects as postgres, so it proved the statement executed, not that it was permitted.
 
-          demo-refresh (truncate, re-apply, re-seed) removes them but is an operator remembering to
-          run a destructive command. This closes it at the source instead - reconcileSeededSet
-          deletes rows for the demo bank whose key the seed no longer declares, with the keep-set
-          DERIVED from the same literals the seed inserts from (a hand-maintained second copy would
-          drift, and a drifted keep-set deletes a row the seed just wrote).
+          THERE WAS NEVER ANYTHING TO INVENT. syncDirectory (packages/db/src/tpp-counterparty-store.ts)
+          IS the sanctioned write path for this exact question - it upserts the participants a
+          directory reports and marks every registry org absent from that set decommissioned, which
+          is precisely what an orphan is. It runs under SET LOCAL ROLE ofbo_app, so it is bounded by
+          the same RLS and grants that refused the DELETE, and it emits BCBS 239 lineage like every
+          other write to this table. The regulated row is RETAINED and its lifecycle state moves,
+          which is what "no deletion path for regulated records" asks for - a wrong record is closed,
+          not erased.
 
-          NOT a general "make the database match the seed" sweep. It reconciles one table's key set
-          for one bank, because that is a claim the seed can actually make. It reuses the guard
-          db:reset already owns rather than writing a second copy - packages/db/src/reset.ts is the
-          only non-ports file the lint rule lets read DEPLOY_PROFILE, so a second guard could not be
-          written without weakening that rule.
-
-          A CONSEQUENCE STATED RATHER THAN DISCOVERED - for a reconciled table the seed is now the
-          authority, so a counterparty created through the demo UI is removed on the next deploy.
-          That is intended for a deterministic demo dataset, but it is a real change in what
-          re-seeding means.
+          RESIDUAL, stated rather than glossed. The registry lists every status ordered by created_at,
+          so the three historical rows on the hosted demo stay in position, now correctly labelled
+          decommissioned instead of masquerading as live directory entries. This change fixes the
+          MECHANISM (no further orphan accumulation, through the sanctioned path); clearing the three
+          existing rows is a one-off pnpm demo:refresh against the demo database - the truncate that
+          resetDatabase already owns, under its own non-prod guard.
         acceptance:
-          - A counterparty the seed does not declare is removed by a re-seed, and every counterparty
-            it does declare survives untouched - both halves asserted against real Postgres.
-          - The deletion is announced, never silent - a DELETE inside a seed must not be something
-            anyone infers from a row count moving.
-          - It refuses to run at all under the enterprise/production profile, on an empty keep-set
-            (which would empty the tenant), or on a table/column that is not a plain identifier.
-          - Verified by reverting the reconciliation - the test then reproduces the exact production
-            symptom, an orphan surviving a re-seed.
+          - A counterparty the seed no longer declares is decommissioned by a re-seed and its row is
+            RETAINED, asserted against real Postgres.
+          - Every counterparty the seed does declare stays live and untouched.
+          - The privilege posture the fix depends on is asserted AS ofbo_app, not as the superuser CI
+            happens to connect with - the UPDATE is granted, the DELETE is refused.
+          - The test states its own precondition, so it holds on a shared database and on a re-run,
+            not only against a freshly seeded one.
+          - Verified by reverting the sync - the orphan then stays live and the test fails.
       - { id: BACKOFFICE-83, title: "Dock the non-prod marker in the sticky top bar; quiet its treatment", status: done, depends_on: [BACKOFFICE-82], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Discharges the follow-up BACKOFFICE-82 deferred. The DEMO marker satisfied 'persistent on every screen' by floating fixed at bottom-3 right-3, which met the hard stop by covering whatever sat underneath — 128 of the 140px of the footer call-to-action on every authenticated route, and live figures on the data-dense consoles. BACKOFFICE-82 reserved gutters around it; this removes the cause instead and takes the gutters back out. TWO placements now: DemoMarker docked in the app shell top bar (which is sticky top-0, so it is on screen at every scroll position while sitting in normal flow where it cannot overlap), and DemoPill still mounted unconditionally in the ROOT layout so the marker rides the shell-less surfaces — sign-in, global-error, not-found, access-denied — and no new page can forget it. globals.css suppresses the floating one under body:has([data-testid=app-shell]); chosen as CSS not a React flag because it applies during SSR with no hydration flash and fails safe (unsupported :has() leaves the floating marker rendering, so worst case is two markers, never zero). TrainingMarker mirrors it. Treatment quieted per user request: fill, border, shadow and backdrop-blur removed from both placements, leaving a dot plus a short label in the marker colour — presence is the regulatory requirement, not prominence. Full statement still rides aria-label. AA gate widened to 18 pairs (the top-bar ground added, per its own rule that a new placement means a new pair): demo 4.98:1 and training 7.10:1 on surface-container-lowest. Verified in a browser across 14 routes x 2 viewports plus two shell-less surfaces: exactly one marker each, zero overlap, zero overflow. 1721 unit tests, E2E 32/32 against seeded Postgres; the new E2E was confirmed to fail when the suppression selector is broken." }
 
   - name: M6
@@ -1004,7 +1005,7 @@ milestones:
             across both layers.
       - id: BACKOFFICE-90
         title: A Q4.5 lineage assertion can pass on a row it is not about (LIMIT 1, no ORDER BY)
-        status: pending
+        status: done
         discovery_exempt: true
         reason: >-
           Not a feature — a test-integrity defect in an existing assertion, found while running the
@@ -1035,6 +1036,15 @@ milestones:
             seeded database, repeatedly.
           - Any sibling lineage assertion with the same LIMIT-1-without-ORDER-BY shape is found and
             given the same treatment — one instance of this is unlikely to be the only one.
+        progress: >-
+          FIXED alongside DEMO-SEED-ORPHAN-DECOMMISSION, because that change made this latent flake
+          DETERMINISTIC - it began failing in isolation, not just in a full run, so it stopped being
+          something to file and became this PR's to fix under "code the PR breaks". The assertion now
+          scopes to source = billing-payable-store with ORDER BY id DESC, which is strictly stronger
+          than what was there: it could previously be satisfied by the seed-demo-scenario row, and a
+          Q4.5 lineage gate satisfiable by the seed is not a gate. Full integration suite green on a
+          clean database, 222 tests. The sibling-sweep criterion is NOT met - no other
+          LIMIT-1-without-ORDER-BY lineage assertion was searched for, and that remains open.
 
   # Commercial track — ADR 0026 (ACCEPTED 2026-07-04): scheme-distributed console tier (Nebras
   # VAS, CAAP model) + independent direct-paid assurance tier, hosted SaaS for Tier 2 banks +

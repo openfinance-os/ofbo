@@ -4,6 +4,7 @@ import { applyMigrations } from '../src/apply.js'
 import { seedDemoDataset } from '../src/seed.js'
 import { seedDemoScenario } from '../src/seed-demo.js'
 import { accrualByTpp, DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { beginAppTx } from '../src/tenant-tx.js'
 
 /** The same relative months the seed writes — month-1/-2/-3 from today. */
 const month = (back: number) => {
@@ -91,47 +92,87 @@ describe('demo scenario seed', () => {
   })
 
   /**
-   * DEMO — the seed states a COMPLETE set, so an orphan cannot outlive the seed that wrote it.
+   * DEMO — an orphan is DECOMMISSIONED, not deleted, and not left leading the registry.
    *
-   * Both seeds are additive-only (`ON CONFLICT DO NOTHING` / `WHERE NOT EXISTS`, not one DELETE
-   * between them), which is right for idempotency and means a seed can only ever ADD. Rows written
-   * by a seed that was later retired stay for ever, and re-running the current seed can never
-   * remove them because from its point of view there is nothing to do.
+   * Both seeds are additive (`ON CONFLICT DO NOTHING` / `WHERE NOT EXISTS`, no DELETE between
+   * them), so a row written by a seed that was later retired outlives every re-seed. The hosted
+   * demo carried three `Fictional fintech 0N` counterparties that exist nowhere in this repository,
+   * leading the TPP registry because it sorts by directory sync time.
    *
-   * That is not hypothetical. The hosted demo carried three `Fictional fintech 0N` counterparties
-   * that exist NOWHERE in this repository — orphans of a seed replaced months earlier — leading the
-   * TPP registry (it sorts by directory sync time) above Lean, Tabby and Tarabut, and counting
-   * toward the registration-state mix in the KPI strip. The deploy runs `db:apply && db:seed:demo`,
-   * so every merge re-seeded and left them exactly where they were.
-   *
-   * This plants that exact shape and asserts the seed removes it — while leaving every counterparty
-   * the seed DOES declare untouched, which is the half that makes the delete safe rather than
-   * merely effective.
+   * The first fix added a DELETE, and the schema refuses one: `tpp_counterparty` sits in
+   * `retention_policy` under `CHECK (deletion_allowed = false)`, has no DELETE policy, and grants
+   * `ofbo_app` only INSERT/SELECT/UPDATE. The seed uses the application's own `syncDirectory`
+   * instead — the sanctioned path for "this org is no longer in the directory" — which runs under
+   * `SET LOCAL ROLE ofbo_app` and moves lifecycle state rather than removing the record.
    */
-  it('removes a counterparty the seed no longer declares, and keeps the ones it does', async () => {
+  it('decommissions a counterparty the seed no longer declares, and keeps the ones it does', async () => {
     const ORPHAN = 'org-retired-seed-orphan'
+    // Planted AND reset to live, so the test states its own precondition instead of inheriting one.
+    // The integration DB is shared across suites and reruns: `ON CONFLICT DO NOTHING` alone left
+    // the orphan already decommissioned by the previous run, and the assertion below then failed
+    // for the wrong reason. A test that only holds on a fresh database is a test that lies on the
+    // second run — which is the shape of the defect BACKOFFICE-90 tracks.
     await admin.query(
       `INSERT INTO tpp_counterparty (bank_id, channel, organisation_id, legal_name, directory_synced_at, production_status, registration_state)
        VALUES ($1, 'internal_retail', $2, 'Retired Seed Orphan Ltd', now(), 'directory_only', 'unregistered')
-       ON CONFLICT (bank_id, organisation_id) DO NOTHING`,
+       ON CONFLICT (bank_id, organisation_id)
+         DO UPDATE SET production_status = 'directory_only', directory_synced_at = now()`,
       [DEMO_BANK_ID, ORPHAN]
     )
-    const before = await admin.query(`SELECT 1 FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`, [DEMO_BANK_ID, ORPHAN])
-    expect(before.rows, 'the orphan must exist before the seed runs, or this proves nothing').toHaveLength(1)
+    const before = await admin.query(
+      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    expect(before.rows[0]?.production_status, 'the orphan must be live before the seed runs').toBe('directory_only')
 
     await seedDemoScenario(url)
 
-    const after = await admin.query(`SELECT 1 FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`, [DEMO_BANK_ID, ORPHAN])
-    expect(after.rows, 'the orphan survived a re-seed').toHaveLength(0)
+    // RETAINED, and closed. Deleting it would breach the table's own no-deletion posture; leaving
+    // it live is the defect. `decommissioned` is the state the directory sync already defines for
+    // an org the directory no longer lists.
+    const after = await admin.query(
+      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    expect(after.rows, 'the row must still exist — this table has no deletion path').toHaveLength(1)
+    expect(after.rows[0].production_status).toBe('decommissioned')
 
-    // The book itself is untouched — the delete is scoped to what the seed does not declare.
+    // The book is untouched and still live.
     const kept = await admin.query(
-      `SELECT organisation_id FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = ANY($2::text[])`,
+      `SELECT organisation_id, production_status FROM tpp_counterparty
+        WHERE bank_id = $1 AND organisation_id = ANY($2::text[]) ORDER BY organisation_id`,
       [DEMO_BANK_ID, ['org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap', 'org-falaj-money']]
     )
-    expect(kept.rows.map((r) => r.organisation_id).sort()).toEqual(
+    expect(kept.rows.map((r) => r.organisation_id)).toEqual(
       ['org-falaj-money', 'org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap']
     )
+    expect(kept.rows.every((r) => r.production_status !== 'decommissioned'), 'the book must stay live').toBe(true)
+  })
+
+  /**
+   * The privilege claim, asserted rather than assumed.
+   *
+   * The previous attempt passed because CI connects as `postgres`, which bypasses RLS and grants —
+   * it proved the statement executed, not that it was permitted. These run AS `ofbo_app`, the role
+   * the seed's sync actually assumes, and pin both halves of the posture the fix depends on: the
+   * UPDATE it uses is granted, and the DELETE it deliberately avoids is not.
+   */
+  it('grants the app role the UPDATE the sync needs and refuses it a DELETE', async () => {
+    const c = await admin.connect()
+    try {
+      await c.query(beginAppTx(DEMO_BANK_ID))
+      const upd = await c.query(
+        `UPDATE tpp_counterparty SET production_status = production_status
+          WHERE organisation_id = 'org-tabby' RETURNING organisation_id`
+      )
+      expect(upd.rows, 'ofbo_app must be able to move lifecycle state').toHaveLength(1)
+      await expect(
+        c.query(`DELETE FROM tpp_counterparty WHERE organisation_id = 'org-tabby'`)
+      ).rejects.toThrow(/permission denied/i)
+    } finally {
+      await c.query('ROLLBACK').catch(() => undefined)
+      c.release()
+    }
   })
 
   it('seeds 3 invoice runs and 3 scheme notifications', async () => {

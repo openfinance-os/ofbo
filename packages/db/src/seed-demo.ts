@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp } from '@ofbo/synthetic-data'
+import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp, tppDisplayName } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
-import { reconcileSeededSet } from './reconcile.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
+import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
 
 /**
  * Rich DEMO scenario layered ON TOP of the base seedDemoDataset — a believable
@@ -725,30 +725,39 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
-    // The registry is now a COMPLETE statement, not just a present one.
+    // ORPHANS ARE DECOMMISSIONED, NOT DELETED — through the application's own directory sync.
     //
-    // Everything above is additive — `WHERE NOT EXISTS` / `UPDATE` — so this seed could add the
-    // book and still leave behind counterparties from a seed retired months ago. It did: the
-    // hosted demo carried three `Fictional fintech 0N` rows that exist nowhere in this repository,
-    // leading the registry (it sorts by directory sync time) above Lean, Tabby and Tarabut and
-    // counting toward the registration-state mix in the KPI strip. Re-seeding could never remove
-    // them, and the deploy runs `db:apply && db:seed:demo`, so every merge left them exactly where
-    // they were.
+    // The hosted demo carried three `Fictional fintech 0N` counterparties that exist nowhere in
+    // this repository: orphans of a seed replaced months earlier, leading the TPP registry (it
+    // sorts by directory sync time) above Lean, Tabby and Tarabut. Both seeds are additive — every
+    // insert is `ON CONFLICT DO NOTHING` or `WHERE NOT EXISTS` — so re-seeding could never remove
+    // them, and the deploy runs `db:apply && db:seed:demo`.
     //
-    // The keep-set is DERIVED from the same two literals that insert above, not written out a
-    // second time — a hand-maintained copy would drift, and the failure mode of a drifted keep-set
-    // is deleting a row the seed just wrote.
-    const seededTpps = [...tpps.map(([orgId]) => orgId), ...bookRows.map(([orgId]) => orgId)]
-    const removedTpps = await reconcileSeededSet(pool, {
-      table: 'tpp_counterparty',
-      keyColumn: 'organisation_id',
-      bankId: DEMO_BANK_ID,
-      keep: seededTpps
-    })
-    if (removedTpps.length > 0) {
-      // Announced, never silent. A DELETE inside a seed is the last thing anyone should have to
-      // infer from a row count moving.
-      console.log(`  reconciled tpp_counterparty — removed ${removedTpps.length} row(s) the seed no longer declares: ${removedTpps.join(', ')}`)
+    // The first attempt at this added a DELETE. That was wrong on the schema's own terms:
+    // `tpp_counterparty` is registered in `retention_policy` under `CHECK (deletion_allowed =
+    // false)`, carries no DELETE policy, and grants `ofbo_app` only INSERT/SELECT/UPDATE — a DELETE
+    // as the application role is refused outright. It ran only because the seed connects as a
+    // superuser, i.e. the one principal that could equally empty `audit_high_sensitivity`.
+    //
+    // There was never anything to invent. `syncDirectory` IS the sanctioned write path for exactly
+    // this question — it upserts the participants a directory reports and marks every registry org
+    // absent from that set `decommissioned`, which is precisely what an orphan is. It runs under
+    // `SET LOCAL ROLE ofbo_app`, so it is bounded by the same RLS and grants that refused the
+    // DELETE, and it emits BCBS 239 lineage the way every other write to this table does.
+    //
+    // The regulated row is retained and its lifecycle state moves, which is what "no deletion path
+    // for regulated records" asks for: a wrong record is closed, not erased.
+    const directory = [
+      ...tpps.map(([orgId, legalName, regNum]) => ({ organisation_id: orgId, legal_name: legalName, registration_number: regNum })),
+      ...bookRows.map(([orgId, regNum]) => ({ organisation_id: orgId, legal_name: tppDisplayName(orgId), registration_number: regNum }))
+    ]
+    const sync = await new PgTppCounterpartyStore(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH }).syncDirectory(
+      directory,
+      'seed-demo-directory-sync'
+    )
+    if (sync.decommissioned.length > 0) {
+      // Announced, never silent — a state change the seed makes to regulated rows it did not write.
+      console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
     }
 
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the

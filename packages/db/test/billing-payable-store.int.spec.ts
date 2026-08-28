@@ -552,11 +552,26 @@ describe('BILL-16 — payable close and AP dispatch', () => {
     expect(states).toEqual(['dispatched', 'accepted'])
   })
 
+  /**
+   * BACKOFFICE-90 — scoped to the emitter under test, with a deterministic order.
+   *
+   * This read `LIMIT 1` with no `ORDER BY` and no `source` filter, over a table that holds
+   * THIRTEEN rows for `billing_tpp_cost_ap_dispatch` after `db:seed`: twelve from
+   * `billing-payable-store` (the emitter under test, carrying `response_payload`) and one from
+   * `seed-demo-scenario` with six columns and no `response_payload`. Which one came back was
+   * physical heap order.
+   *
+   * Both outcomes were wrong. It failed when the seed row surfaced first, and when it passed it
+   * might have been reading a row the store never wrote — a Q4.5 lineage gate satisfiable by the
+   * seed is not a gate. Asserting the emitter's own row is strictly stronger than what was here.
+   */
   it('emits BCBS 239 column lineage for AP dispatch (Q4.5)', async () => {
     const row = (await admin.query(
-      `SELECT columns FROM lineage_events WHERE table_name = 'billing_tpp_cost_ap_dispatch' LIMIT 1`
+      `SELECT columns FROM lineage_events
+        WHERE table_name = 'billing_tpp_cost_ap_dispatch' AND source = 'billing-payable-store'
+        ORDER BY id DESC LIMIT 1`
     )).rows[0]
-    expect(row).toBeDefined()
+    expect(row, 'no lineage row from the store under test').toBeDefined()
     expect(row.columns).toContain('response_payload')
     expect(row.columns).toContain('dispatch_state')
   })
