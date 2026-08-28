@@ -57,6 +57,16 @@ export default tseslint.config(
               message:
                 'Build/test-time only — it reads the OpenAPI file with node:fs and the Workers runtime has no filesystem. Runtime code uses the generated artifacts from @ofbo/contracts instead (packages/contracts/src/spec.ts).'
             }
+          ],
+          // The specifier is the easy way in; a deep relative path is the other one. Guarding only
+          // the name would leave the guard narrower than the boundary it exists to hold — and a
+          // relative reach is exactly what runtime code did before the subpath export existed.
+          patterns: [
+            {
+              group: ['**/contracts/src/spec', '**/contracts/src/spec.js', '**/contracts/src/spec.ts'],
+              message:
+                'Build/test-time only — reaching packages/contracts/src/spec.ts by relative path is the same import the subpath ban covers. Runtime code uses the generated artifacts from @ofbo/contracts.'
+            }
           ]
         }
       ]
