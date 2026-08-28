@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
-import { assertNonProdBulkMutation } from '../src/reset.js'
+import { assertNonProdBulkMutation } from '../src/non-prod-guard.js'
 
 /**
  * The closed set of modules that branch on the deployment profile.
@@ -23,6 +23,10 @@ import { assertNonProdBulkMutation } from '../src/reset.js'
  * be the actual rule-7 violation.
  */
 const PROFILE_GUARDED_MODULES: readonly string[] = [
+  // NOT non-prod-guard.ts: it DECLARES the guard and never calls it, and the scan excludes the
+  // declaration on purpose so a module cannot satisfy membership by defining the function it stopped
+  // using. Listing it made the set claim a caller that does not exist — the mirror image of the bug
+  // this list exists to prevent.
   'packages/db/src/reset.ts',
   'packages/db/src/seed-demo.ts',
   'packages/db/src/seed-tenants.ts',

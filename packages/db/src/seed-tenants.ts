@@ -5,7 +5,7 @@ import { generateDemoDataset, DEMO_TENANTS, DEMO_BANK_ID, tppDisplayName, type D
 import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 import { normalizeTenantConfiguration } from './tenant-configuration.js'
-import { assertNonProdBulkMutation } from './reset.js'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * HOST-01 / BILL-10 (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged

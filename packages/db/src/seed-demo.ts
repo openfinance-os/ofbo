@@ -8,7 +8,7 @@ import { PgAuditEmitter, SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from '
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
 import { PgLineageEmitter } from './lineage.js'
-import { assertNonProdBulkMutation } from './reset.js'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * Rich DEMO scenario layered ON TOP of the base seedDemoDataset — a believable

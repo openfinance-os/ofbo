@@ -66,6 +66,31 @@ The reasoning the user's ruling rests on, recorded so it can be argued with rath
   maintenance and the same semantics. Option 4 reopens the permanent-audit-row risk that motivated the
   change.
 
+## Amendment (2026-08-28, same day) — the premise was briefly false when this was written
+
+An in-place factual correction; the decision above is unchanged. Recorded rather than quietly fixed,
+because the ADR's first argument depends on it.
+
+When this ADR was accepted, the guard was exported from `packages/db/src/reset.ts` and the three seeds
+imported it from there. `packages/db/src/index.ts` re-exports all three seeds and
+`services/bff/src/worker.ts` imports from `@ofbo/db` — so that import edge put `reset.ts` into the
+**request-path service's module graph**, carrying `resetDatabase` (which TRUNCATEs every table in the
+schema) and the one non-ports `DEPLOY_PROFILE` read along with it. Nothing called it, and a bundler may
+have shaken it out; neither makes it acceptable.
+
+That is exactly the line this ADR says its ruling does not cross — "all four modules are non-prod data
+tooling, **not request-path core**". The advisory hard-stop reviewer found it on the same commit that
+added this ADR, which means the record closing the rule-7 question was itself resting on a premise the
+same change had quietly broken.
+
+Fixed structurally rather than argued about: the guard is now its own module,
+`packages/db/src/non-prod-guard.ts`, holding the refusal and nothing else — no pool, no SQL, no
+truncation. The seeds import it from there, so `reset.ts` is reachable only from `db:reset` and is no
+longer in the graph of anything `@ofbo/db` exports (verified by walking the import graph from
+`packages/db/src/index.ts`). The ESLint exemption moved with the `DEPLOY_PROFILE` read.
+
+The ruling's premise is now true as stated.
+
 ## Consequences
 
 - `eslint.config.mjs` records the ruling at the exemption and cites this ADR, so the scope is readable

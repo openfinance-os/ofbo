@@ -4,7 +4,7 @@ import pg from 'pg'
 import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
 import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
-import { assertNonProdBulkMutation } from './reset.js'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * Seeds the deterministic demo dataset (PRD §3.1). Idempotent: natural keys +
