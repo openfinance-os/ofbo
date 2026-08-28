@@ -23,33 +23,43 @@ afterEach(cleanup)
  */
 function mockFetch(opts: {
   runs: unknown[]
-  breaks: unknown[]
-  pending: unknown[]
+  breaks: unknown[] | unknown[][]
+  pending: unknown[] | unknown[][]
   risk: unknown[] | unknown[][] | null
 }): typeof fetch {
-  const riskPages: unknown[][] | null =
-    opts.risk === null ? null : Array.isArray(opts.risk[0]) ? (opts.risk as unknown[][]) : [opts.risk as unknown[]]
+  /** A flat list is one page; an array of arrays is served as real continuation. */
+  const pagesOf = (v: unknown[] | unknown[][]): unknown[][] =>
+    Array.isArray(v[0]) ? (v as unknown[][]) : [v as unknown[]]
+  const riskPages: unknown[][] | null = opts.risk === null ? null : pagesOf(opts.risk)
+  const pendingPages = pagesOf(opts.pending)
+  const breakPages = pagesOf(opts.breaks)
   return (async (url: string) => {
     const u = String(url)
     const ok = (data: unknown, meta: Record<string, unknown> = {}) =>
       new Response(
         JSON.stringify({
           data,
-          // A UUID because the contract says `format: uuid`, and a real ISO timestamp — the two
-          // fields every success body carries.
+          // `meta.request_id` is a plain `string` in the contract — NOT `format: uuid`, which the
+          // first version of this comment claimed. A v4-shaped value is a valid string and is what
+          // the BFF emits, so the fixture is right; the justification was not. (The
+          // `approval_request_id` citation below IS `format: uuid`, which is what made the mix-up
+          // easy.) A comment is the reason the next reader believes a fixture is contract-shaped.
           meta: { request_id: '3f1a5c8e-0000-4000-8000-000000000001', timestamp: '2026-08-28T00:00:00.000Z', ...meta }
         }),
         { status: 200 }
       )
-    if (u.includes('/approvals/pending')) return ok(opts.pending, { next_cursor: null })
-    if (u.includes('/reconciliation/runs')) return ok(opts.runs, { next_cursor: null })
-    if (u.includes('/reconciliation/breaks')) return ok(opts.breaks, { next_cursor: null })
-    if (u.includes('/risk-signals')) {
-      if (riskPages === null) return new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 })
+    /** Serve page N and hand back a cursor for N+1 — every list endpoint is paginated. */
+    const page = (pages: unknown[][]) => {
       const cursor = new URL(u, 'http://bff.test').searchParams.get('cursor')
       const index = cursor ? Number(cursor) : 0
-      const next = index + 1 < riskPages.length ? String(index + 1) : null
-      return ok(riskPages[index] ?? [], { next_cursor: next })
+      return ok(pages[index] ?? [], { next_cursor: index + 1 < pages.length ? String(index + 1) : null })
+    }
+    if (u.includes('/approvals/pending')) return page(pendingPages)
+    if (u.includes('/reconciliation/runs')) return ok(opts.runs, { next_cursor: null })
+    if (u.includes('/reconciliation/breaks')) return page(breakPages)
+    if (u.includes('/risk-signals')) {
+      if (riskPages === null) return new Response(JSON.stringify({ error: { code: 'X' } }), { status: 403 })
+      return page(riskPages)
     }
     return new Response('{}', { status: 404 })
   }) as unknown as typeof fetch
@@ -154,6 +164,65 @@ describe('getDashboardKpis', () => {
     const by = Object.fromEntries(charts.riskSeverity.map((b) => [b.label, b.count]))
     expect(by.High).toBe(2) // one from each page — the KPI and the chart agree on "open"
     expect(by.Info).toBe(1)
+    expect(charts.riskSeverityTruncated).toBe(false)
+  })
+
+  /**
+   * The chart must report a bounded read AS bounded. `openRiskSignals` returns `truncated` and the
+   * KPI card consumed it; the chart destructured it away and rendered a partial distribution as the
+   * complete one, with the panel's own total printed from it. Two callers of one reader disagreeing
+   * about whether the answer is complete is how a partial read becomes a confident one.
+   */
+  it('tells the chart when the severity buckets are only a bounded read', async () => {
+    // 11 pages — one more than the reader will follow.
+    const pages = Array.from({ length: 11 }, () => [{ severity: 'info' }])
+    const charts = await getDashboardCharts('tok', deps(mockFetch({ runs: [], breaks: [], pending: [], risk: pages })))
+    expect(charts.riskSeverityTruncated).toBe(true)
+    const info = charts.riskSeverity.find((b) => b.label === 'Info')!
+    expect(info.count).toBe(10) // stopped at the bound, and said so rather than implying 10 is all
+  })
+
+  /**
+   * ONE interaction id for the whole render. `authHeaders` evaluated `crypto.randomUUID()` at call
+   * time, so every request carried its own — and once the risk reader followed a cursor, a single
+   * logical read emitted up to ten. The spec calls this header the OTel trace id end-to-end.
+   */
+  it('propagates one x-fapi-interaction-id across every request of a render', async () => {
+    const seen: string[] = []
+    const base = mockFetch({ runs: [], breaks: [], pending: [], risk: [[{ severity: 'info' }], [{ severity: 'low' }]] })
+    const spy = (async (url: string, init?: RequestInit) => {
+      const headers = new Headers(init?.headers)
+      const id = headers.get('x-fapi-interaction-id')
+      if (id) seen.push(id)
+      return base(url as never, init as never)
+    }) as unknown as typeof fetch
+
+    await getDashboardKpis('tok', P, { baseUrl: 'http://bff.test', fetchImpl: spy, traceId: 'e7c1f2a4-0000-4000-8000-00000000abcd' })
+    expect(seen.length).toBeGreaterThan(2) // several reads, including a second risk page
+    expect(new Set(seen).size, `expected one trace id, saw ${new Set(seen).size}`).toBe(1)
+    expect(seen[0]).toBe('e7c1f2a4-0000-4000-8000-00000000abcd') // and the CALLER's id, when given
+  })
+
+  /**
+   * The adjacent cards had the same defect and the same rationale. Approvals sends no `limit`, so
+   * the BFF applies the spec default of 50 and the card read "50" as though that were the queue;
+   * breaks saturated at 200, where `open > 8 ? 'breach'` silently stops escalating — a saturated
+   * count cannot report a queue getting worse, which is the only thing that card is for.
+   */
+  it('counts every page of the approvals queue and the break queue, not the first', async () => {
+    const f = mockFetch({
+      runs: [],
+      // Two pages each — the second is what the old single-page read threw away.
+      breaks: [[{ status: 'flagged' }, { status: 'assigned' }], [{ status: 'flagged' }, { status: 'resolved_matched' }]],
+      pending: [[{ approval_request_id: approvalId(1) }], [{ approval_request_id: approvalId(2) }]],
+      risk: []
+    })
+    const by = Object.fromEntries((await getDashboardKpis('tok', P, deps(f))).map((k) => [k.key, k]))
+    expect(by['pending-approvals']!.value).toBe('2') // both pages
+    expect(by['open-breaks']!.value).toBe('3') // flagged + assigned + flagged; resolved excluded
+    // Neither is a bounded read here, so neither claims to be one.
+    expect(by['pending-approvals']!.sub).toBe('awaiting a second principal')
+    expect(by['open-breaks']!.sub).toBe('awaiting claim / resolution')
   })
 
   it('gracefully omits a card whose source the persona cannot access (risk 403)', async () => {

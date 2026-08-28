@@ -209,6 +209,66 @@ milestones:
       - { id: BACKOFFICE-85, title: "Persona cards must not promise a workspace the scope matrix denies", status: done, note: "The sign-in screen advertised Commercial Desk Head as TPP billing, registry and commercial margin with Billing Control and TPP Billing tags, while PRD section 2 gives that persona platform:analytics:read, commercial:read, pipeline:read - no billing:read. The persona whose entire stated job is TPP billing could not open either billing screen, on the first screen anyone evaluating OFBO sees. The PRD is canon and names its surface as the Executive Dashboard (Commercial angle), so the ADVERTISING was wrong; granting billing:read to make the card true would have been granting beyond the matrix, an automatic review FAIL. persona-guide.ts now carries NAV KEYS rather than hand-typed labels - its own header had asked whoever edited it to keep aligned with nav.ts and nothing enforced that - with NAV_MODULES as a literal union so an unknown key fails the build, the chip label read from the nav module so a card and the sidebar cannot name a module differently, and persona-guide.spec asserting every advertised key is reachable for that persona minted scopes via the real mintScopes rather than a copy. Confirmed to catch the original defect: re-adding billing-console to that persona fails with commercial-desk-head advertises modules it cannot open. Also added the missing platform-admin card. Corrected in passing: commercial:read / pipeline:read / programme:read DO gate real BFF data (executive-dashboard sections, onboarding-funnel) - they are data scopes, not nav gates, which is correct design and not the defect it first looked like." }
       - { id: BACKOFFICE-86, title: "Risk Analyst holds consents:admin:fraud-revoke with no portal surface to use it from", note: "PRD section 2 lists fraud-flagged revocations among the Risk Analyst core jobs and grants consents:admin:fraud-revoke; the BFF implements the route (services/bff/src/consents/fraud-revoke.ts, four-eyes gated, 202 plus approval_request). The PORTAL has no screen for it - grep finds no fraud-revoke surface anywhere under apps/portal/src - so the persona holds a power it cannot exercise, and Customer Care, where a revoke UI does exist, is gated on consents:admin which this persona does not hold. Found during BACKOFFICE-85 while auditing persona reachability. Building the surface is a feature, not a fix, so it is filed rather than folded in: it needs a four-eyes initiate flow on the Risk View and a decision on whether it belongs there or in a scoped slice of Customer Care. DELIBERATELY UN-STATUSED, not pending: HG-0007 makes a green discovery hand-off the entry condition for a new feature-bearing item, and this is a new feature by its own description. The escape hatch (discovery_exempt) is for pre-policy legacy items and would be a misuse here. The open question - Risk View or a scoped slice of Customer Care - is exactly the kind a discovery run exists to answer, and the policy grandfathers an un-statused stub precisely so a finding can be recorded without front-running that. Mark it pending when the hand-off exists." }
       - { id: BACKOFFICE-82, title: "Institutional Blue: rendered defects the token gates could not see", status: done, depends_on: [UIF-10-REAUDIT-GATE], adr: docs/adrs/0033-portal-design-system-institutional-blue.md, note: "Post-merge review of the ADR 0033 palette change, driven in a real browser across 17 routes x 4 viewports. main was RED on merge: Q2 (15 tsc errors in the WCAG helpers added to design-tokens.spec.ts — vitest does not type-check, so 30 runtime tests passed while tsc --noEmit failed) and Q2b (this ADR was accepted as 0026, a number the Nebras VAS positioning ADR already held; renumbered to 0033 with an amendment row per ADR 0031/0032). Three rendered defects no gate covered: (1) tokens named DM Sans + Instrument Serif while layout.tsx still linked Inter, so every screen rendered in the OS sans and Inter was fetched unused — font-display had 0 call sites; (2) text-demo renders on the NAVY shell in app-shell.tsx at 3.44:1, so darkening the marker for the light ground inverted its AA failure rather than removing it — no single value clears both grounds, so the marker is now two tokens (ext.demo, ext.nav.demo = the mark orange, legible where it always was) and the gate pairs every marker with each ground it is painted on (14 -> 16 pairs); (3) status-badge.tsx still mapped awaiting -> aging, so ADR 0033s fourth state never reached a screen and Tailwinds JIT never emitted .text-awaiting. Layout: /risk tore the document open 555px @1440 (a flex <dd> at min-width:auto stopped ObjectTables overflow-x-auto engaging); the DemoPill covered 128/140px of the footer link on every authenticated route. Also styled the dashboard audit panel (had zero token utilities) and closed two 390px overflows. Verified: 0 overflow and 0 AA failures across 17 routes x 4 viewports, DM Sans + Instrument Serif confirmed loading by glyph-metric probe. 1711 unit tests (up from 1702), typecheck/lint/doc-link-check green. New gates: typefaces-served, per-ground marker contrast, awaiting reachability." }
+      - id: BACKOFFICE-96
+        title: List endpoints accept an over-maximum limit and unvalidated enum filters
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — two conformance defects on shipped list endpoints, raised by the advisory
+          contract-conformance reviewer on PR 345. No product question for a discovery run.
+        note: >-
+          (a) OVER-LIMIT IS SILENTLY CLAMPED. services/bff/src/pagination.ts rejects only
+          non-integer and non-positive values, so limit=100000 passes through - Postgres clamps it
+          to 200, the in-memory store used to ignore it entirely. A caller asking for more than the
+          contract permits gets a 200 with a quietly different page size and no error. The spec
+          declares maximum 200 but specifies no response for exceeding it, so clamp-vs-400 is
+          currently undefined and the two stores resolved it differently.
+
+          (b) ENUM FILTERS ARE UNVALIDATED. services/bff/src/risk-signals/service.ts passes status,
+          severity and signal_type to the store unchecked, while the spec declares closed enums for
+          all three. So ?status=Open or ?status=nonsense returns 200 with an empty data array -
+          indistinguishable, to a client, from "there are genuinely no open signals". The PATCH path
+          on the SAME service does validate its enum and raises BACKOFFICE.INVALID_STATUS, so the
+          service already knows how; the read path just does not. This matters more after PR 345,
+          whose dashboard correctness argument rests on status=open meaning what it says.
+
+          SPEC FIRST for both. The contract has to say what an over-limit request and a bad enum
+          value get - a 400 or a clamp - before the implementation picks one, or the fix is just
+          this author's preference encoded in two more places.
+        acceptance:
+          - Spec-only PR first, settling the over-limit response and the bad-enum response ONCE for
+            every list endpoint rather than per-endpoint.
+          - The BFF enforces whatever the contract then says, and the two stores behind each port
+            agree - the port-contract suite binds both.
+          - A bad enum value is distinguishable from an empty result, asserted.
+      - id: BACKOFFICE-97
+        title: The Envelope schema makes meta optional, so the binding response convention is unenforceable
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a spec-side underspecification raised by the advisory
+          contract-conformance reviewer on PR 345. No product question for a discovery run.
+        note: >-
+          CLAUDE.md binds every success body to { data, meta: { request_id, timestamp } }. The
+          Envelope schema (specs/backoffice-openapi.yaml) declares NO required list, so meta,
+          meta.request_id and meta.timestamp are all optional and a response omitting meta entirely
+          validates. The convention is therefore enforced by review and by nothing else, on every
+          endpoint.
+
+          Surfaced because PR 345's test fixture is STRICTER than the contract it cites - it emits
+          request_id and timestamp on every route on the argument that a fixture weaker than the
+          contract teaches the wrong thing. That instinct is right and it left the fixture enforcing
+          a convention the OpenAPI does not.
+
+          Related in the same schema - Envelope does not declare data at all (each path adds it via
+          allOf), and it offers next_cursor on every response including single-object ones, where
+          the cursor-only pagination rule has nothing to say.
+        acceptance:
+          - Envelope declares required - [meta] and meta declares required - [request_id, timestamp],
+            via the spec-change workflow.
+          - next_cursor is expressed so it belongs to list responses rather than every response.
+          - A contract test fails if a success body omits the required meta fields, so the
+            convention stops depending on reviewers noticing.
       - id: BACKOFFICE-94
         title: "Institutional Blue: the dashboard spoke in tokens but said the wrong things"
         status: done
