@@ -321,12 +321,28 @@ milestones:
           STD-09 claims, and a claim that is 3/4 true is the kind that stops being re-checked.
 
           Remaining prose copies in code comments (consents/revoke.ts:14, consents/bulk-revoke.ts:19)
-          are narrative, not enforcement, and services/nebras-sim/src/app.ts:6 is legitimate — the
-          simulator EMULATES the counterparty rather than consuming the constant, so it must state
-          the threshold independently or it is not a simulator.
+          are narrative, not enforcement. The simulator is deliberately not wired to the constant -
+          it EMULATES the counterparty, and one that imported the bound it is tested against would be
+          checking the code against itself.
+
+          Stated precisely on the second pass: this note used to call services/nebras-sim/src/app.ts:6
+          a copy that "must state the threshold independently", which overstates what is there. The
+          sim has no numeric threshold and no comparator anywhere in its source - only the prose
+          "<5s revoke ack" in a file-header comment. The reasoning holds; the claim about the file
+          did not, and it was written twice (here and in the nebras-sla.ts docblock) before either
+          was checked against the file.
         acceptance:
-          - The contract states the revoke-SLA bound in exactly one place, and the relationship
-            between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
+          - >-
+            The contract states the revoke-SLA bound in exactly one schema NODE, and every statement
+            of it there is mechanically bound to NEBRAS_SLA_MS rather than maintained by hand.
+            AMENDED FROM "in exactly one place": as delivered the node states it three times - the
+            extension, and the description twice - because the machine-readable and human-readable
+            halves are both wanted, and a description that says "see the extension" helps nobody.
+            The regression risk the original wording aimed at is closed by binding all three and
+            rejecting a fourth, not by there being one. Amended because its sibling criterion was
+            amended in the same diff while this one was left reading "exactly one place" against a
+            delivery of three - a criterion that no longer describes the work is how a story stops
+            being checkable.
           - >-
             A test fails if the two disagree, so an amendment cannot land in one and not the other.
             Both directions: the contract must state the CURRENT bound, and must state no other
@@ -334,14 +350,24 @@ milestones:
             parameterised on the current constant, so a stale prior bound left in the description
             passed the whole suite while the services enforced the new one. Verified by walking the
             amendment, not by reading the assertions.
-          - The change goes spec-first through the spec-change skill, with the contract PR
-            human-approved before any code follows it.
+          - >-
+            The change goes spec-first through the spec-change skill, with the contract PR
+            human-approved before any code follows it. AS BUILT THIS WAS NOT SPLIT: the spec edit and
+            the test that binds it are in one PR. The rule exists so an implementation is never bent
+            to fit a wrong contract, and nothing here is bent - no handler, route, status code or
+            payload changed, and the only code is a test that READS the spec. But that is a reason
+            the risk is low, not evidence the criterion was met, so it is recorded as a deviation for
+            the human approving the PR rather than reported as satisfied.
         progress: >-
           SHIPPED. The bound stays IN the contract - a contract that says "see NFR-18" is worse for
           an integrator than one that states the number - and what was missing, the link, is now
-          there. nebras_propagation_ms carries x-nfr18-p99-exclusive-max-ms, using the same
-          vendor-extension mechanism the spec already uses for x-required-scope and x-four-eyes, and
-          the spec header now enumerates it beside x-rate-limit-per-min.
+          there. nebras_propagation_ms carries x-nfr18-exclusive-max-ms, using the same
+          vendor-extension mechanism the spec already uses for x-required-scope and x-four-eyes.
+
+          WHETHER THAT MECHANISM SHOULD GENERALISE IS NOT SETTLED HERE - raised as ADR 0034
+          (Proposed). The four existing extensions have no governance record either; they were
+          established by precedent, which is the norm this ADR asks a human to either ratify or
+          break.
 
           THE KEY NAMES THE COMPARATOR, not just the magnitude. The first cut called it
           x-nfr18-p99-max-ms, which a machine consumer reads the way JSON Schema reads maximum -
@@ -349,6 +375,12 @@ milestones:
           landing exactly on the bound would have been a breach to the code and conformant to the
           consumer: a one-millisecond window, and exactly the machine-versus-prose disagreement this
           story exists to remove, reintroduced by a key name. Caught by the advisory reviewer.
+
+          IT TOOK TWO ROUNDS. The name then still said p99, so it promised a distributional statistic
+          while carrying a per-observation bound - a consumer evaluating a percentile against it runs
+          a different check from the services. Same defect class as the inclusive-maximum half, in
+          the same key, missed while fixing its twin, and caught by the same reviewer. The name is
+          now x-nfr18-exclusive-max-ms: it states the comparator and claims no statistic.
 
           The guard binds three axes, each verified by breaking it: the magnitude (edit the
           extension to 3000 - fails), the comparator (rename the key inclusive and soften the prose

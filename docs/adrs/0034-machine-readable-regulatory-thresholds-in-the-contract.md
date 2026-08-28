@@ -26,9 +26,24 @@ prose to the constant, and fails if any other duration appears in the node.
 
 **That introduces a class of thing the contract did not previously carry.** The repo's existing extensions —
 `x-required-scope`, `x-four-eyes`, `x-rate-limit-per-min`, `x-pure` — all describe how the *platform* treats
-an operation, and all four are named in CLAUDE.md's binding conventions. A machine-readable *regulatory
-threshold* is different in kind: the number originates outside the repo, in a scheme document, and the
-extension asserts a conformance bound rather than a platform behaviour.
+an operation. A machine-readable *regulatory threshold* is different in kind: the number originates outside
+the repo, in a scheme document, and the extension asserts a conformance bound rather than a platform
+behaviour.
+
+**A correction, because the first draft of this ADR rested on it.** That draft said the four existing
+extensions "are named in CLAUDE.md's binding conventions", making the new one exceptional for lacking a
+governance record. The advisory hard-stop reviewer grepped `CLAUDE.md` and found none of the four; I
+confirmed it — zero occurrences each. `x-required-scope` gets one passing mention in `docs/DEVELOPMENT.md`
+as an example; the other three are documented nowhere outside the spec that uses them.
+
+So the contrast the argument leaned on does not exist, and the honest version is less flattering to the
+question: **no vendor extension in this contract has a governance record.** All four were established by
+precedent, exactly the way this one would be. That cuts both ways — it removes "this one is uniquely
+ungoverned" as an argument against, and it raises a larger question this ADR does not try to settle:
+whether the existing four should be documented as conventions too. What survives is the narrower point,
+which does not depend on the false contrast: a *regulatory conformance bound* sourced from an external
+scheme document is a different kind of assertion from a platform behaviour, whatever the precedent is for
+extensions generally.
 
 Two independent advisory reviewers (hard-stop and contract-conformance, PR #347) raised the same point:
 declining to *declare* it a convention does not un-introduce it. The next author needing the same thing

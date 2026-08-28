@@ -144,11 +144,16 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const lines = raw.split('\n')
 
     // STRUCTURAL, not positional. The first cut used a document-wide `findIndex` for the first
-    // `nebras_propagation_ms:` line — unique today, but `nebras_propagation_ms` already appears on
-    // the fraud and bulk routes' free-form `execution_result` payloads, and BACKOFFICE-93 proposes
-    // giving those a schema. The day one lands above this node, that guard silently retargets and
-    // leaves RevocationResult unguarded with every test still green. Anchor on the response this
-    // node belongs to.
+    // `nebras_propagation_ms:` line. In the SPEC that string occurs exactly once today, so the risk
+    // is prospective, not present: the fraud and bulk routes emit a field of the same name on their
+    // free-form `execution_result`, and BACKOFFICE-93 proposes giving those a schema. The day one
+    // lands above this node, a positional guard silently retargets and leaves RevocationResult
+    // unguarded with every test still green. Anchor on the response this node belongs to.
+    //
+    // Stated in that order because an earlier version of this comment said `nebras_propagation_ms`
+    // "already appears" on those payloads — true of the runtime wire, false of the YAML this guard
+    // scans, which is the only thing the anchoring argument is about. The mitigation was right and
+    // its stated reason was not.
     const anchor = lines.findIndex((l) => /^\s*RevocationResult:/.test(l))
     expect(anchor, 'the RevocationResult response must be findable').toBeGreaterThan(-1)
     const start = lines.findIndex((l, i) => i > anchor && /^\s*nebras_propagation_ms:/.test(l))
