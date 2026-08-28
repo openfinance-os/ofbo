@@ -69,8 +69,8 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
    *
    * The bound stays IN the contract, because a contract that says "see NFR-18" is worse for the
    * integrator than one that states the number. What was missing is the link, so the number is now
-   * machine-readable (`x-nfr18-p99-max-ms`, the same vendor-extension mechanism the spec already
-   * uses for `x-required-scope` and `x-four-eyes`) and this test is the link.
+   * machine-readable (`x-nfr18-p99-exclusive-max-ms`, the same vendor-extension mechanism the spec
+   * already uses for `x-required-scope` and `x-four-eyes`) and this test is the link.
    */
   it('agrees with the contract, which states the same bound machine-readably', () => {
     const spec = loadSpec()
@@ -101,27 +101,60 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const field =
       spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
         .properties.nebras_propagation_ms
-    // The key names the bound exclusive; an inclusive-sounding key is the defect.
-    expect(Object.keys(field).some((k) => /^x-nfr18-.*exclusive-max-ms$/.test(k))).toBe(true)
-    expect(field['x-nfr18-p99-max-ms'], 'an inclusive-sounding key must not reappear').toBeUndefined()
+    // Exactly one NFR-18 extension, and it names the bound exclusive.
+    //
+    // The first cut asserted only that the literal `x-nfr18-p99-max-ms` was absent, under a comment
+    // claiming no inclusive-sounding key may reappear — `x-nfr18-max-ms` or
+    // `x-nfr18-p99-inclusive-max-ms` both satisfied it, and an inclusive key added ALONGSIDE the
+    // exclusive one (the worst state of the three) passed. Same overclaim shape as the one a few
+    // lines up was written to correct: the comment described a guard that did not exist.
+    const nfr18Keys = Object.keys(field).filter((k) => /^x-nfr18-/.test(k))
+    expect(nfr18Keys, 'exactly one NFR-18 extension on this field').toHaveLength(1)
+    expect(nfr18Keys[0]).toMatch(/exclusive-max-ms$/)
     // And the prose says strictly-less-than rather than at-most.
     expect(field.description).toMatch(new RegExp(`<\\s*${NEBRAS_SLA_MS}\\s*ms`))
     expect(field.description).not.toMatch(/≤|<=|at most|no more than/)
   })
 
   /**
-   * ONE stated bound in the contract, and the test binds every statement of it.
+   * ONE stated bound in the node, and the test binds every statement of it.
    *
    * The acceptance criterion is "states the revoke-SLA bound in exactly one place". The schema node
    * necessarily states it twice — machine-readable and human-readable — and both are bound above.
-   * What must never appear is a THIRD, in a comment or elsewhere in the node, that nothing compares:
-   * that is the original defect at smaller scale.
+   * What must never appear is a THIRD that nothing compares: that is the original defect at smaller
+   * scale, and my own first YAML comment for this change contained one.
+   *
+   * SCOPED TO THE NODE, not the document. The first cut scanned all 3,900 lines for `5000`, which
+   * couples this guard to every unrelated author: `x-rate-limit-per-min`, a `maxLength`, or money in
+   * integer minor units (where 5000 is AED 50.00) would fail it with a false accusation about
+   * NFR-18. The claim was always about this node; now the implementation is too.
+   *
+   * UNIT-AWARE, because the copy STD-09 missed was in a different unit. This file's own history
+   * records it: the third code copy was the prose "< 5s" in an SLO description, and "a grep for
+   * `5000` never finds the SLO row". A guard that greps for `5000` is that same grep, one artifact
+   * over — and the contract's surrounding prose already speaks in hours and seconds. So it matches
+   * the bound however it is spelled.
    */
-  it('states the bound nowhere in the contract that a test does not bind', () => {
+  it('states the bound nowhere in its own schema node that a test does not bind', () => {
     const raw = readFileSync(SPEC_PATH, 'utf8')
-    const occurrences = raw.split('\n').filter((line) => new RegExp(`\\b${NEBRAS_SLA_MS}\\b`).test(line))
+    const lines = raw.split('\n')
+    const start = lines.findIndex((l) => /^\s*nebras_propagation_ms:/.test(l))
+    expect(start, 'the nebras_propagation_ms node must be findable').toBeGreaterThan(-1)
+    const indent = lines[start]!.search(/\S/)
+    // The node runs until the next line at or above its own indentation.
+    let end = start + 1
+    while (end < lines.length && (lines[end]!.trim() === '' || lines[end]!.search(/\S/) > indent)) end++
+
+    const seconds = NEBRAS_SLA_MS / 1000
+    // Every spelling of the same bound: 5000, 5_000, 5e3, "5s", "5 seconds".
+    const anySpelling = new RegExp(
+      `\\b${NEBRAS_SLA_MS}\\b|\\b${String(NEBRAS_SLA_MS).replace(/\B(?=(\d{3})+$)/g, '_')}\\b`
+      + `|\\b${seconds}e3\\b|\\b${seconds}\\s*s\\b|\\b${seconds}\\s*seconds?\\b`,
+      'i'
+    )
+    const stated = lines.slice(start, end).filter((l) => anySpelling.test(l))
     // Exactly two: the extension and the description. Both asserted above.
-    expect(occurrences.map((l) => l.trim())).toHaveLength(2)
+    expect(stated.map((l) => l.trim())).toHaveLength(2)
   })
 
   /**

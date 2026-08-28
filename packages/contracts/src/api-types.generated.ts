@@ -6324,7 +6324,8 @@ export interface components {
                         status?: "Revoked";
                         /**
                          * @description Observed Nebras acknowledgment latency in milliseconds. NFR-18 bounds this at p99 < 5000 ms — strictly less than, as carried by x-nfr18-p99-exclusive-max-ms.
-                         *     This is deliberately NOT a `maximum`. The field records what actually happened, and a breach is a real observation the Back Office must be able to report — the fraud-revoke audit trail records exactly that, and a schema constraint here would make the breach unrepresentable and so invisible to the review most likely to ask about it.
+                         *     This is deliberately NOT a `maximum`. The field records what actually happened, so a value at or above the bound is a real observation and must stay representable; constraining the schema would make a breach unreportable rather than impossible.
+                         *     (An earlier draft justified this by pointing at the fraud-revoke audit trail. That behaviour is real but the contract describes it nowhere — its execution result is an untyped object — so the sentence sent an integrator looking for something this document does not contain. A published description has to stand on what the contract itself says.)
                          */
                         nebras_propagation_ms?: number;
                         psu_notified?: boolean;

@@ -3,9 +3,13 @@
 # kebab-case paths, snake_case JSON, cursor pagination, standard error envelope,
 # Idempotency-Key on mutating endpoints, x-fapi-interaction-id on every request.
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
-# Regulatory thresholds that code enforces are declared via x-<requirement>-<bound> extensions
-# (today: x-nfr18-p99-exclusive-max-ms) so a test can bind the contract's number to the constant the
-# services compare against, instead of the two agreeing only in prose.
+# ONE regulatory threshold is declared machine-readably today — x-nfr18-p99-exclusive-max-ms on
+# nebras_propagation_ms — so a test can bind the contract's number to the constant the services
+# compare against, instead of the two agreeing only in prose. The mechanism generalises and the
+# others have NOT yet been moved to it: the 2-business-hour approval expiry, the 24h
+# Idempotency-Key window, 24-month audit retention and the 2-hour Aani fund-recall window are all
+# code-enforced and still stated in prose only. Read the sentence as a description of one field,
+# not as a document-wide guarantee.
 openapi: 3.0.3
 info:
   title: Open Finance Back Office API (delta)
@@ -3293,10 +3297,15 @@ components:
                           x-nfr18-p99-exclusive-max-ms.
 
                           This is deliberately NOT a `maximum`. The field records what actually
-                          happened, and a breach is a real observation the Back Office must be able
-                          to report — the fraud-revoke audit trail records exactly that, and a
-                          schema constraint here would make the breach unrepresentable and so
-                          invisible to the review most likely to ask about it.
+                          happened, so a value at or above the bound is a real observation and must
+                          stay representable; constraining the schema would make a breach
+                          unreportable rather than impossible.
+
+                          (An earlier draft justified this by pointing at the fraud-revoke audit
+                          trail. That behaviour is real but the contract describes it nowhere — its
+                          execution result is an untyped object — so the sentence sent an integrator
+                          looking for something this document does not contain. A published
+                          description has to stand on what the contract itself says.)
                       psu_notified: { type: boolean }
     ConsentEventList:
       description: Paginated consent lifecycle events

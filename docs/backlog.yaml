@@ -352,8 +352,8 @@ milestones:
 
           WHAT IT DOES NOT BUY, recorded so the claim is not over-read: openapi-typescript drops x-
           extensions and the response validator strips them, so every consumer downstream of codegen
-          - the portal client, verify:contract, an external SDK - still reads the bound as prose.
-          The extension buys an in-repo regression guard, not machine-readability downstream.
+          (the portal client, verify:contract, an external SDK) still reads the bound as prose. The
+          extension buys an in-repo regression guard, not machine-readability downstream.
 
           It is deliberately NOT a maximum. That would be the obvious-looking tightening and it
           would be wrong - the field records what HAPPENED, and STD-09 added a fraud-revoke test
