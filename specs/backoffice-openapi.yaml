@@ -3,13 +3,17 @@
 # kebab-case paths, snake_case JSON, cursor pagination, standard error envelope,
 # Idempotency-Key on mutating endpoints, x-fapi-interaction-id on every request.
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
-# ONE regulatory threshold is declared machine-readably today — x-nfr18-p99-exclusive-max-ms on
-# nebras_propagation_ms — so a test can bind the contract's number to the constant the services
-# compare against, instead of the two agreeing only in prose. The mechanism generalises and the
-# others have NOT yet been moved to it: the 2-business-hour approval expiry, the 24h
-# Idempotency-Key window, 24-month audit retention and the 2-hour Aani fund-recall window are all
-# code-enforced and still stated in prose only. Read the sentence as a description of one field,
-# not as a document-wide guarantee.
+# A regulatory threshold MAY be declared machine-readably with an x-<requirement>-<bound> extension,
+# so a test can bind the contract's number to the constant the services compare against instead of
+# the two agreeing only in prose. nebras_propagation_ms does this
+# (x-nfr18-p99-exclusive-max-ms); the mechanism generalises and most thresholds have not been moved
+# to it.
+#
+# Deliberately not enumerating which ones. An earlier version of this comment listed four by name as
+# "code-enforced and still prose only" — an untested claim about the document's own state, in the
+# document whose defect-of-record is untested prose. It was accurate when written and nothing bound
+# it, so the first threshold to gain an extension would have made the header false with no test
+# objecting. Naming a rule the reader can apply beats inventorying a state that drifts.
 openapi: 3.0.3
 info:
   title: Open Finance Back Office API (delta)
@@ -3293,8 +3297,16 @@ components:
                         x-nfr18-p99-exclusive-max-ms: 5000
                         description: >-
                           Observed Nebras acknowledgment latency in milliseconds. NFR-18 bounds this
-                          at p99 < 5000 ms — strictly less than, as carried by
-                          x-nfr18-p99-exclusive-max-ms.
+                          at p99 STRICTLY BELOW 5000 ms — a value of exactly 5000 is a breach.
+
+                          The bound is repeated here rather than delegated to the
+                          x-nfr18-p99-exclusive-max-ms extension beside it, because
+                          openapi-typescript drops x- extensions and the response validator strips
+                          them: a reader working from a generated SDK holds this description and not
+                          that key. Pointing them at it would send them looking for something their
+                          artifacts do not contain, which is the same defect as the sentence this
+                          description replaced. The extension exists so an in-repo test can bind the
+                          number to the constant the services compare against.
 
                           This is deliberately NOT a `maximum`. The field records what actually
                           happened, so a value at or above the bound is a real observation and must

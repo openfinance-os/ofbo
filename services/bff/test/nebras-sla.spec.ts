@@ -111,8 +111,12 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     const nfr18Keys = Object.keys(field).filter((k) => /^x-nfr18-/.test(k))
     expect(nfr18Keys, 'exactly one NFR-18 extension on this field').toHaveLength(1)
     expect(nfr18Keys[0]).toMatch(/exclusive-max-ms$/)
-    // And the prose says strictly-less-than rather than at-most.
-    expect(field.description).toMatch(new RegExp(`<\\s*${NEBRAS_SLA_MS}\\s*ms`))
+    // And the prose says strictly-less-than rather than at-most — the PROPERTY, not one spelling.
+    // The first cut required the literal `<`, which this suite then rejected when the description
+    // was reworded to "STRICTLY BELOW 5000 ms": a stricter statement of the same bound, failed by a
+    // guard pinning punctuation instead of meaning.
+    expect(field.description).toMatch(new RegExp(`(?:<|strictly below|strictly less than)\\s*(?:the bound|${NEBRAS_SLA_MS})`, 'i'))
+    expect(field.description).toContain(String(NEBRAS_SLA_MS))
     expect(field.description).not.toMatch(/≤|<=|at most|no more than/)
   })
 
