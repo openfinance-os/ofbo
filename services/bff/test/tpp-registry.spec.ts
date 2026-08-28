@@ -91,14 +91,21 @@ describe('POST /back-office/tpp-counterparties:sync-directory', () => {
    * below passed it, and the one path a deployment actually takes still diverged. This asserts the
    * store as `createApp` builds it, which is the assertion that was missing.
    */
-  it('defaults to the channel every deployment configures, through createApp', async () => {
+  it('defaults to the channel this table\'s rows actually carry, through createApp', async () => {
     const fallback = createApp({ tppDirectoryEgress: egress, highClassAudit: audit })
     await fallback.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'ch0' }) })
     const res = await fallback.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
     const body = (await res.json()) as { data: { channel: string } }
-    expect(body.data.channel, 'the default-constructed store diverged from the Pg store').toBe('internal_retail')
+    // What `seed.ts` and `seed-tenants.ts` write, and what the portal fixtures assert.
+    expect(body.data.channel).toBe('external_tpp_aas')
   })
 
+  /**
+   * Passing a channel DIFFERENT from the default, so the assertion distinguishes "the argument was
+   * honoured" from "the argument was ignored". The first version passed `internal_retail` while the
+   * default was also `internal_retail`, so it passed either way — a test that could not fail for
+   * the reason it claimed to test.
+   */
   it('stamps a sync-created row with the channel it was configured with', async () => {
     const scoped = createApp({
       tppCounterpartyStore: new InMemoryTppCounterpartyStore('internal_retail'),

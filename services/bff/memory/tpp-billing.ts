@@ -11,24 +11,26 @@ export class InMemoryTppCounterpartyStore implements TppCounterpartyStore {
   private readonly rows = new Map<string, StoredTppCounterparty>()
 
   /**
-   * The channel a sync-created row is stamped with.
+   * The channel a sync-created row is stamped with. Configurable, defaulting to what this table's
+   * ROWS actually carry.
    *
-   * This hardcoded `'external_tpp_aas'` while the Pg store wrote its tenancy `config.channel` — and
-   * every construction of the Pg store in this repository passes `internal_retail`
-   * (`worker.ts:174, 231, 355`, `scripts/serve.ts`). So one endpoint returned a different
-   * `TppCounterparty.channel` depending on which store was mounted.
+   * I changed this default to `internal_retail` on the reasoning that "every Pg construction passes
+   * internal_retail". That is true of the store's tenancy CONFIG (`worker.ts:252` builds it from
+   * `tenancy`, whose channel is `internal_retail`) and false of the rows: every seed writes this
+   * table as `external_tpp_aas` — `seed.ts:39`, `seed-tenants.ts:80` — and the portal's own
+   * fixtures for this resource assert it (`uif08-tpp-overview.spec.tsx`,
+   * `uif08c-registry-table.spec.tsx`). So the flip moved the fallback store to the MINORITY
+   * convention while claiming parity. Reverted.
    *
-   * THE DEFAULT IS THE FIX, not the parameter. A first pass added the parameter and left the
-   * default at `external_tpp_aas` — but `services/bff/src/app.ts` constructs the fallback with no
-   * arguments and has no tenancy to pass, so the only runtime path took the old value and the
-   * divergence stood. The knob was added and nothing turned it. The default is now what every
-   * deployment actually configures; a caller with a different tenancy passes it, as the Pg store
-   * is constructed.
+   * The real split is not this default: the Pg store stamps sync-CREATED rows from tenancy config
+   * while the seeds write `external_tpp_aas` directly, so a Postgres-backed demo already serves both
+   * values. Which one a counterparty should carry is a data-model question, not something a
+   * constructor default settles — filed rather than decided here.
    *
    * Typed to the contract's `Channel` enum rather than `string`, so a non-member cannot reach a
    * spec-enum response field through this constructor.
    */
-  constructor(private readonly channel: Channel = 'internal_retail') {}
+  constructor(private readonly channel: Channel = 'external_tpp_aas') {}
   async syncDirectory(
     participants: { organisation_id: string; legal_name: string; registration_number?: string | null; directory_contacts?: unknown[] }[],
     _traceId: string

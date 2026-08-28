@@ -255,6 +255,39 @@ milestones:
           - The test states its own precondition, so it holds on a shared database and on a re-run,
             not only against a freshly seeded one.
           - Verified by reverting the sync - the orphan then stays live and the test fails.
+      - id: BACKOFFICE-98
+        title: TppCounterparty.channel depends on which write path created the row
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — a data-model inconsistency on a spec-defined enum field, surfaced by the
+          advisory contract-conformance reviewer on PR 346. No product question for a discovery run.
+        note: >-
+          TppCounterparty.channel is a spec enum (Channel), and which member a counterparty carries
+          depends on what wrote the row rather than on anything about the counterparty.
+
+          The seeds write external_tpp_aas literally - packages/db/src/seed.ts and
+          packages/db/src/seed-tenants.ts - and the portal's own fixtures for this resource assert
+          it. The Postgres store stamps rows its directory sync CREATES from tenancy config, which
+          every construction sets to internal_retail. So a seeded demo database already serves both
+          values from one list response (three organisations external_tpp_aas, six internal_retail),
+          and the upsert deliberately does not touch channel on conflict, so re-syncing does not
+          converge them.
+
+          PR 346 briefly flipped the in-memory store's default to internal_retail on the reasoning
+          that "every Pg construction passes internal_retail". That is true of the store CONFIG and
+          false of the rows, so it moved the fallback store to the minority convention while claiming
+          parity. Reverted there: a constructor default cannot settle what the field means, and
+          picking a side inside an unrelated PR would have buried the question.
+
+          Both values are enum members, so nothing is schema-invalid and no contract test objects -
+          which is exactly why it has persisted.
+        acceptance:
+          - A decision on what channel means for a counterparty is recorded - the tenancy that
+            observes it, or the channel it transacts on - and the spec description says which.
+          - Every writer of tpp_counterparty agrees with that decision, seeds and both stores.
+          - A test asserts one value across the seeded demo registry, so a future writer cannot
+            reintroduce the split silently.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
