@@ -1,3 +1,4 @@
+import { DEMO_TPP_DIRECTORY } from '@ofbo/synthetic-data'
 import type {
   ApmPort,
   CareSurfacePort,
@@ -202,11 +203,19 @@ const simApm: ApmPort = {
   }
 }
 
-const DIRECTORY = [
-  { organisation_id: 'org-tarabut-gateway', legal_name: 'Tarabut Gateway Ltd' },
-  { organisation_id: 'org-lean-technologies', legal_name: 'Lean Technologies FZ-LLC' },
-  { organisation_id: 'org-tabby', legal_name: 'Tabby FZ-LLC' }
-]
+/**
+ * The demo Trust Framework Directory, from the ONE place that defines it.
+ *
+ * This used to be a local three-entry literal while the demo seed declared nine, and both wrote the
+ * registry through the same upsert. So `TppCounterparty.legal_name` flipped between "Tabby" and
+ * "Tabby FZ-LLC" depending on which ran last, and an operator pressing "Sync directory"
+ * decommissioned the six organisations the seed had just declared live — which the next deploy
+ * reinstated. The directory is the authority for who is present; there cannot be two of it.
+ */
+const DIRECTORY = DEMO_TPP_DIRECTORY.map((p) => ({
+  organisation_id: p.organisation_id,
+  legal_name: p.legal_name
+}))
 
 /** Thrown when the Nebras sim returns a non-2xx (e.g. 429 rate limit). The
  *  ingestion job (BACKOFFICE-32) treats it as retryable and backs off. */

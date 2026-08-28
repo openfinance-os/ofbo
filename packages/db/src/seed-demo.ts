@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp, tppDisplayName } from '@ofbo/synthetic-data'
+import { DEMO_BANK_ID, DEMO_TENANTS, DEMO_TPP_DIRECTORY, accrualByTpp } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
+import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
 import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
 import { PgLineageEmitter } from './lineage.js'
@@ -359,6 +360,21 @@ async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
 }
 
 export async function seedDemoScenario(databaseUrl: string): Promise<void> {
+  // FIRST STATEMENT, before a pool is opened — the same position `db:reset` puts it in.
+  //
+  // The first cut of this guard sat ~420 lines down, immediately above the directory sync, and its
+  // comment claimed parity with `db:reset` (which "refuses before touching anything"). It did not
+  // have it: everything above ran unguarded — reconciliation runs and breaks, risk signals,
+  // approvals, disputes, STR drafts, fraud incidents, the billing tables, the counterparty INSERT,
+  // and a bulk UPDATE of counterparty rows the seed did not write. Those tables have no deletion
+  // path (0003_rls.sql grants DELETE to no role), so synthetic rows landed in a non-demo database
+  // are unremovable through the application — which is the outcome "synthetic data only in BOTH
+  // profiles' non-prod" exists to prevent.
+  //
+  // A guard that runs after the writes it advertises is worse than none: it reads as protection in
+  // review while protecting nothing.
+  assertNonProdBulkMutation('db:seed:demo')
+
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     await seedBillingConsoleEvidence(pool)
@@ -766,30 +782,25 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     // here emptied them for all nine counterparties on every run — a spec-defined response field
     // (`TppCounterparty.directory_contacts`) silently reporting no contacts for the whole registry.
     // `[]` is schema-valid, so no contract test would have objected.
+    // THE SAME participant set the P6 adapter answers with — `DEMO_TPP_DIRECTORY`, not a local
+    // list. Building it here from the seed's own literals made the seed a second directory
+    // authority: it declared nine while the adapter listed three, with different legal names for
+    // the overlap, so the two disagreed about both who is present and what they are called.
     const directoryContacts = JSON.parse(CONTACTS) as unknown[]
-    const directory = [
-      ...tpps.map(([orgId, legalName, regNum]) => ({
-        organisation_id: orgId, legal_name: legalName, registration_number: regNum, directory_contacts: directoryContacts
-      })),
-      ...bookRows.map(([orgId, regNum]) => ({
-        organisation_id: orgId, legal_name: tppDisplayName(orgId), registration_number: regNum, directory_contacts: directoryContacts
-      }))
-    ]
-    // GUARDED, because this is the seed's first non-additive write.
+    const directory = DEMO_TPP_DIRECTORY.map((p) => ({ ...p, directory_contacts: directoryContacts }))
+    // AUDITED, using the sentinel actor this repository already established for seed writes.
     //
-    // `syncDirectory` closes every DEMO_BANK_ID registry row absent from the participant list —
-    // rows this seed did not write, whoever did. Until now both seeds were strictly additive, and
-    // that is what made an accidental run against a non-demo database harmless. `db:reset` has
-    // always refused under the enterprise/production profile; a bulk lifecycle change needs the
-    // same refusal, from the same guard rather than a second copy of it.
-    assertNonProdBulkMutation('db:seed:demo directory sync')
-
-    // NOT emitted to `audit_high_sensitivity`, deliberately. The operator-triggered path emits
-    // `tpp_directory_synced` with an acting principal, persona and scope — because a principal
-    // acted. A seed is provisioning: there is no principal, and inventing one to satisfy the shape
-    // of an audit row would put a fabricated actor into an INSERT-only regulated trail, which is
-    // worse than the absence it papers over. The change is announced on stdout and carried in
-    // BCBS 239 lineage, which is the record that fits what actually happened.
+    // An earlier version of this comment argued the opposite — that emitting would mean "inventing"
+    // a principal, and a fabricated actor in an INSERT-only trail is worse than the absence. The
+    // codebase falsifies the premise: `seed-tenants.ts` and `seed.ts` already emit
+    // `audit_high_sensitivity` rows from seeds as `acting_principal='seed'`,
+    // `acting_persona='system'`, `SEED_ACTOR_SCOPE`, with `SYSTEM_ACTOR_RESPONSE_STATUS` (0) for
+    // exactly the "a seed row issues no HTTP response" case. There was a sanctioned answer and I
+    // reasoned past it.
+    //
+    // It matters because this is the same state transition the operator path audits as
+    // `tpp_directory_synced` (tpp-billing/service.ts), on the same regulated rows. Audited when an
+    // operator does it and unaudited when the deploy does it is the asymmetry, not the actor.
     const counterpartyStore = new PgTppCounterpartyStore(
       databaseUrl,
       { bankId: DEMO_BANK_ID, channel: CH },
@@ -807,6 +818,19 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       // Announced, never silent — a state change the seed makes to regulated rows it did not write.
       console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
     }
+    // The retained record of it, in the same shape the operator path writes.
+    await pool.query(
+      `INSERT INTO audit_high_sensitivity
+         (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
+          request_trace_id, request_body_redacted, response_status)
+       SELECT $1, $2, 'tpp_directory_synced', 'seed', 'system', $3, $4, $5::jsonb, $6
+        WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $4)`,
+      [
+        DEMO_BANK_ID, CH, SEED_ACTOR_SCOPE, 'seed-demo-directory-sync',
+        JSON.stringify({ synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned }),
+        SYSTEM_ACTOR_RESPONSE_STATUS
+      ]
+    )
 
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the
     //       current period awaiting four-eyes approval (coherent with the billing:write approval in

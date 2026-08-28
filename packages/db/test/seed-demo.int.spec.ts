@@ -207,21 +207,33 @@ describe('demo scenario seed', () => {
    * under the enterprise/production profile; this asserts the seed now does too, through the same
    * guard rather than a second copy of it.
    */
-  it('refuses to bulk-decommission under the enterprise profile', async () => {
+  /**
+   * The guard refuses BEFORE touching the database — pinned by making the database unreachable.
+   *
+   * Two earlier attempts at this test proved nothing. The first asserted
+   * `if (rows.length > 0) expect(typeof status).toBe('string')`, which passes for every value and
+   * for no row. The second planted a row and counted `reconciliation_log`, which cannot tell early
+   * from late either: the seed is idempotent, so re-running it on an already-seeded database writes
+   * nothing new whichever side of the guard the writes fall on. Both went green against a guard
+   * placed 420 lines too late.
+   *
+   * What actually separates the two is whether the seed reaches the database at all. Pointed at an
+   * unreachable host under the enterprise profile, a guard that runs first fails with the refusal;
+   * one that runs later fails trying to connect. That distinction needs no fixture and cannot be
+   * satisfied by accident.
+   */
+  it('refuses before it opens a connection, not after', async () => {
     const prior = process.env.DEPLOY_PROFILE
     process.env.DEPLOY_PROFILE = 'enterprise'
     try {
-      await expect(seedDemoScenario(url)).rejects.toThrow(/non-prod only/)
+      // Port 1 is closed; any query would surface as ECONNREFUSED rather than a refusal.
+      await expect(
+        seedDemoScenario('postgres://nobody:nobody@127.0.0.1:1/unreachable')
+      ).rejects.toThrow(/non-prod only/)
     } finally {
       if (prior === undefined) delete process.env.DEPLOY_PROFILE
       else process.env.DEPLOY_PROFILE = prior
     }
-    // And the guard fires BEFORE the sync — the orphan is untouched by the refused run.
-    const r = await admin.query(
-      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
-      [DEMO_BANK_ID, 'org-retired-seed-orphan']
-    )
-    if (r.rows.length > 0) expect(typeof r.rows[0].production_status).toBe('string')
   })
 
   /**

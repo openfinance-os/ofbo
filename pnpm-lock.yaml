@@ -198,6 +198,9 @@ importers:
 
   packages/ports:
     dependencies:
+      '@ofbo/synthetic-data':
+        specifier: workspace:*
+        version: link:../synthetic-data
       jose:
         specifier: ^5.0.0
         version: 5.10.0

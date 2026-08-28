@@ -25,8 +25,14 @@ export default tseslint.config(
       ]
     }
   },
-  // The sanctioned profile-selection point (the ports registry) and the destructive
-  // db:reset guard legitimately read the deploy profile; tests set it to drive scenarios.
+  // The sanctioned profile-selection point (the ports registry) and reset.ts's non-prod guard
+  // legitimately read the deploy profile; tests set it to drive scenarios.
+  //
+  // reset.ts's exemption covers the guard, not only `db:reset` — `assertNonProdBulkMutation` is
+  // exported from there and the demo seed calls it, so a second module now behaves differently
+  // under the enterprise profile without reading the variable. Sharing one guard beats copying it,
+  // and this rule only sees READS, so the exemption's scope is written down here rather than left
+  // for the next reader to reconstruct from one call site.
   {
     files: ['packages/ports/**', 'packages/db/src/reset.ts', '**/test/**', '**/*.spec.ts', '**/*.spec.tsx'],
     rules: { 'no-restricted-syntax': 'off' }
