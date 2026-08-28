@@ -241,6 +241,44 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
   })
 
   /**
+   * ...and neither does the FILE HEADER, which is the region the two guards above cannot see.
+   *
+   * Both are scoped to the field's schema node, deliberately — a document-wide scan for the bare
+   * number fired on unrelated rate limits and minor-unit money and accused their authors of NFR-18
+   * drift. But this same change added a paragraph to the file header that discusses
+   * `nebras_propagation_ms` and its NFR-18 bound, which created a new home for exactly the copy the
+   * guards exist to prevent, in the one region they do not reach. The advisory reviewer caught it and
+   * confirmed there is no live drift: the header states no number today.
+   *
+   * "States none today" is the property worth holding, so it is held here rather than noticed. The
+   * header is bounded and cheap to scan, unlike the document, so this is the narrow extension that
+   * does not bring the false-positive problem back with it.
+   */
+  it('states no duration in the file header either, where the node guards cannot see', () => {
+    const raw = readFileSync(SPEC_PATH, 'utf8')
+    // The leading comment block — everything before the first non-comment line.
+    const header = raw.split('\n').slice(0, raw.split('\n').findIndex((l) => !l.startsWith('#')))
+    expect(header.length, 'the header comment block must be findable').toBeGreaterThan(3)
+
+    const quantity = /(?<![A-Za-z\d.-])(\d[\d,_ ]*\d|\d)\s*(ms|milliseconds?|s|seconds?)?\b/gi
+    const strays: string[] = []
+    for (const line of header) {
+      for (const [text, digits, unit] of line.matchAll(quantity)) {
+        const n = Number(digits!.replace(/[,_ ]/g, ''))
+        const ms = /^s/i.test(unit ?? '') ? n * 1000 : n
+        // A number counts only if it is stated AS a duration (carries a time unit) or IS the bound
+        // written bare. The first cut flagged every numeral and caught `PRD §7` and `ADR 0034` —
+        // this header cites sections and records, so a guard that cannot tell a citation from a
+        // threshold is one nobody can leave switched on.
+        if (unit || ms === NEBRAS_SLA_MS) strays.push(`${text.trim()} (→ ${ms} ms)`)
+      }
+    }
+    // No duration at all, not "no wrong duration": the header's job is to say the bound is carried
+    // and where, never to restate it.
+    expect(strays, 'the file header states a duration, outside every node-scoped guard').toEqual([])
+  })
+
+  /**
    * `maximum: 5000` would be the obvious-looking tightening and it would be wrong. This field
    * records what actually HAPPENED, and STD-09 added a fraud-revoke test that drives a 6.1s
    * acknowledgment specifically to prove a BREACH is visible in the audit record. A schema

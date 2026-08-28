@@ -5,11 +5,11 @@
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
 # nebras_propagation_ms carries its NFR-18 bound in x-nfr18-exclusive-max-ms as well as in prose, so a
 # test can bind the contract's number to the constant the services compare against (BACKOFFICE-91).
-# INTEGRATORS: your generated client will NOT receive that extension — openapi-typescript drops x-
-# keys and the response validator strips them — so read the bound from the field's description. The
-# extension is an in-repo regression guard, not a machine-readable surface for consumers. Said here
-# because this header is the part an integrator reads, and advertising a key they cannot receive
-# without saying so is the one place the rest of this change is honest and this line was not.
+# INTEGRATORS: standard OpenAPI generators drop x- extensions, so your client will not receive it —
+# read the bound from the field's description. The extension is an in-repo regression guard, not a
+# machine-readable surface for consumers. (An earlier version of this line also cited the response
+# validator: that is this repository's own verify:contract machinery, which is not in an integrator's
+# pipeline and had no business in a sentence addressed to them.)
 # Whether regulatory thresholds generally should be machine-readable is a cross-cutting question, and
 # this header does not settle it: it is raised in ADR 0034, which is Proposed and awaits a human.
 openapi: 3.0.3
@@ -3272,54 +3272,48 @@ components:
                       status: { type: string, enum: [Revoked] }
                       nebras_propagation_ms:
                         type: integer
-                        # The NFR-18 bound, machine-readable. It was previously stated ONLY as
-                        # prose in the description below, derived from nothing and compared by
-                        # nothing — a fourth independent copy of a threshold the services
-                        # single-source in services/bff/src/consents/nebras-sla.ts. A scheme
-                        # amendment would have left the published contract telling integrators the
-                        # old value while the code enforced the new one, which is the worst place of
-                        # the four for the number to be wrong. A test now binds this to
-                        # NEBRAS_SLA_MS.
+                        # THE BOUND IS NOT STATED IN THIS COMMENT — it is stated by the extension
+                        # below and twice in the description, and a test binds every occurrence in
+                        # this schema node. An unbound fourth copy is the defect this field exists to
+                        # close, so this comment carries reasons and no number.
                         #
-                        # EXCLUSIVE is in the key name on purpose. Named `…-max-ms`, a machine
-                        # consumer reads it the way JSON Schema reads `maximum` — inclusive — while
-                        # every comparator that decides conformance is strict `<` (revoke.ts,
-                        # fraud-revoke.ts, bulk-revoke.ts, and the description below). An
-                        # acknowledgment landing exactly ON the bound would then be a breach to the
-                        # code and conformant to the consumer: a one-millisecond window, and
-                        # precisely the machine-vs-prose disagreement this field exists to remove.
+                        # WHY THE EXTENSION. The bound used to be prose alone, derived from nothing
+                        # and compared by nothing — a fourth independent copy of a threshold the
+                        # services single-source in services/bff/src/consents/nebras-sla.ts. A scheme
+                        # amendment would have left the published contract telling integrators the old
+                        # value while the code enforced the new one: of the four places to be wrong,
+                        # the one with the widest audience.
                         #
-                        # PER-OBSERVATION, so `p99` came out of the key name. The value here is what
-                        # each single measurement is compared against; NFR-18's own requirement is
-                        # distributional (a p99 over those comparisons). A machine consumer that took
-                        # `p99` at its word and evaluated a percentile against this number would run a
-                        # different check from the one the services run — the same machine-versus-prose
-                        # disagreement this field exists to remove, relocated into the key name. The
-                        # key was already renamed once for this class of defect (`…-max-ms` read as an
-                        # inclusive `maximum`); `p99` was the remaining half.
+                        # WHY `exclusive` IS IN THE KEY. Named `…-max-ms`, a machine consumer reads it
+                        # the way JSON Schema reads `maximum` — inclusive — while every comparator
+                        # that decides conformance is strict `<`. An acknowledgment landing exactly ON
+                        # the bound would be a breach to the code and conformant to the consumer: a
+                        # one-millisecond window on a regulated control.
                         #
-                        # This comment states no number. The bound is stated by the extension below
-                        # and twice in the description, and the test counts OCCURRENCES in this node
-                        # rather than lines — an earlier version counted lines and asserted two, which
-                        # the description's two statements would break the moment they shared a line
-                        # or a third was appended to an existing one. (An earlier version of THIS
-                        # sentence claimed no numeral appears here at all, which "NFR-18" makes false;
-                        # the claim that carries weight is that the BOUND is not stated here.)
+                        # WHY NOT `p99`. The value is what a SINGLE measurement is compared against.
+                        # NFR-18's own requirement is distributional, a p99 over those comparisons, so
+                        # a key naming the statistic would invite a consumer to evaluate a percentile
+                        # against a per-observation bound — a different check from the one the
+                        # services run.
+                        #
                         x-nfr18-exclusive-max-ms: 5000
                         description: >-
                           Observed Nebras acknowledgment latency for this revocation, in
                           milliseconds. A single measurement, not an aggregate.
 
                           `0` is a sentinel, not a measurement: it means the revocation was
-                          acknowledged without leaving the environment, which is what the training
-                          sandbox reports. Read it as "no propagation occurred" rather than as an
-                          exceptionally fast one, and exclude it from latency statistics.
+                          acknowledged without leaving the deployment, so no propagation was timed.
+                          Read it as "no propagation occurred" rather than as an exceptionally fast
+                          one, and exclude it from latency statistics.
 
                           The NFR-18 bound is strictly below 5000 ms, exclusive: a measurement of
                           exactly 5000 fails that comparison. The bound is per-observation, while
                           NFR-18 itself is distributional (a p99 taken over those comparisons). This
                           response carries the measurement and not a conformance verdict, so a
-                          consumer that needs pass/fail computes it from the stated bound.
+                          consumer that needs pass/fail computes it from the stated bound. Note that
+                          `data` declares no `required` list, so a generated client will type this
+                          field optional even though the service emits it on every revocation —
+                          handle absence.
 
                           Not constrained by `maximum`, deliberately: the field records what
                           happened, so a value at or above the bound is a real observation and must
