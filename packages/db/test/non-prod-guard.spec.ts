@@ -22,16 +22,42 @@ import { assertNonProdBulkMutation } from '../src/reset.js'
  * the enterprise/production profile is the whole point. A request-path module appearing here would
  * be the actual rule-7 violation.
  */
-const PROFILE_GUARDED_MODULES: readonly string[] = ['reset.ts', 'seed-demo.ts', 'seed.ts']
+const PROFILE_GUARDED_MODULES: readonly string[] = ['reset.ts', 'seed-demo.ts', 'seed-tenants.ts', 'seed.ts']
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'src')
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 
+/**
+ * Every module that CALLS the guard, anywhere in the workspace.
+ *
+ * The first cut scanned one flat directory non-recursively and matched
+ * `/assertNonProdBulkMutation\s*\(/` — which also matches the function's own DECLARATION, so
+ * `reset.ts` satisfied membership even if it stopped calling the guard, and no caller outside
+ * `packages/db/src` was visible at all. The ESLint comment nominates this test as the enforcement
+ * the lint rule "structurally cannot provide"; that claim only holds if the scan covers where a
+ * caller could actually appear.
+ */
 function callers(): string[] {
   const found = new Set<string>()
-  for (const entry of readdirSync(SRC, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith('.ts')) continue
-    if (/assertNonProdBulkMutation\s*\(/.test(readFileSync(join(SRC, entry.name), 'utf8'))) found.add(entry.name)
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist') continue
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!entry.name.endsWith('.ts') || entry.name.endsWith('.spec.ts')) continue
+      const text = readFileSync(full, 'utf8')
+      // A CALL, not the declaration — `export function assertNonProdBulkMutation(` must not count
+      // its own definition as a caller.
+      if (/(?<!function\s)assertNonProdBulkMutation\s*\(/.test(text.replace(/export function assertNonProdBulkMutation\s*\(/g, ''))) {
+        found.add(entry.name)
+      }
+    }
   }
+  walk(join(REPO, 'packages'))
+  walk(join(REPO, 'services'))
+  walk(join(REPO, 'apps'))
   return [...found].sort()
 }
 

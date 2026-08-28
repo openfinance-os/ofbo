@@ -5,6 +5,7 @@ import { generateDemoDataset, DEMO_TENANTS, DEMO_BANK_ID, tppDisplayName, type D
 import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
 import { normalizeTenantConfiguration } from './tenant-configuration.js'
+import { assertNonProdBulkMutation } from './reset.js'
 
 /**
  * HOST-01 / BILL-10 (ADR 0028 / docs/proposals/multitenant-platform-blueprint.md §6) — the flagged
@@ -194,6 +195,18 @@ async function seedTenantData(pool: pg.Pool, t: DemoTenant): Promise<void> {
  * aggregates are group-scoped) + compact data for the non-default tenants.
  */
 export async function seedDemoTenants(databaseUrl: string): Promise<void> {
+  // Guarded like its siblings. This is the third seeding entry point — `db:seed:tenants` has its own
+  // CLI — and it was the one left out: it INSERTs synthetic rows into `audit_high_sensitivity`,
+  // `reconciliation_log`, `risk_signal`, `query_purpose_registry` and `tpp_counterparty`, and ran
+  // under any profile.
+  //
+  // Synthetic audit rows landed in a non-demo database are permanent by construction: the audit
+  // table is INSERT-only and DELETE is granted to no role, so nothing in the application can remove
+  // them. That is exactly the property the guard on the other two seeds exists to protect, and the
+  // closed caller set declared in packages/db/test/non-prod-guard.spec.ts listed those two while
+  // omitting this one — which turned an unnoticed gap into a ratified one.
+  assertNonProdBulkMutation('db:seed:tenants')
+
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     for (const t of DEMO_TENANTS) {
