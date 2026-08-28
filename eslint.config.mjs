@@ -29,9 +29,13 @@ export default tseslint.config(
   // legitimately read the deploy profile; tests set it to drive scenarios.
   //
   // reset.ts's exemption covers the guard AND its callers — ruled intended by the repository owner
-  // (PR #346), after the advisory hard-stop reviewer raised it as a rule-7 question it declined to
-  // settle. Recording the decision here because it is the scope of this exemption, and the next
-  // reader should not have to re-derive it from a call site.
+  // on 2026-08-28, recorded in docs/adrs/0035-non-prod-guard-exemption-covers-its-callers.md with the
+  // four options put to them and the reasoning the ruling rests on.
+  //
+  // The ADR exists because THIS COMMENT was not enough: the advisory reviewer raised the rule-7
+  // question three times and said the third time that it could not verify the ruling — "it is a claim
+  // in a comment" — and that a real, recorded ruling closes it. A comment asserting a human decision
+  // with nothing behind it is the defect class the branch this landed on was opened to remove.
   //
   // `assertNonProdBulkMutation` is exported from reset.ts and the three seed entry points call it,
   // so those modules refuse to run outside the demo profile without reading the variable. This rule
