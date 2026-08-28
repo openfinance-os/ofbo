@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/response-validator.ts"
+    "./testing": "./src/response-validator.ts",
+    "./spec": "./src/spec.ts"
   },
   "scripts": {
     "gen": "tsx scripts/gen.ts",

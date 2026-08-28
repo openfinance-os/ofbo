@@ -3,6 +3,10 @@ import { NEBRAS_SLA_MS } from '../src/consents/nebras-sla.js'
 import { NEBRAS_SLA_MS as fromRevoke } from '../src/consents/revoke.js'
 import { NEBRAS_SLA_MS as fromBulkRevoke } from '../src/consents/bulk-revoke.js'
 import { DemoSloReader } from '../src/analytics/slo.js'
+// Build/test-time spec access, on the same subpath family as `@ofbo/contracts/testing` —
+// deliberately NOT the runtime index, which Workers load and which must stay generated-artifacts
+// only (packages/contracts/src/spec.ts).
+import { loadSpec } from '@ofbo/contracts/spec'
 
 /**
  * STD-09 — NFR-18's revoke SLA had three declarations and no single source.
@@ -50,6 +54,48 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
       }
     }
     expect(offenders, 'the NFR-18 threshold is declared outside nebras-sla.ts').toEqual([])
+  })
+
+  /**
+   * BACKOFFICE-91 — the fourth copy, in the artifact with the widest audience.
+   *
+   * STD-09's premise was "declared three times, now once". It enumerated the copies in CODE and
+   * missed the one in the ground-truth document: `nebras_propagation_ms` described the bound as
+   * prose ("Must be < 5000 p99"), derived from nothing and compared by nothing. A scheme amendment
+   * would have left the PUBLISHED CONTRACT telling integrators 5000 while the services enforced
+   * something else — and an integrator reading the contract has no way to discover the
+   * disagreement, which makes it the worst of the four places for the number to be wrong.
+   *
+   * The bound stays IN the contract, because a contract that says "see NFR-18" is worse for the
+   * integrator than one that states the number. What was missing is the link, so the number is now
+   * machine-readable (`x-nfr18-p99-max-ms`, the same vendor-extension mechanism the spec already
+   * uses for `x-required-scope` and `x-four-eyes`) and this test is the link.
+   */
+  it('agrees with the contract, which states the same bound machine-readably', () => {
+    const spec = loadSpec()
+    const field =
+      spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
+        .properties.nebras_propagation_ms
+    expect(field['x-nfr18-p99-max-ms']).toBe(NEBRAS_SLA_MS)
+    // The human-readable half must carry the same number as the machine-readable half — a
+    // description that drifts from its own extension is the original defect in miniature.
+    expect(field.description).toContain(String(NEBRAS_SLA_MS))
+  })
+
+  /**
+   * `maximum: 5000` would be the obvious-looking tightening and it would be wrong. This field
+   * records what actually HAPPENED, and STD-09 added a fraud-revoke test that drives a 6.1s
+   * acknowledgment specifically to prove a BREACH is visible in the audit record. A schema
+   * constraint would make the breach unrepresentable, and therefore invisible to exactly the review
+   * most likely to ask about it.
+   */
+  it('does not constrain the field, so a breach stays representable', () => {
+    const spec = loadSpec()
+    const field =
+      spec.components.responses.RevocationResult.content['application/json'].schema.allOf[1].properties.data
+        .properties.nebras_propagation_ms
+    expect(field.maximum).toBeUndefined()
+    expect(field.exclusiveMaximum).toBeUndefined()
   })
 
   it('derives the SLO description from the constant rather than restating it', async () => {

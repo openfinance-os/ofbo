@@ -3261,7 +3261,25 @@ components:
                     properties:
                       consent_id: { type: string, format: uuid }
                       status: { type: string, enum: [Revoked] }
-                      nebras_propagation_ms: { type: integer, description: Must be < 5000 p99 (NFR-18) }
+                      nebras_propagation_ms:
+                        type: integer
+                        # The NFR-18 bound, machine-readable. It was previously stated ONLY as prose
+                        # inside the description below, derived from nothing and compared by nothing
+                        # — a fourth independent copy of a threshold the services single-source in
+                        # services/bff/src/consents/nebras-sla.ts. A scheme amendment would have left
+                        # the PUBLISHED CONTRACT telling integrators 5000 while the code enforced
+                        # something else, which is the worst place of the four for the number to be
+                        # wrong. A test now fails if this and NEBRAS_SLA_MS disagree.
+                        x-nfr18-p99-max-ms: 5000
+                        description: >-
+                          Observed Nebras acknowledgment latency in milliseconds. NFR-18 bounds this
+                          at p99 < 5000 ms, carried machine-readably in x-nfr18-p99-max-ms.
+
+                          This is deliberately NOT a `maximum`. The field records what actually
+                          happened, and a breach is a real observation the Back Office must be able
+                          to report — the fraud-revoke audit trail records exactly that, and a
+                          schema constraint here would make the breach unrepresentable and so
+                          invisible to the review most likely to ask about it.
                       psu_notified: { type: boolean }
     ConsentEventList:
       description: Paginated consent lifecycle events

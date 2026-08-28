@@ -297,7 +297,7 @@ milestones:
             by the confirmed two-hour rule cross-referencing the rate card.
       - id: BACKOFFICE-91
         title: The OpenAPI carries a fourth copy of NFR-18's 5s revoke SLA, derived from nothing
-        status: pending
+        status: done
         discovery_exempt: true
         reason: >-
           Not a feature — a spec-side defect that falsifies part of STD-09's own premise, raised by
@@ -328,17 +328,63 @@ milestones:
           - The contract states the revoke-SLA bound in exactly one place, and the relationship
             between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
           - A test fails if the two disagree, so an amendment cannot land in one and not the other.
-          - >-
-            The contract ENUMERATES the SLO key set that slo.slos[].key draws from. It enumerates
-            none today, so slo.slos[].key - the field a consumer matches on - is a live wire
-            identifier that no contract test can guard. STD-09 renamed one of them
-            (nebras_propagation_5s to nebras_propagation_sla, correctly, since an identifier must
-            not encode a value that can move) and nothing in the repo or the contract could have
-            objected. An in-repo grep confirmed no screen, export template, adapter or fixture read
-            the old key, but an out-of-repo consumer - an APM dashboard, a P5 adapter mapping -
-            would have broken silently. Enumerating the set is what makes the next rename visible.
           - The change goes spec-first through the spec-change skill, with the contract PR
             human-approved before any code follows it.
+        progress: >-
+          SHIPPED. The bound stays IN the contract - a contract that says "see NFR-18" is worse for
+          an integrator than one that states the number - and what was missing, the link, is now
+          there. nebras_propagation_ms carries x-nfr18-p99-max-ms - 5000, using the same
+          vendor-extension mechanism the spec already uses for x-required-scope and x-four-eyes, and
+          a test asserts it equals NEBRAS_SLA_MS and that the prose half carries the same number.
+          Verified by editing the extension to 3000, simulating an amendment landing in the spec
+          only - the test fails.
+
+          It is deliberately NOT a maximum. That would be the obvious-looking tightening and it
+          would be wrong - the field records what HAPPENED, and STD-09 added a fraud-revoke test
+          driving a 6.1s acknowledgment precisely to prove a BREACH is visible in the audit record.
+          A schema constraint would make the breach unrepresentable, and so invisible to the review
+          most likely to ask about it. A second test pins that the constraint stays absent.
+
+          loadSpec moved onto a ./spec subpath export beside the existing ./testing one, so
+          build-time spec access stays out of the runtime index that Workers load.
+
+          The SLO-key-enumeration criterion that was filed here is SPLIT OUT to BACKOFFICE-95 - it
+          is a different defect (an unenumerated identifier SET, not a duplicated VALUE) and fixing
+          it needs the AnalyticsView schema tightening BACKOFFICE-88 owns. Folding it in here would
+          have been the scope creep the spec-change skill names.
+      - id: BACKOFFICE-95
+        title: slo.slos[].key is a live wire identifier the contract enumerates nowhere
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — an under-specified contract surface, split out of BACKOFFICE-91 where it
+          was originally filed. No product question for a discovery run to answer.
+        depends_on: [BACKOFFICE-88]
+        note: >-
+          slo.slos[].key (services/bff/src/analytics/slo.ts, emitted through
+          GET /back-office/analytics/operations-console) is the field a consumer MATCHES ON, and the
+          contract enumerates no SLO keys at all - the block ships inside AnalyticsView.data, which
+          is additionalProperties - true.
+
+          STD-09 renamed one of them, nebras_propagation_5s to nebras_propagation_sla. The rename is
+          correct - an identifier must not encode a value that can move, or an amendment to 3s
+          leaves a row keyed _5s described as "< 3s" - but it was a BREAKING identifier change on a
+          live wire surface, and nothing in the repo or the contract could have objected to it. An
+          in-repo grep confirmed no screen, export template, adapter or fixture read the old key, so
+          nothing here broke; an out-of-repo consumer (an APM dashboard, a P5 adapter mapping) would
+          have broken silently.
+
+          Split out of BACKOFFICE-91 rather than folded into it - 91 was a duplicated VALUE, this is
+          an unenumerated identifier SET, and they share only the SLO row they happen to meet on.
+          Depends on BACKOFFICE-88 because enumerating these keys means giving the SLO block a real
+          schema, which is the AnalyticsView tightening that item owns - doing it twice would be two
+          answers to one question.
+        acceptance:
+          - The contract enumerates the SLO key set, so a rename is a contract change a reviewer can
+            see rather than a silent edit to a string literal.
+          - A test fails if the emitted keys and the enumerated set disagree.
+          - No key encodes a threshold that can move - the identifier names the SLO, the description
+            carries the number.
       - id: BACKOFFICE-93
         title: The revoke SLA verdict reaches approvers on two of three routes, and the contract documents it on none
         status: pending
