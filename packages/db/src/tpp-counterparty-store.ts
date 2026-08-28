@@ -146,8 +146,21 @@ export class PgTppCounterpartyStore {
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
            ON CONFLICT (bank_id, organisation_id) DO UPDATE
              SET legal_name = EXCLUDED.legal_name,
-                 registration_number = EXCLUDED.registration_number,
-                 directory_contacts = EXCLUDED.directory_contacts,
+                 -- PRESERVE what the participant does not carry, rather than overwriting it with
+                 -- nothing. The P6 port's participant shape is { organisation_id, legal_name }
+                 -- only, so every directory sync bound registration_number to NULL and
+                 -- directory_contacts to '[]' and wrote them over the whole registry — two
+                 -- spec-defined TppCounterparty fields emptied by the act of syncing. Both are
+                 -- schema-valid empty, so no contract test objected.
+                 --
+                 -- A directory sync answers "who is present and what are they called". It has no
+                 -- opinion on the other columns, and a write that has no opinion should not have
+                 -- an effect.
+                 registration_number = COALESCE(EXCLUDED.registration_number, tpp_counterparty.registration_number),
+                 directory_contacts = CASE
+                   WHEN EXCLUDED.directory_contacts = '[]'::jsonb THEN tpp_counterparty.directory_contacts
+                   ELSE EXCLUDED.directory_contacts
+                 END,
                  directory_synced_at = now(),
                  -- a previously decommissioned org reappearing in the directory is reinstated
                  production_status = CASE WHEN tpp_counterparty.production_status = 'decommissioned' THEN 'directory_only' ELSE tpp_counterparty.production_status END`,

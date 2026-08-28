@@ -776,12 +776,11 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
     // The regulated row is retained and its lifecycle state moves, which is what "no deletion path
     // for regulated records" asks for: a wrong record is closed, not erased.
     //
-    // `directory_contacts` IS CARRIED, because the upsert applies
-    // `directory_contacts = EXCLUDED.directory_contacts` unconditionally and binds `[]` when a
-    // participant omits it. This sync is the seed's LAST write to the table, so omitting contacts
-    // here emptied them for all nine counterparties on every run — a spec-defined response field
-    // (`TppCounterparty.directory_contacts`) silently reporting no contacts for the whole registry.
-    // `[]` is schema-valid, so no contract test would have objected.
+    // Contacts are passed because this seed HAS them; the store now also preserves what a caller
+    // omits, so the P6 operator path (whose participant shape carries neither contacts nor a
+    // registration number) no longer empties those columns either. Fixing this only at the seed's
+    // call site would have left the operator button doing the erasing — and this diff widened that
+    // path from three rows to nine, so fixing one half and widening the other was the actual defect.
     // THE SAME participant set the P6 adapter answers with — `DEMO_TPP_DIRECTORY`, not a local
     // list. Building it here from the seed's own literals made the seed a second directory
     // authority: it declared nine while the adapter listed three, with different legal names for
@@ -818,19 +817,33 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       // Announced, never silent — a state change the seed makes to regulated rows it did not write.
       console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
     }
-    // The retained record of it, in the same shape the operator path writes.
-    await pool.query(
-      `INSERT INTO audit_high_sensitivity
-         (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
-          request_trace_id, request_body_redacted, response_status)
-       SELECT $1, $2, 'tpp_directory_synced', 'seed', 'system', $3, $4, $5::jsonb, $6
-        WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $4)`,
-      [
-        DEMO_BANK_ID, CH, SEED_ACTOR_SCOPE, 'seed-demo-directory-sync',
-        JSON.stringify({ synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned }),
-        SYSTEM_ACTOR_RESPONSE_STATUS
-      ]
-    )
+    // The retained record — one row per DISTINCT decommission set, not one per database.
+    //
+    // The first cut deduped on the constant trace id `'seed-demo-directory-sync'`, so the table
+    // could hold exactly one such row for ever. The effect was inverted: on a fresh database the
+    // first run decommissions nothing, writes `decommissioned: []`, and permanently claims the
+    // trace id — so every later run that actually closed an orphan, which is the entire point of
+    // this change, went unaudited while `console.log` still announced it. "Announced, never silent"
+    // was true of run 1 only.
+    //
+    // Keying on WHAT was decommissioned keeps the seed idempotent (re-running with the same
+    // outcome writes no second row) while making each new closure its own audited event. And no
+    // row is written when nothing changed, because nothing regulated did.
+    if (sync.decommissioned.length > 0) {
+      const traceId = `seed-demo-directory-sync:${[...sync.decommissioned].sort().join(',')}`
+      await pool.query(
+        `INSERT INTO audit_high_sensitivity
+           (bank_id, channel, event_type, acting_principal, acting_persona, scope_used,
+            request_trace_id, request_body_redacted, response_status)
+         SELECT $1, $2, 'tpp_directory_synced', 'seed', 'system', $3, $4, $5::jsonb, $6
+          WHERE NOT EXISTS (SELECT 1 FROM audit_high_sensitivity WHERE request_trace_id = $4)`,
+        [
+          DEMO_BANK_ID, CH, SEED_ACTOR_SCOPE, traceId,
+          JSON.stringify({ synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned }),
+          SYSTEM_ACTOR_RESPONSE_STATUS
+        ]
+      )
+    }
 
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the
     //       current period awaiting four-eyes approval (coherent with the billing:write approval in
