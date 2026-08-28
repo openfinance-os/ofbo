@@ -5,11 +5,10 @@
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
 # nebras_propagation_ms carries its NFR-18 bound in x-nfr18-exclusive-max-ms as well as in prose, so a
 # test can bind the contract's number to the constant the services compare against (BACKOFFICE-91).
-# INTEGRATORS: standard OpenAPI generators drop x- extensions, so your client will not receive it —
-# read the bound from the field's description. The extension is an in-repo regression guard, not a
-# machine-readable surface for consumers. (An earlier version of this line also cited the response
-# validator: that is this repository's own verify:contract machinery, which is not in an integrator's
-# pipeline and had no business in a sentence addressed to them.)
+# INTEGRATORS: do not depend on receiving that extension. Many generators drop x- keys (typescript
+# clients generated with openapi-typescript do), though some expose them — read the bound from the
+# field's description, which every generator carries. The extension is an in-repo regression guard,
+# not a machine-readable surface this contract promises consumers.
 # Whether regulatory thresholds generally should be machine-readable is a cross-cutting question, and
 # this header does not settle it: it is raised in ADR 0034, which is Proposed and awaits a human.
 openapi: 3.0.3
