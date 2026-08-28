@@ -159,10 +159,17 @@ describe('STD-09 — one definition of the Nebras revoke SLA', () => {
     while (end < lines.length && (lines[end]!.trim() === '' || lines[end]!.search(/\S/) > indent)) end++
 
     const seconds = NEBRAS_SLA_MS / 1000
-    // Every spelling of the same bound: 5000, 5_000, 5e3, "5s", "5 seconds".
+    const grouped = String(NEBRAS_SLA_MS).replace(/\B(?=(\d{3})+$)/g, '[,_ ]?')
+    // Every spelling of the same bound — and "every" now means it.
+    //
+    // The first cut used `\b5000\b`, which does NOT match `5000ms`: there is no word boundary
+    // between a digit and a letter. So the most natural way anyone would write the bound slipped
+    // through a guard whose comment promised every spelling, and `5,000` / `5 000` did too. The
+    // digit-adjacency lookarounds replace the word boundaries — they still exclude `15000` and
+    // `50000`, which is what `\b` was there for.
     const anySpelling = new RegExp(
-      `\\b${NEBRAS_SLA_MS}\\b|\\b${String(NEBRAS_SLA_MS).replace(/\B(?=(\d{3})+$)/g, '_')}\\b`
-      + `|\\b${seconds}e3\\b|\\b${seconds}\\s*s\\b|\\b${seconds}\\s*seconds?\\b`,
+      `(?<![\\d.])(?:${NEBRAS_SLA_MS}|${grouped})(?!\\d)`
+      + `|(?<![\\d.])${seconds}(?:e3\\b|\\s*m?s\\b|\\s*seconds?\\b)`,
       'gi'
     )
 

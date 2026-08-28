@@ -6324,6 +6324,7 @@ export interface components {
                         status?: "Revoked";
                         /**
                          * @description Observed Nebras acknowledgment latency for this revocation, in milliseconds. A single measurement, not an aggregate.
+                         *     `0` is a sentinel, not a measurement: it means the revocation was acknowledged without leaving the environment, which is what the training sandbox reports. Read it as "no propagation occurred" rather than as an exceptionally fast one, and exclude it from latency statistics.
                          *     Each observation is compared strictly below 5000 ms; a value of exactly 5000 fails that comparison. NFR-18 is the distributional requirement over those comparisons — p99 must pass — and is reported separately on the operations SLO surface, not by this field.
                          *     Not constrained by `maximum`, deliberately: the field records what happened, so a value at or above the bound is a real observation and must stay representable. A schema constraint would make a breach unreportable rather than impossible.
                          */
