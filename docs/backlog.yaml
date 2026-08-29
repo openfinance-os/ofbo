@@ -332,6 +332,41 @@ milestones:
           - currency is validated rather than cast, by the same rule as the three enums beside it.
           - A test drives a row holding an out-of-contract value and asserts the response envelope,
             so the failure mode is pinned rather than reasoned about.
+      - id: BACKOFFICE-101
+        title: ADR 0034 is Proposed on main after the change it governs was merged
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature - an open governance decision with a deadline that has already passed, held
+          open deliberately by the repository owner rather than left by accident.
+        note: >-
+          ADR 0034 asks whether a machine-readable regulatory threshold in the contract
+          (x-nfr18-exclusive-max-ms on nebras_propagation_ms) should be a convention, a recorded
+          one-off, or removed. It shipped Proposed, with the owner ruling SHIP AS-IS AND DECIDE AT
+          MERGE, and PR 347 merged on 2026-08-29.
+
+          Merging settled one third of it: the extension stays, so Option 3 (remove it) is off the
+          table. It did not distinguish Option 1 (adopt as a convention, which means a CLAUDE.md line
+          and retrofit stories for the 2-hour approval expiry, the 24-hour idempotency window and the
+          Nebras dispute clocks) from Option 2 (keep it as a recorded one-off, which is the ADR's own
+          recommendation and needs no code).
+
+          Asked and answered on 2026-08-29: the owner chose to leave it Proposed for now. So the
+          status is deliberate, not stale - and this item exists because the two are indistinguishable
+          to the next reader. The ADR now says "awaiting a human decision" on main after a human
+          merged the thing it governs, which reads as an oversight and is not one.
+
+          The cost of leaving it: the worked example sits in the ground-truth contract while the
+          governance record is open, which is how a convention gets established by precedent rather
+          than by decision - the failure mode ADR 0034's own Context section names. Two advisory
+          reviewers raised it independently across four rounds.
+        acceptance:
+          - ADR 0034 reaches a terminal status, with the chosen option and the decision date recorded
+            in it.
+          - If Option 1, CLAUDE.md gains the convention line and the retrofit stories are filed. If
+            Option 2, no code changes and the ADR says it is deliberately not a precedent.
+          - The spec header and services/bff/src/consents/nebras-sla.ts both cite ADR 0034 and both
+            say the question is open; whichever way it lands, they say what was decided instead.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
