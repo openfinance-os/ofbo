@@ -4,6 +4,7 @@ import pg from 'pg'
 import { generateDemoDataset, DEMO_BANK_ID, tppDisplayName } from '@ofbo/synthetic-data'
 import { SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * Seeds the deterministic demo dataset (PRD §3.1). Idempotent: natural keys +
@@ -11,6 +12,19 @@ import { SEED_QUERY_PURPOSES } from './governed-aggregate.js'
  * Synthetic data only — generators are PII-safe by construction.
  */
 export async function seedDemoDataset(databaseUrl: string): Promise<void> {
+  // The guard belongs HERE, not only at a CLI that happens to call this first.
+  //
+  // `seedDemoScenario` has carried it since the demo seed gained a non-additive write, but
+  // `db:seed:demo` runs THIS function before that one — so under the enterprise profile the whole
+  // base synthetic dataset landed before the refusal fired. That is the third placement of this
+  // guard, each round one caller further out. A guard is only as early as its earliest caller, so
+  // it goes on the function every caller must pass through rather than on the callers.
+  //
+  // Synthetic data in a non-demo database is what this refuses: these tables have no deletion path
+  // (0003_rls.sql grants DELETE to no role), so rows landed there cannot be removed by the
+  // application.
+  assertNonProdBulkMutation('db:seed')
+
   const ds = generateDemoDataset()
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {

@@ -27,7 +27,7 @@ import { PgTppCounterpartyStore } from '../src/tpp-counterparty-store.js'
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is required for integration tests')
 
-const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' as const }
 
 describe('CODE-01 — keyset pagination over the shared helper', () => {
   beforeAll(async () => {

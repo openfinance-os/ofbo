@@ -3,7 +3,8 @@ import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { seedDemoDataset } from '../src/seed.js'
 import { seedDemoScenario } from '../src/seed-demo.js'
-import { accrualByTpp } from '@ofbo/synthetic-data'
+import { accrualByTpp, DEMO_BANK_ID } from '@ofbo/synthetic-data'
+import { beginAppTx } from '../src/tenant-tx.js'
 
 /** The same relative months the seed writes — month-1/-2/-3 from today. */
 const month = (back: number) => {
@@ -88,6 +89,198 @@ describe('demo scenario seed', () => {
     expect(statuses.rows[0].n).toBeGreaterThanOrEqual(3) // active_traffic, directory_only, dormant
     const unbilled = await admin.query(`SELECT count(*)::int AS n FROM tpp_counterparty WHERE unbilled_traffic = true`)
     expect(unbilled.rows[0].n).toBeGreaterThanOrEqual(1)
+  })
+
+  /**
+   * DEMO — an orphan is DECOMMISSIONED, not deleted, and not left leading the registry.
+   *
+   * Both seeds are additive (`ON CONFLICT DO NOTHING` / `WHERE NOT EXISTS`, no DELETE between
+   * them), so a row written by a seed that was later retired outlives every re-seed. The hosted
+   * demo carried three `Fictional fintech 0N` counterparties that exist nowhere in this repository,
+   * leading the TPP registry because it sorts by directory sync time.
+   *
+   * The first fix added a DELETE, and the schema refuses one: `tpp_counterparty` sits in
+   * `retention_policy` under `CHECK (deletion_allowed = false)`, has no DELETE policy, and grants
+   * `ofbo_app` only INSERT/SELECT/UPDATE. The seed uses the application's own `syncDirectory`
+   * instead — the sanctioned path for "this org is no longer in the directory" — which runs under
+   * `SET LOCAL ROLE ofbo_app` and moves lifecycle state rather than removing the record.
+   */
+  it('decommissions a counterparty the seed no longer declares, and keeps the ones it does', async () => {
+    const ORPHAN = 'org-retired-seed-orphan'
+    // Planted AND reset to live, so the test states its own precondition instead of inheriting one.
+    // The integration DB is shared across suites and reruns: `ON CONFLICT DO NOTHING` alone left
+    // the orphan already decommissioned by the previous run, and the assertion below then failed
+    // for the wrong reason. A test that only holds on a fresh database is a test that lies on the
+    // second run — which is the shape of the defect BACKOFFICE-90 tracks.
+    await admin.query(
+      `INSERT INTO tpp_counterparty (bank_id, channel, organisation_id, legal_name, directory_synced_at, production_status, registration_state)
+       VALUES ($1, 'internal_retail', $2, 'Retired Seed Orphan Ltd', now(), 'directory_only', 'unregistered')
+       ON CONFLICT (bank_id, organisation_id)
+         DO UPDATE SET production_status = 'directory_only', directory_synced_at = now()`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    const before = await admin.query(
+      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    expect(before.rows[0]?.production_status, 'the orphan must be live before the seed runs').toBe('directory_only')
+
+    await seedDemoScenario(url)
+
+    // RETAINED, and closed. Deleting it would breach the table's own no-deletion posture; leaving
+    // it live is the defect. `decommissioned` is the state the directory sync already defines for
+    // an org the directory no longer lists.
+    const after = await admin.query(
+      `SELECT production_status FROM tpp_counterparty WHERE bank_id = $1 AND organisation_id = $2`,
+      [DEMO_BANK_ID, ORPHAN]
+    )
+    expect(after.rows, 'the row must still exist — this table has no deletion path').toHaveLength(1)
+    expect(after.rows[0].production_status).toBe('decommissioned')
+
+    // The book is untouched and still live.
+    const kept = await admin.query(
+      `SELECT organisation_id, production_status FROM tpp_counterparty
+        WHERE bank_id = $1 AND organisation_id = ANY($2::text[]) ORDER BY organisation_id`,
+      [DEMO_BANK_ID, ['org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap', 'org-falaj-money']]
+    )
+    expect(kept.rows.map((r) => r.organisation_id)).toEqual(
+      ['org-falaj-money', 'org-lean-technologies', 'org-tabby', 'org-tarabut-gateway', 'org-yap']
+    )
+    expect(kept.rows.every((r) => r.production_status !== 'decommissioned'), 'the book must stay live').toBe(true)
+  })
+
+  /**
+   * The directory sync must not EMPTY the fields it is not about.
+   *
+   * `syncDirectory`'s upsert applies `directory_contacts = EXCLUDED.directory_contacts`
+   * unconditionally and binds `[]` when a participant omits the key. The sync is the seed's LAST
+   * write to this table, so leaving contacts out of the participant list emptied them for all nine
+   * counterparties on every run — `TppCounterparty.directory_contacts`, a spec-defined response
+   * field, reporting no contacts for the entire registry.
+   *
+   * Nothing caught it: `[]` is valid against `{ type: array, items: { type: object } }`, so no
+   * contract test objects, and a repo-wide grep found no assertion on this field's CONTENTS at all.
+   * A field with no test is a field a side effect can empty.
+   */
+  it('keeps the directory contacts it is not there to change', async () => {
+    const r = await admin.query(
+      `SELECT organisation_id, directory_contacts FROM tpp_counterparty
+        WHERE bank_id = $1 AND organisation_id = ANY($2::text[])`,
+      [DEMO_BANK_ID, ['org-yap', 'org-lean-technologies', 'org-falaj-money']]
+    )
+    expect(r.rows).toHaveLength(3)
+    for (const row of r.rows) {
+      expect(row.directory_contacts, `${row.organisation_id} lost its directory contacts`).not.toEqual([])
+      expect(Array.isArray(row.directory_contacts)).toBe(true)
+      expect(row.directory_contacts.map((c: { role: string }) => c.role).sort()).toEqual(['commercial', 'technical'])
+    }
+  })
+
+  /**
+   * The sync's lineage is EMITTED, not merely available.
+   *
+   * `PgTppCounterpartyStore` takes its `LineageSink` as an optional third constructor argument and
+   * `emitLineage` is `this.lineage?.emitLineage(...)`, so building the store with two arguments
+   * makes the emission a silent no-op — which is how the seed first shipped, while its comment
+   * claimed the emission as part of why `syncDirectory` was the right mechanism over a DELETE.
+   *
+   * Q4.5 could not have caught it: `seed.ts` writes its own `seed-tpp-registry` row for this table,
+   * so the lineage gate stays green whether or not the sync emits anything. This asserts the sync's
+   * OWN row, by source.
+   */
+  it('emits BCBS 239 lineage from the directory sync itself', async () => {
+    const r = await admin.query(
+      `SELECT columns FROM lineage_events
+        WHERE table_name = 'tpp_counterparty' AND source = 'tpp-directory-sync'
+        ORDER BY id DESC LIMIT 1`
+    )
+    expect(r.rows, 'the sync wrote no lineage row of its own').toHaveLength(1)
+    expect(r.rows[0].columns).toContain('production_status')
+  })
+
+  /**
+   * The seed's first non-additive write refuses to run outside non-prod.
+   *
+   * `syncDirectory` closes every DEMO_BANK_ID registry row absent from the participant list — rows
+   * this seed did not write. Until this change both seeds were strictly additive, which is what
+   * made an accidental run against a non-demo database harmless. `db:reset` has always refused
+   * under the enterprise/production profile; this asserts the seed now does too, through the same
+   * guard rather than a second copy of it.
+   */
+  /**
+   * The guard refuses BEFORE touching the database — pinned by making the database unreachable.
+   *
+   * Two earlier attempts at this test proved nothing. The first asserted
+   * `if (rows.length > 0) expect(typeof status).toBe('string')`, which passes for every value and
+   * for no row. The second planted a row and counted `reconciliation_log`, which cannot tell early
+   * from late either: the seed is idempotent, so re-running it on an already-seeded database writes
+   * nothing new whichever side of the guard the writes fall on. Both went green against a guard
+   * placed 420 lines too late.
+   *
+   * What actually separates the two is whether the seed reaches the database at all. Pointed at an
+   * unreachable host under the enterprise profile, a guard that runs first fails with the refusal;
+   * one that runs later fails trying to connect. That distinction needs no fixture and cannot be
+   * satisfied by accident.
+   */
+  /**
+   * BOTH seeding entry points refuse, not just the scenario.
+   *
+   * `seedDemoScenario` carries the guard, but `db:seed:demo`'s CLI runs `seedDemoDataset` FIRST —
+   * so under the enterprise profile the whole base synthetic dataset landed before the refusal
+   * fired. Third time this guard has been in the wrong place: a guard is only as early as its
+   * earliest caller, and each round moved it one caller further out.
+   */
+  it('refuses the base dataset too, not only the scenario', async () => {
+    const prior = process.env.DEPLOY_PROFILE
+    process.env.DEPLOY_PROFILE = 'enterprise'
+    try {
+      await expect(
+        seedDemoDataset('postgres://nobody:nobody@127.0.0.1:1/unreachable')
+      ).rejects.toThrow(/non-prod only/)
+    } finally {
+      if (prior === undefined) delete process.env.DEPLOY_PROFILE
+      else process.env.DEPLOY_PROFILE = prior
+    }
+  })
+
+  it('refuses before it opens a connection, not after', async () => {
+    const prior = process.env.DEPLOY_PROFILE
+    process.env.DEPLOY_PROFILE = 'enterprise'
+    try {
+      // Port 1 is closed; any query would surface as ECONNREFUSED rather than a refusal.
+      await expect(
+        seedDemoScenario('postgres://nobody:nobody@127.0.0.1:1/unreachable')
+      ).rejects.toThrow(/non-prod only/)
+    } finally {
+      if (prior === undefined) delete process.env.DEPLOY_PROFILE
+      else process.env.DEPLOY_PROFILE = prior
+    }
+  })
+
+  /**
+   * The privilege claim, asserted rather than assumed.
+   *
+   * The previous attempt passed because CI connects as `postgres`, which bypasses RLS and grants —
+   * it proved the statement executed, not that it was permitted. These run AS `ofbo_app`, the role
+   * the seed's sync actually assumes, and pin both halves of the posture the fix depends on: the
+   * UPDATE it uses is granted, and the DELETE it deliberately avoids is not.
+   */
+  it('grants the app role the UPDATE the sync needs and refuses it a DELETE', async () => {
+    const c = await admin.connect()
+    try {
+      await c.query(beginAppTx(DEMO_BANK_ID))
+      const upd = await c.query(
+        `UPDATE tpp_counterparty SET production_status = production_status
+          WHERE organisation_id = 'org-tabby' RETURNING organisation_id`
+      )
+      expect(upd.rows, 'ofbo_app must be able to move lifecycle state').toHaveLength(1)
+      await expect(
+        c.query(`DELETE FROM tpp_counterparty WHERE organisation_id = 'org-tabby'`)
+      ).rejects.toThrow(/permission denied/i)
+    } finally {
+      await c.query('ROLLBACK').catch(() => undefined)
+      c.release()
+    }
   })
 
   it('seeds 3 invoice runs and 3 scheme notifications', async () => {

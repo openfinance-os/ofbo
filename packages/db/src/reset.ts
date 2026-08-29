@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
+
+export { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * Dev/test convenience: truncate the demo dataset so a full integration run starts clean
@@ -17,10 +20,20 @@ import pg from 'pg'
 // Preserved: the migration ledger (so migrations don't re-run) + migration-seeded config.
 const PRESERVE = new Set(['_migrations', 'retention_policy', 'classification_policy'])
 
+/**
+ * The ONE place that decides whether a bulk mutation of demo data may proceed.
+ *
+ * Exported so the demo seed's directory sync calls THIS rather than carrying a second copy. Two
+ * copies of a safety guard is one that gets updated and one that does not, and the lint rule makes
+ * the point structurally: this file is the only non-ports module permitted to read DEPLOY_PROFILE
+ * (eslint.config.mjs), so a second guard could not be written elsewhere without weakening it.
+ *
+ * It covers more than truncation. `db:seed:demo` used to be strictly additive, which is what made
+ * an accidental run against a non-demo database harmless; once the seed can close registry rows it
+ * did not write, it needs the same refusal its destructive sibling has always had.
+ */
 export async function resetDatabase(databaseUrl: string): Promise<{ truncated: string[]; refreshed: string[] }> {
-  if (process.env.DEPLOY_PROFILE === 'enterprise' || process.env.NODE_ENV === 'production') {
-    throw new Error('db:reset is non-prod only and refuses to run under the enterprise/production profile (regulated data has no deletion path).')
-  }
+  assertNonProdBulkMutation('db:reset')
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     const tables = (

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ofbo/synthetic-data": "workspace:*",
     "jose": "^5.0.0"
   }
 }

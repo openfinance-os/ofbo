@@ -229,6 +229,32 @@ function deterministicUuid(seed: string): string {
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
 }
 
+/**
+ * THE demo Trust Framework Directory — one participant set, read by both authorities.
+ *
+ * The P6 sim adapter answers `syncDirectory` from this, and the demo seed declares the same nine
+ * organisations. They used to be separate literals: the adapter listed three and the seed nine,
+ * with different `legal_name` values for the overlap ("Tabby" vs "Tabby FZ-LLC"). The registry's
+ * upsert applies `legal_name = EXCLUDED.legal_name` unconditionally, so `TppCounterparty.legal_name`
+ * flipped depending on whether an operator last pressed "Sync directory" or the deploy last
+ * re-seeded — and that sync decommissioned the six the seed had just declared live, which the next
+ * deploy reinstated. A demo that breaks itself on a documented button.
+ *
+ * `legal_name` here is the LEGAL entity; `tppDisplayName` below stays the short display form. They
+ * differ on purpose — "Tabby FZ-LLC" is what a registry shows, "Tabby" is what a chart labels.
+ */
+export const DEMO_TPP_DIRECTORY: readonly { organisation_id: string; legal_name: string; registration_number: string }[] = [
+  { organisation_id: 'org-tarabut-gateway', legal_name: 'Tarabut Gateway Ltd', registration_number: 'CN-1001104' },
+  { organisation_id: 'org-lean-technologies', legal_name: 'Lean Technologies FZ-LLC', registration_number: 'CN-1002210' },
+  { organisation_id: 'org-tabby', legal_name: 'Tabby FZ-LLC', registration_number: 'CN-1003318' },
+  { organisation_id: 'org-yap', legal_name: 'YAP Digital Ltd', registration_number: 'CN-1005537' },
+  { organisation_id: 'org-sarwa', legal_name: 'Sarwa Digital Wealth Ltd', registration_number: 'CN-1006644' },
+  { organisation_id: 'org-mamo', legal_name: 'Mamo Pay FZ-LLC', registration_number: 'CN-1008899' },
+  { organisation_id: 'org-baraka', legal_name: 'Baraka Financial Ltd', registration_number: 'CN-1009912' },
+  { organisation_id: 'org-meydan-pay', legal_name: 'Meydan Pay Technologies FZ-LLC', registration_number: 'CN-1004120' },
+  { organisation_id: 'org-falaj-money', legal_name: 'Falaj Money Ltd', registration_number: 'CN-1007788' }
+]
+
 /** Real institution name for a known org-id (e.g. 'org-tarabut-gateway' → 'Tarabut Gateway'),
  *  else a title-cased fallback ('org-meydan-pay' → 'Meydan Pay'). */
 export function tppDisplayName(org: string): string {

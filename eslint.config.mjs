@@ -25,10 +25,36 @@ export default tseslint.config(
       ]
     }
   },
-  // The sanctioned profile-selection point (the ports registry) and the destructive
-  // db:reset guard legitimately read the deploy profile; tests set it to drive scenarios.
+  // The sanctioned profile-selection point (the ports registry) and the non-prod guard
+  // legitimately read the deploy profile; tests set it to drive scenarios.
+  //
+  // THE EXEMPTION MOVED. It named `reset.ts` while the guard lived there; the guard is now its own
+  // module (`packages/db/src/non-prod-guard.ts`) and the exemption follows the DEPLOY_PROFILE read.
+  // Splitting it out removed an import edge that put `resetDatabase` — which TRUNCATEs every table —
+  // into the request-path service's module graph, because the seeds imported the guard from reset.ts
+  // and `@ofbo/db` re-exports the seeds to `worker.ts`. See ADR 0035's amendment.
+  //
+  // The exemption covers the guard AND its callers — ruled intended by the repository owner
+  // on 2026-08-28, recorded in docs/adrs/0035-non-prod-guard-exemption-covers-its-callers.md with the
+  // four options put to them and the reasoning the ruling rests on.
+  //
+  // The ADR exists because THIS COMMENT was not enough: the advisory reviewer raised the rule-7
+  // question three times and said the third time that it could not verify the ruling — "it is a claim
+  // in a comment" — and that a real, recorded ruling closes it. A comment asserting a human decision
+  // with nothing behind it is the defect class the branch this landed on was opened to remove.
+  //
+  // `assertNonProdBulkMutation` is exported from non-prod-guard.ts and the three seed entry points
+  // so those modules refuse to run outside the demo profile without reading the variable. This rule
+  // matches READS, so it cannot see them. The alternatives are worse: copying the guard means three
+  // DEPLOY_PROFILE reads instead of one, and dropping it returns the seeds to writing synthetic rows
+  // into an INSERT-only audit table under any profile.
+  //
+  // The caller set is closed by `packages/db/test/non-prod-guard.spec.ts` instead — a declared list
+  // asserted against the source, the same way `RAW_SQL_AUDIT_WRITERS` closes the set of raw audit
+  // writers. A new caller fails that test by name, which is the enforcement this rule structurally
+  // cannot provide.
   {
-    files: ['packages/ports/**', 'packages/db/src/reset.ts', '**/test/**', '**/*.spec.ts', '**/*.spec.tsx'],
+    files: ['packages/ports/**', 'packages/db/src/non-prod-guard.ts', '**/test/**', '**/*.spec.ts', '**/*.spec.tsx'],
     rules: { 'no-restricted-syntax': 'off' }
   },
   // Stray console.* risks leaking PII into operational logs (hard stop: zero PII in

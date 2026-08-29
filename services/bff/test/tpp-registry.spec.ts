@@ -37,6 +37,99 @@ beforeEach(() => {
 })
 
 describe('POST /back-office/tpp-counterparties:sync-directory', () => {
+  /**
+   * PORT PARITY — the in-memory store must preserve what a participant does not carry, like its
+   * Postgres sibling.
+   *
+   * The P6 participant shape is `{ organisation_id, legal_name }`, and this store assigned
+   * `p.registration_number ?? null` / `p.directory_contacts ?? []`, so every sync emptied two
+   * spec-defined `TppCounterparty` fields. The Pg store was fixed for exactly this and this one was
+   * not — two implementations behind one endpoint returning different values for the same field.
+   * This is the store a BFF running without a database falls back to.
+   *
+   * SET UP AT THE STORE, ASSERTED THROUGH THE ENDPOINT, and each half by a route that can really
+   * happen. An earlier version put the rich fields on the fake egress and cast the participant
+   * `as never`, under a docblock claiming it was "driven entirely through the endpoint" — but the P6
+   * port declares `{ organisation_id, legal_name }` and nothing else, so the cast was there precisely
+   * to manufacture a state the endpoint cannot produce. A test that needs `as never` to reach its
+   * premise is asserting something about a shape the system does not have.
+   *
+   * The real scenario needs no cast, because the two writers genuinely differ: a SEED calls
+   * `syncDirectory` with the richer shape (that is the store's actual signature, and
+   * `packages/db/src/seed-demo.ts` does exactly this), and an OPERATOR then triggers a directory sync
+   * that carries only what P6 carries. The question — does the operator's sync null what the seed
+   * wrote? — is the one that matters, and it is reachable honestly.
+   */
+  it('preserves registration_number and contacts the directory does not carry', async () => {
+    // The seed's write: the store's true signature, no cast.
+    await store.syncDirectory(
+      [
+        {
+          organisation_id: 'org-fictional-fintech-01',
+          legal_name: 'Fictional Fintech One FZ-LLC',
+          registration_number: 'CN-9990001',
+          directory_contacts: [{ role: 'technical', label: 'Integration Desk' }]
+        }
+      ],
+      'test-seed-trace'
+    )
+
+    // The operator's sync, through the endpoint, in the bare P6 shape the port actually carries.
+    egress.participants = [{ organisation_id: 'org-fictional-fintech-01', legal_name: 'Fictional Fintech One Renamed' }]
+    await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'sp2' }) })
+
+    const res = await app.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
+    const body = (await res.json()) as { data: { legal_name: string; registration_number: string | null; directory_contacts: unknown[] } }
+    expect(body.data.legal_name).toBe('Fictional Fintech One Renamed') // what the directory DOES say wins
+    expect(body.data.registration_number, 'the sync nulled a registration number it never carried').toBe('CN-9990001')
+    expect(body.data.directory_contacts, 'the sync emptied contacts it never carried').toHaveLength(1)
+  })
+
+  /**
+   * `channel` is store-configurable, like its Postgres sibling's.
+   *
+   * It was hardcoded `'external_tpp_aas'` here while the Pg store wrote `config.channel` (the
+   * worker sets `internal_retail`), so one endpoint returned a different value for a spec-defined
+   * enum field depending on which store was mounted. Both are enum members, so nothing was
+   * schema-invalid — it is the same parity divergence the two fields above were fixed for, four
+   * lines away in the same method.
+   */
+  /**
+   * The DEFAULT matters, because the only runtime construction site passes no argument.
+   *
+   * A first pass added the `channel` parameter and left the default at `external_tpp_aas`, while
+   * every Postgres construction passes `internal_retail` — and `services/bff/src/app.ts` builds the
+   * fallback store with no arguments and has no tenancy to hand it. So the knob existed, the test
+   * below passed it, and the one path a deployment actually takes still diverged. This asserts the
+   * store as `createApp` builds it, which is the assertion that was missing.
+   */
+  it('defaults to the channel this table\'s rows actually carry, through createApp', async () => {
+    const fallback = createApp({ tppDirectoryEgress: egress, highClassAudit: audit })
+    await fallback.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'ch0' }) })
+    const res = await fallback.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
+    const body = (await res.json()) as { data: { channel: string } }
+    // What `seed.ts` and `seed-tenants.ts` write, and what the portal fixtures assert.
+    expect(body.data.channel).toBe('external_tpp_aas')
+  })
+
+  /**
+   * Passing a channel DIFFERENT from the default, so the assertion distinguishes "the argument was
+   * honoured" from "the argument was ignored". The first version passed `internal_retail` while the
+   * default was also `internal_retail`, so it passed either way — a test that could not fail for
+   * the reason it claimed to test.
+   */
+  it('stamps a sync-created row with the channel it was configured with', async () => {
+    const scoped = createApp({
+      tppCounterpartyStore: new InMemoryTppCounterpartyStore('internal_retail'),
+      tppDirectoryEgress: egress,
+      highClassAudit: audit
+    })
+    await scoped.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 'ch1' }) })
+    const res = await scoped.request('/back-office/tpp-counterparties/org-fictional-fintech-01', { headers: finance() })
+    const body = (await res.json()) as { data: { channel: string } }
+    expect(body.data.channel).toBe('internal_retail')
+  })
+
   it('syncs the directory into the registry, flags new TPPs, and audits (202)', async () => {
     const res = await app.request('/back-office/tpp-counterparties:sync-directory', { method: 'POST', headers: ops({ 'idempotency-key': 's1' }) })
     expect(res.status).toBe(202)

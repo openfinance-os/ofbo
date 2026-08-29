@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { DEMO_BANK_ID, DEMO_TENANTS, accrualByTpp } from '@ofbo/synthetic-data'
+import { DEMO_BANK_ID, DEMO_TENANTS, DEMO_TPP_DIRECTORY, accrualByTpp } from '@ofbo/synthetic-data'
 import { seedDemoDataset } from './seed.js'
+import { PgAuditEmitter, SEED_ACTOR_SCOPE, SYSTEM_ACTOR_RESPONSE_STATUS } from './audit.js'
 import { seedTenantConfiguration, seedTenantGroup } from './seed-tenants.js'
+import { PgTppCounterpartyStore } from './tpp-counterparty-store.js'
+import { PgLineageEmitter } from './lineage.js'
+import { assertNonProdBulkMutation } from './non-prod-guard.js'
 
 /**
  * Rich DEMO scenario layered ON TOP of the base seedDemoDataset — a believable
@@ -37,6 +41,8 @@ function deterministicUuid(key: string): string {
 }
 
 const CH = 'internal_retail'
+/** One id for the sync's lineage AND its audit row — they describe the same mutation. */
+const SYNC_TRACE_ID = 'seed-demo-directory-sync'
 const DEFAULT_DEMO_TENANT = DEMO_TENANTS.find((tenant) => tenant.bank_id === DEMO_BANK_ID)!
 
 /**
@@ -356,6 +362,21 @@ async function seedTppCostEvidence(pool: pg.Pool): Promise<void> {
 }
 
 export async function seedDemoScenario(databaseUrl: string): Promise<void> {
+  // FIRST STATEMENT, before a pool is opened — the same position `db:reset` puts it in.
+  //
+  // The first cut of this guard sat ~420 lines down, immediately above the directory sync, and its
+  // comment claimed parity with `db:reset` (which "refuses before touching anything"). It did not
+  // have it: everything above ran unguarded — reconciliation runs and breaks, risk signals,
+  // approvals, disputes, STR drafts, fraud incidents, the billing tables, the counterparty INSERT,
+  // and a bulk UPDATE of counterparty rows the seed did not write. Those tables have no deletion
+  // path (0003_rls.sql grants DELETE to no role), so synthetic rows landed in a non-demo database
+  // are unremovable through the application — which is the outcome "synthetic data only in BOTH
+  // profiles' non-prod" exists to prevent.
+  //
+  // A guard that runs after the writes it advertises is worse than none: it reads as protection in
+  // review while protecting nothing.
+  assertNonProdBulkMutation('db:seed:demo')
+
   const pool = new pg.Pool({ connectionString: databaseUrl })
   try {
     await seedBillingConsoleEvidence(pool)
@@ -724,6 +745,138 @@ export async function seedDemoScenario(databaseUrl: string): Promise<void> {
       )
     }
 
+    // ORPHANS ARE DECOMMISSIONED, NOT DELETED — through the application's own directory sync.
+    //
+    // The hosted demo carried three `Fictional fintech 0N` counterparties that exist nowhere in
+    // this repository AS SEED DATA — they appear only as a fake P6 participant set in
+    // services/bff/test/{tpp-registry,tpp-onboarding}.spec.ts, which writes no demo row. An earlier
+    // draft of this comment said "nowhere in this repository", which is simply false; the accurate
+    // claim is that nothing seeds them. Orphans of a seed replaced months earlier, leading the TPP
+    // registry (it
+    // orders by `created_at`, and they were created first) above Lean, Tabby and Tarabut. An
+    // earlier draft of this comment said "sorts by directory sync time", which nothing does — the
+    // list query orders by `date_trunc('milliseconds', created_at), organisation_id`. Both seeds
+    // are additive — every
+    // insert is `ON CONFLICT DO NOTHING` or `WHERE NOT EXISTS` — so re-seeding could never remove
+    // them, and the deploy runs `db:apply && db:seed:demo`.
+    //
+    // The first attempt at this added a DELETE. That was wrong on the schema's own terms:
+    // `tpp_counterparty` is registered in `retention_policy` under `CHECK (deletion_allowed =
+    // false)`, carries no DELETE policy, and grants `ofbo_app` only INSERT/SELECT/UPDATE — a DELETE
+    // as the application role is refused outright. It ran only because the seed connects as a
+    // superuser, i.e. the one principal that could equally empty `audit_high_sensitivity`.
+    //
+    // There was never anything to invent. `syncDirectory` IS the sanctioned write path for exactly
+    // this question — it upserts the participants a directory reports and marks every registry org
+    // absent from that set `decommissioned`, which is precisely what an orphan is. It runs under
+    // `SET LOCAL ROLE ofbo_app`, so it is bounded by the same RLS and grants that refused the
+    // DELETE, and — given a lineage sink — it emits BCBS 239 lineage like every other write here.
+    //
+    // The sink is passed EXPLICITLY. `PgTppCounterpartyStore` takes it as an optional third
+    // argument and `emitLineage` is `this.lineage?.emitLineage(...)`, so constructing the store
+    // with two arguments makes the lineage emission a silent no-op — and this comment claimed the
+    // emission as part of why `syncDirectory` is the right mechanism. CI could not have caught it:
+    // `seed.ts` writes its own `seed-tpp-registry` lineage row for this table, so Q4.5 stays green
+    // either way.
+    //
+    // The regulated row is retained and its lifecycle state moves, which is what "no deletion path
+    // for regulated records" asks for: a wrong record is closed, not erased.
+    //
+    // Contacts are passed because this seed HAS them; the store now also preserves what a caller
+    // omits, so the P6 operator path (whose participant shape carries neither contacts nor a
+    // registration number) no longer empties those columns either. Fixing this only at the seed's
+    // call site would have left the operator button doing the erasing — and this diff widened that
+    // path from three rows to nine, so fixing one half and widening the other was the actual defect.
+    // THE SAME participant set the P6 adapter answers with — `DEMO_TPP_DIRECTORY`, not a local
+    // list. Building it here from the seed's own literals made the seed a second directory
+    // authority: it declared nine while the adapter listed three, with different legal names for
+    // the overlap, so the two disagreed about both who is present and what they are called.
+    const directoryContacts = JSON.parse(CONTACTS) as unknown[]
+    const directory = DEMO_TPP_DIRECTORY.map((p) => ({ ...p, directory_contacts: directoryContacts }))
+    // AUDITED, using the sentinel actor this repository already established for seed writes.
+    //
+    // An earlier version of this comment argued the opposite — that emitting would mean "inventing"
+    // a principal, and a fabricated actor in an INSERT-only trail is worse than the absence. The
+    // codebase falsifies the premise: `seed-tenants.ts` and `seed.ts` already emit
+    // `audit_high_sensitivity` rows from seeds as `acting_principal='seed'`,
+    // `acting_persona='system'`, `SEED_ACTOR_SCOPE`, with `SYSTEM_ACTOR_RESPONSE_STATUS` (0) for
+    // exactly the "a seed row issues no HTTP response" case. There was a sanctioned answer and I
+    // reasoned past it.
+    //
+    // It matters because this is the same state transition the operator path audits as
+    // `tpp_directory_synced` (tpp-billing/service.ts), on the same regulated rows. Audited when an
+    // operator does it and unaudited when the deploy does it is the asymmetry, not the actor.
+    const counterpartyStore = new PgTppCounterpartyStore(
+      databaseUrl,
+      { bankId: DEMO_BANK_ID, channel: CH },
+      new PgLineageEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH })
+    )
+    const syncLineage = new PgLineageEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH })
+    const syncAudit = new PgAuditEmitter(databaseUrl, { bankId: DEMO_BANK_ID, channel: CH }, syncLineage)
+    let sync
+    try {
+      sync = await counterpartyStore.syncDirectory(directory, SYNC_TRACE_ID)
+
+      // AUDITED THROUGH THE EMITTER, not hand-rolled SQL over the seed's superuser pool.
+      //
+      // The previous cut wrote this INSERT by hand and had to be added to the closed
+      // `RAW_SQL_AUDIT_WRITERS` set — the set whose members are, by definition, the writes the
+      // `scope_used` scanner cannot see. It also ran on the superuser pool, which the backlog note
+      // for this very change calls out as "the one principal that can also empty
+      // audit_high_sensitivity". `PgAuditEmitter` was in the same package the whole time: it runs
+      // every insert as `ofbo_app` inside `beginAppTx`, so the schema's `REVOKE UPDATE, DELETE` and
+      // the tenancy policies bind, and it redacts the body at emission.
+      //
+      // The only reason the hand-rolled version existed was a `WHERE NOT EXISTS` dedupe the emitter
+      // has no form for — and that dedupe was itself the defect below, so removing it is what let
+      // the sanctioned path back in.
+      //
+      // EMITTED ON ANY CHANGE — deliberately NOT on every invocation, which is where this departs
+      // from the operator path, and the earlier comment claiming parity with it was wrong.
+      //
+      // The operator path audits every call because a principal ACTED: the request is the event,
+      // even when the directory turns out to match. A deploy-time re-seed that changes nothing is
+      // not an event, and recording one on every merge would append to an INSERT-only table with no
+      // deletion path for ever. Gating on decommissions ALONE was the real defect — it left
+      // additions and reinstatements, the same regulated transition through the same upsert,
+      // unrecorded.
+      //
+      // NO DEDUPE. Keying on a constant id audited only the first run ever; keying on the
+      // decommissioned SET then suppressed a genuine second closure of the same organisations
+      // (close X, reinstate X, close X again writes one row for two events). Neither was needed:
+      // the store only reports what it actually changed, so a steady-state re-seed reports nothing
+      // and writes nothing. Idempotency comes from the store's own `WHERE production_status <>
+      // 'decommissioned'`, not from a key.
+      const changed = sync.added.length + sync.changed.length + sync.decommissioned.length
+      if (changed > 0) {
+        if (sync.decommissioned.length > 0) {
+          // Announced as well as recorded — a state change the seed makes to rows it did not write.
+          console.log(`  directory sync — decommissioned ${sync.decommissioned.length} counterpart(ies) the seed no longer declares: ${sync.decommissioned.join(', ')}`)
+        }
+        await syncAudit.emit({
+          event_type: 'tpp_directory_synced',
+          acting_principal: 'seed',
+          acting_persona: 'system',
+          scope_used: SEED_ACTOR_SCOPE,
+          // THE SAME trace id the store wrote its lineage under, so the audit row and the lineage
+          // row for one mutation can be joined. The count-bearing suffix was a leftover of the
+          // dedupe key removed above; with no dedupe it bought nothing and cost the correlation the
+          // contract calls for ("used as the OTel trace ID end-to-end"). The counts are already in
+          // the body.
+          request_trace_id: SYNC_TRACE_ID,
+          request_body: { synced: sync.synced, added: sync.added, changed: sync.changed, decommissioned: sync.decommissioned },
+          response_status: SYSTEM_ACTOR_RESPONSE_STATUS
+        })
+      }
+    } finally {
+      // Every pool this block opened, including the lineage emitter's own — the previous cut closed
+      // the store and left that one holding an idle client, which is precisely what its comment
+      // claimed to prevent.
+      await counterpartyStore.close().catch(() => undefined)
+      await syncAudit.close().catch(() => undefined)
+      await syncLineage.close().catch(() => undefined)
+    }
+
     // ── 11. Invoice runs (BACKOFFICE-73) → the invoicing surface shows a settled history plus the
     //       current period awaiting four-eyes approval (coherent with the billing:write approval in
     //       section 4, period 2026-05). invoices carry per-TPP amounts (money values, no PII).
@@ -954,6 +1107,8 @@ if (isCli) {
     console.error('DATABASE_URL is required')
     process.exit(1)
   }
+  // No guard here: `seedDemoDataset` and `seedDemoScenario` each carry their own, so every path
+  // into either is covered rather than this one entrypoint.
   await seedDemoDataset(url)
   await seedDemoScenario(url)
   console.log('rich demo scenario seeded (base dataset + operating-state depth)')

@@ -2,6 +2,23 @@ import pg from 'pg'
 import { beginAppTx } from './tenant-tx.js'
 import type { LineageSink } from './lineage.js'
 import { decodeCursor, encodeCursor, keysetClause } from './keyset.js'
+import type { components } from '@ofbo/contracts'
+
+/**
+ * The contract's enums, not `string`.
+ *
+ * `toWire` in services/bff/src/tpp-billing/routes.ts is a pass-through, so whatever this store holds
+ * is what the client receives on three spec-enum fields. I typed the in-memory sibling's channel to
+ * `Channel` last round with the stated reason "a non-member must not reach a spec-enum response
+ * field", and left THIS store — the one that serves the deployed demo — as bare `string`. Same
+ * one-sided parity the rest of that PR was fixing.
+ *
+ * The database has enum constraints, so a bad value is caught at the write path; this closes it at
+ * the type level, where the divergence between the two adapters actually lived.
+ */
+type Channel = components['schemas']['Channel']
+type ProductionStatus = NonNullable<components['schemas']['TppCounterparty']['production_status']>
+type RegistrationState = NonNullable<components['schemas']['TppCounterparty']['registration_state']>
 
 /**
  * BACKOFFICE-71 — consuming-TPP registry. The bank-side master list of TPPs
@@ -23,13 +40,13 @@ export interface StoredTppCounterparty {
   registration_number: string | null
   directory_contacts: unknown[]
   directory_synced_at: string | null
-  production_status: string
+  production_status: ProductionStatus
   first_traffic_at: string | null
-  registration_state: string
+  registration_state: RegistrationState
   financial_system_ref: string | null
   unbilled_traffic: boolean
   mtd_fee_accrual: Money | null
-  channel: string
+  channel: Channel
   created_at: string
 }
 
@@ -73,6 +90,35 @@ const MAX_LIMIT = 200
 const DEFAULT_LIMIT = 50
 const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v))
 
+/**
+ * Narrow a database string to a contract enum, or throw.
+ *
+ * A bare `as ProductionStatus` would silence the compiler while asserting exactly the thing that is
+ * not checked — the DB column constraint is the only reason the value IS a member, and a constraint
+ * this code never reads is not something this code knows. That is the shape of claim this branch has
+ * been removing all week, so it is not the shape to end on.
+ *
+ * Throwing is the right failure: `toWire` is a pass-through, so an unrecognised value would otherwise
+ * reach a spec-enum response field and the client would receive a member the contract does not
+ * define. Failing the read is louder and closer to the cause than shipping it.
+ */
+function enumOr<T extends string>(field: string, value: unknown, members: readonly T[]): T {
+  if (typeof value === 'string' && (members as readonly string[]).includes(value)) return value as T
+  throw new Error(
+    `tpp_counterparty.${field} holds ${JSON.stringify(value)}, which is not a member of the contract enum ` +
+      `[${members.join(', ')}] — the column constraint and specs/backoffice-openapi.yaml disagree`
+  )
+}
+
+// Runtime copies of contract enums — the generated types are types only, so the members have to be
+// written down somewhere to be checked at runtime. `packages/db/test/enum-members.spec.ts` reads
+// specs/backoffice-openapi.yaml and fails if any of the three drifts from it. Written down here and
+// bound there, rather than written down here and trusted: I hand-wrote two of these three wrong on
+// the first pass, and only the DB CHECK constraint caught it.
+export const CHANNELS = ['internal_retail', 'internal_sme', 'internal_corporate', 'external_direct', 'external_tpp_aas'] as const
+export const PRODUCTION_STATUSES = ['directory_only', 'active_traffic', 'dormant', 'decommissioned'] as const
+export const REGISTRATION_STATES = ['unregistered', 'onboarding', 'registered', 'suspended'] as const
+
 function toRow(r: Record<string, unknown>): StoredTppCounterparty {
   return {
     organisation_id: r.organisation_id as string,
@@ -80,16 +126,16 @@ function toRow(r: Record<string, unknown>): StoredTppCounterparty {
     registration_number: (r.registration_number as string) ?? null,
     directory_contacts: (r.directory_contacts as unknown[]) ?? [],
     directory_synced_at: r.directory_synced_at ? iso(r.directory_synced_at) : null,
-    production_status: r.production_status as string,
+    production_status: enumOr('production_status', r.production_status, PRODUCTION_STATUSES),
     first_traffic_at: r.first_traffic_at ? iso(r.first_traffic_at) : null,
-    registration_state: r.registration_state as string,
+    registration_state: enumOr('registration_state', r.registration_state, REGISTRATION_STATES),
     financial_system_ref: (r.financial_system_ref as string) ?? null,
     unbilled_traffic: Boolean(r.unbilled_traffic),
     mtd_fee_accrual:
       r.mtd_fee_accrual_amount !== null && r.mtd_fee_accrual_amount !== undefined
         ? { amount: Number(r.mtd_fee_accrual_amount), currency: r.mtd_fee_accrual_currency as string }
         : null,
-    channel: r.channel as string,
+    channel: enumOr('channel', r.channel, CHANNELS),
     created_at: iso(r.created_at)
   }
 }
@@ -99,7 +145,7 @@ export class PgTppCounterpartyStore {
   private readonly pool: pg.Pool
   constructor(
     databaseUrl: string,
-    private readonly config: { bankId: string; channel: string },
+    private readonly config: { bankId: string; channel: Channel },
     private readonly lineage?: LineageSink
   ) {
     this.pool = new pg.Pool({ connectionString: databaseUrl })
@@ -146,8 +192,21 @@ export class PgTppCounterpartyStore {
              VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
            ON CONFLICT (bank_id, organisation_id) DO UPDATE
              SET legal_name = EXCLUDED.legal_name,
-                 registration_number = EXCLUDED.registration_number,
-                 directory_contacts = EXCLUDED.directory_contacts,
+                 -- PRESERVE what the participant does not carry, rather than overwriting it with
+                 -- nothing. The P6 port's participant shape is { organisation_id, legal_name }
+                 -- only, so every directory sync bound registration_number to NULL and
+                 -- directory_contacts to '[]' and wrote them over the whole registry — two
+                 -- spec-defined TppCounterparty fields emptied by the act of syncing. Both are
+                 -- schema-valid empty, so no contract test objected.
+                 --
+                 -- A directory sync answers "who is present and what are they called". It has no
+                 -- opinion on the other columns, and a write that has no opinion should not have
+                 -- an effect.
+                 registration_number = COALESCE(EXCLUDED.registration_number, tpp_counterparty.registration_number),
+                 directory_contacts = CASE
+                   WHEN EXCLUDED.directory_contacts = '[]'::jsonb THEN tpp_counterparty.directory_contacts
+                   ELSE EXCLUDED.directory_contacts
+                 END,
                  directory_synced_at = now(),
                  -- a previously decommissioned org reappearing in the directory is reinstated
                  production_status = CASE WHEN tpp_counterparty.production_status = 'decommissioned' THEN 'directory_only' ELSE tpp_counterparty.production_status END`,
@@ -158,12 +217,21 @@ export class PgTppCounterpartyStore {
       }
       // Decommission registry orgs no longer present in the directory.
       const present = participants.map((p) => p.organisation_id)
+      // The bank_id predicate is REDUNDANT with RLS, and that is the point.
+      //
+      // `beginAppTx` pins `app.bank_id` and the `tenancy_update` policy on this table binds under
+      // FORCE ROW LEVEL SECURITY, so cross-tenant rows were already unreachable — the advisory
+      // reviewer verified the RLS layer fails closed (an unset setting matches no row). But this
+      // statement is now reached from a bulk seed path rather than only per-request, so it mutates a
+      // whole tenant's registry in one shot, and CLAUDE.md's posture for exactly that situation is
+      // two layers rather than one good one. The predicate is the second.
       const dec = await c.query(
         `UPDATE tpp_counterparty SET production_status = 'decommissioned'
-          WHERE production_status <> 'decommissioned'
+          WHERE bank_id = $2::uuid
+            AND production_status <> 'decommissioned'
             AND NOT (organisation_id = ANY($1::text[]))
           RETURNING organisation_id`,
-        [present]
+        [present, this.config.bankId]
       )
       return { synced: participants.length, added, changed, decommissioned: dec.rows.map((r) => r.organisation_id as string) }
     })

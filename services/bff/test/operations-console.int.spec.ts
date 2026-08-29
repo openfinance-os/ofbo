@@ -13,7 +13,7 @@ import type { Principal } from '../src/auth.js'
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('integration tests require DATABASE_URL')
 
-const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
+const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' as const }
 const ops: Principal = { subject: 'demo:ops', persona: 'operations-analyst', scopes: ['platform:operations:read'] }
 
 describe('Operations Console — seeded certification/outage/pipeline + live connectivity (RLS)', () => {
