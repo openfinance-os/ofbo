@@ -34,10 +34,14 @@ if (!url) {
   err('DATABASE_URL is required.\n  DATABASE_URL=postgres://… pnpm demo:refresh')
   process.exit(2)
 }
-// The non-prod guard is NOT duplicated here. `resetDatabase` owns it (packages/db/src/reset.ts,
-// the one file the profile-branching lint rule exempts), and a second copy in a wrapper is just a
-// second thing to keep in step with the first. It refuses under DEPLOY_PROFILE=enterprise or
-// NODE_ENV=production before it truncates anything.
+// The non-prod guard is NOT duplicated here. `resetDatabase` calls it — it lives in
+// packages/db/src/non-prod-guard.ts, the one file the profile-branching lint rule exempts — and a
+// second copy in a wrapper is just a second thing to keep in step with the first. It refuses under
+// DEPLOY_PROFILE=enterprise or NODE_ENV=production before it truncates anything.
+//
+// (This used to say `resetDatabase` OWNS the guard, in packages/db/src/reset.ts. Both halves went
+// stale when the guard was split into its own module, so that importing a seed no longer dragged
+// `resetDatabase` — and its TRUNCATE — into the request-path module graph. See ADR 0035.)
 
 /** Show WHICH database, without printing the password. */
 function describe(connectionString) {
