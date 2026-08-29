@@ -38,6 +38,40 @@ export default tseslint.config(
     files: ['services/bff/src/**/*.ts', 'apps/portal/src/**/*.{ts,tsx}'],
     rules: { 'no-console': ['error', { allow: ['warn', 'error'] }] }
   },
+  // `@ofbo/contracts/spec` reads specs/backoffice-openapi.yaml off disk with node:fs. That is a
+  // BUILD/TEST-time surface — `packages/contracts/src/spec.ts` says so in its first line, and the
+  // Workers runtime has no filesystem, so an import from runtime code breaks the bundle rather
+  // than degrading. It used to be protected by being awkward to reach: runtime code would have had
+  // to path into another package's src/. BACKOFFICE-91 added a `./spec` subpath export so a test
+  // could bind a contract value, which also made the wrong import one clean line away. The comment
+  // that documents the boundary is not a control, so this is.
+  {
+    files: ['services/*/src/**/*.ts', 'apps/*/src/**/*.{ts,tsx}', 'packages/*/src/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@ofbo/contracts/spec',
+              message:
+                'Build/test-time only — it reads the OpenAPI file with node:fs and the Workers runtime has no filesystem. Runtime code uses the generated artifacts from @ofbo/contracts instead (packages/contracts/src/spec.ts).'
+            }
+          ],
+          // The specifier is the easy way in; a deep relative path is the other one. Guarding only
+          // the name would leave the guard narrower than the boundary it exists to hold — and a
+          // relative reach is exactly what runtime code did before the subpath export existed.
+          patterns: [
+            {
+              group: ['**/contracts/src/spec', '**/contracts/src/spec.js', '**/contracts/src/spec.ts'],
+              message:
+                'Build/test-time only — reaching packages/contracts/src/spec.ts by relative path is the same import the subpath ban covers. Runtime code uses the generated artifacts from @ofbo/contracts.'
+            }
+          ]
+        }
+      ]
+    }
+  },
   {
     // Discovery harness is plain-JS Node tooling (gate validator + renderer CLIs + tests) —
     // grant Node globals.

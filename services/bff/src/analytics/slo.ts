@@ -72,7 +72,9 @@ export class DemoSloReader implements SloReader {
       // template, adapter or fixture — so nothing in-repo is left stale. An out-of-repo consumer
       // (an APM dashboard, a P5 adapter mapping) would break silently, which is the actual
       // exposure. Recorded here because there is no contract to record it in; enumerating the key
-      // set so the NEXT rename is visible is BACKOFFICE-91.
+      // set so the NEXT rename is visible is BACKOFFICE-95 (it was BACKOFFICE-91's, and moved when
+      // that story shipped without it — repointed in the same diff that moved it, because a pointer
+      // to a closed story is the drift this file's own neighbour was filed against).
       { key: 'nebras_propagation_sla', description: `Nebras consent-revoke propagation < ${NEBRAS_SLA_SECONDS}s (NFR-18)`, target_pct: 99.0, observed_pct: 99.6, window_days: 30 },
       { key: 'reconciliation_completeness', description: 'Daily three-way reconciliation completeness', target_pct: 99.9, observed_pct: 99.97, window_days: 30 },
       { key: 'nebras_connectivity_uptime', description: 'Nebras Hub connectivity uptime', target_pct: 99.5, observed_pct: 99.55, window_days: 30 },

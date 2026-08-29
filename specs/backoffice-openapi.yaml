@@ -3,6 +3,14 @@
 # kebab-case paths, snake_case JSON, cursor pagination, standard error envelope,
 # Idempotency-Key on mutating endpoints, x-fapi-interaction-id on every request.
 # Rate limits (Kong-enforced per token) are declared via x-rate-limit-per-min.
+# nebras_propagation_ms carries its NFR-18 bound in x-nfr18-exclusive-max-ms as well as in prose, so a
+# test can bind the contract's number to the constant the services compare against (BACKOFFICE-91).
+# INTEGRATORS: do not depend on receiving that extension. Many generators drop x- keys (typescript
+# clients generated with openapi-typescript do), though some expose them — read the bound from the
+# field's description, which every generator carries. The extension is an in-repo regression guard,
+# not a machine-readable surface this contract promises consumers.
+# Whether regulatory thresholds generally should be machine-readable is a cross-cutting question, and
+# this header does not settle it: it is raised in ADR 0034, which is Proposed and awaits a human.
 openapi: 3.0.3
 info:
   title: Open Finance Back Office API (delta)
@@ -3261,7 +3269,55 @@ components:
                     properties:
                       consent_id: { type: string, format: uuid }
                       status: { type: string, enum: [Revoked] }
-                      nebras_propagation_ms: { type: integer, description: Must be < 5000 p99 (NFR-18) }
+                      nebras_propagation_ms:
+                        type: integer
+                        # THE BOUND IS NOT STATED IN THIS COMMENT — it is stated by the extension
+                        # below and twice in the description, and a test binds every occurrence in
+                        # this schema node. An unbound fourth copy is the defect this field exists to
+                        # close, so this comment carries reasons and no number.
+                        #
+                        # WHY THE EXTENSION. The bound used to be prose alone, derived from nothing
+                        # and compared by nothing — a fourth independent copy of a threshold the
+                        # services single-source in services/bff/src/consents/nebras-sla.ts. A scheme
+                        # amendment would have left the published contract telling integrators the old
+                        # value while the code enforced the new one: of the four places to be wrong,
+                        # the one with the widest audience.
+                        #
+                        # WHY `exclusive` IS IN THE KEY. Named `…-max-ms`, a machine consumer reads it
+                        # the way JSON Schema reads `maximum` — inclusive — while every comparator
+                        # that decides conformance is strict `<`. An acknowledgment landing exactly ON
+                        # the bound would be a breach to the code and conformant to the consumer: a
+                        # one-millisecond window on a regulated control.
+                        #
+                        # WHY NOT `p99`. The value is what a SINGLE measurement is compared against.
+                        # NFR-18's own requirement is distributional, a p99 over those comparisons, so
+                        # a key naming the statistic would invite a consumer to evaluate a percentile
+                        # against a per-observation bound — a different check from the one the
+                        # services run.
+                        #
+                        x-nfr18-exclusive-max-ms: 5000
+                        description: >-
+                          Observed Nebras acknowledgment latency for this revocation, in
+                          milliseconds. A single measurement, not an aggregate.
+
+                          `0` is a sentinel, not a measurement: it means the revocation was
+                          acknowledged without leaving the deployment, so no propagation was timed.
+                          Read it as "no propagation occurred" rather than as an exceptionally fast
+                          one, and exclude it from latency statistics.
+
+                          The NFR-18 bound is strictly below 5000 ms, exclusive: a measurement of
+                          exactly 5000 fails that comparison. The bound is per-observation, while
+                          NFR-18 itself is distributional (a p99 taken over those comparisons). This
+                          response carries the measurement and not a conformance verdict, so a
+                          consumer that needs pass/fail computes it from the stated bound. Note that
+                          `data` declares no `required` list, so a generated client will type this
+                          field optional even though the service emits it on every revocation —
+                          handle absence.
+
+                          Not constrained by `maximum`, deliberately: the field records what
+                          happened, so a value at or above the bound is a real observation and must
+                          stay representable. A schema constraint would make a breach unreportable
+                          rather than impossible.
                       psu_notified: { type: boolean }
     ConsentEventList:
       description: Paginated consent lifecycle events

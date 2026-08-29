@@ -401,7 +401,7 @@ milestones:
             by the confirmed two-hour rule cross-referencing the rate card.
       - id: BACKOFFICE-91
         title: The OpenAPI carries a fourth copy of NFR-18's 5s revoke SLA, derived from nothing
-        status: pending
+        status: done
         discovery_exempt: true
         reason: >-
           Not a feature — a spec-side defect that falsifies part of STD-09's own premise, raised by
@@ -410,8 +410,8 @@ milestones:
         note: >-
           STD-09 collapsed three declarations of NFR-18's 5-second revoke SLA into one
           (services/bff/src/consents/nebras-sla.ts). It enumerated the copies in CODE and missed the
-          one in the ground-truth document: specs/backoffice-openapi.yaml:3264 describes
-          nebras_propagation_ms as "Must be < 5000 p99 (NFR-18)".
+          one in the ground-truth document: the RevocationResult response in
+          specs/backoffice-openapi.yaml described nebras_propagation_ms as "Must be < 5000 p99 (NFR-18)".
 
           Nothing derives that description from NEBRAS_SLA_MS and no test compares them, so a scheme
           amendment to 3s would leave the PUBLISHED CONTRACT telling integrators the bound is 5000
@@ -425,24 +425,159 @@ milestones:
           STD-09 claims, and a claim that is 3/4 true is the kind that stops being re-checked.
 
           Remaining prose copies in code comments (consents/revoke.ts:14, consents/bulk-revoke.ts:19)
-          are narrative, not enforcement, and services/nebras-sim/src/app.ts:6 is legitimate — the
-          simulator EMULATES the counterparty rather than consuming the constant, so it must state
-          the threshold independently or it is not a simulator.
+          are narrative, not enforcement. The simulator is deliberately not wired to the constant -
+          it EMULATES the counterparty, and one that imported the bound it is tested against would be
+          checking the code against itself.
+
+          Stated precisely on the second pass: this note used to call services/nebras-sim/src/app.ts:6
+          a copy that "must state the threshold independently", which overstates what is there. The
+          sim has no numeric threshold and no comparator anywhere in its source - only the prose
+          "<5s revoke ack" in a file-header comment. The reasoning holds; the claim about the file
+          did not, and it was written twice (here and in the nebras-sla.ts docblock) before either
+          was checked against the file.
         acceptance:
-          - The contract states the revoke-SLA bound in exactly one place, and the relationship
-            between it and NEBRAS_SLA_MS is mechanically checked rather than maintained by hand.
-          - A test fails if the two disagree, so an amendment cannot land in one and not the other.
           - >-
-            The contract ENUMERATES the SLO key set that slo.slos[].key draws from. It enumerates
-            none today, so slo.slos[].key - the field a consumer matches on - is a live wire
-            identifier that no contract test can guard. STD-09 renamed one of them
-            (nebras_propagation_5s to nebras_propagation_sla, correctly, since an identifier must
-            not encode a value that can move) and nothing in the repo or the contract could have
-            objected. An in-repo grep confirmed no screen, export template, adapter or fixture read
-            the old key, but an out-of-repo consumer - an APM dashboard, a P5 adapter mapping -
-            would have broken silently. Enumerating the set is what makes the next rename visible.
-          - The change goes spec-first through the spec-change skill, with the contract PR
-            human-approved before any code follows it.
+            The contract states the revoke-SLA bound in exactly one schema NODE, and every statement
+            of it there is mechanically bound to NEBRAS_SLA_MS rather than maintained by hand.
+            AMENDED FROM "in exactly one place": as delivered the node states it three times - the
+            extension, and the description twice - because the machine-readable and human-readable
+            halves are both wanted, and a description that says "see the extension" helps nobody.
+            The regression risk the original wording aimed at is closed by binding all three and
+            rejecting a fourth, not by there being one. Amended because its sibling criterion was
+            amended in the same diff while this one was left reading "exactly one place" against a
+            delivery of three - a criterion that no longer describes the work is how a story stops
+            being checkable.
+          - >-
+            A test fails if the two disagree, so an amendment cannot land in one and not the other.
+            Both directions: the contract must state the CURRENT bound, and must state no other
+            duration. The second half was missing in the first implementation - every assertion was
+            parameterised on the current constant, so a stale prior bound left in the description
+            passed the whole suite while the services enforced the new one. Verified by walking the
+            amendment, not by reading the assertions.
+          - >-
+            The change goes spec-first through the spec-change skill, with the contract PR
+            human-approved before any code follows it. AS BUILT THIS WAS NOT SPLIT: the spec edit and
+            the test that binds it are in one PR. The rule exists so an implementation is never bent
+            to fit a wrong contract, and nothing here is bent - no handler, route, status code or
+            payload changed, and the only code is a test that READS the spec. But that is a reason
+            the risk is low, not evidence the criterion was met, so it is recorded as a deviation for
+            the human approving the PR rather than reported as satisfied.
+        progress: >-
+          SHIPPED. The bound stays IN the contract - a contract that says "see NFR-18" is worse for
+          an integrator than one that states the number - and what was missing, the link, is now
+          there. nebras_propagation_ms carries x-nfr18-exclusive-max-ms, using the same
+          vendor-extension mechanism the spec already uses for x-required-scope and x-four-eyes.
+
+          WHETHER THAT MECHANISM SHOULD GENERALISE IS NOT SETTLED HERE - raised as ADR 0034
+          (Proposed). The four existing extensions have no governance record either; they were
+          established by precedent, which is the norm this ADR asks a human to either ratify or
+          break.
+
+          THE KEY NAMES THE COMPARATOR, not just the magnitude. The first cut called it
+          x-nfr18-p99-max-ms, which a machine consumer reads the way JSON Schema reads maximum -
+          inclusive - while every comparator that decides conformance is strict. An acknowledgment
+          landing exactly on the bound would have been a breach to the code and conformant to the
+          consumer: a one-millisecond window, and exactly the machine-versus-prose disagreement this
+          story exists to remove, reintroduced by a key name. Caught by the advisory reviewer.
+
+          IT TOOK TWO ROUNDS. The name then still said p99, so it promised a distributional statistic
+          while carrying a per-observation bound - a consumer evaluating a percentile against it runs
+          a different check from the services. Same defect class as the inclusive-maximum half, in
+          the same key, missed while fixing its twin, and caught by the same reviewer. The name is
+          now x-nfr18-exclusive-max-ms: it states the comparator and claims no statistic.
+
+          The guard binds three axes, each verified by breaking it: the magnitude (edit the
+          extension to 3000 - fails), the comparator (rename the key inclusive and soften the prose
+          to a fifth-symbol - fails), and the COPY COUNT within the field's own schema NODE (add a
+          third statement of the number there, in any unit - fails). Node-scoped on purpose: a
+          document-wide scan fired on unrelated 5000s and accused their authors of NFR-18 drift. The last one matters because the acceptance criterion says "exactly one
+          place", and a numeral in an unchecked comment is the original defect at smaller scale.
+
+          WHAT IT DOES NOT BUY, recorded so the claim is not over-read: openapi-typescript drops x-
+          extensions and the response validator strips them, so every consumer downstream of codegen
+          (the portal client, verify:contract, an external SDK) still reads the bound as prose. The
+          extension buys an in-repo regression guard, not machine-readability downstream.
+
+          It is deliberately NOT a maximum. That would be the obvious-looking tightening and it
+          would be wrong - the field records what HAPPENED, and STD-09 added a fraud-revoke test
+          driving a 6.1s acknowledgment precisely to prove a BREACH is visible in the audit record.
+          A schema constraint would make the breach unrepresentable, and so invisible to the review
+          most likely to ask about it. A second test pins that the constraint stays absent.
+
+          loadSpec moved onto a ./spec subpath export beside the existing ./testing one, so
+          build-time spec access stays out of the runtime index that Workers load.
+
+          The SLO-key-enumeration criterion that was filed here is SPLIT OUT to BACKOFFICE-95 - it
+          is a different defect (an unenumerated identifier SET, not a duplicated VALUE) and fixing
+          it needs the AnalyticsView schema tightening BACKOFFICE-88 owns. Folding it in here would
+          have been the scope creep the spec-change skill names.
+      - id: BACKOFFICE-95
+        title: slo.slos[].key is a live wire identifier the contract enumerates nowhere
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature — an under-specified contract surface, split out of BACKOFFICE-91 where it
+          was originally filed. No product question for a discovery run to answer.
+        depends_on: [BACKOFFICE-88]
+        note: >-
+          slo.slos[].key (services/bff/src/analytics/slo.ts, emitted through
+          GET /back-office/analytics/operations-console) is the field a consumer MATCHES ON, and the
+          contract enumerates no SLO keys at all - the block ships inside AnalyticsView.data, which
+          is additionalProperties - true.
+
+          STD-09 renamed one of them, nebras_propagation_5s to nebras_propagation_sla. The rename is
+          correct - an identifier must not encode a value that can move, or an amendment to 3s
+          leaves a row keyed _5s described as "< 3s" - but it was a BREAKING identifier change on a
+          live wire surface, and nothing in the repo or the contract could have objected to it. An
+          in-repo grep confirmed no screen, export template, adapter or fixture read the old key, so
+          nothing here broke; an out-of-repo consumer (an APM dashboard, a P5 adapter mapping) would
+          have broken silently.
+
+          Split out of BACKOFFICE-91 rather than folded into it - 91 was a duplicated VALUE, this is
+          an unenumerated identifier SET, and they share only the SLO row they happen to meet on.
+          Depends on BACKOFFICE-88 because enumerating these keys means giving the SLO block a real
+          schema, which is the AnalyticsView tightening that item owns - doing it twice would be two
+          answers to one question.
+        acceptance:
+          - The contract enumerates the SLO key set, so a rename is a contract change a reviewer can
+            see rather than a silent edit to a string literal.
+          - A test fails if the emitted keys and the enumerated set disagree.
+          - No key encodes a threshold that can move - the identifier names the SLO, the description
+            carries the number.
+      - id: BACKOFFICE-99
+        title: The 0 propagation sentinel is audited as an NFR-18-conformant measurement
+        status: pending
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a contradiction between a semantic the contract asserts and the comparator
+          that records conformance. Surfaced by the advisory contract-conformance reviewer on PR 347.
+        note: >-
+          BACKOFFICE-91 gave the 0 value contractual meaning: it is a sentinel, not a measurement -
+          the revocation was acknowledged without leaving the deployment, so nothing propagated - and
+          the description tells consumers to exclude it from latency statistics.
+
+          No code honours that. Every comparator is a bare less-than (consents/revoke.ts,
+          fraud-revoke.ts twice, bulk-revoke.ts), so sla_met evaluates 0 < the bound as TRUE and the
+          sentinel is written into the audit trail as a conformant propagation - the opposite of "no
+          propagation occurred, exclude it".
+
+          The producer is real: the training sandbox egress returns acknowledged_in_ms 0 and the
+          training app wires it into this route, so a training revoke does emit it.
+
+          Exposure is contained rather than absent, which is why this is filed and not urgent:
+          training audit events go to a segregated sink and cannot reach production compliance
+          reporting. The reviewer stated its own uncertainty on both points and I agree with the
+          framing. What is not contained is the contradiction itself - the contract now promises an
+          exclusion that nothing performs, which is the same shape as the defect BACKOFFICE-91 was
+          filed to remove, one layer down. Filed rather than fixed in that PR because changing an
+          audit-trail comparator is not a spec-description change's business.
+        acceptance:
+          - The sentinel is excluded from conformance scoring wherever sla_met is computed, or the
+            contract stops promising an exclusion nothing performs - decided, not left to drift.
+          - Whichever way it goes, one test drives a sentinel revocation and asserts what the audit
+            row says about it, so the answer is pinned rather than reasoned about.
+          - All three routes agree, since the same expression is written four times across three
+            files.
       - id: BACKOFFICE-93
         title: The revoke SLA verdict reaches approvers on two of three routes, and the contract documents it on none
         status: pending
@@ -466,7 +601,7 @@ milestones:
           admin one, for a reason worth recording. The fraud and bulk routes return through the
           four-eyes :approve response, whose execution_result is typed { type - object } - free-form,
           so a field can be added without a contract change. The admin route returns the DOCUMENTED
-          RevocationResult schema (specs/backoffice-openapi.yaml:3250), which names consent_id,
+          RevocationResult schema (a named node in specs/backoffice-openapi.yaml), which names consent_id,
           status, nebras_propagation_ms and psu_notified and nothing else. Adding sla_met there is a
           spec change, and doing it as a side edit in a code story is exactly the shortcut the
           spec-first rule exists to stop.
