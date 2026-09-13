@@ -1,0 +1,14 @@
+{
+  "schema": "loom.agent-output/v1",
+  "agent": "risk-reviewer",
+  "prompt_version": "loom-agents@2.1.0",
+  "model": "example-model@2026-01",
+  "inputs_read": ["change.md", "risk-statements.json", "controls.json", "residual-risk.json", "risk-taxonomy.json"],
+  "register_state": "mounted",
+  "verdict": "ESCALATE",
+  "confidence": "medium",
+  "findings": [
+    { "id": "ASSESS 1", "severity": "high", "subject": "DR-1.1-001", "issue": "a new personal-data element (preferred_channel) will appear in fixtures and the revocation screen; the recorded residual (Low) is conditional on synthetic-only fixtures and a PII guard that does not know this element's shape", "evidence_refs": [{ "file": "risk-statements.json", "locator": "DR-1.1-001" }, { "file": "residual-risk.json", "locator": "DR-1.1-001.conditions" }, { "file": "change.md", "locator": "line 3" }], "route": "register", "residual_moved": true },
+    { "id": "ASSESS 2", "severity": "medium", "subject": "CTRL-001", "issue": "the synthetic-data control covers the element only if the fixture convention names a synthetic value for preferred_channel; none is declared", "evidence_refs": [{ "file": "controls.json", "locator": "CTRL-001" }], "route": "spec-fix", "residual_moved": false }
+  ]
+}

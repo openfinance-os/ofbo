@@ -7,20 +7,54 @@
 //   node discovery/render/render.mjs <document|deck|prototype> <spec.json> <out.html> [--brand <design.md>]
 //
 import { readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { parseTokens, tokenResolver } from './tokens.mjs';
 import { MARKER } from '../gates/brand.mjs';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// ---- writing direction ------------------------------------------------------
+// lang/dir reach the <html> element from the brand, with a per-artifact override for the run
+// that renders one document in another language. Both are ALLOW-LISTED rather than escaped:
+// they land in an attribute the whole document inherits, and an attribute value is the wrong
+// place to trust a well-formed-input assumption. Anything unrecognised falls back rather than
+// being emitted — a mis-typed dir silently reverting to 'ltr' is a visible layout, whereas an
+// unvalidated one is an injection point.
+const LANG_RE = /^[a-z]{2}(-[A-Za-z]{2,4})?$/;
+const sanitizeLang = (v, fallback = 'en') => (LANG_RE.test(String(v ?? '').trim()) ? String(v).trim() : fallback);
+const sanitizeDir = (v, fallback = 'ltr') => {
+  const d = String(v ?? '').trim().toLowerCase();
+  return d === 'rtl' || d === 'ltr' ? d : fallback;
+};
+
+/** The direction pair an artifact renders in: brand default, artifact override, both validated. */
+export function writingMode(spec = {}, brand = {}) {
+  return {
+    lang: sanitizeLang(spec.lang, sanitizeLang(brand.lang, 'en')),
+    dir: sanitizeDir(spec.dir, sanitizeDir(brand.dir, 'ltr')),
+  };
+}
+
 /** Shared branded shell. All colours/fonts come from tokens, so D7 (tokens-only) holds by
- *  construction. Layout px are literal (D7 checks colour + font, not spacing). */
-function shell({ title, body, t, version, banner, extraCss = '' }) {
+ *  construction. Layout px are literal (D7 checks colour + font, not spacing).
+ *
+ *  Every direction-sensitive rule below and in each renderer is a LOGICAL property
+ *  (border-inline-start, inset-inline-end, text-align:start). One stylesheet therefore serves
+ *  both directions: there is no `[dir=rtl]` block to keep in step with its LTR twin, and no way
+ *  for an RTL artifact to drift into a half-mirrored layout because someone edited only one of
+ *  the two. Flipping `dir` is the entire change. */
+function shell({ title, body, t, version, banner, brainkit = null, extraCss = '', lang = 'en', dir = 'ltr' }) {
+  // rc.8 WS8: when the brand seam is a BrainKit compatibility projection, stamp its id/version/
+  // digest into the page metadata so the visual carries verifiable BrainKit provenance.
+  const bkMeta = brainkit && brainkit.id
+    ? `\n<meta name="brainkit-id" content="${esc(brainkit.id)}" />\n<meta name="brainkit-version" content="${esc(brainkit.version || '')}" />\n<meta name="brainkit-digest" content="${esc(brainkit.digest || '')}" />`
+    : '';
   return `<!doctype html>
-<html lang="en">
+<html lang="${sanitizeLang(lang)}" dir="${sanitizeDir(dir)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<!-- ${MARKER}@v${version} -->
+<!-- ${MARKER}@v${version} -->${bkMeta}
 <title>${esc(title)}</title>
 <style>
   :root {
@@ -78,12 +112,12 @@ export function renderDocument(spec, brand) {
     h1 { font-size:28px; margin:8px 0 4px; } h2 { font-size:22px; margin:24px 0 8px; }
     .sub { color:var(--muted); font-size:13px; }
     p, li { font-size:15px; line-height:1.5; }
-    .note { border-left:3px solid var(--brand); background:var(--card); padding:8px 12px; color:var(--muted); font-size:13px; }
+    .note { border-inline-start:3px solid var(--brand); background:var(--card); padding:8px 12px; color:var(--muted); font-size:13px; }
     table { width:100%; border-collapse:collapse; margin:8px 0; font-size:13px; }
-    th { background:var(--brand); color:var(--on-brand); text-align:left; padding:6px 8px; }
+    th { background:var(--brand); color:var(--on-brand); text-align:start; padding:6px 8px; }
     td { padding:6px 8px; border-bottom:1px solid var(--border); }
-    @media print { .demo-banner { position:fixed; top:0; left:0; right:0; } .wrap { padding-top:48px; } }`;
-  return shell({ title: spec.title, body, t, version: brand.version, banner: brand.banner, extraCss });
+    @media print { .demo-banner { position:fixed; top:0; inset-inline:0; } .wrap { padding-top:48px; } }`;
+  return shell({ title: spec.title, body, t, version: brand.version, banner: brand.banner, brainkit: brand.brainkit, extraCss, ...writingMode(spec, brand) });
 }
 
 export function renderDeck(spec, brand) {
@@ -104,21 +138,26 @@ export function renderDeck(spec, brand) {
     h1 { font-size:40px; margin:8px 0; } h2 { font-size:30px; margin:0 0 16px; }
     .kicker { color:var(--brand); font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:13px; }
     li { font-size:20px; line-height:1.7; } .sub { color:var(--muted); }
-    .note { color:var(--muted); border-left:3px solid var(--brand); padding:8px 12px; font-size:15px; margin-top:16px; }
-    .pageno { position:absolute; bottom:24px; right:64px; color:var(--muted); font-size:13px; }`;
+    .note { color:var(--muted); border-inline-start:3px solid var(--brand); padding:8px 12px; font-size:15px; margin-top:16px; }
+    .pageno { position:absolute; bottom:24px; inset-inline-end:64px; color:var(--muted); font-size:13px; }`;
   const nav = `<script>
     var i=0,s=document.querySelectorAll('.slide');
     function go(n){s[i].hidden=true;i=Math.max(0,Math.min(s.length-1,n));s[i].hidden=false;}
     document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key===' ')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
     document.addEventListener('click',function(){go(i+1);});
   </script>`;
-  return shell({ title: spec.title, body: html + nav, t, version: brand.version, banner: brand.banner, extraCss });
+  return shell({ title: spec.title, body: html + nav, t, version: brand.version, banner: brand.banner, brainkit: brand.brainkit, extraCss, ...writingMode(spec, brand) });
 }
 
 export function renderPrototype(spec, brand) {
   const t = tokenResolver(brand.tokens);
   const tiles = (spec.tiles || []).map((tile) => {
-    const pill = tile.status ? `<span class="pill" style="background:var(--${tile.status === 'ok' ? 'accent' : tile.status})">${esc(tile.pill || tile.status)}</span>` : '';
+    // tile.status names a CSS custom property, so it must be a bare token — NOT esc()'d text.
+    // esc() guards HTML text nodes but leaves `)`, `;`, `{` intact, which inside a style="" attr
+    // would let a crafted status close var() and inject rules (or a </style>…<script>). Restrict
+    // it to [a-z0-9-] so only a real token name can ever reach the stylesheet.
+    const statusVar = tile.status === 'ok' ? 'accent' : String(tile.status).toLowerCase().replace(/[^a-z0-9-]/g, '');
+    const pill = tile.status ? `<span class="pill" style="background:var(--${statusVar})">${esc(tile.pill || tile.status)}</span>` : '';
     return `<div class="card"><div class="label">${esc(tile.label)}</div>
       <div class="metric">${esc(tile.value || '')} ${pill}</div>
       ${tile.sub ? `<div class="sub">${esc(tile.sub)}</div>` : ''}</div>`;
@@ -147,10 +186,10 @@ export function renderPrototype(spec, brand) {
     .metric { font-size:28px; font-weight:600; margin-top:8px; }
     .pill { display:inline-block; font-size:13px; padding:2px 8px; border-radius:4px; color:var(--on-brand); }
     table { width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
-    th { text-align:left; background:var(--brand); color:var(--on-brand); padding:6px 8px; }
+    th { text-align:start; background:var(--brand); color:var(--on-brand); padding:6px 8px; }
     td { padding:6px 8px; border-bottom:1px solid var(--border); }
     .ghost { color:var(--muted); border:1px dashed var(--border); border-radius:4px; padding:10px; font-size:13px; }`;
-  return shell({ title: spec.title, body, t, version: brand.version, banner: brand.banner, extraCss });
+  return shell({ title: spec.title, body, t, version: brand.version, banner: brand.banner, brainkit: brand.brainkit, extraCss, ...writingMode(spec, brand) });
 }
 
 const RENDERERS = { document: renderDocument, deck: renderDeck, prototype: renderPrototype };
@@ -176,4 +215,4 @@ function main(argv) {
   console.log(`rendered ${mode} -> ${outPath}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main(process.argv);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv);

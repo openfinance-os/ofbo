@@ -1,0 +1,1 @@
+{ "register_mounted": false, "expect_verdict": "INSUFFICIENT_EVIDENCE", "why": "A change that adds a data element, assessed in a repository with no data-risk register: the only honest answer is that there is nothing to assess against. Before 2.1.0 the agent emitted a VERDICT anyway." }

@@ -1,0 +1,37 @@
+{
+  "_comment": "ADOPT: the activation campaign that takes one governed bank change from installed machinery to a supervised pilot. This file coordinates existing controls; it does not replace their evidence. Keep status not-started until owners and a reference change are chosen. activating reports gaps without blocking. ready-for-pilot, pilot-active and concluded arm scripts/activation-readiness-check.mjs and fail closed.",
+  "schema": "loom.activation-plan/v1",
+  "status": "activating",
+  "activation_id": "ofbo-loom-241-2026-09",
+  "target": {
+    "institution": "ADOPT: appoint the legal institution before a supervised pilot",
+    "repository": "openfinance-os/ofbo",
+    "default_branch": "main",
+    "production_environment": "OFBO hosted demo (permanently non-production); bounded bank pilot environment not yet selected",
+    "reference_change_id": "ADOPT: governed high-tier model-enabled change"
+  },
+  "owners": {
+    "accountable_executive": "ADOPT: identity holding accountable-executive",
+    "platform_admin": "ADOPT: identity holding platform-admin",
+    "second_line": "ADOPT: identity outside builders and in second-line",
+    "internal_audit": "ADOPT: identity holding internal-audit"
+  },
+  "required_platform_controls": ["HG-0001", "HG-0004", "HG-0005", "HG-0011"],
+  "external_record": {
+    "role": "external-record",
+    "provider": "kosli",
+    "adapter_id": "kosli-external-record",
+    "integration_run_ref": "ADOPT: evidence of post plus read-back",
+    "tamper_probe_ref": "ADOPT: evidence that an unknown or changed record is rejected",
+    "audit_access_ref": "ADOPT: read-only Internal Audit access grant",
+    "retention_assessment_ref": "ADOPT: approved WORM and timestamping assessment or companion archive design"
+  },
+  "consumer_ai_pilot": false,
+  "governed_records": {
+    "operating_model": "docs/governance/operating-model.json",
+    "ai_governance": "docs/governance/ai-governance.json",
+    "fairness": "docs/governance/fairness-evaluations.json",
+    "contestability": "docs/governance/decision-contestability.json",
+    "pilot": "docs/governance/pilot-record.json"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "profile": "ADOPT:jurisdiction-id",
+  "kind": "jurisdiction",
+  "_comment": "ADOPT: the per-market jurisdiction profile template — the shape of profiles/jurisdictions/uae-bank.json with every value replaced by a placeholder. Copy it to profiles/jurisdictions/<market>.json, rename, and replace every ADOPT: string; a placeholder left in place is not a control, it is a control-shaped hole. THE LOAD-BEARING DESIGN RULE, and the reason this file exists as a template rather than as prose: THE LOCAL SHARI'AH AUTHORITY VOCABULARY LIVES IN THE JURISDICTION PROFILE, WHILE GENERIC ISLAMIC PRODUCT DUTIES STAY IN products/islamic-product.json. Markets differ in which body's rulings bind, which school of thought is followed, which external standards are adopted as baseline, whether a national higher authority exists at all, and what it is called — but the DUTIES of an Islamic product (an approved structure, bound rulings, continuous compliance monitoring, third-line audit, purification of non-permissible income) are the same everywhere. Composing a market profile with the product profile is how that variance is handled with ZERO CODE: no gate branches on jurisdiction, no compiler knows a market name, and a new market is one JSON file. The failure this prevents is the obvious alternative — one market's authority names hard-coded into the generic product profile, which every other market then has to fork.",
+  "_authority_comment": "ADOPT: name the LOCAL binding authorities and their vocabulary here, in the sections your approvers read. Sections are names the harness carries and an approver fills; the harness never rules on Shari'ah and never adjudicates between schools of thought.",
+  "requirements": {
+    "medium": {
+      "gates": [],
+      "approver_roles": [],
+      "evidence": [],
+      "pa1_sections": [
+        "ADOPT:regulator-notification-assessment"
+      ],
+      "pa2_sections": [
+        "ADOPT:mandated-disclosure-document",
+        "ADOPT:language-and-accessibility"
+      ]
+    },
+    "high": {
+      "pa2_sections": [
+        "ADOPT:consumer-protection-conformance"
+      ]
+    }
+  },
+  "conditional": [
+    {
+      "_comment": "ADOPT: the Islamic conditional. Add ONLY what is market-specific — the local supervisory body's own step, the locally binding fatwa/ruling source, the adopted external standards baseline. Do NOT restate the generic Islamic duties here; name products/islamic-product in the envelope instead, and the two compose. Keep the canonical role vocabulary: `shariah-committee` (the internal committee that rules, as a body), `shariah-compliance` (second-line compliance function), `shariah-audit` (third line, never outsourced). If this market's authority has no equivalent of one of them, leave it out rather than renaming another to fill the slot.",
+      "when": "islamic",
+      "adds": {
+        "approver_roles": [
+          "shariah-committee"
+        ],
+        "pa1_approver_roles": [
+          "shariah-committee"
+        ],
+        "pa1_sections": [
+          "ADOPT:shariah-applicability-in-this-market"
+        ],
+        "pa2_sections": [
+          "ADOPT:local-shariah-authority-alignment"
+        ]
+      }
+    },
+    {
+      "_comment": "ADOPT: the personal-data conditional — the local data-protection statute, residency and cross-border transfer rules. Present here as SHAPE: every market has one of these and they are never the same one.",
+      "when": "personal_data",
+      "adds": {
+        "pa2_sections": [
+          "ADOPT:data-protection-law-and-residency"
+        ]
+      }
+    }
+  ]
+}

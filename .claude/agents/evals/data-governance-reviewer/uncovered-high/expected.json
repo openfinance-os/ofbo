@@ -1,0 +1,14 @@
+{
+  "schema": "loom.agent-output/v1",
+  "agent": "data-governance-reviewer",
+  "prompt_version": "loom-agents@2.1.0",
+  "model": "example-model@2026-01",
+  "inputs_read": ["data-governance.md", "risk-statements.json", "controls.json"],
+  "register_state": "mounted",
+  "verdict": "FAIL",
+  "confidence": "high",
+  "findings": [
+    { "id": "FAIL 2", "severity": "high", "subject": "DR-1.1-001", "issue": "High inherent risk cited with no mitigating control, and the Uncovered risks section says none", "evidence_refs": [{ "file": "data-governance.md", "locator": "Risk mapping row 1; Uncovered risks" }, { "file": "risk-statements.json", "locator": "DR-1.1-001.inherent_rating" }] },
+    { "id": "FAIL 3", "severity": "high", "subject": "residual verdict", "issue": "Yes is unsound while a High inherent risk is uncovered; the register records Low only with CTRL-001 applied", "evidence_refs": [{ "file": "data-governance.md", "locator": "Residual-risk verdict" }, { "file": "controls.json", "locator": "CTRL-001" }] }
+  ]
+}

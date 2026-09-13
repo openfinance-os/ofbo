@@ -1,0 +1,23 @@
+{
+  "_comment": "ADOPT: how a person who was decided about is told why, and how they get that decision looked at again — mounted as docs/governance/decision-contestability.json and read by scripts/decision-contestability-check.mjs. WHAT THIS FILE IS: a declaration, per model role, of a reason surface, a contest route, and a named human with the authority to overturn. WHAT IT IS NOT: an explanation. NOTHING IN THE HARNESS GENERATES A REASON, judges whether a reason is intelligible to the person who received it, or routes a contest to anybody. Those are the adopter's runtime. A green gate means somebody wrote down where the reason appears, how it is challenged, and who can act — never that the reason is good or the route works.",
+  "_why_this_file_comment": "The ai-decision-system profile has always compiled an `explainability-and-contestability` PA2 section, so a plan had to SAY how a decision is explained. Until 2.0.0 that was the whole control: a section a human writes and an approver reads, with nothing joining it to the models actually shipping. This file is that join. A model role in docs/governance/model-manifest.json at a covered tier with no entry here is UNCOVERED and named — which is the property the PA2 section alone could never hold.",
+  "response_sla_days": "ADOPT: the default number of days within which a contest gets a substantive response, used by any surface that does not set its own. A contest route with no bounded response time is a route to nowhere — the decision stands by default while nobody is obliged to look. The gate enforces that a bound EXISTS and is a positive number; what the number should be is the adopter's, and no gate here observes whether it was met.",
+  "surfaces": [
+    {
+      "_comment": "ADOPT: one entry per model ROLE in the manifest whose output materially affects a customer outcome. Delete this example row.",
+      "role": "ADOPT: the model role, matching `models[].role` in docs/governance/model-manifest.json exactly.",
+      "decision": "ADOPT: the decision this model makes about a person, in the words the person would recognise — 'declined for a limit increase', not 'scored below threshold'. This field is the one a reviewer can check the rest of the row against.",
+      "reason_surface": {
+        "where": "ADOPT: where the person is actually told — the letter, the in-app screen, the agent script. A reason that exists only in a log is not a reason anybody was given.",
+        "reason_source": "ADOPT: what the reason shown is derived from — the model's own attributions, a rules layer in front of it, or a human's write-up. THIS IS THE FIELD MOST OFTEN QUIETLY FALSE: a reason composed from a rules layer that did not make the decision is a plausible sentence about a different process. The gate reads that the field is filled; it cannot tell whether what it says is true.",
+        "_intelligibility_comment": "Nothing here judges whether the reason can be understood by the person who got it. Readability, translation and plain-language testing are the adopter's, and a record that is complete by this gate can still be incomprehensible in the letter."
+      },
+      "contest_route": {
+        "how": "ADOPT: the route by which the person challenges the decision — the form, the number, the address, and what they have to supply. 'Contact us' is not a route.",
+        "sla_days": "ADOPT (optional): a bound for this surface, overriding response_sla_days above. Positive number of days."
+      },
+      "authority": "ADOPT: the identity id (docs/governance/identities.json) of the human who can OVERTURN this decision — not the person who receives the complaint, the one with the power to change the outcome. The gate resolves them: an agent, an unresolvable id, or somebody inside `builders` means the contest arrives somewhere that cannot act on it, and a route to somebody who cannot act is an inbox.",
+      "overturns_recorded_in": "ADOPT: where the outcome of a contest is recorded. Without it the loop is open: overturns are the highest-signal evidence a model is wrong about a group, and if they land nowhere the monitoring in the model manifest can never see them."
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Institutional Intake</title>
+<meta name="description" content="The Loom's first-time questionnaire for an institution. Each role answers its own block; every answer says where it is written down; the export is an intake record brainkit-init reads. Nothing here is approved.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#FAF9F5; --surface:#FFFFFF; --surface-2:#F3F1EA;
+  --head:#14130F; --ink:#2A2925; --muted:#6E6A60; --faint:#9B978D;
+  --line:#E7E4DC; --line-strong:#D6D2C8;
+  --ember:#CE451B; --ember-fill:#E65C2D; --ember-dim:rgba(206,69,27,.10); --on-ember:#110D0A;
+  --pos:#2F7048; --pos-dim:rgba(47,112,72,.12);
+  --caution:#8F6614; --caution-dim:rgba(143,102,20,.12);
+  --crit:#B23434; --crit-dim:rgba(178,52,52,.12);
+  --serif:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --sans:'DM Sans',system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#080808; --surface:#181817; --surface-2:#101010;
+    --head:#ECE9E1; --ink:#DEDBD4; --muted:#A8A59E; --faint:#87847D;
+    --line:#1E1E1C; --line-strong:#33322F;
+    --ember:#F58F55; --ember-fill:#E65C2D; --ember-dim:rgba(230,92,45,.14); --on-ember:#110D0A;
+    --pos:#7DBE93; --pos-dim:rgba(125,190,147,.14);
+    --caution:#D9A03C; --caution-dim:rgba(217,160,60,.14);
+    --crit:#E0706A; --crit-dim:rgba(224,112,106,.14);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#080808; --surface:#181817; --surface-2:#101010;
+  --head:#ECE9E1; --ink:#DEDBD4; --muted:#A8A59E; --faint:#87847D;
+  --line:#1E1E1C; --line-strong:#33322F;
+  --ember:#F58F55; --ember-fill:#E65C2D; --ember-dim:rgba(230,92,45,.14); --on-ember:#110D0A;
+  --pos:#7DBE93; --pos-dim:rgba(125,190,147,.14);
+  --caution:#D9A03C; --caution-dim:rgba(217,160,60,.14);
+  --crit:#E0706A; --crit-dim:rgba(224,112,106,.14);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-block:24px 64px;padding-inline:clamp(16px,4vw,40px)}
+h1,h2,h3{font-family:var(--serif);font-weight:400;color:var(--head);margin:0;text-wrap:balance}
+h1{font-size:clamp(34px,4.6vw,52px);line-height:1.04}
+h2{font-size:30px;line-height:1.1}
+h3{font-size:19px;line-height:1.25}
+h1 em{font-style:italic;color:var(--ember)}
+p{margin:0}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--ember)}
+.eyebrow::before{content:'// '}
+.muted{color:var(--muted)}
+code{font-family:var(--mono);font-size:.9em;background:var(--surface-2);padding:1px 5px;border:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:36px}
+.mark{display:inline-flex;align-items:center;gap:4px}
+.mark .sq{width:14px;height:14px;background:var(--ink);border-radius:16%}
+.mark .di{width:14px;height:14px;background:linear-gradient(135deg,#F0722E,#CE451B);border-radius:16%;transform:rotate(45deg) scale(.86)}
+.wordmark{font:600 15px/1 var(--sans);letter-spacing:-.02em;color:var(--ink)}
+.wordmark b{color:var(--ember)}
+.brand .right{margin-left:auto;font:400 12px/1 var(--mono);color:var(--faint)}
+/* setup */
+.setup{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:start;margin-bottom:36px}
+@media (max-width:860px){.setup{grid-template-columns:1fr}}
+.setup .txt{display:grid;gap:16px}
+.lede{font-size:17px;line-height:1.5;max-width:60ch}
+.rules{display:grid;gap:8px;font-size:14px;color:var(--muted);padding-left:18px;margin:0}
+.rules li::marker{color:var(--ember)}
+.card{background:var(--surface);border:1px solid var(--line);padding:20px;display:grid;gap:14px}
+label.f{display:grid;gap:6px;font:600 13.5px/1.2 var(--sans);color:var(--head)}
+label.f small{font:400 12.5px/1.4 var(--sans);color:var(--muted)}
+input[type=text],select,textarea{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line-strong);border-radius:0;padding:10px 12px;font:400 15px/1.45 var(--sans)}
+textarea{min-height:76px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ember);box-shadow:0 0 0 3px var(--ember-dim)}
+.btn{font:500 12.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:13px 20px;border:1px solid var(--line-strong);background:transparent;color:var(--ink);cursor:pointer;border-radius:0;display:inline-flex;align-items:center;gap:10px}
+.btn.primary{background:var(--ember-fill);color:var(--on-ember);border-color:var(--ember-fill)}
+.btn.primary::before{content:'';width:9px;height:9px;background:currentColor;transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+.btn.primary:hover::before{transform:rotate(45deg)}
+.btn:focus-visible{outline:2px solid var(--ember);outline-offset:2px}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+/* layout */
+.main{display:grid;grid-template-columns:260px minmax(0,1fr);gap:32px;align-items:start}
+@media (max-width:860px){.main{grid-template-columns:1fr}}
+nav.blocks{position:sticky;top:16px;display:grid;gap:2px}
+nav.blocks button{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;text-align:left;background:transparent;border:1px solid transparent;padding:10px 12px;cursor:pointer;color:var(--ink);font:400 14px/1.3 var(--sans);border-radius:0}
+nav.blocks button .k{font:500 12px/1 var(--mono);color:var(--ember)}
+nav.blocks button .n{font:400 11px/1 var(--mono);color:var(--faint)}
+nav.blocks button:hover{background:var(--surface)}
+nav.blocks button.active{background:var(--surface);border-color:var(--line-strong)}
+nav.blocks button:focus-visible{outline:2px solid var(--ember);outline-offset:-2px}
+.tally{margin-top:16px;padding:14px;border:1px solid var(--line);background:var(--surface);display:grid;gap:8px;font-size:13px}
+.tally .r{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
+.tally .r b{font-weight:500;font-family:var(--mono)}
+.d-S{color:var(--pos)} .d-C{color:var(--caution)} .d-U{color:var(--crit)}
+/* block */
+.block-h{display:grid;gap:8px;margin-bottom:22px}
+.block-h .meta{display:flex;flex-wrap:wrap;gap:8px 18px;font:400 12.5px/1.4 var(--mono);color:var(--muted)}
+.qs{display:grid;gap:14px}
+.q{background:var(--surface);border:1px solid var(--line);padding:18px 20px;display:grid;gap:12px}
+.q .top{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start}
+.q .id{font:500 12px/1.6 var(--mono);color:var(--ember)}
+.q .prompt{font:500 15.5px/1.45 var(--sans);color:var(--head)}
+.q .hint{font-size:13px;color:var(--muted);margin-top:4px}
+.badge{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border:1px solid;white-space:nowrap}
+.badge.S{color:var(--pos);border-color:var(--pos);background:var(--pos-dim)}
+.badge.C{color:var(--caution);border-color:var(--caution);background:var(--caution-dim)}
+.badge.U{color:var(--crit);border-color:var(--crit);background:var(--crit-dim)}
+.sugg{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--line-strong);background:var(--surface-2);font-size:13.5px}
+.sugg .l{font:500 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sugg .row{justify-content:space-between}
+.sugg .row .btn{padding:8px 12px;font-size:11.5px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:700px){.fields{grid-template-columns:1fr}}
+.fields .full{grid-column:1 / -1}
+.ref-hint{font-size:12.5px;color:var(--muted)}
+.ref-hint b{color:var(--ember);font-weight:500}
+/* export */
+.export{margin-top:36px;padding-top:28px;border-top:1px solid var(--line);display:grid;gap:16px}
+.export textarea{font-family:var(--mono);font-size:12px;min-height:160px}
+.notice{font-size:13.5px;color:var(--muted);max-width:70ch}
+.toast{font:500 12px/1 var(--mono);color:var(--pos)}
+footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint);display:flex;flex-wrap:wrap;gap:8px 24px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <span class="mark" aria-hidden="true"><span class="sq"></span><span class="di"></span></span>
+    <span class="wordmark">Middle<b>Leap</b></span>
+    <span class="right">THE LOOM · INSTITUTIONAL INTAKE · authority: none</span>
+  </header>
+
+  <section class="setup">
+    <div class="txt">
+      <span class="eyebrow">Before the first problem</span>
+      <h1>Tell the Loom how your institution works, <em>and where that is written.</em></h1>
+      <p class="lede">Nine blocks, one per accountable role. Answer only your block. Every question asks two things: what is true here, and which document says so. That second field decides what happens to your answer.</p>
+      <ul class="rules">
+        <li><b class="d-S">Sourced</b>: you named a document, register or signed decision. Only these reach a BrainKit section.</li>
+        <li><b class="d-C">Claimed</b>: you answered from experience. It goes to the gap register with your role as owner, to be written down.</li>
+        <li><b class="d-U">Unknown</b>: left blank. It goes to the gap register for escalation.</li>
+        <li>Roles, never names. Nothing you type here is approved by typing it. Your answers are saved in this browser and exported as a file the facilitator imports.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <label class="f" for="inst">Institution <small>The name as it should appear in the record.</small><input type="text" id="inst" placeholder="e.g. Meridian Trust" autocomplete="organization"></label>
+      <label class="f" for="pack">Pre-fill pack <small>Suggestions from a bundled jurisdiction profile. A suggestion you confirm is still <b>claimed</b> until you name the document.</small><select id="pack"></select></label>
+      <label class="f" for="role">I am answering as <small>Your role. Never your name.</small><select id="role"></select></label>
+      <div class="row">
+        <label class="btn" for="importf">Import a saved record</label>
+        <input type="file" id="importf" accept="application/json" hidden>
+        <button class="btn" id="clear" type="button">Clear this browser's answers</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="main">
+    <nav class="blocks" id="nav" aria-label="Blocks"></nav>
+    <div>
+      <div id="block"></div>
+      <section class="export" id="export">
+        <span class="eyebrow">Export</span>
+        <h2>Hand the record to the facilitator</h2>
+        <p class="notice">The record is a JSON file, <code>intake-record.json</code>, saved to <code>institution/intake/</code> in the repository. The <code>institution-intake</code> skill imports it and interviews only the gaps; <code>brainkit-init</code> drafts from the sourced answers. It carries <code>authority: none</code> on purpose.</p>
+        <div class="row">
+          <button class="btn primary" id="download" type="button">Download intake-record.json</button>
+          <button class="btn" id="copy" type="button">Copy JSON</button>
+          <span class="toast" id="toast" aria-live="polite"></span>
+        </div>
+        <textarea id="out" readonly aria-label="Intake record JSON"></textarea>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>The Loom · MiddleLeap AI DLC · generated from <code>intake/questions.json</code> — edit the bank, rebuild with <code>node intake/build-questionnaire.mjs</code></span>
+    <span>Questions digest <code id="qd"></code></span>
+  </footer>
+</div>
+
+<script id="intake-data" type="application/json">
+{"questions":{"schema":"loom.intake-questions/v1","_comment":"The single question bank behind institution-intake and the questionnaire. The HTML is GENERATED from this file (node intake/build-questionnaire.mjs); scripts/intake-check.mjs fails when they disagree. Every question carries the BrainKit home a SOURCED answer lands in. Add questions here, never in the HTML.","dispositions":{"SOURCED":"An answer with a reference to a document, register or signed decision. Only these reach a BrainKit section.","CLAIMED":"An answer with no reference. Goes to the gap register with the respondent's role as owner.","UNKNOWN":"No answer. Goes to the gap register for escalation."},"blocks":[{"id":"A","title":"Identity and brand","home":"identity/design.md","role":"head of brand / communications"},{"id":"B","title":"Terminology","home":"terminology.md","role":"head of architecture / data office"},{"id":"C","title":"Architecture principles","home":"architecture.md","role":"head of architecture"},{"id":"D","title":"Technology policy and radar","home":"technology-policy.json","role":"CTO office / platform lead"},{"id":"E","title":"Decision rights","home":"governance.md + docs/governance/identities.json","role":"risk, second line"},{"id":"F","title":"Strategic intents","home":"strategy.md","role":"head of strategy / product"},{"id":"G","title":"Regulated context","home":"pointers only — the D6 data-risk register and obligations register","role":"risk, second line / data protection"},{"id":"H","title":"Investment and the business case","home":"business-case.md ADOPT markers","role":"finance / investment committee secretary"},{"id":"I","title":"Working the Loom","home":"residency record · floor · facilitator","role":"data protection / operations / the facilitator"}],"questions":[{"id":"A1","block":"A","prompt":"Is there a brand guideline? Where does it live, who owns it, and when was it last approved?","hint":"The document is the answer. A colour someone remembers is a claim.","type":"text","home":"identity/design.md"},{"id":"A2","block":"A","prompt":"Are colour, typography, logo and spacing available as tokens, or only as pictures in a PDF?","hint":"Tokens can be projected into the D7 brand seam directly; pictures have to be transcribed and re-approved.","type":"text","home":"identity/design.md"},{"id":"A3","block":"A","prompt":"Are there tone-of-voice rules, or a list of words the institution never uses about itself?","hint":"Voice rules become the renderer's copy constraints.","type":"textarea","home":"identity/design.md"},{"id":"A4","block":"A","prompt":"Which output media must look institutional: documents, decks, spreadsheets, web, wireframes?","hint":"Everything the harness renders for a human reads design.md.","type":"text","home":"identity/design.md"},{"id":"A5","block":"A","prompt":"Is there a right-to-left or multi-language requirement?","hint":"The brand seam carries lang and dir; the renderer mirrors layout from them.","type":"text","home":"identity/design.md"},{"id":"A6","block":"A","prompt":"Who signs off a new template today, and how long does it take?","hint":"This is a decision right; it also lands in block E.","type":"text","home":"identity/design.md"},{"id":"B1","block":"B","prompt":"Is there a glossary, a data dictionary, or an adopted regulatory vocabulary? Where?","hint":"The binding vocabulary every artifact uses.","type":"text","home":"terminology.md"},{"id":"B2","block":"B","prompt":"Which words are contested internally (two departments, two meanings)?","hint":"A contested term stays a claim until one side's document wins.","type":"textarea","home":"terminology.md"},{"id":"B3","block":"B","prompt":"Which product and customer terms are legally defined and must never be paraphrased?","hint":"These are copied exactly, never reworded by the agent.","type":"textarea","home":"terminology.md"},{"id":"C1","block":"C","prompt":"Are there written architecture principles, or an architecture review board with a charter?","hint":"Principles every ADR must conform to.","type":"text","home":"architecture.md"},{"id":"C2","block":"C","prompt":"What are the binding constraints: data residency, integration patterns, hosting posture, identity provider?","hint":"Constraints, not preferences. Regulated constraints point at the D6 register rather than repeating it.","type":"textarea","home":"architecture.md"},{"id":"C3","block":"C","prompt":"What makes a change architecture-material here? What fires a review?","hint":"Becomes the architecture_material trigger in the institution profile.","type":"textarea","home":"architecture.md"},{"id":"C4","block":"C","prompt":"Which reference architectures or mandated patterns exist, and where are they?","hint":"","type":"text","home":"architecture.md"},{"id":"D1","block":"D","prompt":"The no-fly zone: which technologies must not be introduced, and what is the approved rationale for each?","hint":"Forbidden without a written reason is a claim, not a policy.","type":"textarea","home":"technology-policy.json"},{"id":"D2","block":"D","prompt":"The allowed set: the standard language, runtime, data platform and cloud, and the document that says so.","hint":"","type":"textarea","home":"technology-policy.json"},{"id":"D3","block":"D","prompt":"The consult set: which technologies need whose sign-off before use?","hint":"","type":"textarea","home":"technology-policy.json"},{"id":"D4","block":"D","prompt":"Which internal or external standards has the institution adopted?","hint":"By reference.","type":"textarea","home":"technology-policy.json"},{"id":"D5","block":"D","prompt":"Is there a curated package mirror or hardened-libraries supplier? Does the resolver fall back to the public index? Who owns the resolver configuration?","hint":"An unenforced registry is the honest answer if that is the case.","type":"textarea","home":"technology-policy.json"},{"id":"D6","block":"D","prompt":"The radar: what is being assessed, trialled, adopted or held, by whom, decided when, and re-decided when?","hint":"One line per technology: name, ring, owner role, since, review-by or exit-by.","type":"textarea","home":"technology-policy.json"},{"id":"E1","block":"E","prompt":"Who decides product scope, architecture, risk acceptance, data-protection questions, brand exceptions, technology exceptions, and release to production?","hint":"One decision per line with the accountable authority and who is consulted.","type":"textarea","home":"governance.md + docs/governance/identities.json"},{"id":"E2","block":"E","prompt":"Where are those decision rights written: a delegated-authorities matrix, committee terms of reference?","hint":"","type":"text","home":"governance.md + docs/governance/identities.json"},{"id":"E3","block":"E","prompt":"How does a decision escalate when authority is unclear?","hint":"","type":"textarea","home":"governance.md + docs/governance/identities.json"},{"id":"E4","block":"E","prompt":"Which humans hold the roles the Loom needs: product owner, engineering, risk second line, compliance, legal, operations, data protection, accountable executive, institutional-context owner?","hint":"Roles only here; names go in the identity registry. A role with no human is a gap.","type":"textarea","home":"governance.md + docs/governance/identities.json"},{"id":"E5","block":"E","prompt":"Who is the second human who merges what the facilitator proposes?","hint":"It is never the facilitator.","type":"text","home":"governance.md + docs/governance/identities.json"},{"id":"F1","block":"F","prompt":"What are the stated strategic intents for the current planning horizon, and where are they written?","hint":"Strategy paper, board pack, OKR set. Each intent gets a stable id (SI-01…).","type":"textarea","home":"strategy.md"},{"id":"F2","block":"F","prompt":"For each intent: the owner role and the measure the institution already tracks.","hint":"","type":"textarea","home":"strategy.md"},{"id":"F3","block":"F","prompt":"Which intents are explicitly not being pursued this cycle?","hint":"A problem that serves a parked intent should know it.","type":"textarea","home":"strategy.md"},{"id":"G1","block":"G","prompt":"Which regulators and regimes apply, in which jurisdictions?","hint":"Pointers only. The register holds the content.","type":"textarea","home":"pointers only — the D6 data-risk register and obligations register"},{"id":"G2","block":"G","prompt":"Does a data-risk register exist? Who owns it? When was it last reconciled against the regulation?","hint":"","type":"text","home":"pointers only — the D6 data-risk register and obligations register"},{"id":"G3","block":"G","prompt":"Does an obligations register exist, with an owner per obligation?","hint":"","type":"text","home":"pointers only — the D6 data-risk register and obligations register"},{"id":"G4","block":"G","prompt":"Is there a jurisdiction profile per market, or one market only?","hint":"","type":"text","home":"pointers only — the D6 data-risk register and obligations register"},{"id":"H1","block":"H","prompt":"Who approves funding for change, at what thresholds? One stage or two?","hint":"","type":"textarea","home":"business-case.md ADOPT markers"},{"id":"H2","block":"H","prompt":"What financial method is mandated: hurdle rate, horizon, NPV / IRR / payback, currency?","hint":"If none, say so. The business case then shows payback only.","type":"text","home":"business-case.md ADOPT markers"},{"id":"H3","block":"H","prompt":"Which benefit categories does finance recognise, and which does it refuse?","hint":"","type":"textarea","home":"business-case.md ADOPT markers"},{"id":"H4","block":"H","prompt":"How are benefits tracked after launch today, and by whom? Does anyone go back?","hint":"","type":"textarea","home":"business-case.md ADOPT markers"},{"id":"H5","block":"H","prompt":"Which non-build costs does the institution routinely under-count: organisational change, training, legal and contractual work, control-function time, operations and run, decommissioning?","hint":"","type":"textarea","home":"business-case.md ADOPT markers"},{"id":"H6","block":"H","prompt":"Is there an existing business-case template? Where?","hint":"If so, the Loom's template is filled from it, never the other way round.","type":"text","home":"business-case.md ADOPT markers"},{"id":"I1","block":"I","prompt":"Where may institutional and personal data live? Is a collaboration workspace already approved for it?","hint":"","type":"textarea","home":"residency record · floor · facilitator"},{"id":"I2","block":"I","prompt":"Who would sign the residency record: data protection and risk second line, two different people, neither a builder?","hint":"Roles only.","type":"text","home":"residency record · floor · facilitator"},{"id":"I3","block":"I","prompt":"Which workspace tool would a Factory Floor project into, if any?","hint":"","type":"text","home":"residency record · floor · facilitator"},{"id":"I4","block":"I","prompt":"Who is the facilitator? Do they have Claude Code and the plugin today?","hint":"Role only.","type":"text","home":"residency record · floor · facilitator"},{"id":"I5","block":"I","prompt":"What is the institution's PII rule for interview notes and meeting notes?","hint":"If there is none, the floor's catalog-C banner is the rule until one is written, and that is a gap.","type":"textarea","home":"residency record · floor · facilitator"}]},"prefill":[{"schema":"loom.intake-prefill/v1","pack":"uae-bank","title":"UAE bank (CBUAE-regulated)","_comment":"SUGGESTED answers from the bundle's uae-bank jurisdiction profile and the regulated-bank base profile. A suggestion the respondent confirms is still CLAIMED until they name the document; the questionnaire says so beside every suggestion. Nothing here is the institution's approved position.","suggestions":{"G1":"Central Bank of the UAE (CBUAE). Regimes the harness already names as D6 drivers: Consumer Protection Standards (CPS), Personal Data Protection Law (PDPL), Model Management Standards (MMS), CPS-AI, BCBS 239. Open Finance carries the AlTareq CX regime.","G4":"One jurisdiction: uae-bank (profiles/jurisdictions/uae-bank.json).","E4":"Roles the regulated-bank profile compiles: product-owner, engineering (low tier); risk-second-line, compliance, legal, operations (medium tier); institutional-context-owner (institution profile). Islamic products add shariah-committee.","E1":"Product approval is two-line: PA1 before Develop, PA2 before launch (regulated-bank profile). The accountable authority per decision is the institution's to name.","H1":"Two stages are the common shape: a one-page pre-screen, then a full case above the committee threshold. The threshold and the committee are the institution's.","I2":"Data protection officer and head of risk (second line): two different humans, neither in the builders group (residency-check).","A5":"Arabic alongside English is usual for customer-facing output in this market; the brand seam carries lang and dir per artifact."}}],"questions_digest":"sha256:1d8fc2510a0bc09ec1f3e9f25c26c05b81c66f2645cdfb21e4db68053a7da869"}
+</script>
+<script>
+(function(){
+  var DATA = JSON.parse(document.getElementById('intake-data').textContent);
+  var BANK = DATA.questions, PACKS = DATA.prefill, DIGEST = DATA.questions_digest;
+  var KEY = 'loom.intake.v1';
+  var state = load() || { institution:'', pack:'', role:'', answers:{} };
+  var current = BANK.blocks[0].id;
+
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY)); } catch(e){ return null; } }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} render(); }
+  function disp(a){ if(!a || !(a.answer||'').trim()) return 'UNKNOWN'; return (a.reference||'').trim() ? 'SOURCED' : 'CLAIMED'; }
+  function letter(d){ return d[0]; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+
+  // setup controls
+  var inst=document.getElementById('inst'), pack=document.getElementById('pack'), role=document.getElementById('role');
+  pack.innerHTML = '<option value="">No pre-fill</option>' + PACKS.map(function(p){return '<option value="'+esc(p.pack)+'">'+esc(p.title)+'</option>';}).join('');
+  role.innerHTML = '<option value="">Choose a role</option>' + BANK.blocks.map(function(b){return '<option value="'+esc(b.role)+'">'+esc(b.role)+'</option>';}).join('') + '<option value="the facilitator">the facilitator</option>';
+  inst.value=state.institution; pack.value=state.pack||''; role.value=state.role||'';
+  inst.addEventListener('input',function(){state.institution=inst.value;save();});
+  pack.addEventListener('change',function(){state.pack=pack.value;save();});
+  role.addEventListener('change',function(){state.role=role.value;save();});
+  document.getElementById('clear').addEventListener('click',function(){ if(confirm('Clear every answer saved in this browser?')){ state={institution:'',pack:'',role:'',answers:{}}; inst.value='';pack.value='';role.value=''; save(); } });
+  document.getElementById('importf').addEventListener('change',function(e){
+    var f=e.target.files[0]; if(!f) return; var r=new FileReader();
+    r.onload=function(){ try{ var rec=JSON.parse(r.result); if(rec.schema!=='loom.intake-record/v1') throw new Error('not an intake record');
+      state.institution=rec.institution||state.institution; state.pack=rec.prefill_pack||state.pack; inst.value=state.institution; pack.value=state.pack||'';
+      (rec.answers||[]).forEach(function(a){ state.answers[a.id]={answer:a.answer||'',reference:a.reference||'',role:a.respondent_role||'',prefilled_from:a.prefilled_from||null}; });
+      save(); toast('Imported '+(rec.answers||[]).length+' answers'); } catch(err){ toast('Could not import: '+err.message); } };
+    r.readAsText(f);
+  });
+
+  function packFor(){ return PACKS.filter(function(p){return p.pack===state.pack;})[0]; }
+
+  function tallies(){
+    var t={SOURCED:0,CLAIMED:0,UNKNOWN:0}, per={};
+    BANK.questions.forEach(function(q){ var d=disp(state.answers[q.id]); t[d]++; per[q.block]=per[q.block]||{SOURCED:0,CLAIMED:0,UNKNOWN:0}; per[q.block][d]++; });
+    return {total:t, per:per};
+  }
+
+  function render(){
+    var T=tallies();
+    // nav
+    var nav=document.getElementById('nav');
+    nav.innerHTML = BANK.blocks.map(function(b){ var p=T.per[b.id]; var n=BANK.questions.filter(function(q){return q.block===b.id;}).length;
+      return '<button type="button" data-b="'+b.id+'" class="'+(b.id===current?'active':'')+'" aria-current="'+(b.id===current)+'"><span class="k">'+b.id+'</span><span>'+esc(b.title)+'</span><span class="n">'+(n-p.UNKNOWN)+'/'+n+'</span></button>'; }).join('')
+      + '<div class="tally"><div class="r"><span class="d-S">Sourced</span><b>'+T.total.SOURCED+'</b></div><div class="r"><span class="d-C">Claimed</span><b>'+T.total.CLAIMED+'</b></div><div class="r"><span class="d-U">Unknown</span><b>'+T.total.UNKNOWN+'</b></div></div>';
+    nav.querySelectorAll('button').forEach(function(b){ b.addEventListener('click',function(){ current=b.dataset.b; render(); window.scrollTo({top:document.getElementById('block').offsetTop-16,behavior:'smooth'}); }); });
+    // block
+    var b=BANK.blocks.filter(function(x){return x.id===current;})[0]; var P=packFor();
+    var html='<div class="block-h"><span class="eyebrow">Block '+b.id+'</span><h2>'+esc(b.title)+'</h2><div class="meta"><span>ANSWERED BY · '+esc(b.role)+'</span><span>SOURCED ANSWERS LAND IN · '+esc(b.home)+'</span></div></div><div class="qs">';
+    BANK.questions.filter(function(q){return q.block===b.id;}).forEach(function(q){
+      var a=state.answers[q.id]||{answer:'',reference:'',role:'',prefilled_from:null}; var d=disp(a);
+      var sug = P && P.suggestions[q.id] && !(a.answer||'').trim() ? '<div class="sugg"><span class="l">Suggested by the '+esc(P.title)+' pack — confirm or override. Confirming does not make it sourced.</span><div class="row"><span>'+esc(P.suggestions[q.id])+'</span><button type="button" class="btn" data-use="'+q.id+'">Use this</button></div></div>' : '';
+      html += '<div class="q" id="q-'+q.id+'"><div class="top"><span class="id">'+q.id+'</span><div><div class="prompt">'+esc(q.prompt)+'</div>'+(q.hint?'<div class="hint">'+esc(q.hint)+'</div>':'')+'</div><span class="badge '+letter(d)+'">'+d+'</span></div>'+sug
+        +'<div class="fields"><label class="f full" for="a-'+q.id+'">Answer'+(q.type==='textarea'?'<textarea id="a-'+q.id+'" data-a="'+q.id+'">'+esc(a.answer)+'</textarea>':'<input type="text" id="a-'+q.id+'" data-a="'+q.id+'" value="'+esc(a.answer)+'">')+'</label>'
+        +'<label class="f" for="r-'+q.id+'">Where is this written down? <small class="ref-hint">A document, register or signed decision. Empty means <b>claimed</b>.</small><input type="text" id="r-'+q.id+'" data-r="'+q.id+'" value="'+esc(a.reference)+'" placeholder="e.g. Brand Guideline v4.2, intranet/brand"></label>'
+        +'<label class="f" for="o-'+q.id+'">Answered by <small>Defaults to the role above.</small><input type="text" id="o-'+q.id+'" data-o="'+q.id+'" value="'+esc(a.role||'')+'" placeholder="'+esc(state.role||b.role)+'"></label></div></div>';
+    });
+    html+='</div>';
+    var blk=document.getElementById('block'); blk.innerHTML=html;
+    blk.querySelectorAll('[data-a]').forEach(function(el){ el.addEventListener('input',function(){ upd(el.dataset.a,'answer',el.value); }); el.addEventListener('blur',render); });
+    blk.querySelectorAll('[data-r]').forEach(function(el){ el.addEventListener('input',function(){ upd(el.dataset.r,'reference',el.value); }); el.addEventListener('blur',render); });
+    blk.querySelectorAll('[data-o]').forEach(function(el){ el.addEventListener('input',function(){ upd(el.dataset.o,'role',el.value); }); });
+    blk.querySelectorAll('[data-use]').forEach(function(btn){ btn.addEventListener('click',function(){ var id=btn.dataset.use; state.answers[id]=state.answers[id]||{}; state.answers[id].answer=P.suggestions[id]; state.answers[id].prefilled_from=P.pack; save(); document.getElementById('r-'+id).focus(); }); });
+    document.getElementById('out').value = JSON.stringify(record(), null, 2);
+    document.getElementById('qd').textContent = DIGEST;
+  }
+  function upd(id,k,v){ state.answers[id]=state.answers[id]||{answer:'',reference:'',role:'',prefilled_from:null}; state.answers[id][k]=v; try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){} }
+
+  function record(){
+    var T=tallies();
+    return { schema:'loom.intake-record/v1', authority:'none', institution: state.institution||'', generated_at: new Date().toISOString(), prefill_pack: state.pack||null, questions_digest: DIGEST,
+      answers: BANK.questions.map(function(q){ var a=state.answers[q.id]||{}; var d=disp(a); var o={id:q.id, block:q.block, disposition:d};
+        if((a.answer||'').trim()) o.answer=a.answer.trim(); if((a.reference||'').trim()) o.reference=a.reference.trim();
+        var r=(a.role||'').trim()||state.role||''; if(r) o.respondent_role=r; if(a.prefilled_from) o.prefilled_from=a.prefilled_from; return o; }),
+      summary: T.total };
+  }
+  function toast(m){ var t=document.getElementById('toast'); t.textContent=m; setTimeout(function(){ t.textContent=''; },3000); }
+  document.getElementById('download').addEventListener('click',function(){
+    var blob=new Blob([JSON.stringify(record(),null,2)],{type:'application/json'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='intake-record.json'; document.body.appendChild(a); a.click(); a.remove(); toast('Downloaded');
+  });
+  document.getElementById('copy').addEventListener('click',function(){ var o=document.getElementById('out'); o.select(); try{ navigator.clipboard.writeText(o.value).then(function(){toast('Copied');}); }catch(e){ document.execCommand('copy'); toast('Copied'); } });
+  render();
+})();
+</script>
+</body>
+</html>

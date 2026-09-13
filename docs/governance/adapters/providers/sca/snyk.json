@@ -1,0 +1,38 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `sca` role — one of several; the institution chooses. This one closes a specific hole: scripts/supply-chain-check.mjs reads dependency-audit.json from a path the coding agent can write, so an agent that writes {\"critical\":0,\"high\":0} goes green without a scan. That is the HG-0002 failure mode. The provider makes the counts an envelope the SCANNER ORG asserts, signed by an issuer outside the agent's write scope (governance/attestation-issuers.template.json), and reconciled against the file the gate reads. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your org, and wire the fetch that fills activation_evidence.",
+  "role": "sca",
+  "provider": "snyk",
+  "adapter_id": "snyk-sca",
+  "system": "snyk",
+  "satisfies_control": "Q4-SUPPLY",
+  "capability": "The scanner org's own severity counts for the scanned project, plus the reachability verdict behind any deferred finding — asserted by the platform, not by the repository under test",
+  "evidence": {
+    "kind": "dependency-audit",
+    "envelope_fields": [
+      "project_id",
+      "target_reference",
+      "scanned_commit",
+      "critical",
+      "high",
+      "moderate",
+      "low",
+      "reachable_critical",
+      "reachable_high",
+      "reachability_method",
+      "policy_id",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "The gate reads the file; the adapter proves the file matches the platform. Reconcile on scanned_commit AND on every count — a stale or edited local report is a finding, not a pass.",
+    "gate_artifact": "docs/governance/evidence/dependency-audit.json",
+    "gate_mechanism": "scripts/supply-chain-check.mjs",
+    "match_on": ["scanned_commit", "critical", "high", "reachable_critical", "reachable_high"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real API read against your Snyk org + a tamper probe; sign the envelope with a registry issuer. The tamper probe is the decisive one — it proves the RECONCILIATION bites, not that the API answered.",
+    "fetched_at": "ADOPT: timestamp of your Snyk API read",
+    "scanner_identity": "ADOPT: the least-privilege service account that runs the scan — must NOT be the coding agent's identity",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that editing dependency-audit.json away from the platform's counts fails the build"
+  }
+}

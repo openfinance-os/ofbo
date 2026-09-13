@@ -1,0 +1,28 @@
+{
+  "profile": "shariah-model",
+  "kind": "product",
+  "_comment": "A model whose OUTPUT carries Shari'ah significance — product structuring, compliance screening, financing decisions on an Islamic product. Ordinary model risk asks whether the model is accurate, stable and monitored; it does not ask whether the thing the model produced is a permissible structure, and a model that is statistically excellent can be confidently wrong in a way only a scholar can see. So this profile adds a DOMAIN validation on top of model risk rather than replacing it: `model_risk` stays required at a high floor, and `shariah_model_validation` sits beside it. Composes with products/ai-decision-system (the generic AI-decision controls) and products/islamic-product (the Shari'ah governance route) — name all three for an AI system deciding on an Islamic product. The validation is a review of the model's Shari'ah-significant behaviour by people who hold that competence, recorded as evidence; NO agent and nothing in this harness rules on Shari'ah, and a passing validation record means the review happened and is bound to this change, not that the model is Shari'ah-compliant.",
+  "requirements": {
+    "medium": {
+      "approver_roles": [
+        "model-validator",
+        "shariah-compliance"
+      ],
+      "_pa2_comment": "`shariah-model-validation` is the domain review itself: what the model decides, which contract structures its outputs can produce, where it can produce an impermissible one, and what stops that reaching a customer. `ai-disclosure` is restated here rather than inherited, because a Shari'ah-significant model may be deployed without the ai-decision-system profile being named and the customer's right to be told is not conditional on which profiles an envelope happened to list.",
+      "pa2_sections": [
+        "shariah-model-validation",
+        "ai-disclosure"
+      ],
+      "capabilities": {
+        "shariah_model_validation": {
+          "required": true,
+          "institution_owned": true
+        },
+        "model_risk": {
+          "required": true,
+          "minimum_tier": "high"
+        }
+      }
+    }
+  }
+}

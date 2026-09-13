@@ -1,0 +1,21 @@
+{
+  "_comment": "ADOPT (rc.37 · flow-plan Phase 3.4): the service-level EXPECTATION for approvals, mounted as docs/governance/approval-sla.json and owned by the second line — deliberately shaped like assurance-sla.json, and deliberately weaker in force. scripts/approval-status.mjs reads it and FLAGS a breach; nothing here gates a merge, because gating a control on how long a human took to think would trade the control for the clock. Its job is to make a queue visible: who a change is waiting on, for how long, and how much is stacked on one role. Tune the targets to your organisation; a target you cannot meet is worth knowing about, which is the whole point of measuring it.",
+  "default_target_days": 10,
+  "stages": {
+    "PA1": { "target_days": 5, "note": "Permission to develop — the cheap place to raise an objection. A slow PA1 is the most expensive queue in the system: the work has not started, and the objection arrives after it has." },
+    "PA2": { "target_days": 10, "note": "Permission to launch — more functions, more evidence, a longer honest target." }
+  },
+  "roles": {
+    "risk-second-line": { "target_days": 5 },
+    "compliance": { "target_days": 7 },
+    "model-validator": { "target_days": 10 },
+    "credit-risk": { "target_days": 7 },
+    "data-protection": { "target_days": 7 },
+    "accountable-executive": { "target_days": 10 },
+    "shariah-committee": { "target_days": 14, "note": "Committee cadence, not an individual's desk — the target reflects when the body actually sits." },
+    "shariah-compliance": { "target_days": 7, "note": "The second-line Shari'ah Compliance Function is a standing desk, not a sitting body — it monitors continuously, so its target matches the other second-line functions rather than the committee's calendar." },
+    "shariah-audit": { "target_days": 10, "note": "Third-line internal Shari'ah audit, binding at PA2 only. Longer than the compliance desk because it certifies what was actually built, and shorter than the committee because it is a function rather than a quorum." }
+  },
+  "wip_limit_per_role": 5,
+  "_wip_note": "A soft limit. More than this many changes queued on one role is reported as a concentration, because that is a capacity problem wearing the costume of a governance problem. It is a FLAG, never a block."
+}

@@ -1,0 +1,37 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `hardened-runtime` role — one of several; the institution chooses. The obvious use of hardened images is the shipped product's base layer, and that is already evidenced by the Q4 provenance artifact (scripts/supply-chain-check.mjs). This role covers the less obvious and more load-bearing one: the container the CODING AGENT itself runs in is a supply-chain artifact with a build, a digest and provenance, and HG-0011 requires that execution be attested. A sandbox image nobody can account for does not satisfy it. Scoped to HG-0011 rather than Q4-SUPPLY: one adapter, one control (AD-R05) — sharing a control with the sca provider would make their evidence interchangeable. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your registry, and wire the fetch that fills activation_evidence.",
+  "role": "hardened-runtime",
+  "provider": "chainguard",
+  "adapter_id": "chainguard-runtime",
+  "system": "chainguard",
+  "satisfies_control": "HG-0011",
+  "capability": "The agent's build/eval runtime is a digest-pinned image whose SBOM and SLSA provenance are verified at admission rather than trusted by name, and whose minimal surface carries no shell or package manager for a misdirected agent to reach for",
+  "evidence": {
+    "kind": "runtime-attestation",
+    "envelope_fields": [
+      "runtime_image_reference",
+      "runtime_image_digest",
+      "sbom_format",
+      "sbom_digest",
+      "slsa_build_level",
+      "attestation_verified",
+      "verifying_key_id",
+      "shell_present",
+      "package_manager_present",
+      "rebuilt_at",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "Bind the attestation to what actually ran, not to what the manifest requested. A digest verified in the registry and a different digest executing in the sandbox is the whole gap this closes.",
+    "gate_artifact": "docs/governance/platform-activation/agent-runtime.json",
+    "gate_mechanism": "scripts/platform-activation-check.mjs",
+    "match_on": ["runtime_image_digest", "attestation_verified"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real registry read + a real signature verification (e.g. a cosign verify-attestation run) + the negative probe. Pinning by tag is not pinning — the envelope carries a digest or it carries nothing.",
+    "fetched_at": "ADOPT: timestamp of your registry/attestation read",
+    "verified_by": "ADOPT: the verifier identity that checked the signature — outside the coding agent's write scope",
+    "unsigned_image_probe": "ADOPT: 'rejected' once you have tested that a runtime image without a valid attestation fails admission"
+  }
+}

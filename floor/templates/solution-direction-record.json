@@ -1,0 +1,106 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "solution-direction-record",
+  "title": "Solution direction",
+  "stage": "develop",
+  "write_class": "decision-routed",
+  "source": "delivery/templates/solution-direction-record.md",
+  "source_digest": "sha256:185a413ab353e65146a7f2d32c19ed19c22bd2d9ab1cbe67618500e962e4e5df",
+  "gates": [
+    "D1",
+    "D6",
+    "D9"
+  ],
+  "guidance": "**Identifiers.** Gate ids (`D1`–`D9`, `Q1`–`Q5`) and run-level ids (`S-001` signal, `T-1` theme, `H1` hypothesis) are expanded in `discovery/GLOSSARY.md`.",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "The directions explored",
+      "required": true,
+      "kind": "table",
+      "help": "At least three. A single direction dressed as a choice defeats the diamond — the point is that a real alternative was live at the moment of the decision.",
+      "columns": [
+        "#",
+        "Direction",
+        "Shape in one line",
+        "Sketch (`/design` canvas, if it has a surface)",
+        "Killed by / survived because"
+      ]
+    },
+    {
+      "name": "The judgment",
+      "required": true,
+      "kind": "table",
+      "help": "How the directions were scored — against the D1 success measures and the inherited D6 data-governance conditions, not against taste. Name the criterion that actually decided it.",
+      "columns": [
+        "Criterion (source)",
+        "Dir 1",
+        "Dir 2",
+        "Dir 3"
+      ],
+      "gates": [
+        "D1",
+        "D6"
+      ]
+    },
+    {
+      "name": "The chosen direction",
+      "required": true,
+      "kind": "rich_text",
+      "help": "What is being built, at the level of shape rather than spec: the components, the seams, the data that moves, the systems it touches."
+    },
+    {
+      "name": "How it meets every success measure",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "D1 measure",
+        "How this direction meets it",
+        "How it will be evidenced"
+      ]
+    },
+    {
+      "name": "Inherited conditions carried into delivery",
+      "required": true,
+      "kind": "table",
+      "help": "Every D6 condition and every constraint from the hand-off, restated as something delivery must honour — each one traceable to a backlog item or an explicit control.",
+      "columns": [
+        "Condition (source)",
+        "Carried into"
+      ],
+      "gates": [
+        "D6"
+      ]
+    },
+    {
+      "name": "Decisions deferred to ADRs",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Question",
+        "ADR",
+        "Blocking?"
+      ]
+    }
+  ]
+}

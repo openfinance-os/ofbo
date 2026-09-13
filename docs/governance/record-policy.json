@@ -1,0 +1,570 @@
+{
+  "schema": "loom.record-policy/v1",
+  "catalog_sha256": "651a6148d098ccb539cac4217446fcb15183e0ca25ef2e858a36f66fef6247f6",
+  "compiled_at": "2026-09-13T18:44:38.447Z",
+  "rule": "every required record is PRESENT on the trail and COMPLIANT (a gate record whose result is not pass/pass-cached is non-compliant); an unexpected record is reported, never fatal",
+  "required": [
+    {
+      "name": "risk-class",
+      "kind": "risk-class",
+      "mechanism": null,
+      "lane": "pr",
+      "controls": [
+        "POLICY-COMPILER"
+      ]
+    },
+    {
+      "name": "seal-anchor",
+      "kind": "seal-anchor",
+      "mechanism": null,
+      "lane": "release",
+      "controls": [
+        "HG-0003"
+      ]
+    },
+    {
+      "name": "gate.scripts-activation-readiness-check",
+      "kind": "gate",
+      "mechanism": "scripts/activation-readiness-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "ACTIVATION-READINESS"
+      ]
+    },
+    {
+      "name": "gate.scripts-adapter-check",
+      "kind": "gate",
+      "mechanism": "scripts/adapter-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "ADAPTERS"
+      ]
+    },
+    {
+      "name": "gate.scripts-adapter-evidence-check",
+      "kind": "gate",
+      "mechanism": "scripts/adapter-evidence-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "ADAPTER-EVIDENCE"
+      ]
+    },
+    {
+      "name": "gate.scripts-agent-output-check",
+      "kind": "gate",
+      "mechanism": "scripts/agent-output-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "AGENT-OUTPUT"
+      ]
+    },
+    {
+      "name": "gate.scripts-ai-governance-check",
+      "kind": "gate",
+      "mechanism": "scripts/ai-governance-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "AI-GOVERNANCE"
+      ]
+    },
+    {
+      "name": "gate.scripts-approval-surface-check",
+      "kind": "gate",
+      "mechanism": "scripts/approval-surface-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "APPROVAL-SURFACE"
+      ]
+    },
+    {
+      "name": "gate.scripts-architecture-assurance-check",
+      "kind": "gate",
+      "mechanism": "scripts/architecture-assurance-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "A-GATES",
+        "THREAT-MODEL-MEDIUM"
+      ]
+    },
+    {
+      "name": "gate.scripts-brainkit-check",
+      "kind": "gate",
+      "mechanism": "scripts/brainkit-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "BRAINKIT"
+      ]
+    },
+    {
+      "name": "gate.scripts-change-envelope-check",
+      "kind": "gate",
+      "mechanism": "scripts/change-envelope-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "CHANGE-ENVELOPE",
+        "CHANGE-PATTERN",
+        "EMERGENCY-RETROSPECTIVE",
+        "FLAG-CORROBORATION",
+        "POST-IMPL-REVIEW",
+        "PROD-AUTH",
+        "RELEASE-HOLD",
+        "UAT-ACCEPTANCE"
+      ]
+    },
+    {
+      "name": "gate.scripts-ci-catalog-check",
+      "kind": "gate",
+      "mechanism": "scripts/ci-catalog-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "CI-CATALOG"
+      ]
+    },
+    {
+      "name": "gate.scripts-comprehension-check",
+      "kind": "gate",
+      "mechanism": "scripts/comprehension-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "COMPREHENSION"
+      ]
+    },
+    {
+      "name": "gate.scripts-control-catalog-check",
+      "kind": "gate",
+      "mechanism": "scripts/control-catalog-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "CATALOG"
+      ]
+    },
+    {
+      "name": "gate.scripts-control-plane-check",
+      "kind": "gate",
+      "mechanism": "scripts/control-plane-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "HG-0002"
+      ]
+    },
+    {
+      "name": "gate.scripts-data-lifecycle-check",
+      "kind": "gate",
+      "mechanism": "scripts/data-lifecycle-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "DATA-LC"
+      ]
+    },
+    {
+      "name": "gate.scripts-decision-contestability-check",
+      "kind": "gate",
+      "mechanism": "scripts/decision-contestability-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "AI-EXPLAINABILITY"
+      ]
+    },
+    {
+      "name": "gate.scripts-develop-direction-check",
+      "kind": "gate",
+      "mechanism": "scripts/develop-direction-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "HG-0009"
+      ]
+    },
+    {
+      "name": "gate.scripts-discovery-link-check",
+      "kind": "gate",
+      "mechanism": "scripts/discovery-link-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "HG-0007"
+      ]
+    },
+    {
+      "name": "gate.scripts-discovery-sync-check",
+      "kind": "gate",
+      "mechanism": "scripts/discovery-sync-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "DISCOVERY-SYNC"
+      ]
+    },
+    {
+      "name": "gate.scripts-doc-integrity-check",
+      "kind": "gate",
+      "mechanism": "scripts/doc-integrity-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "DOC-INTEGRITY"
+      ]
+    },
+    {
+      "name": "gate.scripts-drift-check",
+      "kind": "gate",
+      "mechanism": "scripts/drift-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "FLOOR-DRIFT"
+      ]
+    },
+    {
+      "name": "gate.scripts-environments-check",
+      "kind": "gate",
+      "mechanism": "scripts/environments-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "ENVIRONMENTS"
+      ]
+    },
+    {
+      "name": "gate.scripts-evidence-retention-check",
+      "kind": "gate",
+      "mechanism": "scripts/evidence-retention-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "EVIDENCE-RETENTION"
+      ]
+    },
+    {
+      "name": "gate.scripts-evidence-seal-check",
+      "kind": "gate",
+      "mechanism": "scripts/evidence-seal-check.mjs",
+      "lane": "release",
+      "controls": [
+        "HG-0003",
+        "RELEASE-TRAIN"
+      ]
+    },
+    {
+      "name": "gate.scripts-fairness-evaluation-check",
+      "kind": "gate",
+      "mechanism": "scripts/fairness-evaluation-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "AI-FAIRNESS"
+      ]
+    },
+    {
+      "name": "gate.scripts-feature-flag-check",
+      "kind": "gate",
+      "mechanism": "scripts/feature-flag-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "EXPOSURE-CONTROL"
+      ]
+    },
+    {
+      "name": "gate.scripts-floor-keeper-check",
+      "kind": "gate",
+      "mechanism": "scripts/floor-keeper-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "FLOOR-KEEPER"
+      ]
+    },
+    {
+      "name": "gate.scripts-floor-only-check",
+      "kind": "gate",
+      "mechanism": "scripts/floor-only-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "FLOOR-ONLY"
+      ]
+    },
+    {
+      "name": "gate.scripts-freeze-stamp-check",
+      "kind": "gate",
+      "mechanism": "scripts/freeze-stamp-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "FREEZE-STAMP"
+      ]
+    },
+    {
+      "name": "gate.scripts-guardrail-policy-check",
+      "kind": "gate",
+      "mechanism": "scripts/guardrail-policy-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "GUARDRAIL-POLICY"
+      ]
+    },
+    {
+      "name": "gate.scripts-id-legibility-check",
+      "kind": "gate",
+      "mechanism": "scripts/id-legibility-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "ID-LEGIBILITY"
+      ]
+    },
+    {
+      "name": "gate.scripts-identity-map-check",
+      "kind": "gate",
+      "mechanism": "scripts/identity-map-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "IDENTITY-MAP"
+      ]
+    },
+    {
+      "name": "gate.scripts-identity-registry-check",
+      "kind": "gate",
+      "mechanism": "scripts/identity-registry-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "APPROVAL-DELEGATION",
+        "IDENTITY-REGISTRY"
+      ]
+    },
+    {
+      "name": "gate.scripts-knowledge-staleness-check",
+      "kind": "gate",
+      "mechanism": "scripts/knowledge-staleness-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "KNOWLEDGE-CURRENCY"
+      ]
+    },
+    {
+      "name": "gate.scripts-model-provenance-check",
+      "kind": "gate",
+      "mechanism": "scripts/model-provenance-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "HG-0006"
+      ]
+    },
+    {
+      "name": "gate.scripts-obligations-check",
+      "kind": "gate",
+      "mechanism": "scripts/obligations-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "OBLIGATIONS"
+      ]
+    },
+    {
+      "name": "gate.scripts-operating-model-check",
+      "kind": "gate",
+      "mechanism": "scripts/operating-model-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "OPERATING-MODEL"
+      ]
+    },
+    {
+      "name": "gate.scripts-operational-readiness-check",
+      "kind": "gate",
+      "mechanism": "scripts/operational-readiness-check.mjs",
+      "lane": "release",
+      "controls": [
+        "OPS-READINESS"
+      ]
+    },
+    {
+      "name": "gate.scripts-operations-signal-check",
+      "kind": "gate",
+      "mechanism": "scripts/operations-signal-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "OPS-LOOP",
+        "REG-NOTIFICATION"
+      ]
+    },
+    {
+      "name": "gate.scripts-pilot-record-check",
+      "kind": "gate",
+      "mechanism": "scripts/pilot-record-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "PILOT-CONDUCT"
+      ]
+    },
+    {
+      "name": "gate.scripts-product-approval-check",
+      "kind": "gate",
+      "mechanism": "scripts/product-approval-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "DPIA",
+        "MODEL-OUTSOURCING",
+        "PA-GATES"
+      ]
+    },
+    {
+      "name": "gate.scripts-product-eval-check",
+      "kind": "gate",
+      "mechanism": "scripts/product-eval-check.mjs",
+      "lane": "release",
+      "controls": [
+        "PRODUCT-EVAL"
+      ]
+    },
+    {
+      "name": "gate.scripts-profit-distribution-check",
+      "kind": "gate",
+      "mechanism": "scripts/profit-distribution-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "PROFIT-DISTRIBUTION"
+      ]
+    },
+    {
+      "name": "gate.scripts-projection-capability-check",
+      "kind": "gate",
+      "mechanism": "scripts/projection-capability-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "PROJECTION-CAPABILITY"
+      ]
+    },
+    {
+      "name": "gate.scripts-provenance-check",
+      "kind": "gate",
+      "mechanism": "scripts/provenance-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "RECORD-PROVENANCE"
+      ]
+    },
+    {
+      "name": "gate.scripts-provider-selection-check",
+      "kind": "gate",
+      "mechanism": "scripts/provider-selection-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "PROVIDER-SELECTION"
+      ]
+    },
+    {
+      "name": "gate.scripts-purification-check",
+      "kind": "gate",
+      "mechanism": "scripts/purification-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "PURIFICATION"
+      ]
+    },
+    {
+      "name": "gate.scripts-record-policy-compile",
+      "kind": "gate",
+      "mechanism": "scripts/record-policy-compile.mjs",
+      "lane": "pr",
+      "controls": [
+        "RECORD-POLICY"
+      ]
+    },
+    {
+      "name": "gate.scripts-record-types-compile",
+      "kind": "gate",
+      "mechanism": "scripts/record-types-compile.mjs",
+      "lane": "pr",
+      "controls": [
+        "RECORD-TYPES"
+      ]
+    },
+    {
+      "name": "gate.scripts-release-attestation-check",
+      "kind": "gate",
+      "mechanism": "scripts/release-attestation-check.mjs",
+      "lane": "release",
+      "controls": [
+        "RELEASE-ATTESTATION"
+      ]
+    },
+    {
+      "name": "gate.scripts-release-subject-check",
+      "kind": "gate",
+      "mechanism": "scripts/release-subject-check.mjs",
+      "lane": "release",
+      "controls": [
+        "RELEASE-SUBJECT"
+      ]
+    },
+    {
+      "name": "gate.scripts-residency-check",
+      "kind": "gate",
+      "mechanism": "scripts/residency-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "RESIDENCY"
+      ]
+    },
+    {
+      "name": "gate.scripts-routine-change-check",
+      "kind": "gate",
+      "mechanism": "scripts/routine-change-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "HG-0013"
+      ]
+    },
+    {
+      "name": "gate.scripts-sast-check",
+      "kind": "gate",
+      "mechanism": "scripts/sast-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "Q2-SAST"
+      ]
+    },
+    {
+      "name": "gate.scripts-secrets-scan",
+      "kind": "gate",
+      "mechanism": "scripts/secrets-scan.mjs",
+      "lane": "pr",
+      "controls": [
+        "Q4-SECRETS"
+      ]
+    },
+    {
+      "name": "gate.scripts-self-claims-check",
+      "kind": "gate",
+      "mechanism": "scripts/self-claims-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "SELF-CLAIMS"
+      ]
+    },
+    {
+      "name": "gate.scripts-shariah-emission-check",
+      "kind": "gate",
+      "mechanism": "scripts/shariah-emission-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "SHARIAH-SUBSTANCE"
+      ]
+    },
+    {
+      "name": "gate.scripts-shariah-governance-check",
+      "kind": "gate",
+      "mechanism": "scripts/shariah-governance-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "SHARIAH-GOV"
+      ]
+    },
+    {
+      "name": "gate.scripts-supply-chain-check",
+      "kind": "gate",
+      "mechanism": "scripts/supply-chain-check.mjs",
+      "lane": "release",
+      "controls": [
+        "Q4-SUPPLY"
+      ]
+    },
+    {
+      "name": "gate.scripts-template-parity-check",
+      "kind": "gate",
+      "mechanism": "scripts/template-parity-check.mjs",
+      "lane": "pr",
+      "controls": [
+        "TEMPLATE-PARITY"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "profile": "ADOPT:institution-id",
+  "kind": "institution",
+  "version": "0.0.0",
+  "_comment": "ADOPT: the institution profile template — the shape of profiles/institutions/meridian-trust.json with every institution-specific value replaced by a placeholder, plus the two CONTRACT fields an institution uses to stop its own governance being routed around. Copy to profiles/institutions/<institution>.json, rename, replace every ADOPT: string, and set a real `version`. An institution profile is how a repository's governed changes bind to the institution's approved BrainKit: every change conforms to institutional identity, terminology, architecture principles and technology policy, is approved by the institutional-context-owner, and carries brainkit-provenance evidence. Institution profiles compose ON TOP of base + jurisdiction + product profiles and only ever ADD. This template carries NO real policy, brand, regulatory interpretation or approval authority.",
+  "brainkit": {
+    "brainkit_id": "ADOPT:brainkit-id",
+    "institution_id": "ADOPT:institution-id",
+    "path": "institution/brainkit/manifest.json",
+    "release_digest": "ADOPT:sha256:<digest of the approved BrainKit release>"
+  },
+  "_asserts_flags_comment": "ADOPT: `asserts_flags` is the institution DECLARING that a flag is always true for its changes, whatever an individual envelope says. The flags decide which conditional profile rules fire, so for a WHOLLY Islamic institution an envelope that simply omits `islamic` would compile a route with no Shari'ah governance in it at all — not by anyone's decision, but by an unticked box. Asserting it here means no envelope in this repository may quietly route around Shari'ah governance: the change-envelope gate reads the assertion and refuses an envelope that contradicts it. Assert ONLY what is unconditionally true of the institution. An institution with both Islamic and conventional books must NOT assert this — for them the flag is a real per-change fact and asserting it would make the declaration a lie that the gate then enforces.",
+  "asserts_flags": {
+    "islamic": true
+  },
+  "_required_for_all_changes_comment": "ADOPT: `required_for_all_changes` says this profile must appear in EVERY envelope's required_profiles in this repository. An institution profile that a change can decline to name governs only the changes that agreed to be governed; this is what makes it structural rather than opt-in. Leave it false (or omit it) for a profile that legitimately applies to part of a repository only.",
+  "required_for_all_changes": true,
+  "requirements": {
+    "low": {
+      "gates": ["brainkit-conformance"],
+      "approver_roles": ["institutional-context-owner"],
+      "evidence": ["brainkit-provenance"]
+    },
+    "_medium_comment": "ADOPT: THE RESTATEMENT BELOW IS DELIBERATE, NOT A COPY-PASTE SLIP. Profiles have no include mechanism — a profile cannot say `inherit products/islamic-product`, and the compiler unions pure data. So for an institution that is WHOLLY Islamic, restating the Islamic requirements UNCONDITIONALLY here is the only fork-free way to make the `islamic` flag irrelevant: whether or not an envelope sets the flag, and whether or not it names the Islamic product profile, the Shari'ah roles and sections compile. `asserts_flags` and this restatement are belt and braces on purpose — the assertion refuses a contradicting envelope, the restatement means the route is right even if the assertion is ever relaxed. The alternative — forking products/islamic-product into an institution-specific copy — drifts from the shipped profile the first time either changes, and drift in this direction is silent. Duplication is safe because the compiler unions duplicates idempotently: naming products/islamic-product as well changes nothing. DELETE this block if your institution is not wholly Islamic; there the conditional route is the correct one and this restatement would compile Shari'ah governance onto conventional changes.",
+    "medium": {
+      "gates": ["assurance-cadence"],
+      "approver_roles": ["shariah-committee", "shariah-compliance", "shariah-audit"],
+      "pa1_approver_roles": ["shariah-committee", "shariah-compliance"],
+      "evidence": ["shariah-attestation"],
+      "pa1_sections": ["shariah-structure"],
+      "pa2_sections": ["shariah-audit", "profit-rate-structure", "purification-of-non-compliant-income"],
+      "capabilities": {
+        "shariah_governance": { "required": true, "institution_owned": true },
+        "approval_attestation": { "required": true },
+        "knowledge_currency": { "required": true, "institution_owned": true }
+      }
+    }
+  },
+  "conditional": [
+    { "when": "customer_facing", "adds": { "pa2_sections": ["brand-identity-conformance"] } },
+    { "when": "architecture_material", "adds": { "pa1_sections": ["architecture-principles-conformance"] } }
+  ]
+}

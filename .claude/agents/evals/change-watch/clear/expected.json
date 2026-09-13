@@ -1,0 +1,11 @@
+{
+  "schema": "loom.agent-output/v1",
+  "agent": "change-watch",
+  "prompt_version": "loom-agents@2.1.0",
+  "model": "example-model@2026-01",
+  "inputs_read": ["knowledge-pins.json"],
+  "register_state": "mounted",
+  "verdict": "CLEAR",
+  "confidence": "high",
+  "findings": []
+}

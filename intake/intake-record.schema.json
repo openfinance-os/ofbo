@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "loom.intake-record/v1",
+  "title": "Institutional intake record",
+  "description": "What the questionnaire exports and institution-intake / brainkit-init import. authority is always none: this is a record of what was said, never of what is true.",
+  "type": "object",
+  "required": [
+    "schema",
+    "authority",
+    "institution",
+    "generated_at",
+    "answers"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "loom.intake-record/v1"
+    },
+    "authority": {
+      "const": "none"
+    },
+    "institution": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "prefill_pack": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "questions_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Digest of the questions.json the answers were given against, so a record from an older bank is recognisable."
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "block",
+          "disposition"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-I][0-9]+$"
+          },
+          "block": {
+            "type": "string",
+            "pattern": "^[A-I]$"
+          },
+          "answer": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Where it is written down. Present and non-empty ⇒ SOURCED."
+          },
+          "respondent_role": {
+            "type": "string",
+            "description": "A role, never a name."
+          },
+          "prefilled_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pack id when the answer began as a suggestion."
+          },
+          "disposition": {
+            "enum": [
+              "SOURCED",
+              "CLAIMED",
+              "UNKNOWN"
+            ]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "SOURCED": {
+          "type": "integer"
+        },
+        "CLAIMED": {
+          "type": "integer"
+        },
+        "UNKNOWN": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -4,9 +4,14 @@ profile_version: 1
 entity: "OFBO (DEMO instance)"
 status: demo
 banner: "DEMO — synthetic data, non-production"
+lang: en
+dir: ltr
 ---
 
 # Brand profile — the single source of visual truth
+
+> **Identifiers.** Gate ids (`D1`–`D9`, `Q1`–`Q5`) and run-level ids (`S-001` signal,
+> `T-1` theme, `H1` hypothesis) are expanded in `discovery/GLOSSARY.md`.
 
 This file is the **brand seam** for the discovery harness (canon §5.2). **Every** artifact a
 human looks at — markdown rendered to HTML, generated documents, slide decks, spreadsheets,
@@ -17,6 +22,25 @@ hard-codes a colour/size/font.
 > **How to swap brands.** Replace the token values and rules below with another entity's
 > brand and re-run. Nothing downstream references OFBO directly — it reads tokens by name
 > (`color.brand.primary`, not `#1F4DB8`). This is the OFBO DEMO instance.
+
+## Profile front-matter
+
+The front-matter above is read by the renderer (`discovery/render/tokens.mjs`) and by gate D7.
+
+> The second column is deliberately **not** backticked: a `| `name` | `value` |` row *is* the
+> token grammar, and a documentation table written that way would mount itself as tokens.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `profile_version` | 1 | Stamped into the conformance marker; bump when token values change |
+| `entity` | — | Whose brand this is; never referenced by name downstream |
+| `banner` | DEMO — synthetic data, non-production | The non-dismissable banner text on every artifact |
+| `lang` | en | BCP-47 content language, emitted as `<html lang="…">`. Validated as xx or xx-YYYY; anything else falls back to the default rather than reaching the attribute. |
+| `dir` | ltr | Writing direction, emitted as `<html dir="…">`. Only ltr or rtl; anything else falls back. |
+
+`lang`/`dir` are **brand** properties with a **per-artifact override** (`lang`/`dir` on the
+render spec), for the run that produces one document in another language. A profile that says
+nothing about either renders exactly as it did before these keys existed.
 
 ## Conformance marker (required on every visual artifact)
 
@@ -58,6 +82,7 @@ artifacts must not inline the right-hand column.
 |---|---|
 | `font.family.sans` | `"Inter", "Helvetica Neue", Arial, sans-serif` |
 | `font.family.mono` | `"IBM Plex Mono", "SFMono-Regular", monospace` |
+| `font.family.rtl` | `"Noto Naskh Arabic", "Noto Sans Hebrew", "Segoe UI", sans-serif` |
 | `font.size.h1` | `28px` |
 | `font.size.h2` | `22px` |
 | `font.size.h3` | `18px` |
@@ -65,6 +90,12 @@ artifacts must not inline the right-hand column.
 | `font.size.caption` | `13px` |
 | `font.weight.regular` | `400` |
 | `font.weight.semibold` | `600` |
+
+> **Every font stack must end in a generic family** (`sans-serif` / `serif` / `monospace`).
+> That is not typographic advice: `discovery/gates/brand.mjs` harvests the D7 font allow-list by
+> matching backticked stacks that end in one of those three words. A stack ending in a named face
+> is invisible to the harvest, so D7 sees every artifact that uses it as using a non-token font
+> and fails the whole run — for a token that is defined right here.
 
 ### Spacing & shape
 
@@ -118,6 +149,26 @@ doc/deck/sheet renderers follow the same token contract.)
 - Title slide: `logo.wordmark` top-left, DEMO banner footer.
 - One idea per slide; `font.size.h2` titles; body bullets `font.size.body`.
 - Status uses `color.status.*`; never raw colour.
+
+### RTL media (`dir: rtl`)
+
+- **Mirroring is free, not authored.** Every direction-sensitive rule the renderers emit is a
+  logical property — `border-inline-start`, `inset-inline-end`, `text-align: start`. One
+  stylesheet serves both directions; there is no `[dir=rtl]` block to keep in step with an LTR
+  twin, which is the usual way an RTL layout ends up half-mirrored. Flipping `dir` is the change.
+- **Set `font.family.sans` to a stack whose first faces cover the script**, ending in a generic
+  family (see `font.family.rtl` above for the shape). Latin-only stacks fall back per-glyph and
+  the result is a mixed-weight page.
+- **Bidi-isolate mixed-script runs.** Gate ids, token names, and file paths stay **Latin** in
+  every direction — `D7` is `D7`. Latin inside RTL prose reorders at the boundary when trailing
+  punctuation is involved. The shipped renderers escape authored text and isolate nothing, so
+  this is the author's job: give an identifier its own table cell, list item, or block rather
+  than embedding it mid-sentence. Declared here because it is real and **uncovered** — no gate
+  detects it.
+- **Numerals are not a brand decision.** Whether an institution writes ٠١٢ or 012, and where,
+  is **content policy** — it belongs in the adopter's BrainKit terminology, with the rest of
+  what the institution has decided to call things. This file governs how a page is laid out,
+  not what an institution says on it.
 
 ### Spreadsheet (.xlsx)
 

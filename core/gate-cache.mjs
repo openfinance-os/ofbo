@@ -1,0 +1,145 @@
+// The content-addressed gate result cache (Loom 2.0-rc.40 — flow-plan Phase 6.2).
+//
+// The gate runner already answers "must this control run on this diff?" from the catalog. This
+// module answers a narrower question: "has this exact control, at this exact mechanism, already
+// been run against these exact inputs — and passed?" When the answer is provably yes, the runner
+// records `pass-cached` with the KEY instead of spawning Node again. When it is anything short of
+// provable, it runs.
+//
+// THE TRUST ARGUMENT, stated plainly, because a cache is the obvious place to launder a control.
+//
+//   1. A cache entry is only ever served for a control that DECLARES A PATH SCOPE. That scope is
+//      not new trust: it is already the thing that decides whether the control runs at all — a
+//      diff touching none of its declared paths skips it outright (recorded, but skipped). So a
+//      mis-declared scope is a defect the path-scoping already has, and the cache adds no reach
+//      to it. An `always: true` tamper check declares no scope and is NEVER cached.
+//   2. The RELEASE and DEPLOY lanes are never cached, at all, whatever a control declares. The
+//      release re-runs its gates at the released commit, for real — that is the whole point of
+//      re-running them there, and no speed argument is allowed to touch it.
+//   3. The key covers everything that could change the answer: the mechanism FILE's digest (edit
+//      the gate, lose every entry), its arguments, the CANONICAL CATALOG ENTRY of every control
+//      that shares the mechanism (re-scope or re-lane a control, lose the entry), the digest of
+//      every file under the declared scope, the sorted set of compiled plan_hashes (recompile a
+//      plan, lose the entry), and a format version so a change to this file's own semantics
+//      invalidates everything written by the previous one.
+//   4. Only PASSES are stored. A failure always re-runs — there is no such thing as a cached red.
+//   5. A hit is as auditable as a skip: `status: "pass-cached"` with `cache_key` in the run
+//      record, and the stored stdout/stderr are replayed into the log verbatim, so the build log
+//      of a cached run says the same thing the uncached one said.
+//
+// Nothing here gates anything, and nothing here can turn a fail into a pass.
+//
+// Store: `.loom/gate-cache/<key>.json`, self-ignoring (the directory writes its own .gitignore —
+// results are a local/CI artifact, never a committed record; the record of record is gate-run.json).
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { canonical } from './policy-compiler.mjs';
+
+// Bump on ANY change to what the key covers or how an entry is shaped. Every previously written
+// entry then misses, which is the correct and only safe direction for a cache-format change.
+export const FORMAT = 'loom-gate-cache/1';
+export const CACHE_DIR = '.loom/gate-cache';
+// Lanes whose results are never served from cache. The release lane re-runs at the released
+// commit by design (skills/release/SKILL.md step 3); the deploy lane verifies what actually went
+// out. Both are evidence-producing, and evidence is produced, not remembered.
+export const UNCACHEABLE_LANES = new Set(['release', 'deploy']);
+const PRUNE = new Set(['.git', 'node_modules', '.loom']);
+
+/**
+ * May this mechanism's result be cached? Returns `{ cacheable, reason }` — the reason is recorded
+ * either way, so a control that is never cached says why on every run rather than being quietly
+ * slow. `controls` are the catalog entries sharing the mechanism.
+ */
+export function cacheability(controls, lane) {
+  if (UNCACHEABLE_LANES.has(lane)) {
+    return { cacheable: false, reason: `lane:${lane} is never cached — the release re-runs its gates at the released commit, for real` };
+  }
+  if (!Array.isArray(controls) || controls.length === 0) {
+    return { cacheable: false, reason: 'no catalog entry resolved for this mechanism' };
+  }
+  for (const c of controls) {
+    if (c.always) return { cacheable: false, reason: `${c.control_id} is always:true — the tamper-detection core is never served from cache` };
+  }
+  for (const c of controls) {
+    if (!(Array.isArray(c.paths) && c.paths.length && c.paths.every((p) => typeof p === 'string' && p.trim()))) {
+      return { cacheable: false, reason: `${c.control_id} declares no path scope — an unscoped control has no provable input set` };
+    }
+  }
+  return { cacheable: true, reason: 'scoped, non-always, cacheable lane' };
+}
+
+/** Every file under a declared scope (a file is itself; a directory is walked), repo-relative. */
+function filesUnder(cwd, scope) {
+  const abs = join(cwd, scope);
+  if (!existsSync(abs)) return [];
+  let st;
+  try { st = statSync(abs); } catch { return []; }
+  if (!st.isDirectory()) return [scope];
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (PRUNE.has(e.name)) continue;
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.isFile()) out.push(relative(cwd, p));
+    }
+  };
+  walk(abs);
+  return out;
+}
+
+const digestOf = (p) => {
+  try { return createHash('sha256').update(readFileSync(p)).digest('hex'); } catch { return '<unreadable>'; }
+};
+
+/**
+ * The content-addressed key, or `null` when it cannot be computed honestly (a missing mechanism
+ * file — which is a real failure the runner must surface by RUNNING, not by caching).
+ * Pure but for reading the declared inputs off disk.
+ */
+export function computeKey({ cwd, mechanism, args = [], controls = [], planHashes = [] }) {
+  const mechAbs = join(cwd, mechanism);
+  if (!existsSync(mechAbs)) return null;
+  const scopes = [...new Set(controls.flatMap((c) => (Array.isArray(c.paths) ? c.paths : [])))].sort();
+  const inputs = [...new Set(scopes.flatMap((s) => filesUnder(cwd, s)))].sort();
+  const parts = [
+    `format:${FORMAT}`,
+    `mechanism:${mechanism}@${digestOf(mechAbs)}`,
+    `args:${canonical(args)}`,
+    // The catalog entry itself: re-lane, re-scope or re-grade a control and its entries die.
+    `catalog:${canonical([...controls].sort((a, b) => String(a.control_id).localeCompare(String(b.control_id))))}`,
+    `scopes:${canonical(scopes)}`,
+    `inputs:${inputs.map((f) => `${f}\x00${digestOf(join(cwd, f))}`).join('\x01')}`,
+    `plans:${[...new Set(planHashes.filter(Boolean))].sort().join(',')}`,
+  ];
+  return createHash('sha256').update(parts.join('\x02')).digest('hex');
+}
+
+const entryPath = (cwd, key) => join(cwd, CACHE_DIR, `${key}.json`);
+
+/** A stored PASS for this key, or null. A stored entry that is not a pass is never served. */
+export function read(cwd, key) {
+  if (!key) return null;
+  const p = entryPath(cwd, key);
+  if (!existsSync(p)) return null;
+  try {
+    const rec = JSON.parse(readFileSync(p, 'utf8'));
+    if (rec && rec.format === FORMAT && rec.key === key && rec.status === 'pass') return rec;
+    return null;
+  } catch { return null; }
+}
+
+/** Store a PASS. Refuses anything else — there is no such thing as a cached red. */
+export function write(cwd, key, rec) {
+  if (!key || !rec || rec.status !== 'pass') return false;
+  const dir = join(cwd, CACHE_DIR);
+  mkdirSync(dir, { recursive: true });
+  // The store ignores itself: a cached result is a local artifact, never a committed record.
+  const ignore = join(dir, '.gitignore');
+  if (!existsSync(ignore)) writeFileSync(ignore, '*\n');
+  writeFileSync(entryPath(cwd, key), JSON.stringify({ format: FORMAT, key, ...rec }, null, 2) + '\n');
+  return true;
+}

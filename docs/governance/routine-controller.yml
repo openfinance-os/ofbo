@@ -1,0 +1,71 @@
+# Reference routine-change controller (Loom 2.0-rc.12 · WS2.3). The Loom classifies a PR and, via
+# `routine-change-check.mjs --assert-routine`, emits the platform-legible `routine-qualified` status.
+# But a status check cannot MERGE anything — a controller must, and it must be an identity DISJOINT
+# from the coding agent (an agent that could enable its own auto-merge is not four-eyes). This is
+# that controller: a bot that enables auto-merge only for a qualifying routine PR, only while the
+# control plane is not drifted, and writes every decision to the evidence record.
+#
+# ADOPT:
+#   1. Provision a bot identity SEPARATE from the coding agent's (a GitHub App or a machine user).
+#      Register it in docs/governance/identities.json OUTSIDE the `builders` group. Store its token
+#      as the secret ROUTINE_BOT_TOKEN. The coding agent must NOT have access to this token.
+#   2. In branch protection: mark `gates` (and `routine-qualified` is NOT required) — point the
+#      merge queue / auto-merge ruleset so ONLY this controller can enable auto-merge.
+#   3. The floor still holds: routine-change-check's absolute denylist keeps the control plane,
+#      contract, auth and migrations out of the lane, whatever the envelope says.
+#
+# The controller does NOT approve or merge by force — it enables GitHub's auto-merge, so all the
+# normal required checks must still pass. It only decides ELIGIBILITY for the routine lane.
+name: routine-controller
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read           # the controller reads; it never pushes
+  pull-requests: write     # to enable auto-merge on an eligible PR
+
+jobs:
+  controller:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      # Eligibility is the AND of two gates: the PR qualifies as routine, AND the live control
+      # plane has not drifted from the approved baseline (WS2.4 — drift suspends the lane).
+      - name: Routine eligibility (qualified AND no config drift)
+        id: eligible
+        run: |
+          set +e
+          node scripts/routine-change-check.mjs --assert-routine --base origin/${{ github.base_ref }}
+          QUALIFIED=$?
+          node scripts/config-reconciliation-check.mjs
+          RECONCILED=$?
+          if [ $QUALIFIED -eq 0 ] && [ $RECONCILED -eq 0 ]; then
+            echo "decision=enable" >> "$GITHUB_OUTPUT"
+          else
+            echo "decision=hold" >> "$GITHUB_OUTPUT"
+            echo "reason=qualified=$QUALIFIED reconciled=$RECONCILED" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Every decision — enable OR hold — is written to the evidence record. An auto-merge that
+      # left no trace would be autonomy without accountability.
+      - name: Record the decision
+        env:
+          GH_TOKEN: ${{ secrets.ROUTINE_BOT_TOKEN }}
+        run: |
+          printf 'routine-controller decision: %s (PR #%s, %s)\n' \
+            "${{ steps.eligible.outputs.decision }}" "${{ github.event.number }}" \
+            "${{ steps.eligible.outputs.reason || 'routine-qualified + reconciled' }}"
+          # ADOPT: append this decision to docs/governance/operations-signal.json (or your evidence
+          # store) as the durable record the auto-merge check reads back.
+
+      # Only the separated bot identity enables auto-merge — never the coding agent's token.
+      - name: Enable auto-merge for an eligible routine PR
+        if: steps.eligible.outputs.decision == 'enable'
+        env:
+          GH_TOKEN: ${{ secrets.ROUTINE_BOT_TOKEN }}
+        run: gh pr merge --auto --squash "${{ github.event.number }}"

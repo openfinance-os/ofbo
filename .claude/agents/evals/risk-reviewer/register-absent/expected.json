@@ -1,0 +1,14 @@
+{
+  "schema": "loom.agent-output/v1",
+  "agent": "risk-reviewer",
+  "prompt_version": "loom-agents@2.1.0",
+  "model": "example-model@2026-01",
+  "inputs_read": ["change.md"],
+  "register_state": "absent",
+  "verdict": "INSUFFICIENT_EVIDENCE",
+  "confidence": "high",
+  "reason": "docs/governance/data-risk-register/ is not mounted. The change adds a personal-data element (preferred_channel) and I cannot map it to a DR-* category, a control, or a residual position without the register. Mount the register (or the obligations register) and re-run; an unregistered risk is not a low risk.",
+  "findings": [
+    { "id": "ASSESS 1", "severity": "info", "subject": "preferred_channel", "issue": "new personal-data element with no register to place it in", "evidence_refs": [{ "file": "change.md", "locator": "line 3" }], "route": "human" }
+  ]
+}

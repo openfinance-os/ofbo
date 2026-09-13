@@ -1,0 +1,71 @@
+{
+  "_comment": "The provider ROLE catalog. HG-0008 says the harness names roles, never vendors — but until now the only place a vendor could be named was adapters/reference/, which holds at most ONE adapter per control (AD-R05 refuses two on the same control, and CI mounts that whole directory). So a role with three plausible providers had nowhere to put the second and third: the directory encoded 'the one true instance', not 'pick one'. This catalog is the fix. Each role states the control it fills and the capability name a profile uses to REQUIRE it; providers/<role>/ holds the alternatives; docs/governance/provider-selection.json records which one this institution chose. Nothing here is mounted by default — a catalog is an offer, not an installation.",
+  "roles": [
+    {
+      "role": "sca",
+      "control": "Q4-SUPPLY",
+      "capability": "sca",
+      "purpose": "Assert the dependency-audit severity counts from outside the repository under test, so the Q4 gate cannot be satisfied by an agent writing its own verdict",
+      "must_provide": [
+        "severity counts (and any reachability verdict) asserted by the scanning platform, not by the scanned repo",
+        "a tamper probe: editing the local report away from the platform's counts must fail the build"
+      ]
+    },
+    {
+      "role": "hardened-runtime",
+      "control": "HG-0011",
+      "capability": "hardened_runtime",
+      "purpose": "Make the runtime the coding agent executes in a digest-pinned, attestation-verified image, so HG-0011's attested-execution limb rests on evidence rather than on a base image nobody can account for",
+      "must_provide": [
+        "a digest (never a tag) plus a verification result for the image's SBOM and provenance",
+        "a negative probe: an image without a valid attestation must fail admission"
+      ]
+    },
+    {
+      "role": "shariah-governance",
+      "control": "SHARIAH-GOV",
+      "capability": "shariah_governance",
+      "purpose": "Record which system of record carries the institution's ISSC arrangement — membership, HSA approvals, resolutions and minutes — so an Islamic product plan cannot compile against a Shari'ah governance function that exists only as prose",
+      "must_provide": [
+        "the ISSC register exported to docs/governance/issc-register.json — seats with their HSA approval and appointment references, and the resolutions an approval cites — asserted by the system of record, not by the repository under test",
+        "a tamper probe: a register row that diverges from the system of record (a seat added, an approval reference edited) must fail reconciliation"
+      ],
+      "_comment": "DORMANT UNLESS AN ISLAMIC PRODUCT IS IN FLIGHT. `shariah_governance` compiles only from an Islamic product or institution profile, so a conventional adopter never meets this role — PS-R06 arms it the moment a plan names the capability and not before. And note what the role does NOT do: it fixes WHERE the committee's arrangement is recorded and proves the export matches. Scholars decide Shari'ah. No provider here, and no gate that reads its evidence, rules on any Shari'ah question — they check that a ruling exists, is attributable to an approved committee, and is bound to this change."
+    },
+    {
+      "role": "runtime-guardrails",
+      "control": "AI-INCIDENT",
+      "capability": "runtime_guardrails",
+      "purpose": "Name the policy-enforcement point that constrains agents in the SERVING path (input/output filters, tool-use allowlists, terminology and PII screens) so the runtime guardrail is a chosen, evidenced component rather than an assumption",
+      "must_provide": [
+        "an enforcement decision log asserted by the serving platform — the enforcement point itself — and never by the agent being constrained",
+        "a negative probe: a policy-violating action must be denied and the denial must be observable in that log"
+      ],
+      "_comment": "Do not confuse this with guardrails/guardrail-policy.json: that policy covers the agent that WRITES the code, at build time; this role covers the agent that SERVES the customer, at request time. The honest limit is the same in both places — the harness reads records, it does not watch production. It cannot verify that a runtime guardrail FIRES; it can refuse to let a change ship that never chose one, and it can read the denial the platform recorded when the negative probe was run."
+    },
+    {
+      "role": "real-data-controls",
+      "control": "REAL-PII-SURFACE",
+      "capability": "real_data_controls",
+      "purpose": "Name the platform controls that stand between real customer data and the people and agents who touch it — key custody and rotation, field-level encryption or tokenisation, and access logging — so an institution moving off synthetic data records what it CHOSE instead of inheriting the harness's synthetic-only posture by silence",
+      "must_provide": [
+        "key custody and access logs asserted by the PLATFORM that holds the data — the key manager, the tokenisation service, the database audit log — and never by the application or the agent that reads through them",
+        "a negative probe: an unauthorised read must be DENIED and the denial must be observable in that log. An allow-only log proves traffic, never protection"
+      ],
+      "_comment": "THE SEAM THIS ROLE EXISTS TO MAKE VISIBLE. Everything else in this bundle assumes synthetic data — pii-guard.sh blocks real-PII shapes at the keystroke, and REAL-PII-SURFACE is graded `absent` in the control catalog because the harness genuinely ships nothing for the real-data case. That is honest while the repository is synthetic-only. The moment an institution points a workload at production data, the same `absent` grade reads as 'not our problem' about the surface that now matters most, and nothing in the tree changes to say so. This role turns that transition into a recorded choice: an adopter that moves to real data must name the key manager, the encryption or tokenisation boundary, and the access log, and evidence a denial. What the role does NOT do: it does not encrypt anything, does not verify a key rotation happened, and cannot see a read at request time. The harness reads JSON records; it never watches production. It refuses to let the move to real data happen without a named, evidenced control, which is a smaller claim than 'customer data is protected' and is the true one.",
+      "_dormancy_comment": "DORMANT UNLESS A COMPILED PLAN REQUIRES IT — and the trigger is the PROFILE AND TIER, never the data. `real_data_controls` arms via PS-R06 the moment a change compiles a profile that demands it, and the shipped `regulated-bank` profile demands it UNCONDITIONALLY at the high tier. So a conventional, synthetic-fixtures-only change on that profile classified high DOES meet this role and is asked for a selection. That is deliberate — the harness cannot tell a repository holding real customer data from one that does not, and a trigger conditioned on a self-declared 'we have real data now' flag would be the silence this role exists to refuse — but it means the honest statement of dormancy is narrower than 'only for real-data repositories': what stays inert is a repository whose changes never compile a profile requiring the capability (`standard`, or `regulated-bank` below high). There is no not-applicable answer at selection time: an adopter under that profile at high tier either records a provider or changes the profile it compiles — and the profile is the institution's to set, which is where an argument about scope belongs, rather than in a gate that quietly stays silent. Note the contrast with `shariah_governance` and `runtime_guardrails`, which arm only from an opt-in Islamic or AI-serving profile: this one does not, by design."
+    },
+    {
+      "role": "external-record",
+      "control": "HG-0003",
+      "capability": "external_record",
+      "purpose": "Keep the record of what the gates found OUTSIDE the tree the agent edits — every Loom trust root (catalog, registries, issuer keys, evidence chain) lives in the repository the coding agent writes to, and the only thing that separates a sealed chain from a self-attestation is a record the agent cannot rewrite",
+      "must_provide": [
+        "accept a signed Loom envelope (core/external-record.mjs) and return a record id the harness can store on the evidence manifest and resolve later — the id is asserted by the platform, never chosen by the harness",
+        "resolve a stored record id back to the record it names, so the seal gate can check that the anchor it holds is the one the platform holds",
+        "a tamper probe: a manifest carrying a record id the platform does not know, or the wrong provider, must fail the seal gate"
+      ],
+      "_comment": "DECISION K9 (kosli-seam.md): Kosli is the FIRST provider of this role, never a dependency. A WORM store with RFC 3161 timestamps, a transparency log, or a bank's own evidence platform fill the same role through the same seam (core/external-record.mjs); core/providers/<provider>.mjs is the only place a vendor's CLI is named. Unmounted, every seam call is a NAMED no-op — the run record and the status report say 'external record: not mounted', and PS-R06 fires the moment a compiled plan requires the capability. What the role does NOT do: it does not make the record true. A platform that recorded a gate result proves the gate ran and what it said, not that the gate was right; bank-grade-gap.md's five states still apply."
+    }
+  ]
+}

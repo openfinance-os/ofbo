@@ -1,0 +1,29 @@
+{
+  "profile": "ai-decision-system",
+  "kind": "product",
+  "_comment": "A material AI-assisted decision system (a model whose output materially affects a customer outcome). Compiles model-risk at a raised floor, human-oversight, and monitoring controls regardless of the surrounding product type.",
+  "requirements": {
+    "medium": {
+      "approver_roles": ["model-validator"],
+      "_pa2_comment": "`ai-disclosure` is a CUSTOMER-facing duty, not an internal one: where AI made or materially shaped a decision about a person, the person is told so, and told the human-review path out of it. Consumer-protection disclosure duties do not stop applying because the decider was a model — this section is where that extension is written down and read by an approver.",
+      "_ai_disclosure_tier": "MEDIUM, deliberately — and it is a NEW duty for existing adopters of this profile, not a restatement: product-approval-check fails an approved PA2 whose required section is missing or empty, so a medium-tier AI-decision change that was passing now fails until the section is written. Kept at medium rather than moved up with the high-tier additions because `explainability-and-contestability` is already a medium-tier duty here, and a repository told to document the customer's route to contest a model decision while never telling the customer a model decided is the incoherence this placement refuses. `high` would also be the wrong axis: the duty tracks whether a person was decided about, not how risky the model is. Tier placement is profile DATA — an adopter whose own consumer-protection regime binds the duty at a different threshold moves the string to the tier that regime names and records which regime that was; the compiler has no opinion.",
+      "pa2_sections": ["human-oversight", "explainability-and-contestability", "ai-disclosure"],
+      "_contestability_comment": "2.0.0 — `decision_contestability` arms scripts/decision-contestability-check.mjs, which is the JOIN the `explainability-and-contestability` section above never had. The section is prose an approver reads; until now a plan could satisfy it while a model shipped that the prose never mentioned. The capability sits at MEDIUM beside the section it backstops, for the same reason the section does: the duty tracks whether a person was decided about, not how risky the model is. It is a NEW required record for existing adopters of this profile — see upgrade-notes.json.",
+      "_fairness_comment": "2.0.0 — `fairness_evaluation` arms scripts/fairness-evaluation-check.mjs. MEDIUM rather than high, and deliberately: the disparity that matters is a property of who the model decides about, not of the model's own risk tier, and a medium-tier model declining people at scale is exactly the case a high-tier-only placement would miss. The gate MEASURES NOTHING — it reads the adopter's measurements and holds them against the pin that ships (a retrain moving the pin invalidates its own evidence) and a threshold whose owner resolves in the registry. Also a NEW required record for existing adopters.",
+      "capabilities": {
+        "model_risk": { "required": true, "minimum_tier": "high" },
+        "human_oversight": { "required": true },
+        "ai_governance": { "required": true, "institution_owned": true },
+        "fairness_evaluation": { "required": true, "institution_owned": true },
+        "decision_contestability": { "required": true, "institution_owned": true },
+        "data_risk_register": { "required": true, "minimum_version": "3.1", "institution_owned": true }
+      }
+    },
+    "high": {
+      "_runtime_comment": "At high risk the model is deciding about people in production, and every guardrail this harness ships is a BUILD-time one — hooks and CI gates do not execute in the serving path. `runtime_guardrails` does not let the harness verify that a runtime control fires; it refuses to let a change ship that never chose the enforcement point. Naming it is the least the institution owes a customer whose outcome a model decides.",
+      "capabilities": {
+        "runtime_guardrails": { "required": true, "institution_owned": true }
+      }
+    }
+  }
+}

@@ -14,10 +14,15 @@ const rgb = (t, name, fb) => (t(name, fb) || '#000000').replace('#', '').toUpper
 const argb = (t, name, fb) => 'FF' + rgb(t, name, fb);
 const firstFont = (t) => (t('font.family.sans', 'Arial').split(',')[0] || 'Arial').replace(/["']/g, '').trim();
 
-function core(title) {
+// rc.8 WS8: `provenance` (e.g. "brainkit:acme-brainkit@1.3.0 sha256:…") is embedded in the
+// document properties alongside the D7 marker when the brand seam is a BrainKit projection, so a
+// reader — and the brainkit-check gate — can confirm which approved BrainKit a visual came from.
+function core(title, provenance = '') {
+  const desc = provenance ? `${MARK} · ${provenance}` : MARK;
   return `${XMLH}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">` +
     `<dc:title>${esc(title)}</dc:title>` +
-    `<dc:description>${MARK}</dc:description>` +
+    `<dc:description>${esc(desc)}</dc:description>` +
+    (provenance ? `<cp:keywords>${esc(provenance)}</cp:keywords>` : '') +
     `</cp:coreProperties>`;
 }
 const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -32,7 +37,7 @@ function colLetter(n) {
 const STATUS_XF = { header: 1, ok: 2, warn: 3, danger: 4 };
 
 /** spec: { title?, sheetName?, columns:[string], rows:[[ string | {v,status} ]] } */
-export function buildXlsx(spec, t) {
+export function buildXlsx(spec, t, provenance = '') {
   const sheetName = (spec.sheetName || 'Sheet1').slice(0, 31);
   const cell = (ref, val, xf) => {
     const s = xf ? ` s="${xf}"` : '';
@@ -71,7 +76,7 @@ export function buildXlsx(spec, t) {
   return zip([
     { name: '[Content_Types].xml', data: `${XMLH}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>` },
     { name: '_rels/.rels', data: `${XMLH}<Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${OD}/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>` },
-    { name: 'docProps/core.xml', data: core(spec.title || sheetName) },
+    { name: 'docProps/core.xml', data: core(spec.title || sheetName, provenance) },
     { name: 'xl/workbook.xml', data: `${XMLH}<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${OD}"><sheets><sheet name="${esc(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
     { name: 'xl/_rels/workbook.xml.rels', data: `${XMLH}<Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${OD}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${OD}/styles" Target="styles.xml"/></Relationships>` },
     { name: 'xl/styles.xml', data: styles },
@@ -92,7 +97,7 @@ function docRun(text, { color, bold, font, sz } = {}) {
 const docP = (inner, { shd } = {}) => `<w:p>${shd ? `<w:pPr><w:shd w:val="clear" w:fill="${shd}"/></w:pPr>` : ''}${inner}</w:p>`;
 
 /** spec: { title, subtitle?, sections:[{heading, blocks:[{p}|{list}|{table}|{note}]}] } */
-export function buildDocx(spec, t) {
+export function buildDocx(spec, t, provenance = '') {
   const font = firstFont(t);
   const brand = rgb(t, 'color.brand.primary', '#1F4DB8');
   const ink = rgb(t, 'color.ink.strong', '#0B1221');
@@ -127,7 +132,7 @@ export function buildDocx(spec, t) {
   return zip([
     { name: '[Content_Types].xml', data: `${XMLH}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>` },
     { name: '_rels/.rels', data: `${XMLH}<Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${OD}/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>` },
-    { name: 'docProps/core.xml', data: core(spec.title || 'Document') },
+    { name: 'docProps/core.xml', data: core(spec.title || 'Document', provenance) },
     { name: 'word/document.xml', data: document },
   ]);
 }
@@ -150,7 +155,7 @@ const para = (runs, { align } = {}) => `<a:p>${align ? `<a:pPr algn="${align}"/>
 const run = (text, hex, sz, bold) => `<a:r><a:rPr lang="en-US" sz="${sz}"${bold ? ' b="1"' : ''}><a:solidFill><a:srgbClr val="${hex}"/></a:solidFill><a:latin typeface="%FONT%"/></a:rPr><a:t>${esc(text)}</a:t></a:r>`;
 
 /** spec: { title, subtitle?, slides:[{title, kicker?, bullets:[string], note?}] } */
-export function buildPptx(spec, t) {
+export function buildPptx(spec, t, provenance = '') {
   const font = firstFont(t);
   const brand = rgb(t, 'color.brand.primary', '#1F4DB8');
   const ink = rgb(t, 'color.ink.strong', '#0B1221');
@@ -200,7 +205,7 @@ export function buildPptx(spec, t) {
   const entries = [
     { name: '[Content_Types].xml', data: ctypes },
     { name: '_rels/.rels', data: `${XMLH}<Relationships xmlns="${RELS_NS}"><Relationship Id="rId1" Type="${OD}/officeDocument" Target="ppt/presentation.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>` },
-    { name: 'docProps/core.xml', data: core(spec.title || 'Deck') },
+    { name: 'docProps/core.xml', data: core(spec.title || 'Deck', provenance) },
     { name: 'ppt/presentation.xml', data: presentation },
     { name: 'ppt/_rels/presentation.xml.rels', data: presRels },
     { name: 'ppt/slideMasters/slideMaster1.xml', data: master },

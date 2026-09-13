@@ -1,0 +1,365 @@
+{
+  "_comment": "ADOPTER: the obligations register (2.1.0, hardening plan phase 3) — mounted as docs/governance/obligations.json and OWNED in CODEOWNERS by compliance or the second line. Until now the chain was free-text regulatory drivers → DR-* risk categories → CTRL-* controls → gates; nothing named the OBLIGATION itself, so 'show me every control for obligation X' had no answer. Each entry here is one obligation: where it comes from, which article, who owns keeping it current, when it was last verified against the source, the register risks and controls that answer it, and the FINOS SDLC draft mitigations it maps to. scripts/obligations-check.mjs fails an entry that resolves to no risk or no control, a stale last_verified, an owner nobody holds, or an unknown FINOS catalogue version. D6 requires a data-governance document to cite at least one OB-* id that resolves here; change-watch reports drift per obligation to its owner_role.",
+  "_illustrative_comment": "EVERY ENTRY BELOW IS ILLUSTRATIVE (`illustrative: true`). They show the SHAPE — a plausible UAE set across consumer protection, personal data, model management, operational risk, outsourcing and AI — with the article field left as an ADOPT placeholder ON PURPOSE: regulatory figures and article numbers are load-bearing and are never paraphrased from memory into a control (CLAUDE.md). Under a regulated profile an illustrative entry FAILS the gate; replace each with your compliance function's verified entry (source, article, owner, date) or delete it. The real taxonomy is never committed to a shared repository: point `private_path` at a file outside the tree if your register cannot be public.",
+  "schema_version": "1.0",
+  "private_path": null,
+  "finos_catalogue": {
+    "ref": "finos-labs/SDLC-Controls-Framework readiness report 2026-06-20",
+    "note": "Draft identifiers; they will move. The loader refuses a ref it does not know, so a moved catalogue is a loud failure, not a silent mismatch."
+  },
+  "defaults": {
+    "verify_every_days": 365
+  },
+  "obligations": [
+    {
+      "id": "OB-AE-CPS-001",
+      "illustrative": true,
+      "source": "CBUAE Consumer Protection Standards",
+      "article": "ADOPT: cite the article (verified against the current Standards, not from memory)",
+      "title": "Products are approved through a documented process with an inherent-risk assessment and control-function sign-off before launch",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "customer_facing"
+        ]
+      },
+      "owner_role": "compliance",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "PA-GATES"
+      ],
+      "finos": [
+        "mi-4",
+        "mi-20"
+      ]
+    },
+    {
+      "id": "OB-AE-CPS-002",
+      "illustrative": true,
+      "source": "CBUAE Consumer Protection Standards",
+      "article": "ADOPT: cite the article",
+      "title": "Customer-facing disclosures are provided in Arabic and English and are accessible",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "customer_facing"
+        ]
+      },
+      "owner_role": "compliance",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "PA-GATES"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-PDPL-001",
+      "illustrative": true,
+      "source": "UAE Federal Decree-Law on the Protection of Personal Data (PDPL)",
+      "article": "ADOPT: cite the article",
+      "title": "Personal data is processed lawfully, for a stated purpose, and no more than is necessary",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "personal_data"
+        ]
+      },
+      "owner_role": "data-protection",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "DATA-LC"
+      ],
+      "finos": [
+        "mi-4"
+      ]
+    },
+    {
+      "id": "OB-AE-PDPL-002",
+      "illustrative": true,
+      "source": "UAE Federal Decree-Law on the Protection of Personal Data (PDPL)",
+      "article": "ADOPT: cite the article",
+      "title": "Personal data is retained no longer than needed and erased or anonymised on request where the law allows",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "personal_data"
+        ]
+      },
+      "owner_role": "data-protection",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "DATA-LC"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-PDPL-003",
+      "illustrative": true,
+      "source": "UAE Federal Decree-Law on the Protection of Personal Data (PDPL)",
+      "article": "ADOPT: cite the article",
+      "title": "No real personal data in non-production environments; synthetic data only",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "personal_data"
+        ]
+      },
+      "owner_role": "data-protection",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1-001"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "HOOK-PII",
+        "Q4-SECRETS"
+      ],
+      "finos": [
+        "mi-14"
+      ]
+    },
+    {
+      "id": "OB-AE-MMS-001",
+      "illustrative": true,
+      "source": "CBUAE Model Management Standards",
+      "article": "ADOPT: cite the article",
+      "title": "Every model in use is inventoried, tiered by risk, validated independently before use and monitored in production",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "model_involved"
+        ]
+      },
+      "owner_role": "model-validator",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "HG-0006"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-OPRISK-001",
+      "illustrative": true,
+      "source": "CBUAE Operational Risk regulation and standards",
+      "article": "ADOPT: cite the article",
+      "title": "Changes to production systems follow a documented change process with segregation of duties and a rehearsed rollback",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": []
+      },
+      "owner_role": "risk-second-line",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "HG-0001",
+        "HG-0005",
+        "OPS-READINESS"
+      ],
+      "finos": [
+        "mi-19",
+        "mi-20"
+      ]
+    },
+    {
+      "id": "OB-AE-OPRISK-002",
+      "illustrative": true,
+      "source": "CBUAE Operational Risk regulation and standards",
+      "article": "ADOPT: cite the article",
+      "title": "Material incidents are reported to the regulator within the prescribed period",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": []
+      },
+      "owner_role": "compliance",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "OPS-LOOP"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-OUTSOURCING-001",
+      "illustrative": true,
+      "source": "CBUAE Outsourcing regulation",
+      "article": "ADOPT: cite the article",
+      "title": "Material outsourcing arrangements, including cloud and AI model providers, are assessed, approved and exit-planned before use",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "*"
+        ],
+        "conditions": [
+          "third_party",
+          "model_involved"
+        ]
+      },
+      "owner_role": "risk-second-line",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "HG-0004",
+        "HG-0011"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-AI-001",
+      "illustrative": true,
+      "source": "CBUAE Guidance Note on Consumer Protection and Responsible Adoption and Use of Artificial Intelligence and Machine Learning by Licensed Financial Institutions",
+      "article": "Sections 2-7 and 9; issued 11 February 2026",
+      "title": "Consumer-impacting AI is governed, transparent, explainable, contestable, monitored and subject to meaningful human oversight",
+      "applicability": {
+        "jurisdictions": [
+          "AE"
+        ],
+        "product_types": [
+          "ai-decision-system"
+        ],
+        "conditions": [
+          "model_involved",
+          "customer_facing"
+        ]
+      },
+      "owner_role": "model-validator",
+      "last_verified": "2026-09-01",
+      "risk_ids": [
+        "DR-1.1"
+      ],
+      "control_ids": [
+        "CTRL-001"
+      ],
+      "catalog_controls": [
+        "AI-GOVERNANCE",
+        "AI-EXPLAINABILITY",
+        "AI-FAIRNESS"
+      ],
+      "finos": []
+    },
+    {
+      "id": "OB-AE-PDPL-OFBO-001",
+      "source": "docs/governance/data-risk-register/source/DATA_REGULATION_V2_5_0.xlsx via regulations.json",
+      "article": "PDPL-6.2 and PDPL-15.2",
+      "title": "A data subject may withdraw consent at any time; withdrawal-related erasure rights and their legal exceptions must be handled.",
+      "applicability": {
+        "jurisdictions": ["AE"],
+        "product_types": ["open-finance"],
+        "conditions": ["personal_data", "consent_withdrawal"]
+      },
+      "owner_role": "data-protection",
+      "last_verified": "2026-06-24",
+      "verification_basis": "Source register imported and deterministically converted in commit 4389d396; institutional applicability re-verification remains an activation task.",
+      "risk_ids": ["DR-2.1", "DR-2.1-002"],
+      "control_ids": ["CTRL-DP-002", "CTRL-DP-003"],
+      "catalog_controls": ["D-GATES", "DATA-LC"],
+      "finos": []
+    },
+    {
+      "id": "OB-INT-BCBS239-OFBO-001",
+      "source": "docs/governance/data-risk-register/source/DATA_REGULATION_V2_5_0.xlsx via regulations.json",
+      "article": "BCBS239-P3-002, BCBS239-P3-003, and BCBS239-P3-004",
+      "title": "Risk data is accurate and reliable, manual or EUC processes have effective mitigants, and aggregated figures reconcile to authoritative sources.",
+      "applicability": {
+        "jurisdictions": ["INT"],
+        "product_types": ["open-finance"],
+        "conditions": ["risk_data", "reconciliation"]
+      },
+      "owner_role": "risk-second-line",
+      "last_verified": "2026-06-24",
+      "verification_basis": "Source register imported and deterministically converted in commit 4389d396; institutional applicability re-verification remains an activation task.",
+      "risk_ids": ["DR-1.1-003", "DR-1.3-001", "DR-1.4-001"],
+      "control_ids": ["CTRL-DQ-003", "CTRL-DQ-006", "CTRL-DQ-012"],
+      "catalog_controls": ["D-GATES", "OPS-READINESS"],
+      "finos": []
+    }
+  ]
+}

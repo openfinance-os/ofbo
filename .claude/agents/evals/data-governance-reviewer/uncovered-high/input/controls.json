@@ -1,0 +1,12 @@
+[
+  {
+    "control_id": "CTRL-001",
+    "control_name": "Synthetic-data-only rule with automated PII guard",
+    "control_type": "Preventive",
+    "control_owner": "First line — engineering",
+    "risk_ids": ["DR-1.1-001"],
+    "automation_level": "Automated",
+    "effectiveness_score": 0.9,
+    "description": "All non-production data is synthetic by construction; a pre-write guard (hooks/pii-guard.sh) blocks PII-shaped literals; CI re-checks."
+  }
+]

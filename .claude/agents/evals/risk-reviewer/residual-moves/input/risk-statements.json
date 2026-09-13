@@ -1,0 +1,11 @@
+[
+  {
+    "risk_id": "DR-1.1-001",
+    "risk_category_id": "DR-1.1",
+    "statement": "Personal data appears in non-production artifacts (fixtures, logs, prototypes) without redaction or a synthetic-data control.",
+    "regulatory_drivers": ["<your data-protection regulation, e.g. GDPR Art. 5 / PDPL Art. 5>"],
+    "inherent_rating": "High",
+    "control_ids": ["CTRL-001"],
+    "residual_rating": "Low"
+  }
+]

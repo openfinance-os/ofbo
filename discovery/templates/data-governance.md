@@ -7,7 +7,7 @@ run: "<slug>"
 
 # Data-governance feasibility — <slug>
 
-> Define (converge). Asked in discovery, not retrofitted in delivery. Gate D6: cite ≥1
+> Define (converge). Asked in discovery, not retrofitted in delivery. Gate D6 (Data-governance feasibility): cite ≥1
 > `DR-*` risk category **and** ≥1 regulatory driver; every cited `DR-*`/`CTRL-*` id must
 > resolve against `docs/governance/data-risk-register/`; record a residual-risk verdict.
 > The `data-governance-reviewer` agent checks control coverage.
@@ -24,7 +24,7 @@ run: "<slug>"
 |---|---|---|---|---|
 | | DR-2.1 | | PDPL Art. … | CTRL-… |
 
-## Residual-risk verdict (D6)
+## Residual-risk verdict (gate D6)
 
 - **Residual rating after controls:**
 - **Acceptable for delivery?** Yes / No / Conditional —

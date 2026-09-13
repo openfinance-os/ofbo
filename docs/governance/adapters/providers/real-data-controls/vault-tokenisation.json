@@ -1,0 +1,45 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `real-data-controls` role — the KEEP-IT-OUT shape: the real value never enters the application store at all. A token vault holds it, the workload handles a surrogate, and getting the real value back is a separate, individually authorised, individually logged detokenisation call. It closes the same hole as the encrypt-in-place shape from the other end — instead of protecting the data where the agents and engineers already are, it removes the data from where they are. It PROTECTS nothing by itself and verifies no read: the harness reads JSON records and never watches production. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your vault and its audit log, and wire the fetch that fills activation_evidence.",
+  "role": "real-data-controls",
+  "provider": "vault-tokenisation",
+  "adapter_id": "vault-tokenisation",
+  "system": "tokenisation-vault",
+  "satisfies_control": "REAL-PII-SURFACE",
+  "capability": "Substitution of customer-identifying values with non-reversible surrogates held by a token vault, so application stores, fixtures, logs and agent context carry tokens only, with every detokenisation authorised and recorded by the vault",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes. Neither line argues for or against — they are the trade being accepted.",
+    "strength": "The blast radius collapses to one system. A dump of an application database, a debug log, a fixture accidentally committed, or a prompt carrying a customer record contains surrogates and nothing else — which is the failure mode this bundle spends the most effort on elsewhere, here removed rather than guarded. It also keeps the synthetic-only posture true for most of the estate, so pii-guard.sh and the fixture conventions stay meaningful after the move to real data",
+    "limitation": "IT MOVES THE SURFACE, IT DOES NOT REMOVE IT. The detokenisation endpoint is now the whole control, and it is a single high-value target that must authorise per call rather than per session — a broad grant there recreates the plaintext estate in one hop. It also breaks what the other shape preserves: joins, uniqueness assumptions, format-dependent validation and analytics all have to be reworked against surrogates, which is where projects quietly widen the grant to make a report run"
+  },
+  "evidence": {
+    "kind": "real-data-control-posture",
+    "envelope_fields": [
+      "vault_id",
+      "tokenised_fields",
+      "token_scheme",
+      "detokenise_authorised_identities",
+      "access_log_stream_id",
+      "window_start",
+      "window_end",
+      "detokenisations_authorised",
+      "detokenisations_denied",
+      "residual_plaintext_stores",
+      "fetched_at",
+      "asserted_by"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "NO SHIPPED GATE READS THIS ARTIFACT, and `gate_mechanism` is null rather than naming one. REAL-PII-SURFACE is catalogued `absent`: the harness ships nothing for the real-data case, which is the whole reason this role exists. scripts/adapter-evidence-check.mjs is the nearest thing and it is NOT it — it reads signed observations under docs/governance/adapter-evidence/, not this path, and it makes no claim at all about an adapter outside the stream contract (core/floor-adapters.mjs `isStreamAdapter`), which this one is. What the harness DOES see is that a provider was selected (PS-R06) and whether activation_evidence is still placeholders (adapter-check.mjs). So the reconciliation below is the ADOPTER'S, performed by the fetch that fills activation_evidence. `residual_plaintext_stores` is the field that earns this adapter its keep: tokenisation projects are judged on what was tokenised; what decides the exposure is what was NOT, and that list is the one nobody publishes. Reconcile on it and a store left holding plaintext is a finding rather than an omission — but note WHOSE finding, because nothing in CI will raise it for you. WHAT A GATE WOULD TAKE: this envelope committed as a signed observation under docs/governance/adapter-evidence/ naming REAL-PII-SURFACE, asserted by an issuer outside the coding agent's write scope, with the denial as a required negative — plus a data-custody mechanism in SEAM_MECHANISMS, which carries none today, and a gate that reads it.",
+    "gate_artifact": "docs/governance/evidence/real-data-control-posture.json",
+    "gate_mechanism": null,
+    "reconciled_by": "the adopter's fetch and negative probe — no gate in this harness",
+    "match_on": ["vault_id", "tokenised_fields", "residual_plaintext_stores", "detokenisations_denied"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real vault read + the negative probe. detokenisations_authorised proves the vault is in the path, never that it refuses anyone. Only a denial you provoked and then found in the VAULT's own log shows the control bit.",
+    "fetched_at": "ADOPT: timestamp of your vault and audit-log read",
+    "asserted_by": "ADOPT: the vault / audit-log service identity that emits these records — must NOT be the application or agent that detokenises through them",
+    "negative_probe": "ADOPT: 'denied-and-logged' once an identity WITHOUT detokenisation rights has attempted a call, been refused, and that refusal has been found in the vault's audit log",
+    "residual_probe": "ADOPT: 'enumerated' once the stores still holding plaintext have been listed and each one has an owner and a dated plan — an empty list asserted without a survey is the claim this field exists to prevent"
+  }
+}

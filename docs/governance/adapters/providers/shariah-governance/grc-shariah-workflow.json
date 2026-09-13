@@ -1,0 +1,45 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `shariah-governance` role — the external alternative, for institutions that run ISSC papers, resolutions and sign-offs through a GRC or Shari'ah-workflow platform rather than a secretariat share. It exists so the role is a genuine choice and not one arrangement with extra steps; the role's demand does not soften either way. What changes is WHO asserts the register: a platform outside the repository, whose resolution and approval records carry its own timestamps and audit trail. It still rules on nothing — scholars decide Shari'ah, the platform records that they did. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your tenant, and wire the fetch that fills activation_evidence.",
+  "role": "shariah-governance",
+  "provider": "grc-shariah-workflow",
+  "adapter_id": "grc-shariah-workflow",
+  "system": "grc-workflow-platform",
+  "satisfies_control": "SHARIAH-GOV",
+  "capability": "The ISSC arrangement as the workflow platform holds it — committee membership with HSA approval and appointment references, sitting minutes, and the resolution record behind each ruling — read from the platform's API, not from the repository under test",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes, not sold. Neither line is a reason to prefer or avoid this provider — they are the trade the institution is accepting.",
+    "strength": "The assertion comes from OUTSIDE the repository by construction: membership changes are workflow events with platform-side timestamps, so a seat cannot appear in the register without appearing in an audit trail no repository edit can rewrite. The separation the in-house route has to manufacture is the platform's default state",
+    "limitation": "The platform knows what was ENTERED into it, not what the committee decided in the room. A resolution the secretariat mis-keys reconciles perfectly and is still wrong, so the minutes reference — not the workflow state — is what an auditor follows. Two further consequences to accept deliberately: ISSC papers in a third-party tenant is a residency and confidentiality decision of its own; and a platform can carry the workflow for all three lines but can hold NO role — internal Shari'ah audit may never be outsourced, so a vendor identity in the `shariah-audit` slot has not satisfied it"
+  },
+  "evidence": {
+    "kind": "shariah-governance-register",
+    "envelope_fields": [
+      "tenant_id",
+      "committee_id",
+      "seat_count",
+      "member_ids",
+      "hsa_approval_refs",
+      "appointment_instrument_refs",
+      "appointment_dates",
+      "resolution_refs",
+      "minutes_refs",
+      "quorum_rule",
+      "record_last_modified",
+      "effective_from",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "Same binding as any shariah-governance provider: the register the gate reads must match the committee the platform holds, on composition and on provenance. record_last_modified is carried so a register exported before an appointment changed is visible as stale rather than read as current.",
+    "gate_artifact": "docs/governance/issc-register.json",
+    "gate_mechanism": "scripts/shariah-governance-check.mjs",
+    "match_on": ["member_ids", "seat_count", "hsa_approval_refs", "appointment_instrument_refs"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real API read against your tenant + the tamper probe. Staleness matters here in a way it does not for a secretariat export — a platform read cached from before a resignation reports a lawful committee that no longer sits.",
+    "fetched_at": "ADOPT: timestamp of your platform API read",
+    "reader_identity": "ADOPT: the least-privilege service account that reads the register — must NOT be the coding agent's identity",
+    "staleness_probe": "ADOPT: 'rejected' once you have tested that a register export older than your appointment-change window fails the build",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that editing docs/governance/issc-register.json away from the platform's record fails the build"
+  }
+}

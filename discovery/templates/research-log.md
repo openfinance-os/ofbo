@@ -8,7 +8,7 @@ run: "<slug>"
 # Research log — <slug>
 
 > Discover (diverge). Every signal recorded here is referenced by `synthesis.md` and gates
-> D2/D5. Synthetic/illustrative signals must be tagged `[synthetic]`. Zero real PII.
+> D2 (Evidence) and D5 (Synthesis integrity). Synthetic/illustrative signals must be tagged `[synthetic]`. Zero real PII.
 
 ## Stakeholders consulted
 
@@ -18,7 +18,7 @@ run: "<slug>"
 
 ## Signals
 
-Each signal gets a stable id (`S-001`, …) so downstream artifacts can cite it.
+Each signal gets a stable id (`S-001`, … — "S" for signal) so downstream artifacts can cite it.
 
 | Signal id | Source | Observation | Type (pain/need/constraint/quote) | Confidence |
 |---|---|---|---|---|

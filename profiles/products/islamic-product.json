@@ -1,0 +1,48 @@
+{
+  "profile": "islamic-product",
+  "kind": "product",
+  "_comment": "A financial product the institution offers on its Islamic proposition — a cost-plus sale, a lease, a co-ownership, a Takaful cover. Selecting this profile declares the product category; it asserts no compliance, and nothing in this harness can. Automatically compiles Shari'ah governance — an approved structure, alignment with the binding local Shari'ah authority — that a conventional product never requires. Composes with any base product profile (a Murabaha consumer-lending product carries BOTH consumer-lending and islamic-product requirements). THE THREE ROLES ARE THE THREE LINES, and they are not interchangeable: `shariah-committee` is the internal Shari'ah supervision committee (the ISSC — the BODY that rules; individuals hold the role and a registry quorum is what makes it a body, so one member's signature is never the committee's decision); `shariah-compliance` is the second-line Shari'ah Compliance Function, which monitors conformance continuously rather than at a launch gate; `shariah-audit` is third-line internal Shari'ah audit, which certifies what was actually built and MAY NEVER BE OUTSOURCED — an adopter who maps it to a vendor has not satisfied it. Nothing here rules on Shari'ah: the harness verifies that an approved structure exists, is bound to this exact change and is conformed to. Scholars decide Shari'ah; these controls decide whether their decision was recorded, bound and followed.",
+  "requirements": {
+    "medium": {
+      "gates": [
+        "assurance-cadence"
+      ],
+      "approver_roles": [
+        "shariah-committee",
+        "shariah-compliance",
+        "shariah-audit"
+      ],
+      "evidence": [
+        "shariah-attestation"
+      ],
+      "pa1_sections": [
+        "shariah-structure"
+      ],
+      "pa2_sections": [
+        "shariah-audit",
+        "profit-rate-structure",
+        "purification-of-non-compliant-income"
+      ],
+      "capabilities": {
+        "shariah_governance": {
+          "required": true,
+          "institution_owned": true
+        },
+        "approval_attestation": {
+          "required": true
+        },
+        "knowledge_currency": {
+          "required": true,
+          "institution_owned": true
+        }
+      },
+      "_pa1_comment": "`shariah-audit` is deliberately ABSENT from the PA1 set. Third-line audit certifies what was built; it does not authorise development, and binding it at permission-to-develop would make the assurer a party to the thing it later assures. It binds at PA2 only.",
+      "pa1_approver_roles": [
+        "shariah-committee",
+        "shariah-compliance"
+      ],
+      "_attestation_comment": "`approval_attestation` (core/approval-attestations.mjs) is mandatory here because an ISSC decides in committee sittings, not in a pull request. The attestation binds the human's assertion to the exact plan hash, so a ruling recorded against one plan cannot silently cover a plan that drifted afterwards — the failure it prevents is a genuine fatwa being cited for a structure it never saw.",
+      "_cadence_comment": "Continuous, not high-tier-only. The Shari'ah Compliance Function's obligation is CONTINUOUS monitoring, so `assurance-cadence` and an institution-owned `knowledge_currency` capability compile from medium — the point at which an Islamic product exists at all. Treating them as a high-tier extra would mean a medium-tier Islamic product is governed at launch and never again. What the harness can see is the cadence RECORDS; it does not watch production, and a missing record is reported as uncovered rather than assumed clean."
+    }
+  }
+}

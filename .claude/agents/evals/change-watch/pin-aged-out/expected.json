@@ -1,0 +1,13 @@
+{
+  "schema": "loom.agent-output/v1",
+  "agent": "change-watch",
+  "prompt_version": "loom-agents@2.1.0",
+  "model": "example-model@2026-01",
+  "inputs_read": ["knowledge-pins.json"],
+  "register_state": "mounted",
+  "verdict": "HORIZON",
+  "confidence": "high",
+  "findings": [
+    { "id": "WATCH 1", "severity": "high", "subject": "PIN-OF-STANDARDS", "issue": "UNVERIFIED (no mechanical check): last_verified 2025-11-01 is past the 180-day window and check_ref is null — currency was not established here", "evidence_refs": [{ "file": "knowledge-pins.json", "locator": "pins[0]" }], "route": "human" }
+  ]
+}

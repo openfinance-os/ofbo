@@ -1,0 +1,9 @@
+[
+  {
+    "risk_domain_id": "DR-1",
+    "risk_domain_name": "Data Protection",
+    "risk_category_id": "DR-1.1",
+    "risk_category_name": "Personal Data Handling Risk",
+    "definition": "Risk that personal data is collected, processed, or retained without a lawful basis, adequate safeguards, or within-policy retention."
+  }
+]

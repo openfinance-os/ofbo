@@ -1,0 +1,23 @@
+{
+  "profile": "consumer-lending",
+  "kind": "product",
+  "_comment": "Consumer (retail) lending — composes ON TOP of the base lending profile. A retail credit product automatically compiles consumer-duty, affordability, credit-risk, data and model-risk controls a wholesale product never sees.",
+  "requirements": {
+    "medium": {
+      "approver_roles": ["conduct-risk", "credit-risk"],
+      "_pa1_comment": "rc.38 (flow-plan Phase 4.6) — a retail credit product's conduct objection belongs at permission-to-develop, beside the target-market analysis it reads, not at permission-to-launch beside the disclosures it would then send back.",
+      "pa1_approver_roles": ["conduct-risk", "credit-risk", "data-protection"],
+      "pa1_sections": ["target-market-consumer-duty"],
+      "pa2_sections": ["affordability-assessment", "responsible-lending-disclosures", "vulnerable-customer-treatment"],
+      "capabilities": {
+        "consumer_credit_risk": { "required": true },
+        "data_risk_register": { "required": true, "minimum_version": "3.1", "institution_owned": true }
+      }
+    },
+    "high": {
+      "capabilities": {
+        "model_risk": { "required": true, "minimum_tier": "high" }
+      }
+    }
+  }
+}

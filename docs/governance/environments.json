@@ -1,0 +1,36 @@
+{
+  "_comment": "ADOPT: the environment seam (rc.39 · flow-plan Phase 5.1) — mounted as docs/governance/environments.json and validated by scripts/environments-check.mjs. Environments were the one cross-cutting concept in this bundle that existed only as PROSE: three `<!-- ADOPT -->` comments in skills/release/SKILL.md told an adopter to 'name your pre-production target' and nothing anywhere could check what they named. A promotion ladder that lives in a comment cannot be reasoned about by a gate, cannot be cited by a deployment record, and cannot tell you which environments hold personal data. This file is that ladder, written down: one entry per environment, each naming what it is for, what class of data it may hold, who may promote INTO it, and where it is promoted FROM. The ladder is a chain: exactly one root (promotion_source null), every other environment naming a declared source, and no cycles. Two rules fail closed and are the reason this is a control rather than documentation: an environment holding `personal` data must require approval, and the terminal environment (the one nothing promotes out of — production) must require approval. ADOPT every field; the placeholders below are a WORKED SHAPE for a three-rung ladder, not your ladder.",
+  "environments": [
+    {
+      "id": "dev",
+      "purpose": "Integration of merged work; the first place a built artifact runs at all",
+      "data_classification": "synthetic",
+      "identity": "eng-omar",
+      "promotion_source": null,
+      "approval_required": false,
+      "url": "https://dev.credit.example.invalid",
+      "external_record_environment": "ADOPT: the name of this environment at your external-record provider (e.g. the Kosli environment), when one is mounted; omit to use the id \"dev\""
+    },
+    {
+      "id": "staging",
+      "purpose": "Pre-production rehearsal: the release skill's smoke suite runs HERE, against this live URL",
+      "data_classification": "masked",
+      "identity": "ops-dana",
+      "promotion_source": "dev",
+      "approval_required": false,
+      "url": "https://staging.credit.example.invalid",
+      "external_record_environment": "ADOPT: the name of this environment at your external-record provider (e.g. the Kosli environment), when one is mounted; omit to use the id \"staging\""
+    },
+    {
+      "id": "production",
+      "purpose": "Customer-facing. Promotion into it is delivery step ⑧ and happens only on a returned compound production authorization",
+      "data_classification": "personal",
+      "identity": "padmin-zoe",
+      "promotion_source": "staging",
+      "approval_required": true,
+      "url": "https://credit.example.invalid",
+      "external_record_environment": "ADOPT: the name of this environment at your external-record provider (e.g. the Kosli environment), when one is mounted; omit to use the id \"production\""
+    }
+  ],
+  "_external_record_comment": "2.1.0 (hardening plan row 2.10, decision K9): when an external-record provider that keeps environment snapshots is mounted, scripts/deployed-digest-check.mjs reads what is RUNNING from it and requires the deployed digest to be there; external_record_environment maps this ladder rung to the provider's name for it. Unmounted, the gate reads the repo's deployment record and says so."
+}

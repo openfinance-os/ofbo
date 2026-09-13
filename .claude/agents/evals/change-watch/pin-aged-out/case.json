@@ -1,0 +1,1 @@
+{ "register_mounted": true, "expect_verdict": "HORIZON", "why": "A knowledge pin whose last_verified is older than max_age_days, with a check_ref of null. The agent reports it UNVERIFIED and routes to the pin's owner_role; it never reads a null check as clean." }

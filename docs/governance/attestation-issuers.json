@@ -1,0 +1,33 @@
+{
+  "_comment": "ADOPT: the allowed-issuers registry — the attestation contract's key-distribution half (Loom 2.0 §6). core/attestations.mjs VERIFIES against this file: only attestations from an issuer listed here, checked by the named mechanism, count as authenticated. The ed25519 mechanism is verified in-process (real crypto, negative-tested); ci-oidc and sigstore mechanisms are verified by the platform in CI — until you wire them and record activation evidence, they report UNVERIFIED-HERE rather than silently passing. Own this file in CODEOWNERS by a non-builder group.",
+  "issuers": [
+    {
+      "id": "bank-ci",
+      "mechanism": "ci-oidc",
+      "description": "The protected CI runner's OIDC identity — gate evidence envelopes",
+      "verify": {
+        "kind": "github-attestation",
+        "repository_owner": "your-org"
+      }
+    },
+    {
+      "id": "bank-approvals",
+      "mechanism": "sigstore",
+      "description": "SUPERSEDED for human approvals — human approval assertions now live in assertion-issuers.json (Factory Floor WS2 · D2.4), which is deliberately a SEPARATE registry so that a service key can never vouch for a person. Keep this entry only for service-issued envelopes; do not reuse its trust anchor in the assertion registry (the gate rejects a shared anchor).",
+      "verify": {
+        "kind": "sigstore-identity",
+        "issuer": "ADOPT: a SERVICE issuer — it must NOT be the identity provider used in assertion-issuers.json (the gate rejects a shared trust anchor)",
+        "subject_pattern": "*@your-org.example"
+      }
+    },
+    {
+      "id": "demo-anchor-signer",
+      "mechanism": "ed25519",
+      "demo": true,
+      "description": "DEMO reference issuer — a real ed25519 key pair; the private key is NOT shipped (regenerate your own; this one signs only the bundled example anchor). `demo: true` is refused by the ONE unified attestation stack (core/attestations.mjs, rc.36 D3) — every gate that verifies a signature refuses a demo issuer, the anchor gate included. The entry stays so the refusal is demonstrable; nothing can pass with it. Register your own signer (see evidence-example/regenerate.mjs for the per-run pattern). Issuer entries also honour `valid_from`/`valid_until`/`revoked`, and attestations may carry their own `validity` window.",
+      "verify": {
+        "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAsbjIWdwF4iiTTOfICsqf2J/YWtw4YVRNhXhswb8TAzI=\n-----END PUBLIC KEY-----\n"
+      }
+    }
+  ]
+}

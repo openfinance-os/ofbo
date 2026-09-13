@@ -1,0 +1,28 @@
+{
+  "_comment": "ADOPT: every data category the solution touches, with its lifecycle disposition. Verified by scripts/data-lifecycle-check.mjs. The gate enforces the disposition is DECLARED and bounded — executing it (KMS, tokenization, deletion jobs) is your data platform's job (governance/data-protection-runbook.md). Replace these demo categories with yours. retention is a bounded period (ISO-8601 'P6Y' or '30 days'), OR { indefinite: true, justification }. erasure.method is your right-to-erasure mechanism; 'none' needs a legal-hold exemption.",
+  "categories": [
+    {
+      "category": "customer_contact_details",
+      "classification": "personal",
+      "lawful_basis": "contract",
+      "retention": { "period": "P6Y" },
+      "erasure": { "method": "crypto-shred" },
+      "residency": "onshore"
+    },
+    {
+      "category": "transaction_audit_log",
+      "classification": "personal",
+      "lawful_basis": "legal_obligation",
+      "retention": { "period": "P5Y" },
+      "erasure": { "method": "none", "exemption": "AML/CFT record-keeping — statutory 5-year hold" },
+      "residency": "onshore"
+    },
+    {
+      "category": "aggregate_usage_metrics",
+      "classification": "non-personal",
+      "retention": { "period": "P2Y" },
+      "erasure": { "method": "hard-delete" },
+      "residency": "onshore"
+    }
+  ]
+}

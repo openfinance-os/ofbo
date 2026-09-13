@@ -1,0 +1,34 @@
+{
+  "_comment": "ADOPT: the identity map — the join from a collaboration surface's person id, through the immutable identity-provider subject, to a registry identity (Factory Floor P6). core/identity-map.mjs resolves against this file; scripts/identity-map-check.mjs checks its soundness. Own it in CODEOWNERS by the SAME non-builder second-line group that owns identities.json.",
+  "_external_identities_are_not_mapped_here": "This map covers identities the CORPORATE DIRECTORY governs, and its reconciliation rests on a joiner/mover/leaver lifecycle: a departed human's idp_subject goes disabled, the periodic observation reads that, and the mapping is caught. That assumption DOES NOT HOLD for an identity marked `\"external\": true` in identities.json — a committee appointee (the ISSC case) is not employed, has no joiner/mover/leaver record, and typically no corporate idp_subject to pivot on. Such identities are reconciled against the register named in their own `reconciliation_source`, not against the directory, and the honest consequence is that this file's observation says NOTHING about them: their coverage here is `uncovered`, and claiming otherwise would be the kind of implied assurance the map exists to remove. Do not manufacture an employee account to make an external appointee mappable — that trades an unmapped identity for a false one. If an external identity DOES appear on a floor surface and genuinely holds a directory subject, map it like any other entry; the flag governs who reconciles it, not whether it may be mapped.",
+  "_why_the_pivot_is_the_idp_subject": "Three identifier spaces, three lifecycles, no shared transaction. The workspace person id is reassignable — a vendor may reissue it to a different human, which is the ugliest drift class because the id LOOKS stable. The registry id is ours and means nothing to the surface. Only the identity-provider subject is opaque, immutable, and governed by a joiner/mover/leaver process the institution already audits. So it is the pivot, and the other two hang off it.",
+  "_why_there_is_no_email_field": "Because an address is a routing label, not an identity: a person can change it, two people can share a mailbox, a departed employee's address can be reassigned, and an attacker who controls a display name can often control what an address appears to be. A schema with no field for it is what stops a well-meaning shortcut from being written. Any code path that establishes identity by comparing addresses is refused AT REVIEW — it has no rejection code because it must never reach a gate.",
+  "_never_written_by_a_service": "The bridge MAY read this file (to route, to reject early and visibly on the floor, to render the right label). It may never write it — not the file, not a branch that automerges, not a proposal any automation merges. The service that transcribes a decision must not also be able to decide who is allowed to make one. And its read is never authorisation: the gate re-resolves independently at CI time, from the committed file, with no network and no bridge involvement.",
+  "_never_projected": "This file is personal data by construction and the seam's highest-value target. It stays in the record. A floor surface may show a person's name — the workspace already knows it — and must never display or store an `idp_subject`.",
+  "schema": "loom.identity-map/v1",
+  "surface": {
+    "system": "notion",
+    "workspace_id": "ADOPT: your workspace id",
+    "tenant": "ADOPT: your tenant, if the surface has one"
+  },
+  "idp": {
+    "issuer": "ADOPT: the same issuer pinned in assertion-issuers.json — a mapping against a different provider resolves nothing",
+    "subject_claim": "sub"
+  },
+  "_entries": "One entry per mapped human. At most one `active` entry per idp_subject, per person id, and per registry_id — two active entries for one subject is a REJECTION, never a pick. Revocation sets `status`; it never deletes, because the history is the evidence that a decision made in March was made by someone who held the mapping in March. A removed entry is a finding, not a tidy-up.",
+  "_entry_shape": {
+    "notion_person_id": "the vendor's UUID for the account, READ FROM THE API — never typed from a directory",
+    "idp_subject": "the pivot: opaque, immutable, from the issuer named above; recorded from an assertion or an authoritative directory read, never derived from an address",
+    "registry_id": "must exist in identities.json, kind: human, and must not be a service identity",
+    "roles_at_mapping": ["AUDIT SNAPSHOT ONLY — never read as an authorisation source; roles come from identities.json at verification time, always"],
+    "verification": { "method": "assertion-derived | directory-plus-console", "reference": "something an auditor can follow to the act that established the binding" },
+    "mapped_at": "RFC 3339 UTC — the instant from which the mapping may be relied on",
+    "mapped_by": "the registry id of the HUMAN who verified the binding. Must not be the subject, must not be a builder, must hold a control-function role",
+    "status": "active | revoked — there is no `pending`; an unmerged entry is not an entry",
+    "revoked_at": "on revocation",
+    "revoked_by": "on revocation",
+    "revocation_class": "departed | account-reprovisioned | for-cause — the class changes what happens to in-flight approvals",
+    "superseded_by": "optional: for a re-provisioned workspace account, points at the entry that replaces this one so the history reads forward"
+  },
+  "entries": []
+}

@@ -1,0 +1,33 @@
+{
+  "profile": "open-finance",
+  "kind": "product",
+  "_comment": "Open Finance product (data sharing / payment initiation via a regulated API hub). Compiles consent-lifecycle, TPP due-diligence and FAPI-grade security controls specific to third-party access.",
+  "requirements": {
+    "medium": {
+      "approver_roles": ["information-security", "data-protection"],
+      "pa1_sections": ["open-finance-scope-and-consent"],
+      "pa2_sections": ["consent-lifecycle", "tpp-liability-model", "strong-customer-authentication"],
+      "capabilities": {
+        "consent_management": { "required": true },
+        "tpp_due_diligence": { "required": true },
+        "data_risk_register": { "required": true, "minimum_version": "3.1", "institution_owned": true }
+      }
+    }
+  },
+  "_conditional_comment": "The Islamic conditional adds SECTIONS and EVIDENCE and deliberately adds NO approver roles. The Shari'ah roles come from composing products/islamic-product — duplicating them here would let an Open Finance change compile Shari'ah approvers without ever naming the Islamic product profile, and a non-Islamic Open Finance compile must be byte-identical to what it was before this block existed. SECTION SEMANTICS: `sharia-structure-mapping` is a TABLE, one row per product — product → Islamic contract (Murabaha, Ijara, Diminishing Musharaka, …) → the Open Finance ShariaStructure value it is published as, or an explicit GAP row where the enum cannot represent the contract. The enum is closed and smaller than the product set, so a GAP row is the honest output and inventing a value is not available; the row exists because the API REPRESENTATION IS ITSELF A SHARI'AH-COMPLIANCE STATEMENT — a contract published under the wrong structure, or under a default `IsShariaCompliant: false`, misstates the product to every third party that reads it. `islamic-consumer-disclosures` carries the consumer-protection disclosure wording as it appears INSIDE the consent and payment journeys — including the consumer-education duty, which is why it cannot be discharged by a product page the customer never reaches. `monetisation-shariah-screening` screens the revenue model itself (data monetisation, referral and interchange economics) for permissible income, since an Open Finance surface can be structure-conformant and still earn in a way the committee has not seen. All three are analysis an approver reads; none of them is a ruling this harness makes.",
+  "conditional": [
+    {
+      "when": "islamic",
+      "adds": {
+        "pa2_sections": [
+          "sharia-structure-mapping",
+          "islamic-consumer-disclosures",
+          "monetisation-shariah-screening"
+        ],
+        "evidence": [
+          "sharia-structure-mapping"
+        ]
+      }
+    }
+  ]
+}

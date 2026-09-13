@@ -1,0 +1,59 @@
+# CODEOWNERS — the immutable control plane (HG-0002)
+#
+# ADOPT: replace @your-org/platform-admins with a REAL team the agent's identity is NOT a
+# member of. Until you do, `scripts/control-plane-check.mjs` FAILS on the placeholder by
+# design — a copied-but-never-adopted template must not read as a green control.
+# This file is what makes "the agent cannot edit its own guardrails" true: every
+# path below requires a Code Owner review before merge, enforced by branch protection (see
+# governance/activation-runbook.md). `scripts/control-plane-check.mjs` fails CI if any of
+# these paths loses its owner — the paper control and the check are defence in depth.
+#
+# Last match wins. Keep the control-plane rules LAST so nothing later un-owns them.
+
+# Sensible default owner for the whole repo (optional — remove if you prefer explicit-only).
+*                                       @your-org/engineering
+
+# --- Control plane: hooks, gates, workflows, settings, governance data, and CODEOWNERS itself ---
+/.claude/hooks/                         @your-org/platform-admins
+/.claude/settings.json                  @your-org/platform-admins
+/.claude/agents/                        @your-org/platform-admins
+/discovery/gates/                       @your-org/platform-admins
+/discovery/render/                      @your-org/platform-admins
+/scripts/                               @your-org/platform-admins
+/.github/workflows/                     @your-org/platform-admins
+/core/                                  @your-org/platform-admins
+/profiles/                              @your-org/platform-admins
+/guardrails/                            @your-org/platform-admins
+/docs/governance/                       @your-org/platform-admins
+# The adoption stamp: which Loom this repo runs and which managed files you have customised.
+# A record, not a control — but an edit to it changes what the next upgrade will overwrite.
+/.loom/                                 @your-org/platform-admins
+
+# Classification, approvals and the identity registry are owned by the SECOND LINE, not the
+# builders — this is what makes "the agent cannot lower the risk tier" a mechanism.
+/docs/governance/changes/               @your-org/risk-second-line
+/docs/governance/identities.json        @your-org/risk-second-line
+/docs/governance/attestation-issuers.json  @your-org/risk-second-line
+/docs/governance/assertion-issuers.json    @your-org/risk-second-line
+/docs/governance/identity-map.json         @your-org/risk-second-line
+/docs/governance/identity-map-reconciliation.json  @your-org/risk-second-line
+/docs/governance/services/              @your-org/platform-admins
+
+# The Shari'ah plane. The rulings register is the record of what the committee determined;
+# the ISSC register is who may approve. An agent that could write a ruling could authorise
+# its own product structure, and one that could edit the committee could appoint its own
+# approvers — so both are owned by the secretariat, not by the builders. Scholars decide
+# Shari'ah; CODEOWNERS only decides who may change the record of it.
+# ADOPT: replace with a REAL Shari'ah secretariat team that excludes every builder AND every
+# agent identity — a secretariat a builder sits in is one pair of eyes wearing two labels.
+# NO ISLAMIC PRODUCT? Delete these two lines and the mounted files. The blanket
+# /docs/governance/ rule above still owns the paths, so control-plane-check.mjs stays green.
+/docs/governance/shariah-rulings.json   @your-org/shariah-secretariat
+/docs/governance/issc-register.json     @your-org/shariah-secretariat
+
+# The Institutional BrainKit is institution-owned context — owned by the accountable
+# context owners, not the builders. A change to it requires their review (rc.8).
+/institution/                           @your-org/institutional-context-owners
+/profiles/institutions/                 @your-org/institutional-context-owners
+
+/CODEOWNERS                             @your-org/platform-admins

@@ -1,0 +1,76 @@
+{
+  "_comment": "ADOPT: the institution's binding technology policy (Loom 2.0-rc.8 BrainKit). Ground each entry in an approved source (source-register.json). 'allowed' may be used freely; 'consult' needs the named authority's sign-off; 'forbidden' must not be introduced. Reference the D6 register and supply-chain policy \u2014 do not duplicate them. 'radar' (2.2.0) is the LIFECYCLE the three lists lack: assess \u2192 trial \u2192 adopt \u2192 hold, each entry owned and dated, so a technology on trial has a mechanical on-ramp (a `trial` entry is read as `consult` by the develop skill) and a hold has a written reason.",
+  "allowed": [
+    {
+      "technology": "ADOPT: e.g. the institution's standard language/runtime",
+      "source": "ADOPT: source id"
+    }
+  ],
+  "consult": [
+    {
+      "technology": "ADOPT: technology needing sign-off",
+      "authority": "ADOPT: registry-id or function",
+      "source": "ADOPT: source id"
+    }
+  ],
+  "forbidden": [
+    {
+      "technology": "ADOPT: technology that must not be introduced",
+      "reason": "ADOPT: approved rationale",
+      "source": "ADOPT: source id"
+    }
+  ],
+  "standards": [
+    {
+      "standard": "ADOPT: binding internal or external standard the institution adopts",
+      "source": "ADOPT: source id"
+    }
+  ],
+  "registry": {
+    "_comment": "ADOPT: the enforcement seam for the lists above. In the Loom the AGENT picks the dependency, so the distinctive risk is not 'a package we chose has a CVE' but 'the agent chose a package nobody approved' \u2014 a hallucinated or slopsquatted name that resolves. SCA is structurally bad at this: it tells you a package is vulnerable, not that it should never have been selected. A curated registry closes it by construction \u2014 the resolver cannot fetch what the registry does not carry \u2014 which turns these lists from a document a reviewer checks into a boundary the build cannot cross. Chainguard Libraries is one instance of the role (Python/Java/JavaScript, built from source); an internal Artifactory/Nexus mirror with an allow-list is another. See ../../loom/references/supply-chain-security.md.",
+    "enforced": false,
+    "upstream": [
+      {
+        "ecosystem": "ADOPT: npm | pypi | maven | \u2026",
+        "source": "ADOPT: the curated registry URL the resolver is pinned to",
+        "supplier": "ADOPT: the role instance (e.g. a hardened-libraries supplier, or your internal mirror)",
+        "fallback_to_public": "ADOPT: false \u2014 a fallback that silently reaches the public index is not a boundary"
+      }
+    ],
+    "resolver_config": [
+      "ADOPT: the file that pins the resolver, e.g. .npmrc / pip.conf / settings.xml \u2014 it belongs to CODEOWNERS, not to the agent"
+    ],
+    "attested_by": "ADOPT: the adapter that proves this is live \u2014 docs/governance/adapters/<id>.json, reconciled per adapters/README.md"
+  },
+  "radar": {
+    "_comment": "ADOPT: the technology radar \u2014 where a technology stands on its way into (or out of) the allowed set. Rings: assess (looking, no use in a governed change), trial (bounded use with the named authority's sign-off \u2014 the develop skill treats a trial entry as `consult`), adopt (promoted; also appears in `allowed`), hold (do not start new use; existing use has an exit date). Every entry is owned, dated and grounded; `review_by` is when the ring is re-decided. A radar is a record of decisions, not a wishlist.",
+    "entries": [
+      {
+        "technology": "ADOPT: technology under assessment",
+        "ring": "assess",
+        "owner": "ADOPT: registry-id or function",
+        "since": "ADOPT: YYYY-MM-DD",
+        "review_by": "ADOPT: YYYY-MM-DD",
+        "source": "ADOPT: source id"
+      },
+      {
+        "technology": "ADOPT: technology on bounded trial",
+        "ring": "trial",
+        "owner": "ADOPT: registry-id or function",
+        "since": "ADOPT: YYYY-MM-DD",
+        "review_by": "ADOPT: YYYY-MM-DD",
+        "authority": "ADOPT: who signs off each use while on trial",
+        "source": "ADOPT: source id"
+      },
+      {
+        "technology": "ADOPT: technology being retired",
+        "ring": "hold",
+        "owner": "ADOPT: registry-id or function",
+        "since": "ADOPT: YYYY-MM-DD",
+        "exit_by": "ADOPT: YYYY-MM-DD",
+        "reason": "ADOPT: approved rationale",
+        "source": "ADOPT: source id"
+      }
+    ]
+  }
+}

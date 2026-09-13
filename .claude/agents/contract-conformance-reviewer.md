@@ -23,3 +23,8 @@ For every endpoint touched by the diff:
 ## Output format
 
 Per finding: `DRIFT — <endpoint> — <file>:<line> — implementation says X, contract says Y (spec line N)`. Separate section `SPEC DEFECTS` for cases where the spec contradicts CLAUDE.md conventions. End with `VERDICT: CONFORMANT` or `VERDICT: DRIFT (<n> findings)`.
+
+The machine-readable companion output MUST conform to `loom.agent-output/v1`. Include
+`register_state`; when the governing contract or required register is absent or not mounted,
+return `INSUFFICIENT_EVIDENCE` with a reason rather than a conformance verdict. Include
+`confidence`, and attach non-empty `evidence_refs` to every finding.

@@ -1,0 +1,15 @@
+{
+  "schema": "loom.intake-prefill/v1",
+  "pack": "uae-bank",
+  "title": "UAE bank (CBUAE-regulated)",
+  "_comment": "SUGGESTED answers from the bundle's uae-bank jurisdiction profile and the regulated-bank base profile. A suggestion the respondent confirms is still CLAIMED until they name the document; the questionnaire says so beside every suggestion. Nothing here is the institution's approved position.",
+  "suggestions": {
+    "G1": "Central Bank of the UAE (CBUAE). Regimes the harness already names as D6 drivers: Consumer Protection Standards (CPS), Personal Data Protection Law (PDPL), Model Management Standards (MMS), CPS-AI, BCBS 239. Open Finance carries the AlTareq CX regime.",
+    "G4": "One jurisdiction: uae-bank (profiles/jurisdictions/uae-bank.json).",
+    "E4": "Roles the regulated-bank profile compiles: product-owner, engineering (low tier); risk-second-line, compliance, legal, operations (medium tier); institutional-context-owner (institution profile). Islamic products add shariah-committee.",
+    "E1": "Product approval is two-line: PA1 before Develop, PA2 before launch (regulated-bank profile). The accountable authority per decision is the institution's to name.",
+    "H1": "Two stages are the common shape: a one-page pre-screen, then a full case above the committee threshold. The threshold and the committee are the institution's.",
+    "I2": "Data protection officer and head of risk (second line): two different humans, neither in the builders group (residency-check).",
+    "A5": "Arabic alongside English is usual for customer-facing output in this market; the brand seam carries lang and dir per artifact."
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_comment": "The PII-shape catalog read by pii-guard.sh. It exists because the shapes were HARDCODED in the guard: adding a second jurisdiction meant hand-editing a security-critical shell script, and the review of that edit was a review of shell quoting rather than of the shape being added. Here the shapes are data — a compliance-owned row, reviewable on its own, added without touching the guard. What did NOT move is any of the guard's structure: the jq-absent deny, the separator-insensitive normalisation, the deny-with-reason envelope, and `exit 0` always. Note the consequence, because it is the whole point: this file is now part of the control. A missing or unparseable pattern file makes the guard DENY — a guard that cannot load its patterns has no idea what it is looking for, and one that passed anyway would be a silent disarm dressed as a green run.",
+  "_matching_comment": "Each row is applied to a NORMALISED copy of the written content: every non-alphanumeric character stripped (spaces, tabs, dots, hyphens, underscores, slashes, quotes, plus signs — anything), newlines kept, then upcased. Write `match` and `allow` against that normalised form — `784[0-9]{12}`, not `784-[0-9]{4}-…`. They are POSIX extended regular expressions (grep -E). `allow` is the SYNTHETIC exception: a hit that also matches `allow` is permitted, so a fixture convention can coexist with a blanket shape ban; `null` means the shape is banned outright. `{match}` in `reason` is replaced by the first offending literal. Because separators are gone, a shape that is all digits can only be bounded by letters or line edges — the mobile row shows the `(^|[^0-9])…([^0-9]|$)` form.",
+  "_adopt_comment": "ADOPT: the two rows below are the UAE instance. Add your jurisdiction's shapes here — national ID, IBAN, passport, tax number — each with the synthetic convention your fixtures use as `allow`. A row whose `allow` is null and whose shape your own fixtures legitimately carry will block your own test data: that is a signal to give the fixtures a synthetic marker, not to loosen the row.",
+  "schema_version": "1.0",
+  "patterns": [
+    {
+      "id": "ae-emirates-id",
+      "jurisdiction": "AE",
+      "match": "784[0-9]{12}",
+      "allow": null,
+      "reason": "PII guard: Emirates-ID-shaped literal (784…) detected. Real Emirates IDs are forbidden everywhere (CLAUDE.md hard stop). Synthetic fixtures must use the 999 prefix, e.g. 999-1990-1234567-1."
+    },
+    {
+      "id": "ae-iban",
+      "jurisdiction": "AE",
+      "match": "AE[0-9]{21}",
+      "allow": "^AE[0-9]{2}000",
+      "reason": "PII guard: real-shaped UAE IBAN detected ({match}…). Synthetic IBANs must use bank code 000 (AEkk000…), per the no-PII hard stop."
+    },
+    {
+      "id": "ae-mobile",
+      "jurisdiction": "AE",
+      "match": "(^|[^0-9])(00)?9715[0-9]{8}([^0-9]|$)",
+      "allow": "^[^0-9]?(00)?9715[0-9]000",
+      "reason": "PII guard: UAE-mobile-shaped literal detected ({match}). Real subscriber numbers are forbidden in fixtures, logs and prompts (no-PII hard stop). Synthetic mobiles use the 000 block: +971 5X 000 XXXX. Only the international form (971 5…) is matched; the local 05… form is too short to distinguish from ordinary numbers and must be caught by review."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `external-record` role — the SECOND offer, so the role is a choice and not a vendor (HG-0008, decision K9). A Sigstore-style transparency log (Rekor, or an institution's own append-only log with RFC 3161 timestamps): every Loom envelope becomes a signed entry whose inclusion proof and log index are the record id. What it gives that Kosli does not: a public, verifiable inclusion proof with no vendor account. What it does not give: trails, policy evaluation over the record, environment snapshots — rows 2.9–2.11 stay unmounted under this provider, and the status report says so. NO ADAPTER MODULE SHIPS YET for this provider (core/providers/transparency-log.mjs is not in the bundle): selecting it is recorded honestly as 'ships no adapter module' by core/external-record.mjs until one is contributed. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, and contribute or commission the adapter.",
+  "role": "external-record",
+  "provider": "transparency-log",
+  "adapter_id": "transparency-log-external-record",
+  "system": "sigstore-rekor-or-institutional-log",
+  "satisfies_control": "HG-0003",
+  "capability": "An append-only, timestamped log entry per Loom envelope with an inclusion proof — asserted by the log, resolvable by log index, never rewritable from the tree the agent edits",
+  "config": {
+    "_comment": "ADOPT: the log's URL and the public key its signed tree heads verify against.",
+    "log_url": "ADOPT: https://rekor.your-institution.example",
+    "log_public_key": "ADOPT: PEM of the log's signing key"
+  },
+  "evidence": {
+    "kind": "external-record",
+    "envelope_fields": [
+      "schema",
+      "kind",
+      "subject",
+      "commit",
+      "produced_at",
+      "actor",
+      "payload_digest",
+      "attestation"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "The seal gate holds the log index; the provider proves the log holds an entry at that index whose body is the envelope carrying this anchor, and that the inclusion proof verifies against a signed tree head.",
+    "gate_artifact": "docs/governance/evidence/manifest.json",
+    "gate_mechanism": "scripts/evidence-seal-check.mjs",
+    "match_on": ["external_record.id", "anchor"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from the first entry written and read back with a verified inclusion proof, plus the tamper probe.",
+    "integration_run_at": "ADOPT: timestamp of the run",
+    "runner_identity": "ADOPT: the least-privilege identity that writes entries — must NOT be the coding agent's identity",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that a manifest naming a log index the log does not hold fails scripts/evidence-seal-check.mjs"
+  }
+}

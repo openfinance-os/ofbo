@@ -1,0 +1,25 @@
+{
+  "_comment": "ADOPT: the identity-map reconciliation observation (Factory Floor P6 · §4.4). Reconciliation is the only mechanism that notices three lifecycles diverging, and it is what makes the mapping more than a document. Follows the platform-activation precedent exactly: a live read of both authoritative sides, freshly timestamped, SIGNED BY THE INDEPENDENT OBSERVER — the human platform role from P4, outside the coding agent's and the bridge's authority — and committed to git as an observation, not a claim.",
+  "_absent_means_unproven": "No observation, or a stale one, means nobody has looked recently enough for the map to be trusted. The gate then treats mapping currency as unproven (IM-R24) — observed, not declared. There is no fourth outcome: every drift class resolves to a rejected approval, an adapter reverting to declared-not-active, or an operations signal. A drift condition that produced a yellow badge and a green gate would be the appearance of control, which is the risk this programme is written against.",
+  "_what_the_reconciler_may_not_do": "It may read both sides, emit this observation, raise an operations signal, and AT MOST open a revocation PR as a proposal. It may never merge, never write the map on a branch that automerges, and never alter identities.json. A job that could revoke unilaterally could also fail open by revoking nothing, and neither behaviour should be invisible.",
+  "observed_at": "ADOPT: RFC 3339 UTC, written by the observation run — not by hand",
+  "observed_by": "ADOPT: the independent observer's registry identity (a human platform role, holding no approval role)",
+  "attestation": {
+    "_comment": "ADOPT: signed with the observer's platform key from attestation-issuers.json. This is a service-class attestation ABOUT A SYSTEM STATE, not a human decision about a change — the two signature meanings stay separate.",
+    "issuer": "ADOPT: the observer's issuer id",
+    "signature": "ADOPT"
+  },
+  "_assertions": "A1 every active subject exists and is enabled at the IdP · A2 every registry_id exists, is human, is not a service · A3 every person id still exists in the workspace as a full member, not a guest · A4 REVERSE DIRECTION — every workspace account holding a grant on an approval surface has exactly one active mapping (this is the assertion that catches an unmapped person being quietly added to an approver group) · A5 uniqueness holds · A6 roles_at_mapping vs current registry roles, INFORMATIONAL ONLY (failing here would train people to ignore the report).",
+  "assertions": {
+    "a1_subjects_enabled": "ADOPT: pass | fail",
+    "a2_registry_resolves": "ADOPT: pass | fail",
+    "a3_person_ids_present": "ADOPT: pass | fail",
+    "a4_reverse_direction": "ADOPT: pass | fail",
+    "a5_uniqueness": "ADOPT: pass | fail",
+    "a6_roles_drift": "ADOPT: informational — list, never a failure"
+  },
+  "_disabled_subjects": "Subjects the identity provider reports disabled. Any of these still holding an ACTIVE mapping is refused at resolution (IM-R25): the directory is authoritative over the map, and landing the revocation PR takes a human.",
+  "disabled_subjects": [],
+  "_unmapped_surface_accounts": "A4's output: workspace accounts holding an approval-surface grant with no active mapping. Each one is an operations signal AND a grant to remove.",
+  "unmapped_surface_accounts": []
+}

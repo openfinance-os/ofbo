@@ -1,0 +1,86 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "adr",
+  "title": "ADR-<NNNN>",
+  "stage": "deliver",
+  "write_class": "decision-routed",
+  "source": "delivery/templates/adr.md",
+  "source_digest": "sha256:c50427c726dc49af30601f5a9cc6ff75a6057b210594ab3f8b8e1499240f6295",
+  "gates": [
+    "D1",
+    "D6",
+    "D9"
+  ],
+  "guidance": "**Identifiers.** Gate ids (`D1`–`D9`, `Q1`–`Q5`) and run-level ids (`S-001` signal, `T-1` theme, `H1` hypothesis) are expanded in `discovery/GLOSSARY.md`.",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "Context",
+      "required": true,
+      "kind": "rich_text",
+      "help": "What forces the decision now: the story that hit it, the constraint that bites, the option that was assumed and turned out not to hold. Name the inherited boundaries — the discovery hand-off's D6 conditions, the BrainKit's `technology-policy.json`, the contract the spec tripwire protects. One paragraph, no options yet.",
+      "gates": [
+        "D6"
+      ]
+    },
+    {
+      "name": "Options considered",
+      "required": true,
+      "kind": "fields",
+      "help": "At least two real options, each argued fairly. An option nobody could choose is not an option; a straw man makes the record worthless to the next reader.",
+      "fields": [
+        "What it is",
+        "Costs",
+        "Risks",
+        "What it is",
+        "Costs",
+        "Risks"
+      ]
+    },
+    {
+      "name": "Decision",
+      "required": true,
+      "kind": "rich_text",
+      "help": "**Chosen: Option <X>.** Then the reasoning — why this option beats the others *against the success measures and the inherited conditions*, not in the abstract."
+    },
+    {
+      "name": "Consequences",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Becomes true",
+        "Becomes harder",
+        "Revisit when"
+      ]
+    },
+    {
+      "name": "Compliance notes",
+      "required": true,
+      "kind": "table",
+      "help": "Which HG entries, gates, controls, or regulatory expectations this touches — and how the decision leaves each one. If it touches none, say **none** rather than leaving the section empty: silence reads as an omission, not as a clean bill.",
+      "columns": [
+        "Control / gate",
+        "How this decision affects it"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{ "register_mounted": true, "expect_verdict": "ESCALATE", "why": "The same change with the register mounted: a new personal-data element touches DR-1.1 and the recorded residual position (Low, conditional on synthetic-only fixtures) moves if the element lands in fixtures. Escalate, route to the register." }

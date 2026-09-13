@@ -1,0 +1,18 @@
+{
+  "profile": "payments",
+  "kind": "product",
+  "_comment": "Payments product-type profile. A payments product compiles settlement, reconciliation and duplicate-transaction requirements a lending product never sees.",
+  "requirements": {
+    "medium": {
+      "pa1_sections": ["scheme-and-rails"],
+      "pa2_sections": ["settlement-and-reconciliation", "duplicate-transaction-controls", "failed-transaction-recovery"]
+    },
+    "high": {
+      "approver_roles": ["finance-treasury"],
+      "pa2_sections": ["liquidity-and-float-treatment"]
+    }
+  },
+  "conditional": [
+    { "when": "third_party", "adds": { "pa2_sections": ["scheme-outage-fallback"] } }
+  ]
+}

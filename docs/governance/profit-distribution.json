@@ -1,0 +1,37 @@
+{
+  "_comment": "ADOPT: the profit-distribution register for investment accountholders — mounted as docs/governance/profit-distribution.json. This is the DEPOSIT-side twin of purification, and the most Islamic-specific duty in the set: consumer-protection rules require that profit distribution to investment accountholders is overseen by the Shari'ah committee, and that what the accountholder was told matches what they were paid. On the financing side a structure defect makes a customer pay something they should not; on the deposit side it makes a customer RECEIVE something they were not entitled to — or not receive something they were — and there is no contract term to inspect, only a periodic calculation nobody outside the bank can see. One row per distribution run. Silent when absent; MANDATORY once a compiled plan requires the shariah_governance capability AND the change touches an investment-account product.",
+  "_returns_are_expected_never_guaranteed": "The load-bearing fact this register exists to keep visible. An investment accountholder under a Mudarabah or Wakala arrangement shares in actual profit; they are not owed a rate. So `expected_rate` and `distributed_rate` are two DIFFERENT things and the file keeps them apart on purpose. A system that treats the expected rate as an obligation to be met has quietly rebuilt a guaranteed return on a deposit, which is the thing the whole structure exists not to be — and it will look, in every screen and every statement, exactly like a well-run bank hitting its numbers.",
+  "_why_the_reserves_matter": "SMOOTHING IS WHERE THE UNFAIRNESS LIVES. A Profit Equalisation Reserve (PER) or Investment Risk Reserve (IRR) movement takes profit from one period's accountholders and pays it to another's: withhold in a good period, release in a bad one, and the published rate stops moving. That is displaced commercial risk made operational, and it redistributes between cohorts of real customers who never agreed to subsidise each other. The reserves are legitimate and approved instruments — the defect is a movement made WITHOUT the committee's approval, or made to hit a number. So each movement carries its own `issc_approval_ref`, and A MOVEMENT WITHOUT ONE IS THE DEFECT THIS REGISTER EXISTS TO SURFACE. What the harness sees is the RECORD of the run; it does not read your ledger, cannot recompute an allocation, and cannot tell an approved smoothing from a managed one. It can refuse to let a run be recorded as approved when the movement inside it was not.",
+  "_pool_not_product": "Rows are keyed by `pool_id`, not by product. Several products can draw on one investment pool and one product can span pools; the allocation is computed per pool, so that is the unit that has to reconcile. A register keyed by product cannot represent the run that actually happened.",
+  "_amounts_note": "Amounts are in the pool's reporting currency as your finance function states it. The harness does not convert, does not total, and does not check arithmetic — it is not an accounting system and must not be read as one.",
+  "runs": [
+    {
+      "run_id": "ADOPT: your distribution run id (e.g. PD-2026-Q1-001)",
+      "pool_id": "ADOPT: the investment pool this run distributes (as your finance function names it)",
+      "period_start": "ADOPT: RFC 3339 date the profit period opened",
+      "period_end": "ADOPT: RFC 3339 date the profit period closed",
+      "allocation_basis": "ADOPT: the committee-approved basis, stated precisely enough to be checked — the weightage table applied, whether PER is deducted from gross profit BEFORE the mudarib's share and IRR from the accountholders' share AFTER it, and which approved instrument says so. The harness cannot infer this and must not: two banks with the same reserves and different bases produce different, equally lawful numbers",
+      "mudarib_share": "ADOPT: the mudarib's (or wakil's) share for this period, as a rate or ratio — recorded per run because it is a period decision, not a constant",
+      "per_reserve_movements": [
+        {
+          "reserve": "PER",
+          "direction": "to",
+          "amount": "ADOPT: amount moved into the Profit Equalisation Reserve this period",
+          "issc_approval_ref": "ADOPT: the SR-* ruling id or minute reference approving THIS movement — not a standing policy reference. A blanket approval covering every future movement is the absence of oversight written as its presence"
+        },
+        {
+          "reserve": "IRR",
+          "direction": "from",
+          "amount": "ADOPT: amount released from the Investment Risk Reserve this period",
+          "issc_approval_ref": "ADOPT: SR-* ruling id or minute reference for this release"
+        }
+      ],
+      "expected_rate": "ADOPT: the rate communicated to accountholders as EXPECTED for this period — an indication, never a promise",
+      "distributed_rate": "ADOPT: the rate actually distributed. When this equals expected_rate period after period, the reserves are doing the work; that may be entirely approved, and it should be visible rather than smooth",
+      "iah_disclosure_evidence_ref": "ADOPT: reference to the evidence that accountholders were told the basis, the reserves and the outcome — the disclosure obligation is discharged by what reached the customer, not by what was calculated",
+      "approved_by": "ADOPT: registry id of the committee or secretariat that approved the run — never an individual scholar; the quorum in docs/governance/identities.json is what makes an approval the committee's",
+      "status": "draft"
+    }
+  ],
+  "_status_values": "draft | approved | distributed. `approved` means the committee signed off the run as computed; `distributed` means it was paid. Keeping them apart matters because the gap between them is where a late adjustment lands — a run approved at one set of numbers and paid at another is a real failure mode, and a single status cannot express it."
+}

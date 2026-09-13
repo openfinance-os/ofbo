@@ -1,0 +1,637 @@
+{
+  "schema": "loom.record-types/v1",
+  "catalog_sha256": "651a6148d098ccb539cac4217446fcb15183e0ca25ef2e858a36f66fef6247f6",
+  "compiled_at": "2026-09-13T18:44:38.478Z",
+  "envelope_schema": "loom.record-envelope/v1",
+  "types": [
+    {
+      "name": "loom-gate",
+      "kind": "gate",
+      "family": null,
+      "controls": [],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for one mechanism (core/gate-runner.mjs --record)"
+    },
+    {
+      "name": "loom-gate-a",
+      "kind": "gate",
+      "family": "A",
+      "controls": [
+        "A-GATES"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family A (A-GATES)"
+    },
+    {
+      "name": "loom-gate-assurance-cadence",
+      "kind": "gate",
+      "family": "assurance-cadence",
+      "controls": [
+        "ASSURANCE-CYCLE",
+        "EVIDENCE-RETENTION",
+        "KNOWLEDGE-CURRENCY",
+        "PROFIT-DISTRIBUTION",
+        "PURIFICATION",
+        "SHARIAH-GOV"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family assurance-cadence (ASSURANCE-CYCLE, EVIDENCE-RETENTION, KNOWLEDGE-CURRENCY, PROFIT-DISTRIBUTION, PURIFICATION, SHARIAH-GOV)"
+    },
+    {
+      "name": "loom-gate-brainkit-conformance",
+      "kind": "gate",
+      "family": "brainkit-conformance",
+      "controls": [
+        "BRAINKIT"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family brainkit-conformance (BRAINKIT)"
+    },
+    {
+      "name": "loom-gate-d",
+      "kind": "gate",
+      "family": "D",
+      "controls": [
+        "D-GATES"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family D (D-GATES)"
+    },
+    {
+      "name": "loom-gate-decision-log",
+      "kind": "gate",
+      "family": "decision-log",
+      "controls": [
+        "DECISION-LOG"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family decision-log (DECISION-LOG)"
+    },
+    {
+      "name": "loom-gate-pa1",
+      "kind": "gate",
+      "family": "PA1",
+      "controls": [
+        "PA-GATES"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family PA1 (PA-GATES)"
+    },
+    {
+      "name": "loom-gate-pa2",
+      "kind": "gate",
+      "family": "PA2",
+      "controls": [
+        "AI-EXPLAINABILITY",
+        "AI-GOVERNANCE",
+        "OPERATING-MODEL"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family PA2 (AI-EXPLAINABILITY, AI-GOVERNANCE, OPERATING-MODEL)"
+    },
+    {
+      "name": "loom-gate-product-eval",
+      "kind": "gate",
+      "family": "product-eval",
+      "controls": [
+        "AI-FAIRNESS",
+        "PRODUCT-EVAL"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family product-eval (AI-FAIRNESS, PRODUCT-EVAL)"
+    },
+    {
+      "name": "loom-gate-q",
+      "kind": "gate",
+      "family": "Q",
+      "controls": [
+        "Q1B",
+        "Q2-SAST",
+        "Q4-SECRETS",
+        "Q4-SUPPLY"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family Q (Q1B, Q2-SAST, Q4-SECRETS, Q4-SUPPLY)"
+    },
+    {
+      "name": "loom-gate-r",
+      "kind": "gate",
+      "family": "R",
+      "controls": [
+        "OPS-READINESS"
+      ],
+      "schema": {
+        "type": "object",
+        "required": [
+          "gate",
+          "result",
+          "controls"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "pattern": "\\.mjs$"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "pass-cached",
+              "fail",
+              "timeout",
+              "error"
+            ]
+          },
+          "controls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "lane": {
+            "type": "string"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.result",
+        "in": [
+          "pass",
+          "pass-cached"
+        ]
+      },
+      "description": "A gate-runner result for a mechanism in family R (OPS-READINESS)"
+    },
+    {
+      "name": "loom-risk-class",
+      "kind": "risk-class",
+      "family": null,
+      "controls": [
+        "POLICY-COMPILER"
+      ],
+      "description": "The compiled tier and plan hash (core/risk-class-attestation.mjs)",
+      "schema": {
+        "type": "object",
+        "required": [
+          "risk_tier",
+          "plan_hash"
+        ],
+        "properties": {
+          "risk_tier": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "plan_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.plan_hash",
+        "matches": "^[0-9a-f]{64}$"
+      }
+    },
+    {
+      "name": "loom-seal-anchor",
+      "kind": "seal-anchor",
+      "family": null,
+      "controls": [
+        "HG-0003"
+      ],
+      "description": "The final seal of the evidence chain (scripts/seal-evidence.mjs --record)",
+      "schema": {
+        "type": "object",
+        "required": [
+          "anchor",
+          "release_commit",
+          "entries"
+        ],
+        "properties": {
+          "anchor": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "release_commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "entries": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "pass": {
+        "field": "payload.anchor",
+        "matches": "^[0-9a-f]{64}$"
+      }
+    }
+  ]
+}

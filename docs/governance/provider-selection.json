@@ -1,0 +1,13 @@
+{
+  "_comment": "ADOPT: which provider this institution chose for each role in adapters/providers/roles.json. This file is the middle link the Loom was missing: profiles say a capability is REQUIRED, the adapter contract says how a chosen system reports EVIDENCE, and until now nothing recorded WHICH system was chosen — the choice was implicit in whichever file happened to sit in a directory. Selecting is not installing: the chosen provider's adapter must also be copied to docs/governance/adapters/, and it stays 'selected, not active' until its activation_evidence carries a real fetch and a passed negative probe. Ground each decision in an approved source (institution/brainkit/source-register.json), the same way technology-policy.json does. Validated by scripts/provider-selection-check.mjs.",
+  "selections": [
+    {
+      "role": "external-record",
+      "provider": "kosli",
+      "adapter_id": "kosli-external-record",
+      "decided_by": "@michartmann (repository owner; institutional ratification pending)",
+      "decided_at": "2026-09-13",
+      "source": "user-directed Loom 2.4.1 adoption decision, 2026-09-13"
+    }
+  ]
+}

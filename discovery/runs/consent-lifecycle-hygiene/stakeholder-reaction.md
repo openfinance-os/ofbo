@@ -3,6 +3,7 @@ artifact: stakeholder-reaction
 stage: define
 design_profile: discovery/brand/design.md
 run: consent-lifecycle-hygiene
+prototype_digest: 1994e58035ba4ba0a334dfae9773f5f5a078c80e6432a1983a6b0484886e8a35
 ---
 
 # Stakeholder reaction — consent-lifecycle-hygiene

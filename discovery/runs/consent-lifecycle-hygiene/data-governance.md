@@ -30,6 +30,9 @@ Cited categories resolve in the register: **DR-2.1**, **DR-2.1-001**, **DR-2.1-0
 Cited controls resolve: **CTRL-DP-001** (Consent Collection), **CTRL-DP-002** (Consent
 Repository & Tracking), **CTRL-DP-003** (Consent Withdrawal Process).
 
+The direction answers **OB-AE-PDPL-OFBO-001**, derived from the register's exact PDPL-6.2 and
+PDPL-15.2 source records. Institutional applicability must be re-verified before a bank pilot.
+
 ## Residual-risk verdict (D6)
 
 - **Residual rating after controls:** Low (DR-2.1-001 Critical→Low; DR-2.1-002 High→Very Low

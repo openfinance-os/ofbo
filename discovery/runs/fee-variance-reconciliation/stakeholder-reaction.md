@@ -3,6 +3,7 @@ artifact: stakeholder-reaction
 stage: define
 design_profile: discovery/brand/design.md
 run: fee-variance-reconciliation
+prototype_digest: 6d99c2dbd35ca29bad38726b022f72878069c539b01ea305ee4f7525975b46b0
 ---
 
 # Stakeholder reaction — fee-variance-reconciliation

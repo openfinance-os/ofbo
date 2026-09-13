@@ -36,3 +36,8 @@ discovery/gates/validate.mjs <runDir>` first to confirm D6 is green, then review
 For each finding: `FAIL <#> — <risk/control id> — <one-sentence issue> — <register evidence>`.
 Cite the JSON record you checked. End with `VERDICT: PASS` or `VERDICT: FAIL (<n>)`. Detection
 only — propose fixes only if asked.
+
+The machine-readable companion output MUST conform to `loom.agent-output/v1`. Include
+`register_state`; when the data-risk register is absent or not mounted, return
+`INSUFFICIENT_EVIDENCE` with a reason rather than a PASS/FAIL judgment. Include `confidence`,
+and attach non-empty `evidence_refs` to every finding.

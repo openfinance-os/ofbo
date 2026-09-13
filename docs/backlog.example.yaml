@@ -1,0 +1,98 @@
+# ADOPTER EXAMPLE — the shape of docs/backlog.yaml, which the delivery loop and waist gate read.
+#
+# Installed as docs/backlog.example.yaml, beside where your real backlog goes. The installer does
+# NOT create docs/backlog.yaml itself: a backlog is your content, not a template. Copy from here.
+#
+# This file is not decoration. scripts/discovery-link-check.test.mjs parses it on every run and
+# asserts the exact items below, so the shape documented here cannot drift from the shape the gate
+# understands — which is the drift that made the shape ambiguous in the first place.
+#
+# WHAT READS IT
+#   · the `next-story` skill's Pick step — first `pending` item, in file order, whose `depends_on`
+#     are all `done`;
+#   · the `next-story` skill's `--parallel N` lane (§6) — `depends_on` gives the DAG and the
+#     optional `paths:` gives the disjointness test; two items sharing a prefix are never
+#     selected together, and an item with NO `paths:` may only run alone (an undeclared scope is
+#     not an empty one). `stacked_on: <PR#>` records that a dependent story is being reviewed on
+#     top of an unmerged base — a record, never a permission: merge order stays human-controlled;
+#   · scripts/discovery-link-check.mjs — HG-0007, the waist gate.
+#
+# THE ONE RULE THAT BITES: an ITEM is a list element keyed by `id`. A MILESTONE is a container.
+# Both nesting styles below work — a milestone keyed by `name:` and a milestone keyed by `id:` —
+# and so does a flat list with no milestones at all. What does NOT work is a mapping-shaped
+# backlog (`STORY-1:` as a key); the gate will fail loudly rather than examine nothing.
+#
+# FEATURE vs INFRASTRUCTURE. Only ids matching FEATURE in scripts/discovery-link-check.mjs are
+# waist-gated. The shipped default is `^STORY-\d+$`; set it to your own convention — the gate fails
+# if it is still the default and no item matches, because then it is gating nothing.
+
+milestones:
+  # ── Style A: milestone keyed by `name` ─────────────────────────────────────────────────────
+  - name: M1 — consent revocation
+    exit_criteria:
+      - Revocation propagates to every downstream cache within the agreed budget.
+    items:
+      # A feature that has been through the left diamond. `discovery:` names a run directory whose
+      # handoff.md exists and passes every applicable D1–D9 gate; `sdr:` names the Develop-phase
+      # Solution Direction Record. This is the shape the waist gate is looking for.
+      #
+      # `paths:` is OPTIONAL and only the `--parallel N` lane reads it: the prefixes this story is
+      # expected to touch. It is the disjointness test — STORY-1 and INFRA-1 below share none, so
+      # they may run as two worktrees, two branches, two PRs, in one invocation. Omit it and the
+      # item may still be picked, but only ALONE.
+      - id: STORY-1
+        title: Propagate revocation to the token cache
+        status: pending
+        discovery: revoke-latency
+        sdr: docs/develop/revoke-latency.md
+        depends_on: []
+        paths: [src/consent/, src/token-cache/]
+        acceptance:
+          - A revoked consent stops authorising within one propagation interval.
+
+      # An infrastructure item. Its id does not match FEATURE, so HG-0007 does not ask it for a
+      # discovery hand-off — infrastructure serves a milestone's exit criteria, not a user problem.
+      - id: INFRA-1
+        title: Cache-invalidation contract tests
+        status: pending
+        depends_on: []
+        paths: [tests/contract/]
+
+      # Shipped work is grandfathered: the waist gate binds items that enter the queue after the
+      # policy, and never rewrites history. Only an explicit `status: pending` is gated.
+      - id: STORY-2
+        title: Revocation audit event
+        status: done
+        discovery: revoke-latency
+
+  # ── Style B: milestone keyed by `id` ───────────────────────────────────────────────────────
+  # Equally valid, and the shape that used to defeat the parser: a milestone keyed by `id` looks
+  # exactly like an item start. It is now its own short block — no `status`, so it is skipped —
+  # and every item beneath it is examined on its own.
+  - id: M2
+    name: M2 — data residency
+    items:
+      # The escape hatch. A pending feature with no hand-off may pass only by saying so out loud,
+      # with a reason a human can argue with. Silence is not an option; an exemption is.
+      - id: STORY-3
+        title: Pin the residency region in the service manifest
+        status: pending
+        discovery_exempt: true
+        reason: Regulatory pin with no user-facing choice — no problem to discover.
+
+      # Inline flow form, exactly as the `develop` skill emits it. `stacked_on:` records that this
+      # dependent story is being reviewed on top of STORY-3's still-unmerged PR #118 — its branch
+      # was cut from STORY-3's branch, its PR body names the base, and it is not mergeable until
+      # the base is. It is a record of how review is proceeding, never a permission to merge.
+      - { id: STORY-4, title: Residency evidence in the release bundle, status: pending, discovery: residency-pin, depends_on: [STORY-3], stacked_on: 118, paths: [docs/governance/evidence/] }
+
+# A flat list with no milestones is also valid — the gate reads items, not containers:
+#
+#   items:
+#     - id: STORY-9
+#       status: pending
+#       discovery: some-run
+#
+# And an empty backlog is valid and passes:
+#
+#   milestones: []

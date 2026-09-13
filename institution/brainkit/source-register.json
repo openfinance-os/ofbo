@@ -1,0 +1,12 @@
+{
+  "_comment": "ADOPT: the approved source register (Loom 2.0-rc.8 BrainKit). Every claim in every BrainKit section must be grounded in a source listed here. A source is APPROVED institutional material (a policy, a standard, a signed decision) — not the agent's inference. brainkit-check fails a section whose approved source references do not resolve here. Reference the D6 data-risk register and solution-domain packs by pointer; do not copy their contents.",
+  "sources": [
+    {
+      "id": "ADOPT: source-id",
+      "title": "ADOPT: approved source title",
+      "kind": "ADOPT: policy | standard | decision | brand | register-pointer",
+      "reference": "ADOPT: where the approved source lives (URL, doc id, or repo path)",
+      "approved_by": "ADOPT: registry-id of the human who approved this source as authoritative"
+    }
+  ]
+}

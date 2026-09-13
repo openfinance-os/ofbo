@@ -1,0 +1,21 @@
+{
+  "profile": "lending",
+  "kind": "product",
+  "_comment": "Lending / financing product-type profile. A lending product compiles affordability, credit-risk and collections requirements a payments product never sees.",
+  "requirements": {
+    "medium": {
+      "approver_roles": ["credit-risk"],
+      "_pa1_comment": "rc.38 (flow-plan Phase 4.6) — pull objections LEFT. Both roles were compiled into the plan and first engaged at PA2, which is the most expensive place in the route to discover an objection: the analysis is finished, the build is done, and a credit-risk or data-protection challenge at that point re-opens work that PA1 could have shaped. `data-protection` binds at PA1 only when the change actually carries personal data, because the role itself is added by the regulated-bank `personal_data` conditional and pa1Roles() intersects with what the plan compiled — naming it here costs nothing on a change that does not touch personal data.",
+      "pa1_approver_roles": ["credit-risk", "data-protection"],
+      "pa1_sections": ["credit-risk-appetite"],
+      "pa2_sections": ["affordability-assessment", "responsible-lending-disclosures", "collections-and-forbearance"]
+    },
+    "high": {
+      "approver_roles": ["finance-treasury"],
+      "pa2_sections": ["capital-and-provisioning-treatment"]
+    }
+  },
+  "conditional": [
+    { "when": "islamic", "adds": { "pa2_sections": ["profit-rate-structure"] } }
+  ]
+}

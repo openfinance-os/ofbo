@@ -1,0 +1,49 @@
+{
+  "_comment": "ADOPT: the COMPOSITION register — mounted as docs/governance/issc-register.json and read by scripts/shariah-governance-check.mjs (control SHARIAH-GOV). It answers exactly one question: WHO holds the Shari'ah roles, and under what appointment. It answers no Shari'ah question at all — no ruling lives here (those are docs/governance/shariah-rulings.json), and nothing in this file or the gate that reads it determines whether anything is permissible. Every seat's `identity_id` must resolve in docs/governance/identities.json to a holder of the matching role, and every seat in that registry carries `reconciliation_source: docs/governance/issc-register.json` pointing back here — the two files are a closed loop, which is why NEITHER may be the agent's word. This file is an EXPORT: the provider chosen in docs/governance/provider-selection.json (adapters/providers/shariah-governance/) asserts the committee from outside the repository, and reconciliation against that export is what stops an agent from adding a seat to make a quorum. Silent when absent; MANDATORY once a compiled plan requires the shariah_governance capability.",
+  "_five_seats_note": "FIVE IS A FLOOR, NOT A TARGET. The regulatory minimum committee size is five members, each individually approved by the jurisdiction's binding Shari'ah authority, so a register carrying four describes a committee that cannot lawfully sit — and an approval collected from it is not the committee's approval however many people signed. The gate counts seats and checks each carries its three provenance fields un-placeholdered. It cannot check that the approval reference is genuine, that the member is still alive to the role, or that the appointment was not rescinded last week; that is what the provider reconciliation and `hsa_refs` are for, and what an auditor follows.",
+  "_quorum_lives_elsewhere": "There is deliberately no quorum number in this file. Quorum is a property of the ROLE and is declared once, in docs/governance/identities.json (`quorum: { \"shariah-committee\": 3 }` — a majority of the minimum of five). Duplicating it here would create two numbers that can disagree, and the one an approval is checked against would be whichever file the gate happened to read.",
+  "members": [
+    {
+      "identity_id": "issc-scholar-1",
+      "hsa_approval_ref": "ADOPT: the higher-authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (a reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect"
+    },
+    {
+      "identity_id": "issc-scholar-2",
+      "hsa_approval_ref": "ADOPT: higher-authority approval reference",
+      "appointment_instrument": "ADOPT: appointing resolution reference",
+      "appointment_date": "ADOPT: RFC 3339 date"
+    },
+    {
+      "identity_id": "issc-scholar-3",
+      "hsa_approval_ref": "ADOPT: higher-authority approval reference",
+      "appointment_instrument": "ADOPT: appointing resolution reference",
+      "appointment_date": "ADOPT: RFC 3339 date"
+    },
+    {
+      "identity_id": "issc-scholar-4",
+      "hsa_approval_ref": "ADOPT: higher-authority approval reference",
+      "appointment_instrument": "ADOPT: appointing resolution reference",
+      "appointment_date": "ADOPT: RFC 3339 date"
+    },
+    {
+      "identity_id": "issc-scholar-5",
+      "hsa_approval_ref": "ADOPT: higher-authority approval reference",
+      "appointment_instrument": "ADOPT: appointing resolution reference",
+      "appointment_date": "ADOPT: RFC 3339 date"
+    }
+  ],
+  "scf": {
+    "lead_identity_id": "shariah-compliance-head",
+    "_comment": "The head of the Shari'ah Compliance Function — SECOND line, a standing desk rather than a sitting body, so one holder and no quorum. Its obligation is CONTINUOUS monitoring, not a signature at launch; what this file records is who holds the desk, and what the harness can see of the monitoring is the cadence RECORDS it files (assurance-cadence), never the monitoring itself."
+  },
+  "internal_audit": {
+    "lead_identity_id": "shariah-audit-lead",
+    "outsourced": false,
+    "_comment": "THIRD line, and the one composition rule with no exception: internal Shari'ah audit MAY NOT BE OUTSOURCED. `outsourced` must be literally false — not absent, not a string, not \"co-sourced\". The gate refuses anything else, and it refuses an `lead_identity_id` that resolves to an identity marked `external` in the registry, because a co-sourced firm's partner in this slot is the outsourcing the rule forbids wearing an employee's label. A false here is a CLAIM by the institution; the harness verifies the claim's shape and the identity's employment flag, and can verify nothing about the reporting line — governance/shariah-audit-charter.md is where that is written down and the board audit committee is where it is enforced."
+  },
+  "hsa_refs": [
+    "ADOPT: reference(s) to the higher-authority instrument(s) under which this committee is constituted — the constitution of the body, distinct from each member's individual approval above"
+  ]
+}

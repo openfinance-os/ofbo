@@ -1,0 +1,42 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `sca` role — the self-hosted, open-source alternative. It exists to prove the role is a genuine choice and not a single vendor with extra steps. The role's demand is unchanged: the counts must be asserted from OUTSIDE the repository under test. That is harder to satisfy with a scanner you run yourself, and the honest consequence is stated in `role_fit` below rather than papered over — a self-hosted scanner earns the same evidence only when the CI identity that runs it, and the store it writes to, are outside the coding agent's reach. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, and wire the fetch that fills activation_evidence.",
+  "role": "sca",
+  "provider": "trivy",
+  "adapter_id": "trivy-sca",
+  "system": "trivy",
+  "satisfies_control": "Q4-SUPPLY",
+  "capability": "Dependency and image vulnerability scanning with CycloneDX/SPDX SBOM output, run on the institution's own infrastructure under a scanning identity separate from the coding agent",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes, not sold. Neither line is a reason to prefer or avoid this provider — they are the trade the institution is accepting.",
+    "strength": "No third-party data-sharing and no per-seat cost; the scan and its evidence stay inside the institution boundary, which matters where residency rules apply (HG-0011)",
+    "limitation": "There is no external platform asserting the counts, so the separation must be MANUFACTURED: the scan must run under a CI identity the coding agent cannot assume, and write to a store the agent cannot edit. Absent that, the report is self-asserted again and the role is unfilled — which is exactly the hole the role exists to close"
+  },
+  "evidence": {
+    "kind": "dependency-audit",
+    "envelope_fields": [
+      "scan_id",
+      "target_reference",
+      "scanned_commit",
+      "critical",
+      "high",
+      "moderate",
+      "low",
+      "db_version",
+      "scanner_identity",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "Same binding as any sca provider: the file the gate reads must match what the scan produced, at the released commit.",
+    "gate_artifact": "docs/governance/evidence/dependency-audit.json",
+    "gate_mechanism": "scripts/supply-chain-check.mjs",
+    "match_on": ["scanned_commit", "critical", "high"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real run + the tamper probe. db_version matters here in a way it does not for a hosted platform — a self-hosted scanner with a stale vulnerability database reports clean for reasons that have nothing to do with your code.",
+    "fetched_at": "ADOPT: timestamp of your scan run",
+    "scanner_identity": "ADOPT: the CI identity that runs the scan — must NOT be assumable by the coding agent",
+    "db_freshness_probe": "ADOPT: 'current' once you check the vulnerability DB age at scan time and fail the build on a stale one",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that editing dependency-audit.json away from the scan output fails the build"
+  }
+}

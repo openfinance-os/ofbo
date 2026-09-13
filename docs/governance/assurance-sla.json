@@ -1,0 +1,23 @@
+{
+  "_comment": "ADOPT (rc.14 · WS6): the service-level expectations for continuous assurance, mounted as docs/governance/assurance-sla.json and owned by the second line. A signal from any declared source opens a CASE (assurance-case-check.mjs); the case must be assessed within the severity's window, remediated by its deadline, and — for a runtime breach (high/critical) — record a CONTAINMENT action (suspend routine autonomy, block release, rollback, model fallback, quarantine income, or suspend the product offering). An open breach past its deadline blocks unless the second line risk-accepts it. Tune the windows to your risk appetite; the Loom validates and reconciles — the accountable decision stays human.",
+  "_vocabulary_is_data": "`sources` and `containment_actions` are VOCABULARY: the gate checks a case's source and containment against these lists and knows nothing else about them, so an institution extends both by editing this file and never by editing a gate. Delete the entries you do not run — an adapter nobody feeds is a source of nothing, and leaving it listed lets a case claim it. `shariah-compliance-monitoring` is the continuous-monitoring feed a Shari'ah compliance function files against its own book (the standard requires the monitoring to be continuous, not periodic); the harness reads the records that feed produces and never watches production, so a quiet period is UNCOVERED here, not clean. Two of the containments park VALUE rather than code: `quarantine-income` holds suspect income in a charity-pending account until a purification record disposes of it (income parked is not income booked, and it is never booked as income later); `suspend-product-offering` halts new sales of a product whose structure no longer conforms while the existing book runs off. Both are generic containments — a mis-priced fee, a mis-sold rider or a structurally non-conformant contract reach for the same two — and a repo that declares neither is unaffected.",
+  "sources": [
+    "regulatory-intelligence",
+    "siem",
+    "observability",
+    "model-monitoring",
+    "incident-management",
+    "grc",
+    "deployment-platform",
+    "product-analytics",
+    "shariah-compliance-monitoring"
+  ],
+  "severities": {
+    "critical": { "assessment_hours": 4, "remediation_days": 7, "requires_containment": true },
+    "high": { "assessment_hours": 24, "remediation_days": 30, "requires_containment": true },
+    "medium": { "assessment_hours": 72, "remediation_days": 90, "requires_containment": false },
+    "low": { "assessment_hours": 168, "remediation_days": 180, "requires_containment": false }
+  },
+  "containment_actions": ["suspend-autonomy", "block-release", "rollback", "model-fallback", "quarantine-income", "suspend-product-offering"],
+  "revalidation_cadence_days": 90
+}

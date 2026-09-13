@@ -1,0 +1,45 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `runtime-guardrails` role — the sidecar shape: the policy engine travels with the workload, in the request path, injected by the platform rather than called by the application. It exists so the role is a genuine choice and not one topology with extra steps. The demand does not soften: the decision log is emitted by the sidecar and collected by the control plane, so it is still not written by the agent being constrained. Read adapters/providers/runtime-guardrails/README.md before choosing: the harness cannot see this fire, only that it was chosen and that a denial was recorded when probed. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your control plane, and wire the fetch that fills activation_evidence.",
+  "role": "runtime-guardrails",
+  "provider": "sidecar-policy-enforcement",
+  "adapter_id": "sidecar-policy-enforcement",
+  "system": "service-mesh-policy-engine",
+  "satisfies_control": "AI-INCIDENT",
+  "capability": "Input/output filtering, tool-use allowlisting and terminology/PII screening applied in-process beside each serving workload by a platform-injected sidecar, with allow and DENY decisions collected by the mesh control plane",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes, not sold. Neither line is a reason to prefer or avoid this shape — they are the trade the institution is accepting.",
+    "strength": "Enforcement travels with the workload, so there is no unenforced path around it and no single chokepoint whose outage takes every screen down at once. It sees the request as the workload sees it — after routing, after any internal rewrite — which is where a terminology or PII screen has to sit to be accurate",
+    "limitation": "COVERAGE IS THE CONTROL, and coverage is a deployment property. A workload that ships without the sidecar — a namespace missing the injection label, an exempted job, a legacy service — is silently unenforced and emits no denial to miss. So injected_workloads and uninjected_workloads are carried in the envelope: a report of denials from the pods that HAVE the sidecar says nothing about the ones that do not, and reporting that as coverage would be the overstatement this role exists to prevent"
+  },
+  "evidence": {
+    "kind": "runtime-guardrail-decisions",
+    "envelope_fields": [
+      "enforcement_point_id",
+      "policy_bundle_id",
+      "policy_bundle_digest",
+      "injected_workloads",
+      "uninjected_workloads",
+      "window_start",
+      "window_end",
+      "decisions_allowed",
+      "decisions_denied",
+      "denial_categories",
+      "fail_mode",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "NO SHIPPED GATE READS THIS ARTIFACT, and `gate_mechanism` is null rather than naming one. AI-INCIDENT is catalogued `defined` — a runbook, not a mechanism — so there is nothing to name, and a gate id that does not resolve would be exactly the implied-coverage defect this role exists to refuse. What the harness DOES see is that a provider was selected (PS-R06) and whether activation_evidence is still placeholders (adapter-check.mjs). It never reads a decision log, and it certainly cannot count pods. So the reconciliation below is the ADOPTER'S, performed by the fetch that fills activation_evidence: bind the log to the bundle the sidecars actually loaded AND to how many of them exist. Matching the digest alone passes a fleet where one workload runs the right policy and nine run none. WHAT A GATE WOULD TAKE, so the gap is costed rather than merely admitted: this envelope committed as a signed observation under docs/governance/adapter-evidence/ naming AI-INCIDENT, asserted by an issuer outside the coding agent's write scope, with the denial as a required negative — plus a serving-path enforcement mechanism in core/floor-adapters.mjs SEAM_MECHANISMS, which carries none today, and a gate that reads it. Until all three exist, match_on is a specification for your fetch, not a comparison CI performs.",
+    "gate_artifact": "docs/governance/evidence/runtime-guardrail-decisions.json",
+    "gate_mechanism": null,
+    "reconciled_by": "the adopter's fetch and both probes — no gate in this harness",
+    "match_on": ["policy_bundle_digest", "injected_workloads", "decisions_denied"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real control-plane read + both probes. The negative probe shows the guardrail bit; the coverage probe shows it bit everywhere — a sidecar architecture fails on the second far more often than the first.",
+    "fetched_at": "ADOPT: timestamp of your control-plane read",
+    "asserted_by": "ADOPT: the mesh control-plane identity that collects the decision log — must NOT be the agent being constrained",
+    "negative_probe": "ADOPT: 'denied-and-logged' once you have driven a policy-violating action through a serving workload, confirmed it was refused, and found that denial in the control plane's log",
+    "coverage_probe": "ADOPT: 'rejected' once you have tested that a serving workload deployed WITHOUT the sidecar fails admission rather than running unenforced"
+  }
+}

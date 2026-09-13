@@ -1,0 +1,9 @@
+{
+  "schema": "loom.intake-prefill/v1",
+  "pack": "ADOPT:pack-id",
+  "title": "ADOPT: pack title",
+  "_comment": "ADOPT: a pre-fill pack suggests answers by question id from a jurisdiction or base profile. A confirmed suggestion is still CLAIMED until the respondent names the document.",
+  "suggestions": {
+    "G1": "ADOPT: regulators and regimes for this market"
+  }
+}

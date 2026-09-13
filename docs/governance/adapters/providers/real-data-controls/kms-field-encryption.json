@@ -1,0 +1,46 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `real-data-controls` role — the ENCRYPT-IN-PLACE shape: the real value stays in the institution's own stores and is encrypted at field level with keys held by a managed key manager (HSM-backed), so reading it means holding a decrypt grant. It closes a specific hole: the moment a workload points at production data, everything else in this bundle is still reasoning about synthetic fixtures, and REAL-PII-SURFACE stays graded `absent` in the catalog while the surface it names becomes the most important one in the repository. This adapter makes the key custody, the encrypted fields and the access log a named, evidenced choice. It PROTECTS nothing by itself and verifies no read: the harness reads JSON records and never watches production. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your key manager and audit log, and wire the fetch that fills activation_evidence.",
+  "role": "real-data-controls",
+  "provider": "kms-field-encryption",
+  "adapter_id": "kms-field-encryption",
+  "system": "key-management-service",
+  "satisfies_control": "REAL-PII-SURFACE",
+  "capability": "Field-level encryption of customer-identifying values in the institution's own stores, with key custody, rotation and grant assignment in a managed key manager, and every decrypt recorded in the key manager's own access log",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes. Neither line argues for or against — they are the trade being accepted.",
+    "strength": "The data never leaves the institution's stores, so referential integrity, joins and existing schemas survive unchanged, and the migration is a key-management project rather than a rewrite of every reader. Custody is centralised: one key manager holds rotation, grants and the decrypt log, and revoking a grant makes the ciphertext unreadable everywhere at once without touching the data",
+    "limitation": "IT PROTECTS THE DATA AT REST, NOT THE IDENTITY THAT MAY READ IT. Any workload holding a decrypt grant reads plaintext, and the log records that read as AUTHORISED — which is exactly how a compromised or over-broad service identity looks. The blast radius is therefore the grant list, not the cipher, and this adapter evidences custody rather than least privilege. Record the grant review alongside it, or the log describes the reads that were permitted rather than the reads that should have been"
+  },
+  "evidence": {
+    "kind": "real-data-control-posture",
+    "envelope_fields": [
+      "key_manager_id",
+      "key_ids",
+      "key_rotation_last",
+      "key_rotation_interval_days",
+      "encrypted_fields",
+      "grant_holder_identities",
+      "access_log_stream_id",
+      "window_start",
+      "window_end",
+      "reads_authorised",
+      "reads_denied",
+      "fetched_at",
+      "asserted_by"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "NO SHIPPED GATE READS THIS ARTIFACT, and `gate_mechanism` is null rather than naming one. REAL-PII-SURFACE is catalogued `absent`: the harness ships nothing for the real-data case, which is the whole reason this role exists. scripts/adapter-evidence-check.mjs is the nearest thing and it is NOT it — it reads signed observations under docs/governance/adapter-evidence/, not this path, and it makes no claim at all about an adapter outside the stream contract (core/floor-adapters.mjs `isStreamAdapter`), which this one is. Naming it here would have read as coverage it never provides. What the harness DOES see is that a provider was selected (PS-R06) and whether activation_evidence is still placeholders (adapter-check.mjs). So the reconciliation below is the ADOPTER'S, performed by the fetch that fills activation_evidence: bind the posture to the keys and fields ACTUALLY in force, not to the ones a runbook describes. A field added to the store after the encryption config was written is the commonest way this drifts, and it drifts silently because nothing fails. `reads_denied` is carried because an access log with no denials in it has never been shown to deny anything. WHAT A GATE WOULD TAKE, so the gap is costed rather than merely admitted: this envelope committed as a signed observation under docs/governance/adapter-evidence/ naming REAL-PII-SURFACE, asserted by an issuer outside the coding agent's write scope, with the denial as a required negative — plus a data-custody mechanism in SEAM_MECHANISMS, which carries none today, and a gate that reads it. Until all three exist, match_on is a specification for your fetch, not a comparison CI performs.",
+    "gate_artifact": "docs/governance/evidence/real-data-control-posture.json",
+    "gate_mechanism": null,
+    "reconciled_by": "the adopter's fetch and negative probe — no gate in this harness",
+    "match_on": ["key_manager_id", "key_ids", "encrypted_fields", "reads_denied"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real key-manager read + the negative probe. The negative probe is the decisive one — reads_authorised proves the system is in use, never that it protects anything. Only a denial you provoked and then found in the PLATFORM's log shows the control bit.",
+    "fetched_at": "ADOPT: timestamp of your key-manager and access-log read",
+    "asserted_by": "ADOPT: the key-manager / audit-log service identity that emits these records — must NOT be the application or agent that reads through them",
+    "negative_probe": "ADOPT: 'denied-and-logged' once an identity WITHOUT a decrypt grant has attempted a read, been refused, and that refusal has been found in the key manager's access log",
+    "rotation_probe": "ADOPT: 'rotated' once a key rotation has completed and the previous key version has been shown to no longer satisfy a decrypt"
+  }
+}

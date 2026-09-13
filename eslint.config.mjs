@@ -12,7 +12,11 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        ignoreRestSiblings: true
+      }],
       // Profile selection is config-only and lives in packages/ports getAdapter()
       // (CLAUDE.md §3.1: application core code NEVER branches on profile). This makes a
       // stray `…DEPLOY_PROFILE` read a lint error instead of a review-time catch.
@@ -105,10 +109,22 @@ export default tseslint.config(
     languageOptions: { globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' } }
   },
   {
-    // Harness gate scripts are plain-JS Node CLIs. They import `node:` builtins explicitly, so
-    // only `fetch` needs granting — it is a Node >=18 global with no importable module form,
-    // and package.json engines already require node >=22.
-    files: ['scripts/**/*.mjs'],
-    languageOptions: { globals: { fetch: 'readonly' } }
+    // Loom's adopted core, gates, tests and intake builder are plain-JS Node tooling. Keep the
+    // repository-wide lint boundary over them while declaring the Node 22 runtime surface they
+    // execute against; without this override every legitimate runtime global is a false error.
+    files: ['core/**/*.mjs', 'scripts/**/*.mjs', 'intake/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        Buffer: 'readonly',
+        Headers: 'readonly',
+        URL: 'readonly',
+        clearTimeout: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        process: 'readonly',
+        setTimeout: 'readonly',
+        structuredClone: 'readonly'
+      }
+    }
   }
 )

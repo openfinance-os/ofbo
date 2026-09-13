@@ -1,0 +1,59 @@
+{
+  "_comment": "ADOPT: the external rule bases this repository is built against, PINNED — mounted as docs/governance/knowledge-pins.json. A rule base published by somebody else moves without asking you: a standards edition supersedes, an authority issues a pronouncement, an API specification takes errata. Code written against 'the current version' is written against whatever the author last remembered, and nothing in the repository records which version that was. A pin turns that into an artifact: a named publisher, a named edition, a date somebody last checked, and a bound after which 'last checked' stops counting. NOT AN ISLAMIC MECHANISM — it is a generic one that Islamic products happen to need most, which is why a non-Islamic row ships alongside the Shari'ah rows below. MANDATORY once a compiled plan requires the knowledge_currency capability; silent otherwise.",
+  "_what_this_file_can_and_cannot_see": "It records WHEN a pin was last verified, and by whom. THE GATE THAT READS IT NEVER FETCHES A PUBLISHER — there is no network call anywhere in the harness, by design. Running `check_ref` is the ADOPTER'S scheduled job, and `last_verified` is that job's (or a human's) assertion that the pinned version was still current at that moment. So a stale pin is a true finding and a fresh pin is a claim about the record, not about the world: the authority may have published this morning and a pin verified yesterday will report green until its next run. The honest reading of a fresh pin is 'somebody looked recently', never 'this is current'.",
+  "_dates_are_load_bearing": "`last_verified` must be a parseable ISO date. An unparseable ADOPT placeholder FAILS the check rather than passing — a pin nobody has ever verified must not read as fresh, and this is the same failure mode governance/service-readiness.template.json uses for undrilled dates. `max_age_days` is the bound the owner_role is accountable for: it should reflect how fast that publisher actually moves, not how often you would like to look.",
+  "pins": [
+    {
+      "id": "shariah-authority-pronouncements",
+      "publisher": "ADOPT: the binding Shari'ah authority for your jurisdiction — the body whose pronouncements are legally binding on the institution, named as it names itself",
+      "artifact": "Binding pronouncement / resolution register",
+      "pinned_version": "ADOPT: the edition, issue or as-at date of the register this repository is built against",
+      "source_url": "ADOPT: the authority's publication location",
+      "last_verified": "ADOPT: ISO date the pinned version was last checked against the publisher",
+      "max_age_days": 30,
+      "required_by_capability": "knowledge_currency",
+      "check_ref": "ADOPT: path to the scheduled job that checks this publisher and updates last_verified, or null if the check is a human's calendar entry",
+      "owner_role": "shariah-compliance",
+      "note": "The shortest bound in the file, deliberately. A binding pronouncement changes what is permissible the day it is issued, and a product built on a superseded position is not merely out of date. The Shari'ah Compliance Function owns it because continuous monitoring is that function's standing duty — this pin is one of the few parts of that duty a repository can hold."
+    },
+    {
+      "id": "shariah-standards-edition",
+      "publisher": "ADOPT: the Shari'ah standard-setter whose standards your authority has adopted as the baseline",
+      "artifact": "Shari'ah standards, consolidated edition",
+      "pinned_version": "ADOPT: the edition this repository's structure mappings cite (e.g. '<year> consolidated edition')",
+      "source_url": "ADOPT: where the edition is published",
+      "last_verified": "ADOPT: ISO date",
+      "max_age_days": 180,
+      "required_by_capability": "knowledge_currency",
+      "check_ref": null,
+      "owner_role": "shariah-compliance",
+      "note": "A longer bound than the pronouncement register because a standards edition is a slow artifact — but the pin matters more, not less: SR-* rulings cite standard numbers, and a standard number means nothing without the edition it was numbered in. `check_ref` is null here to show that null is a legitimate answer: a publisher with an annual cadence is reasonably watched by a human, and pretending a script exists is worse than admitting one does not."
+    },
+    {
+      "id": "internal-shariah-rulings-register",
+      "publisher": "ADOPT: your own Shari'ah secretariat — the internal system of record",
+      "artifact": "docs/governance/shariah-rulings.json",
+      "pinned_version": "ADOPT: the register version or as-at date this repository is built against",
+      "source_url": "ADOPT: the secretariat's store this file is exported from",
+      "last_verified": "ADOPT: ISO date the mounted register was reconciled against the secretariat's copy",
+      "max_age_days": 30,
+      "required_by_capability": "knowledge_currency",
+      "check_ref": "ADOPT: path to the reconciliation job, or null",
+      "owner_role": "shariah-compliance",
+      "note": "An INTERNAL rule base is still an external rule base to this repository. The register is exported from the secretariat's store, and an export goes stale exactly the way a standards edition does — a ruling withdrawn last week is still active in a copy taken the week before, and every change bound to it reads green. Pinning the internal register is what makes that staleness visible instead of invisible."
+    },
+    {
+      "id": "open-finance-api-standard",
+      "publisher": "ADOPT: the body that publishes your jurisdiction's open-banking / open-finance API standard",
+      "artifact": "API standards, including errata",
+      "pinned_version": "ADOPT: the standards version AND errata level the contracts in this repository are built against (an errata level is part of the version — a spec at the same version with different errata is a different spec)",
+      "source_url": "ADOPT: the publication location",
+      "last_verified": "ADOPT: ISO date",
+      "max_age_days": 60,
+      "required_by_capability": "knowledge_currency",
+      "check_ref": "ADOPT: path to your standards-currency script, or null",
+      "owner_role": "compliance",
+      "note": "THE NON-ISLAMIC ROW, and it is here to prove the mechanism is not an Islamic special case. A conventional adopter who never mounts a Shari'ah row still has publishers who move underneath them, and the same pin does the same job. Keep this row and delete the three above if you run no Islamic product; the file stays useful and the capability stays the same one."
+    }
+  ]
+}

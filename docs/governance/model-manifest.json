@@ -1,0 +1,165 @@
+{
+  "_comment": "ADOPT: the model inventory the harness runs on (HG-0006). One entry per model ROLE. model_id and prompt_version MUST be pinned (no 'latest'/floating tags). Per the model-risk-operating-model-runbook §2.2 matrix, medium AND high tiers need a passing eval run against THIS pin plus an independent validation sign-off (low is optional). Each eval must identify its dataset, runner and timestamp, and cite its REPORT artifact by ref + sha256 (1.10: a declared pass is not evidence). Verified by scripts/model-provenance-check.mjs, which also re-hashes the report. Replace these demo values with your real models; keep the shape.",
+  "_domains_comment": "ADOPT (optional, 2.1): `domains` and `domain_validations` cover a model whose OUTPUT carries significance in a specialist domain — shariah, medical, privacy. Model risk asks whether the model is accurate, stable and monitored; it never asks whether the thing the model produced is admissible in that domain, and a statistically excellent model can be confidently wrong in a way only a domain authority sees. So a model may declare `domains: [\"<domain>\"]` plus one signature per domain in `domain_validations: {\"<domain>\": \"<identity id>\"}`. The identity must resolve in docs/governance/identities.json, be a human (an agent validates nothing), sit outside `builders`, and hold the role `<domain>-model-validator` — the role name is DERIVED from the domain, so a new domain needs a new registry identity and no code change. This is an ADDITIONAL signature, never a role swap: `validated_by` still has to be a second-line model-validator, and one person covers both only by holding BOTH roles. Omit both fields entirely and nothing here applies — the check is strictly additive and silent for a manifest that declares no domain. Note what the gate proves: WHO signed, and that they signed against the pin that ships. Whether the determination is SOUND is not a property of a JSON record and is not claimed — that belongs to the accountable body (for Shari'ah, the ISSC; scholars decide permissibility, not this harness). Where a compiled control plan requires a domain capability (e.g. `shariah_model_validation` from profiles/products/shariah-model.json) and no model here names that domain, the gate fails and names the change.",
+  "models": [
+    {
+      "role": "delivery-loop",
+      "provider": "example-provider",
+      "model_id": "example-model@2026-01",
+      "prompt_version": "loom-harness@1.4.0",
+      "risk_tier": "high",
+      "eval": {
+        "suite": "evals/delivery-loop",
+        "ran_at": "2026-07-20",
+        "result": "pass",
+        "threshold_met": true,
+        "evaluated_model_id": "example-model@2026-01",
+        "evaluated_prompt_version": "loom-harness@1.4.0",
+        "dataset_version": "evalset@3",
+        "runner_version": "loom-eval-runner@1.2.0",
+        "report": {
+          "ref": "docs/governance/evidence/eval-report-delivery-loop.json",
+          "sha256": "ba54e3d7d4f8f19df5c860b54c525e49b7c8fe07e6a776a6a426147318afecbb"
+        }
+      },
+      "validated_by": "mrm-aisha",
+      "domains": [
+        "ADOPT: name each domain whose competence this model's output requires — e.g. shariah, medical, privacy — or delete both `domains` and `domain_validations`. An untouched ADOPT row is not a declaration and the gate skips it."
+      ],
+      "domain_validations": {
+        "ADOPT: <domain>": "ADOPT: the identity id of the human holding <domain>-model-validator in docs/governance/identities.json — a second, distinct signature from validated_by unless one person holds both roles"
+      },
+      "runtime": {
+        "monitoring": [
+          "decision-vs-outcome drift (monthly)",
+          "override rate",
+          "input-distribution shift",
+          "p99 latency"
+        ],
+        "suspension": "Suspend to manual underwriting if override rate > 15% over 2 weeks or a drift alarm fires; the model-risk function holds the switch.",
+        "fallback": "On model or provider outage: route to the manual underwriting queue; no automated limit decisions while degraded.",
+        "_fallback_note": "ADOPT: the fallback for a domain-significant model — a compliance or structure SCREENING model above all — must FAIL CLOSED into a human queue. 'On outage, let it through' books an approval that no determination ever produced, which is the same defect as a data field whose default asserts a compliance flag nobody set (the UAE Open Finance v2.1 IsShariaCompliant default is exactly that shape: absence reading as an answer). Rebuilding it in your own runtime is worse, because here the absence is silent and the record still looks screened. Queue for human review; never auto-approve. Note also what this file is: a DECLARATION the gate reads. Nothing in the harness observes what the fallback does in production — that evidence comes from your monitoring, not from here."
+      },
+      "third_party": {
+        "_comment": "2.1.0 (hardening plan 4.4): the provider is a THIRD PARTY under the outsourcing rules, and this block is the per-provider assessment scripts/product-approval-check.mjs requires at PA1 for every model role a change names. ADOPT: replace with your outsourcing register's entry for this provider. Kosli, or any evidence platform, is a third party under the same rule — in its own register entry, not here.",
+        "outsourcing_assessment": "docs/governance/outsourcing/OSR-021-example-provider.md",
+        "prompt_data_residency": "prompts and completions processed in-region under the enterprise agreement; no training on customer data; retention 0 days at the provider",
+        "exit_plan": "docs/governance/outsourcing/OSR-021-exit-plan.md — fail closed to the manual queue; replacement pin validated before cut-over",
+        "assessed_by": "comp-imran",
+        "assessed_at": "2026-07-18"
+      }
+    },
+    {
+      "role": "affordability-assessment",
+      "_comment": "2.1.0: the PRODUCT model the worked-example change CHG-2026-0042 names in its envelope (model_roles) and passport (data-and-models) — the affordability model in the credit-limit decision path, tier high (A4 of the change's architecture assurance). It was named by the change and inventoried nowhere, which is exactly the gap scripts/product-approval-check.mjs now refuses: a change on a model nobody inventoried. ADOPT: replace with your product's models; keep the shape.",
+      "provider": "example-provider",
+      "model_id": "example-model@2026-01",
+      "prompt_version": "affordability-prompt@2.3.0",
+      "risk_tier": "high",
+      "eval": {
+        "suite": "evals/affordability",
+        "ran_at": "2026-07-20",
+        "result": "pass",
+        "threshold_met": true,
+        "evaluated_model_id": "example-model@2026-01",
+        "evaluated_prompt_version": "affordability-prompt@2.3.0",
+        "dataset_version": "evalset@3",
+        "runner_version": "loom-eval-runner@1.2.0",
+        "report": {
+          "ref": "docs/governance/evidence/eval-report-affordability-assessment.json",
+          "sha256": "bbdcd7da35773b7b7efb3156706172a1db772d3c99f7d3f8da32b18ea13e42a7"
+        }
+      },
+      "validated_by": "mrm-aisha",
+      "third_party": {
+        "_comment": "2.1.0 (hardening plan 4.4): the provider is a THIRD PARTY under the outsourcing rules, and this block is the per-provider assessment scripts/product-approval-check.mjs requires at PA1 for every model role a change names. ADOPT: replace with your outsourcing register's entry for this provider. Kosli, or any evidence platform, is a third party under the same rule — in its own register entry, not here.",
+        "outsourcing_assessment": "docs/governance/outsourcing/OSR-021-example-provider.md",
+        "prompt_data_residency": "prompts and completions processed in-region under the enterprise agreement; no training on customer data; retention 0 days at the provider",
+        "exit_plan": "docs/governance/outsourcing/OSR-021-exit-plan.md — fail closed to the manual queue; replacement pin validated before cut-over",
+        "assessed_by": "comp-imran",
+        "assessed_at": "2026-07-18"
+      },
+      "runtime": {
+        "monitoring": [
+          "decision-vs-outcome drift (monthly)",
+          "override rate (underwriter overrides with reason code)",
+          "input-distribution shift on income and bureau score",
+          "p99 latency"
+        ],
+        "suspension": "Suspend to manual underwriting if override rate > 15% over 2 weeks or a drift alarm fires; the model-risk function holds the switch.",
+        "fallback": "On model or provider outage: route to the manual underwriting queue; no automated limit decisions while degraded."
+      }
+    },
+    {
+      "role": "discovery-facilitator",
+      "provider": "example-provider",
+      "model_id": "example-model@2026-01",
+      "prompt_version": "loom-harness@1.4.0",
+      "risk_tier": "medium",
+      "eval": {
+        "suite": "evals/discovery-facilitator",
+        "ran_at": "2026-07-20",
+        "result": "pass",
+        "threshold_met": true,
+        "evaluated_model_id": "example-model@2026-01",
+        "evaluated_prompt_version": "loom-harness@1.4.0",
+        "dataset_version": "evalset@3",
+        "runner_version": "loom-eval-runner@1.2.0",
+        "report": {
+          "ref": "docs/governance/evidence/eval-report-discovery-facilitator.json",
+          "sha256": "36f150eb2f8c9f8d5166b0b366eab5e7c0c1ee72ef2a73fc8b26f6e5215524b7"
+        }
+      },
+      "validated_by": "mrm-aisha",
+      "third_party": {
+        "_comment": "2.1.0 (hardening plan 4.4): the provider is a THIRD PARTY under the outsourcing rules, and this block is the per-provider assessment scripts/product-approval-check.mjs requires at PA1 for every model role a change names. ADOPT: replace with your outsourcing register's entry for this provider. Kosli, or any evidence platform, is a third party under the same rule — in its own register entry, not here.",
+        "outsourcing_assessment": "docs/governance/outsourcing/OSR-021-example-provider.md",
+        "prompt_data_residency": "prompts and completions processed in-region under the enterprise agreement; no training on customer data; retention 0 days at the provider",
+        "exit_plan": "docs/governance/outsourcing/OSR-021-exit-plan.md — fail closed to the manual queue; replacement pin validated before cut-over",
+        "assessed_by": "comp-imran",
+        "assessed_at": "2026-07-18"
+      }
+    },
+    {
+      "role": "assurance-reviewers",
+      "_comment": "2.1.0 (HG-0006 applied to the reviewers): the eight Loom reviewer and assurance agents run as ONE role — one model pin, one prompt bundle (the agent definitions at their plugin version), one eval suite (agents/evals/, held structurally by scripts/agent-output-check.mjs), one independent validation. `agents` lists which agent definitions this role covers; agent-output-check fails an agent that emits loom.agent-output/v1 and is covered by no role. Split the role if your reviewers run on different pins — a change-watch on a cheaper model than the risk-reviewer is a second entry, not a footnote. Medium tier: a reviewer that says PASS wrongly is an approval path with a blind spot, which is why eval and validation are required and why the eval report here is marked EXAMPLE until your rig has actually run.",
+      "agents": [
+        "change-watch",
+        "risk-reviewer",
+        "model-risk-reviewer",
+        "data-governance-reviewer",
+        "discovery-boundary-reviewer",
+        "hard-stop-reviewer",
+        "contract-conformance-reviewer",
+        "shariah-conformance-reviewer"
+      ],
+      "provider": "example-provider",
+      "model_id": "example-model@2026-01",
+      "prompt_version": "loom-agents@2.1.0",
+      "risk_tier": "medium",
+      "eval": {
+        "suite": "agents/evals",
+        "ran_at": "2026-09-12",
+        "result": "pass",
+        "threshold_met": true,
+        "evaluated_model_id": "example-model@2026-01",
+        "evaluated_prompt_version": "loom-agents@2.1.0",
+        "dataset_version": "loom-agent-evals@2.1.0",
+        "runner_version": "ADOPT-your-eval-rig@0.0.0",
+        "report": {
+          "ref": "docs/governance/evidence/eval-report-assurance-reviewers.json",
+          "sha256": "87e60ceb500cd1108be5c2302bc03396fb33bf86a10f77bf0aad26fa13b3b485"
+        }
+      },
+      "validated_by": "mrm-aisha",
+      "third_party": {
+        "_comment": "2.1.0 (hardening plan 4.4): the provider is a THIRD PARTY under the outsourcing rules, and this block is the per-provider assessment scripts/product-approval-check.mjs requires at PA1 for every model role a change names. ADOPT: replace with your outsourcing register's entry for this provider. Kosli, or any evidence platform, is a third party under the same rule — in its own register entry, not here.",
+        "outsourcing_assessment": "docs/governance/outsourcing/OSR-021-example-provider.md",
+        "prompt_data_residency": "prompts and completions processed in-region under the enterprise agreement; no training on customer data; retention 0 days at the provider",
+        "exit_plan": "docs/governance/outsourcing/OSR-021-exit-plan.md — fail closed to the manual queue; replacement pin validated before cut-over",
+        "assessed_by": "comp-imran",
+        "assessed_at": "2026-07-18"
+      }
+    }
+  ]
+}

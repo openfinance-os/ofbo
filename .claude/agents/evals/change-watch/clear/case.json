@@ -1,0 +1,1 @@
+{ "register_mounted": true, "expect_verdict": "CLEAR", "why": "A pin inside its window with a check_ref that ran and matched. Clear, with the scan named — an unrun scan is never clear, a run one can be." }

@@ -48,6 +48,16 @@
 /.github/CODEOWNERS         @openfinance-os/control-plane-owners @michartmann
 /.claude/                   @openfinance-os/control-plane-owners @michartmann
 /CLAUDE.md                  @openfinance-os/control-plane-owners @michartmann
+/core/                      @openfinance-os/control-plane-owners @michartmann
+/profiles/                  @openfinance-os/control-plane-owners @michartmann
+/guardrails/                @openfinance-os/control-plane-owners @michartmann
+/.loom/                     @openfinance-os/control-plane-owners @michartmann
+/institution/               @openfinance-os/control-plane-owners @michartmann
+/intake/                    @openfinance-os/control-plane-owners @michartmann
+/floor/                     @openfinance-os/control-plane-owners @michartmann
+/delivery/                  @openfinance-os/control-plane-owners @michartmann
+/discovery/gates/           @openfinance-os/control-plane-owners @michartmann
+/discovery/render/          @openfinance-os/control-plane-owners @michartmann
 /scripts/                   @openfinance-os/control-plane-owners @michartmann
 /docs/governance/           @openfinance-os/control-plane-owners @michartmann
 
