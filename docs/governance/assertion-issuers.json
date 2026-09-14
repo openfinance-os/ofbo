@@ -1,0 +1,30 @@
+{
+  "_comment": "ADOPT: the ASSERTION-issuers registry — identity-provider verification material for human approval assertions (Factory Floor WS2 · D2.4). core/approval-attestations.mjs verifies against this file when a compiled plan requires the `approval_attestation` capability. Own it in CODEOWNERS by a non-builder group.",
+  "_why_separate_from_attestation_issuers": "These two registries must never merge. attestation-issuers.json holds SERVICE keys — CI runners, sync workers, evidence signers — which prove custody: that a machine handled a record faithfully. This file holds IDENTITY-PROVIDER material, which proves a named human decided. A record signed only by a service key authenticates the worker, not the approver, so the gate REJECTS any approval assertion whose issuer appears in the service registry. Keeping the namespaces apart is what makes that check possible.",
+  "issuers": [
+    {
+      "id": "bank-idp",
+      "mechanism": "oidc-step-up",
+      "description": "ADOPT: the institution's identity provider, used for step-up re-authentication at the moment of decision. The assertion must bind a nonce equal to the decision payload digest (see ADR-0005). Verified against pinned IdP metadata by the platform — UNVERIFIED-HERE until you wire it and record activation evidence.",
+      "verify": {
+        "kind": "oidc",
+        "issuer": "ADOPT: your identity provider's issuer URL — it must NOT match any entry in attestation-issuers.json (the gate rejects a shared trust anchor)",
+        "audience": "ADOPT: the client id the approval surface authenticates against",
+        "required_acr": "ADOPT: the step-up assurance level your policy demands",
+        "subject_claim": "sub",
+        "jwks_uri": "ADOPT: pin the JWKS or the keys themselves — an unpinned provider is not trusted"
+      }
+    },
+    {
+      "id": "bank-approvals-sigstore",
+      "mechanism": "sigstore",
+      "description": "ADOPT (optional): short-lived identity certificates binding a human subject to the decision payload. The strategic direction where the institution already runs this infrastructure (ADR-0005, Option C). UNVERIFIED-HERE until wired.",
+      "verify": {
+        "kind": "sigstore-identity",
+        "issuer": "ADOPT: your identity provider — it must NOT share a trust anchor with any entry in attestation-issuers.json",
+        "subject_pattern": "*@your-org.example"
+      }
+    }
+  ],
+  "_no_demo_key_here": "Deliberately empty of working key material. This file is the root of trust for the only signature that proves a HUMAN decided, and it is copied verbatim into every adopting repository — so a live reference key here would be the same key in every adoption, with a private half that demonstrably exists. The bundle's worked example carries its own issuers alongside it (approval-attestation-example/), marked `\"demo\": true`, which core/approval-attestations.mjs refuses outright. Nothing in this file signs anything until you put your provider's material in it."
+}

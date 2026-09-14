@@ -1,0 +1,54 @@
+{
+  "_comment": "ADOPT: the institution-owned operating model around the Loom. This record makes accountability, oversight, change control, cease-use, IAM bindings and independent re-performance structurally checkable. It does not appoint anybody, activate an IAM group, convene a committee or prove a control operated; those remain institution evidence.",
+  "schema": "loom.operating-model/v1",
+  "accountable_executive": {
+    "identity_id": "ADOPT: a human in docs/governance/identities.json holding accountable-executive and outside builders",
+    "mandate_ref": "ADOPT: approved-individual mandate or Statement of Responsibilities reference",
+    "effective_on": "ADOPT: ISO date YYYY-MM-DD",
+    "regulator_reference": "ADOPT: regulator filing or controlled-function reference; use not-applicable with an approved legal rationale only where no filing exists"
+  },
+  "oversight": {
+    "committee": "ADOPT: board risk committee or delegated technology/model-risk committee",
+    "terms_of_reference": "ADOPT: approved terms-of-reference reference",
+    "minutes_record": "ADOPT: system of record for minuted decisions",
+    "review_every_days": "ADOPT: positive integer",
+    "event_triggers": [
+      "control-plane regression",
+      "cease-use invocation",
+      "failed rollback drill",
+      "material model or pilot-scope change"
+    ]
+  },
+  "change_management": {
+    "system_of_record": "ADOPT: CAB or change-management system",
+    "ticket_required_for_production": true,
+    "promotion_gate": "ADOPT: the pipeline mechanism that refuses production without an approved ticket",
+    "rollback_owner": "ADOPT: identity id of the human responsible for rollback",
+    "cease_use_owner": "ADOPT: identity id; normally the accountable executive",
+    "kill_switch": "ADOPT: executable cease-use mechanism and manual fallback"
+  },
+  "raci": [
+    { "activity": "propose-change", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: agent or human builder identity id"] },
+    { "activity": "approve-merge", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: human identity id"] },
+    { "activity": "control-plane-change", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: human identity id"] },
+    { "activity": "production-promotion", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: human identity id"] },
+    { "activity": "rollback", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: human identity id"] },
+    { "activity": "cease-use", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: human identity id"] },
+    { "activity": "model-risk-signoff", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: model-validator identity id"] },
+    { "activity": "pilot-scope", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: second-line human identity id"] },
+    { "activity": "oversight-and-reperformance", "accountable": "ADOPT: identity id", "responsible": ["ADOPT: internal-audit identity id"] }
+  ],
+  "iam_bindings": [
+    { "activity": "approve-merge", "subject": "ADOPT: identity id from this activity's RACI", "provider_group": "ADOPT: immutable IAM group id", "enforcement_ref": "ADOPT: branch-protection/CODEOWNERS observation" },
+    { "activity": "control-plane-change", "subject": "ADOPT: identity id from this activity's RACI", "provider_group": "ADOPT: immutable IAM group id", "enforcement_ref": "ADOPT: control-plane administration policy" },
+    { "activity": "production-promotion", "subject": "ADOPT: identity id from this activity's RACI", "provider_group": "ADOPT: immutable IAM group id", "enforcement_ref": "ADOPT: deployment protection observation" },
+    { "activity": "cease-use", "subject": "ADOPT: identity id from this activity's RACI", "provider_group": "ADOPT: immutable IAM group id", "enforcement_ref": "ADOPT: kill-switch access policy" }
+  ],
+  "independent_reperformance": {
+    "owner": "ADOPT: internal-audit identity id outside builders",
+    "sample_every_days": "ADOPT: positive integer",
+    "procedure": "ADOPT: re-performance procedure reference",
+    "external_evidence_route": "ADOPT: Kosli or the selected external-record provider trail/query"
+  },
+  "_notice": "A green structural gate proves this record is internally consistent. It does not prove appointments, committee oversight, IAM membership, promotion refusal, cease-use, Kosli retention or re-performance occurred."
+}

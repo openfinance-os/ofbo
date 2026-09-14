@@ -1,0 +1,43 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `hardened-runtime` role — the in-house alternative, for institutions that already run a golden-image pipeline and will not add an external image supplier. It exists so the role is a real choice rather than one vendor with extra steps. The role's demand does not soften: the runtime carries a DIGEST and a verified attestation, or the role is unfilled. Building the images yourself changes who signs them, not whether a signature is checked. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your registry, and wire the fetch that fills activation_evidence.",
+  "role": "hardened-runtime",
+  "provider": "internal-golden-images",
+  "adapter_id": "internal-golden-images",
+  "system": "internal-image-pipeline",
+  "satisfies_control": "HG-0011",
+  "capability": "The institution's own hardened base images, signed by its build platform and verified at admission, pinned by digest for the runtime the coding agent executes in",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes. Neither line argues for or against — they are the trade being accepted.",
+    "strength": "No external supplier in the runtime supply chain and no egress to a third-party registry, which is often the deciding factor where residency rules apply (HG-0011); the signing key is the institution's own",
+    "limitation": "Rebuild cadence becomes the institution's problem. A hardened image is only hardened on the day it was built, so an in-house pipeline that rebuilds quarterly ships a runtime months behind its upstream fixes — the freshness field below is not bookkeeping, it is the control"
+  },
+  "evidence": {
+    "kind": "runtime-attestation",
+    "envelope_fields": [
+      "runtime_image_reference",
+      "runtime_image_digest",
+      "sbom_format",
+      "sbom_digest",
+      "signing_key_id",
+      "attestation_verified",
+      "shell_present",
+      "package_manager_present",
+      "built_at",
+      "max_age_days",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "Bind the attestation to what actually ran, not to what the manifest requested. A digest verified in the registry and a different digest executing in the sandbox is the gap this closes.",
+    "gate_artifact": "docs/governance/platform-activation/agent-runtime.json",
+    "gate_mechanism": "scripts/platform-activation-check.mjs",
+    "match_on": ["runtime_image_digest", "attestation_verified"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real registry read + a real signature verification + both probes. The staleness probe is the one an in-house pipeline actually fails.",
+    "fetched_at": "ADOPT: timestamp of your registry/attestation read",
+    "verified_by": "ADOPT: the verifier identity that checked the signature — outside the coding agent's write scope",
+    "staleness_probe": "ADOPT: 'rejected' once you have tested that a runtime image older than max_age_days fails admission",
+    "unsigned_image_probe": "ADOPT: 'rejected' once you have tested that a runtime image without a valid attestation fails admission"
+  }
+}

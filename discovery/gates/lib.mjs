@@ -72,6 +72,11 @@ export function drIds(text) {
   return new Set((text.match(/\bDR-\d+(?:\.\d+)?(?:-\d+)?\b/g) || []));
 }
 
+/** All OB-* obligation ids (2.1.0). */
+export function obIds(text) {
+  return new Set((text.match(/\bOB-[A-Z0-9]+(?:-[A-Z0-9]+)+\b/g) || []));
+}
+
 /** All CTRL-* control ids. */
 export function ctrlIds(text) {
   return new Set((text.match(/\bCTRL-[A-Z0-9-]+\b/g) || []));

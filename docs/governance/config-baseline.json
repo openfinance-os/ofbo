@@ -1,0 +1,12 @@
+{
+  "_comment": "ADOPT (rc.12 · WS2.4): the APPROVED control-plane configuration, mounted as docs/governance/config-baseline.json and OWNED in CODEOWNERS by the control-plane owners (platform-admins), never agent-writable. config-reconciliation-check.mjs compares this baseline against what the platform actually reports (the platform-activation observations) and fails on any WEAKENING drift — a removed required check, disabled admin enforcement, re-enabled force-push, weakened CODEOWNERS, a widened workflow token, a swapped OIDC issuer, or an AI identity in an approval group. A drift finding suspends routine auto-merge (the controller requires this gate green; routine-envelope.suspended is the direct switch). Set these to YOUR approved values.",
+  "branch_protection": {
+    "required_status_checks_include": ["gates"],
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "min_required_reviews": 1,
+    "require_code_owner_reviews": true
+  },
+  "workflow_permissions": "read",
+  "oidc_issuer": "https://token.actions.githubusercontent.com"
+}

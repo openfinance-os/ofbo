@@ -1,0 +1,104 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "data-governance",
+  "title": "Data-governance feasibility",
+  "stage": "define",
+  "write_class": "born-on-the-floor",
+  "source": "discovery/templates/data-governance.md",
+  "source_digest": "sha256:520d3feeb3d23ed5f0e69ebc3ed0eba0b7171327d6498fd44f5a96249e035004",
+  "gates": [
+    "D6"
+  ],
+  "guidance": "Define (converge). Asked in discovery, not retrofitted in delivery. Gate D6 (Data-governance feasibility): cite ≥1 `DR-*` risk category **and** ≥1 regulatory driver; every cited `DR-*`/`CTRL-*` id must resolve against `docs/governance/data-risk-register/`; record a residual-risk verdict. The `data-governance-reviewer` agent checks control coverage.",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green",
+        "frozen"
+      ]
+    },
+    {
+      "name": "Frozen at",
+      "type": "text",
+      "required": false,
+      "read_only": true,
+      "help": "Commit sha of the merged snapshot. Empty until the first freeze."
+    },
+    {
+      "name": "Version",
+      "type": "text",
+      "required": false,
+      "read_only": true
+    },
+    {
+      "name": "Drift",
+      "type": "select",
+      "required": false,
+      "read_only": true,
+      "options": [
+        "none",
+        "draft ahead of record"
+      ],
+      "help": "Never blocks. It says the draft and the record have diverged."
+    }
+  ],
+  "sections": [
+    {
+      "name": "Data the direction would touch",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Data element (synthetic)",
+        "Classification",
+        "Subject",
+        "Purpose"
+      ]
+    },
+    {
+      "name": "Risk mapping (→ register)",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Data element",
+        "`DR-*` category",
+        "Inherent rating",
+        "Regulatory driver(s)",
+        "Mitigating `CTRL-*`"
+      ]
+    },
+    {
+      "name": "Residual-risk verdict (gate D6)",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Residual rating after controls",
+        "Acceptable for delivery?",
+        "Conditions / watch-items carried into hand-off"
+      ],
+      "gates": [
+        "D6"
+      ]
+    },
+    {
+      "name": "Uncovered risks",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    }
+  ]
+}

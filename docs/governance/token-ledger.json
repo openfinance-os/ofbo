@@ -1,0 +1,4 @@
+{
+  "_comment": "ADOPTER: the append-only token ledger (macro-ring telemetry), mounted as docs/governance/token-ledger.json. The build loop appends one entry per iteration at step 5 (Record); scripts/token-report.mjs aggregates it per iteration and per milestone, and it seals into the release evidence bundle at delivery step 8. This is TELEMETRY, NOT A GATE — cost is a signal for humans, never a merge control. Start empty; the loop fills it.",
+  "entries": []
+}

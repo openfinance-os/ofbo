@@ -1,0 +1,375 @@
+{
+  "_comment": "ADOPT: the identity registry seam (Loom 2.0 §8) — mounted as docs/governance/identities.json, CODEOWNERS-owned by a NON-builder group. Every approver, validator and classifier field resolves against this registry: `validated_by: 'Risk'` does not pass; an identity must exist, hold the required role, and satisfy the separation rules (agents approve nothing; second-line members are not builders). Authentication of these identities (SSO/signing) is the platform's half — see attestation-issuers.template.json; this registry is the repo-side contract the gates enforce deterministically.",
+  "_roles_not_headcount": "The role set is a regulatory minimum of ROLES, not an org chart. One person may hold several — eng-omar below carries `engineering` and `enterprise-architect`, the engineering manager who owns the domain's architecture alongside the product owner. Only three separations can never collapse, and the gates enforce all three: builders and second-line are disjoint; agents hold no approval role; and four-eyes needs a second human at the merge. Map the rest to as few people as your institution honestly can — with one exception below.",
+  "_the_shariah_roles_do_not_collapse": "The three Shari'ah roles are the three lines and they may NOT be mapped onto one person, however small the Islamic book is: `shariah-committee` is the internal Shari'ah supervision committee (the ISSC) that rules; `shariah-compliance` is the second-line function that monitors conformance continuously; `shariah-audit` is third-line internal audit that certifies what was actually built, and it may never be outsourced — a vendor id in that slot has not satisfied the role. A committee member who also holds the compliance or audit role reviews their own ruling, which is the defect the three lines exist to prevent. Nor may a scholar delegate outward: a deputy for `shariah-committee` must itself be an HSA-approved member of the same committee, because the delegation transfers a seat on a body, not a task. The registry cannot check HSA approval — it checks that the deputy is a registered committee holder, and the appointment provenance below is what an auditor follows for the rest. Only scholars decide Shari'ah; nothing in this file, and no gate that reads it, rules on any Shari'ah question.",
+  "_external_identities": "Some identities are governed by a register that is not the corporate directory. ISSC members are the case that forced this: they are EXTERNAL appointees, not employees, so there is no joiner/mover/leaver record and typically no corporate IdP subject to reconcile against. Demanding one anyway would have made scholar approvals either unimplementable or a reason to create off-the-books employee accounts — the pressure this harness is written against. So an identity may declare `\"external\": true` plus a `\"reconciliation_source\"` naming the register that DOES govern it (for scholars, the ISSC register at docs/governance/issc-register.json). The gate enforces the pairing in both directions: an external identity must name a real register, and a non-external identity must NOT name one — an employee reconciled against an ad-hoc list is a hole in the directory reconciliation wearing an exemption's clothes.",
+  "_architect_independence_residual": "STATED, NOT ENFORCED: both architect roles sit in `builders` in this reference registry, because architecture is first-line design work. The consequence is that a builder-held architect can sign the architecture assurance (A1–A5) for a change they helped build, with only the four-eyes merge behind it — architecture assurance here is FIRST-line assurance, and the independent challenge comes from the second line separately. If your institution requires architecture assurance to be independent, move `enterprise-architect` to a non-builder identity and add it to the second-line role set in `product-approval-check.mjs`. The Loom does not decide this for you; it refuses to let the choice stay implicit.",
+  "groups": {
+    "builders": "first-line identities that author changes (humans and agents)",
+    "second-line": "independent risk / compliance / validation identities — MUST be disjoint from builders",
+    "platform-admins": "control-plane owners"
+  },
+  "identities": [
+    {
+      "id": "agent-loom-delivery",
+      "kind": "agent",
+      "display": "Loom delivery loop (service identity)",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "model": {
+        "provider": "example-provider",
+        "model_id": "example-model@2026-01",
+        "prompt_version": "loom-harness@1.4.0"
+      },
+      "harness_role": "delivery-loop",
+      "tool_permissions": [
+        "Read",
+        "Edit",
+        "Write",
+        "Bash",
+        "Grep",
+        "Glob",
+        "Agent"
+      ],
+      "_actor_comment": "2.1.0 (row 2.1): the actor record. model pins are cross-checked against docs/governance/model-manifest.json role `delivery-loop`; tool_permissions is what the harness lets it touch. ADOPT: keep in step with your manifest — the gate fails a mismatch."
+    },
+    {
+      "id": "agent-loom-reviewers",
+      "kind": "agent",
+      "display": "Loom reviewer and assurance agents (service identity) — the assurance-reviewers role in the model manifest. Reviews, routes and reports; approves nothing",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "model": {
+        "provider": "example-provider",
+        "model_id": "example-model@2026-01",
+        "prompt_version": "loom-agents@2.1.0"
+      },
+      "harness_role": "assurance-reviewers",
+      "tool_permissions": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ]
+    },
+    {
+      "id": "svc-floor-projector",
+      "kind": "agent",
+      "display": "Floor projector — git read → collaboration-surface write (delete if you run no external surface)",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "runs_model": false
+    },
+    {
+      "id": "svc-floor-freezer",
+      "kind": "agent",
+      "display": "Floor freezer — exports a collaborative draft into a branch and opens the PR; never merges",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "runs_model": false
+    },
+    {
+      "id": "svc-floor-bridge",
+      "kind": "agent",
+      "display": "Floor bridge — TRANSCRIBES an external decision into an approval attestation. Proves custody, never authority: it may not issue the human's assertion",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "runs_model": false
+    },
+    {
+      "id": "svc-floor-keeper",
+      "kind": "agent",
+      "roles": [],
+      "groups": [
+        "builders"
+      ],
+      "note": "WS6 D6.3 floor-keeper: prefills the non-judgment fields, converses, routes. Holds NO role and NO grant on any container carrying an approval field — core/floor-keeper.mjs refuses both. core/floor-approval-surface.mjs fixes this id as KEEPER_IDENTITY, so an adopter who renames it must change that constant too.",
+      "runs_model": false
+    },
+    {
+      "id": "eng-omar",
+      "kind": "human",
+      "display": "Omar (Engineering Manager · acting Enterprise Architect)",
+      "roles": [
+        "engineering",
+        "enterprise-architect"
+      ],
+      "groups": [
+        "builders"
+      ]
+    },
+    {
+      "id": "arch-tariq",
+      "kind": "human",
+      "display": "Tariq (Solution Architect)",
+      "roles": [
+        "solution-architect"
+      ],
+      "groups": [
+        "builders"
+      ]
+    },
+    {
+      "id": "po-fatima",
+      "kind": "human",
+      "display": "Fatima (Product)",
+      "roles": [
+        "product-owner"
+      ],
+      "groups": []
+    },
+    {
+      "id": "risk-lena",
+      "kind": "human",
+      "display": "Lena (Risk, 2nd line)",
+      "roles": [
+        "risk-second-line"
+      ],
+      "groups": [
+        "second-line"
+      ]
+    },
+    {
+      "id": "comp-imran",
+      "kind": "human",
+      "display": "Imran (Compliance)",
+      "roles": [
+        "compliance"
+      ],
+      "groups": [
+        "second-line"
+      ]
+    },
+    {
+      "id": "legal-sara",
+      "kind": "human",
+      "display": "Sara (Legal)",
+      "roles": [
+        "legal"
+      ],
+      "groups": []
+    },
+    {
+      "id": "ops-dana",
+      "kind": "human",
+      "display": "Dana (Operations)",
+      "roles": [
+        "operations"
+      ],
+      "groups": []
+    },
+    {
+      "id": "infosec-noor",
+      "kind": "human",
+      "display": "Noor (Information Security)",
+      "roles": [
+        "information-security"
+      ],
+      "groups": []
+    },
+    {
+      "id": "credit-hassan",
+      "kind": "human",
+      "display": "Hassan (Credit Risk)",
+      "roles": [
+        "credit-risk"
+      ],
+      "groups": [
+        "second-line"
+      ]
+    },
+    {
+      "id": "mrm-aisha",
+      "kind": "human",
+      "display": "Aisha (Model Risk)",
+      "roles": [
+        "model-validator"
+      ],
+      "groups": [
+        "second-line"
+      ]
+    },
+    {
+      "id": "dp-yusuf",
+      "kind": "human",
+      "display": "Yusuf (Data Protection)",
+      "roles": [
+        "data-protection"
+      ],
+      "groups": [
+        "second-line"
+      ]
+    },
+    {
+      "id": "issc-scholar-1",
+      "kind": "human",
+      "display": "ADOPT: the ISSC member's name (seat 1 of 5) — DELETE ALL FIVE if you run no Islamic product",
+      "roles": [
+        "shariah-committee"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "external": true,
+      "reconciliation_source": "docs/governance/issc-register.json",
+      "hsa_approval_ref": "ADOPT: the Higher Shari'ah Authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect"
+    },
+    {
+      "id": "issc-scholar-2",
+      "kind": "human",
+      "display": "ADOPT: the ISSC member's name (seat 2 of 5)",
+      "roles": [
+        "shariah-committee"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "external": true,
+      "reconciliation_source": "docs/governance/issc-register.json",
+      "hsa_approval_ref": "ADOPT: the Higher Shari'ah Authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect"
+    },
+    {
+      "id": "issc-scholar-3",
+      "kind": "human",
+      "display": "ADOPT: the ISSC member's name (seat 3 of 5)",
+      "roles": [
+        "shariah-committee"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "external": true,
+      "reconciliation_source": "docs/governance/issc-register.json",
+      "hsa_approval_ref": "ADOPT: the Higher Shari'ah Authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect"
+    },
+    {
+      "id": "issc-scholar-4",
+      "kind": "human",
+      "display": "ADOPT: the ISSC member's name (seat 4 of 5)",
+      "roles": [
+        "shariah-committee"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "external": true,
+      "reconciliation_source": "docs/governance/issc-register.json",
+      "hsa_approval_ref": "ADOPT: the Higher Shari'ah Authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect"
+    },
+    {
+      "id": "issc-scholar-5",
+      "kind": "human",
+      "display": "ADOPT: the ISSC member's name (seat 5 of 5)",
+      "roles": [
+        "shariah-committee"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "external": true,
+      "reconciliation_source": "docs/governance/issc-register.json",
+      "hsa_approval_ref": "ADOPT: the Higher Shari'ah Authority approval reference for this member",
+      "appointment_instrument": "ADOPT: the general-assembly resolution that appointed this member (reference, not a summary)",
+      "appointment_date": "ADOPT: RFC 3339 date the appointment took effect",
+      "note": "FIVE SEATS, NOT FIVE PEOPLE-YOU-HAVE: five is the regulatory minimum for the committee, so a registry carrying four has a committee that cannot lawfully sit. The three provenance fields on each seat are what an auditor follows from a signature back to an approved appointment; the gate checks they are present and no longer placeholders, and can check nothing about the approval itself."
+    },
+    {
+      "id": "shariah-compliance-head",
+      "kind": "human",
+      "display": "ADOPT: head of the Shari'ah Compliance Function",
+      "roles": [
+        "shariah-compliance"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "note": "Second line, and an EMPLOYEE — no `external` flag: this desk is inside the institution, reconciled against the corporate directory like every other staff identity. It monitors conformance continuously rather than signing at a launch gate; the harness sees only the records it files."
+    },
+    {
+      "id": "shariah-audit-lead",
+      "kind": "human",
+      "display": "ADOPT: head of internal Shari'ah audit",
+      "roles": [
+        "shariah-audit"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "note": "Third line. Internal Shari'ah audit MAY NOT BE OUTSOURCED, so this must resolve to an in-house human on the corporate directory — a co-sourced firm's partner, a shared-service id, or any identity you would have marked `external` is a mapping that has not satisfied the role. Bound at PA2 only: audit certifies what was built, and making it a party at permission-to-develop would have it assure its own authorisation."
+    },
+    {
+      "id": "shariah-model-validator-1",
+      "kind": "human",
+      "display": "ADOPT: the validator of Shari'ah-significant models — DELETE if no model of yours carries Shari'ah significance",
+      "roles": [
+        "shariah-model-validator"
+      ],
+      "groups": [
+        "second-line"
+      ],
+      "note": "TWO COMPETENCES, ONE OR TWO SIGNATURES. products/shariah-model compiles the `shariah_model_validation` capability, and model-provenance-check DERIVES the role name from the domain (`shariah` → `shariah-model-validator`), so a model declaring domain `shariah` needs a holder of this exact role; without this seat no shipped identity holds it and the requirement is unresolvable. The review needs model-validation competence AND Shari'ah authority, which are rarely one person, so pick one of two mappings: give this seat `model-validator` as well and one signature covers both, or leave it as-is and let the manifest carry two distinct signatures — `validated_by` for whether the model is accurate, `domain_validations.shariah` for what its output means. An EMPLOYEE by default (no `external` flag): if you fill it with an outside appointee instead, add `external: true` and the register that governs them, as the ISSC seats do. It is a competence, not a fourth line — holding it neither adds to nor substitutes for the three Shari'ah lines above. And it confers no authority to rule: a passing domain validation records that a competent review happened and is bound to this model pin, never that the model is Shari'ah-compliant."
+    },
+    {
+      "id": "audit-nadia",
+      "kind": "human",
+      "display": "Nadia (Internal Audit)",
+      "roles": [
+        "internal-audit"
+      ],
+      "groups": [],
+      "note": "Third-line owner of independent re-performance. This reference identity is illustrative; replace it with the institution's directory-backed audit identity. It is deliberately outside builders and second-line decision making."
+    },
+    {
+      "id": "exec-rashid",
+      "kind": "human",
+      "display": "Rashid (Accountable Executive)",
+      "roles": [
+        "accountable-executive"
+      ],
+      "groups": []
+    },
+    {
+      "id": "ctx-mariam",
+      "kind": "human",
+      "display": "Mariam (Institutional Context Owner)",
+      "roles": [
+        "institutional-context-owner"
+      ],
+      "groups": []
+    },
+    {
+      "id": "padmin-zoe",
+      "kind": "human",
+      "display": "Zoe (Platform Admin)",
+      "roles": [
+        "platform-admin"
+      ],
+      "groups": [
+        "platform-admins"
+      ]
+    }
+  ],
+  "_quorum": "A quorum is what turns a role into a BODY. Every other role here is a desk: one holder's signature is the function's decision. `shariah-committee` is not — the ISSC rules collectively, so one member's name on an approval is a member's opinion, and the gate must refuse to read it as the committee's. THREE is a majority of the regulatory minimum of five, which is why it is the shipped number; raise it if your constitution says more, and note that the gate can only ever raise a quorum, never lower it. Keys here are role names ONLY — an explanatory key inside `quorum` is read as a role and fails the gate, which is why this note sits outside it. Delete this block along with the ISSC seats if you run no Islamic product; a quorum for a role nobody holds is unsatisfiable and blocks every change that needs it.",
+  "quorum": {
+    "shariah-committee": 3
+  },
+  "_actor_comment": "2.1.0 (hardening plan row 2.1 · PRD loom-kosli F3): an agent identity is the ACTOR an attestation names, so it declares what it is — model { provider, model_id, prompt_version } pinned and cross-checked against the model manifest role named in harness_role, and tool_permissions[] (empty means none; absent is a finding). A deterministic service identity that runs no model says runs_model: false. Acceptors (UAT sign-off) resolve through resolveAcceptor: human, outside builders, holding product-owner or business-owner."
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "risk_id": "DR-1.1-001",
+    "inherent_rating": "High",
+    "control_effectiveness": 0.9,
+    "residual_rating": "Low",
+    "verdict": "Acceptable with conditions",
+    "conditions": ["PII guard active on every write path", "synthetic markers on all fixtures"]
+  }
+]

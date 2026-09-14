@@ -1,0 +1,114 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "prototype",
+  "title": "Prototype brief",
+  "stage": "define",
+  "write_class": "born-on-the-floor",
+  "source": "discovery/templates/prototype.md",
+  "source_digest": "sha256:c98021e273042353924e63d8cb15c042178f3755e3f0f1f4f377f4696a82afc6",
+  "gates": [
+    "D2",
+    "D4",
+    "D7",
+    "D8"
+  ],
+  "guidance": "Define (*make tangible*). A **disposable, low-fidelity** wireframe that visualises how the direction *could* look, to test the framing before delivery. Gates D8 — Tangibility (this brief + a brand-conformant `wireframe.html` exist) and D4/§4 (validation fidelity, not a delivery spec). The wireframe renders against `design.md` (D7).",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green",
+        "frozen"
+      ]
+    },
+    {
+      "name": "Frozen at",
+      "type": "text",
+      "required": false,
+      "read_only": true,
+      "help": "Commit sha of the merged snapshot. Empty until the first freeze."
+    },
+    {
+      "name": "Version",
+      "type": "text",
+      "required": false,
+      "read_only": true
+    },
+    {
+      "name": "Drift",
+      "type": "select",
+      "required": false,
+      "read_only": true,
+      "options": [
+        "none",
+        "draft ahead of record"
+      ],
+      "help": "Never blocks. It says the draft and the record have diverged."
+    }
+  ],
+  "sections": [
+    {
+      "name": "What this prototype tests",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Hypothesis",
+        "Screen/region that tests it",
+        "What a positive reaction looks like"
+      ]
+    },
+    {
+      "name": "Scope of the wireframe",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Screens included",
+        "Deliberately excluded",
+        "Data shown"
+      ]
+    },
+    {
+      "name": "Fidelity guardrails (D4 / canon §4)",
+      "required": true,
+      "kind": "rich_text",
+      "help": "",
+      "gates": [
+        "D4"
+      ]
+    },
+    {
+      "name": "Stakeholder reactions (evidence → D2)",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Reaction",
+        "From",
+        "New signal id",
+        "Implication for framing"
+      ],
+      "gates": [
+        "D2"
+      ]
+    },
+    {
+      "name": "Wireframe",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    }
+  ]
+}

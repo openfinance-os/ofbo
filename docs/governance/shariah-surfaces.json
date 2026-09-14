@@ -1,0 +1,37 @@
+{
+  "_comment": "ADOPT: the DECLARED EMISSION SURFACES — mounted as docs/governance/shariah-surfaces.json and read by scripts/shariah-emission-check.mjs (control SHARIAH-SUBSTANCE). It answers exactly one question: WHERE in this repository do Islamic products stop being a claim in a governance record and become bytes — the fixtures, the data contracts, and the customer-facing copy. It answers no Shari'ah question at all. Nothing declared here is approved by declaring it, and the gate that reads this file rules on no permissibility: it checks that data conforms to structures the Shari'ah committee ALREADY approved and to an enum a published standard ALREADY fixes. Scholars decide Shari'ah. The most that plane ever claims is structure-conformant.",
+  "_why_you_declare_it": "DECLARING THE SURFACES IS THE INSTITUTION'S ACT, and it is not a formality the harness could have saved you. No generic heuristic can tell an Islamic fixture tree from a conventional one — the file names, the schemas and the field names are the same — so a gate that guessed would do one of two harmful things: miss the tree that actually matters, and report a pass over it; or fail a bank that runs no Islamic product at all, on a fixture that was never Islamic. Nothing is inferred here. A surface nobody declared is UNCHECKED, not clean.",
+  "_ships_empty": "EVERY LIST BELOW SHIPS EMPTY, and that is the correct and permanent state for a repository with no Islamic product: an empty declaration reads nothing, says nothing, and fails nobody. Once a compiled plan requires the `shariah_governance` capability — which only an Islamic product or institution profile compiles — an empty declaration becomes a FINDING, because a gate that read nothing must not report a pass. Fill the lists at that point and not before.",
+  "_what_it_cannot_see": "IT READS FILES, NEVER PRODUCTION. It parses JSON fixtures and specs in this checkout. It never watches a ledger, never sees a posted transaction, and cannot tell a fixture that reflects the running system from one that reflects an intention. A YAML spec is UNREAD by it (JSON only) and it says so rather than counting it clean — emit the resolved JSON alongside if you want that spec covered.",
+
+  "fixture_globs": [],
+  "_fixture_globs": "ADOPT: glob patterns for the test fixtures and sample payloads that represent Islamic products, e.g. \"tests/fixtures/islamic/**/*.json\". The literal prefix before the first wildcard is where the walk starts, so a pattern is also a scope: \"**/*.json\" would read the repository. A glob matching nothing is a NOTICE (an empty fixture set is legitimate on the day this file lands); a path outside the repository is a finding.",
+
+  "spec_paths": [],
+  "_spec_paths": "ADOPT: paths to the data contracts that carry Islamic product fields — an OpenAPI/JSON Schema document, or a directory of them, e.g. \"specs/accounts.json\". A declared path that does not exist is a FINDING, not a notice: a surface pointing at nothing is a control aimed at nothing, and a typo here is the way this gate is most likely to die quietly.",
+
+  "content_roots": [],
+  "_content_roots": "ADOPT: directories of customer-facing copy for Islamic products, e.g. \"docs/products/islamic\". Read for terminology only (.md, .mdx, .txt), as the merge-time backstop for the pre-write hook scoped by .claude/hooks/shariah-surfaces.txt. A document that CITES a conventional field name in backticks or a fenced block is not a finding — mapping away from interest is the honest use of the word, and a gate that failed it would be switched off within a week.",
+
+  "structure_enum": {
+    "_comment": "ADOPT ONLY IF YOUR JURISDICTION'S STANDARD IS NOT THE ONE BELOW, or once that standard revises. This block is REGULATORY FACT MOUNTED AS DATA, not a constant of the harness: a jurisdiction's closed enum revises on that jurisdiction's schedule, and an adopter under a different standard must not be held to five values only a new harness release could change. The values below are the shipped DEFAULT and `regime` records exactly what they quote. Replace both together — the gate refuses values that differ from the shipped default while still travelling under the shipped default's name, because an enum copied from one standard and labelled with another is a quotation nobody can check.",
+    "_what_this_does_not_license": "Replacing the enum declares WHICH published interoperability contract this repository emits under. It does not license a value of your own. The moment two institutions emit different bytes for the same structure, the enum has stopped being a contract — so a structure no enum in force can express is a DOCUMENTED GAP routed as a spec change to the standard, modelled meanwhile in your own field, and never closed with a locally invented value.",
+    "_edition_is_a_claim": "`regime` and `edition` are a claim about which text somebody read, not a fetch — the harness never contacts a publisher and cannot tell you this is current. Pin the re-verification owner and bound in docs/governance/knowledge-pins.json, which is the file that owns that.",
+    "regime": "Open Finance UAE Standards v2.1-final — ShariaStructure",
+    "edition": "",
+    "values": ["Ijara", "ServiceIjara", "Murabaha", "Musharaka", "Tawarruq"],
+    "documented_gap": ["Mudarabah", "Mudaraba", "Wakala", "Wakalah", "Istisna", "Istisna'a", "Salam"],
+    "_documented_gap": "Structures the standard above does not carry, listed so a finding can say WHY a value is unrepresentable rather than just \"invalid\". These are real products an Islamic committee rules on every week; the gap is in the published standard, not in your product. If you replace `values`, replace this list too — it is a fact about one standard and is not carried over to another."
+  },
+
+  "rules": {
+    "_comment": "ADOPT: ADDITIONS to the patterns the gate ships, for the field names your institution actually uses. Extension is data, never a fork, and it is MONOTONE: whatever you declare here is UNIONED with the shipped floor, so no entry can remove a shipped pattern and no config can make this gate say less than it says with no config at all. A mistyped rule name is REFUSED rather than ignored — a typo would otherwise read as a configured control while configuring nothing. Delete this block entirely if the shipped patterns fit.",
+    "_not_configurable": "THREE LISTS ARE NOT ADOPTER-CONFIGURABLE, and the gate refuses them by name: `prose_allow_phrases` (every entry DELETES a terminology match — one entry of \"interest\" switches the prose backstop off), `rebate_decision_ref_patterns` (every entry WIDENS what counts as the committee's approving decision, so it buys a pass rather than a check), and `expected_return_key_patterns` (every entry SUPPRESSES the notice that says nothing here was checked against a rate). A list whose entries subtract is an exception, not configuration — book it in docs/governance/exception-policy.json where somebody signs for it.",
+    "_worked_example": "The list most often extended is `participatory_values`. The standard's enum has no value for a Mudarabah or Wakala structure, so those ride whichever field your model uses — declare the field in `structure_fields` and the value in `participatory_values`, and SE-R06 (a guaranteed return on a participatory structure) starts reading your products.",
+    "structure_fields": [],
+    "participatory_values": [],
+    "murabaha_values": [],
+    "product_marker_keys": [],
+    "prose_terms": []
+  }
+}

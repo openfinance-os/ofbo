@@ -2619,6 +2619,8 @@ deferred: # Could / Phase 2 — not in build scope until promoted by the user
     title: Training environment for Customer Care
     status: in-progress
     priority: Could
+    discovery_exempt: true
+    reason: "Legacy item already in progress before Loom 2.4.1 adoption; retrospective discovery or closure is required before any later reactivation."
     progress: >-
       Modelled as a SEPARATE app composition (an environment, not a per-request flag) so audit
       isolation is absolute — the training environment shares no sinks with production.

@@ -1,0 +1,41 @@
+{
+  "_comment": "ADOPT: the fairness register and the disparity measurements taken against it — mounted as docs/governance/fairness-evaluations.json and read by scripts/fairness-evaluation-check.mjs. WHAT THIS FILE IS: a record that somebody declared which attributes a model must not disadvantage, measured a disparity across them on a named population, and held the result against a threshold somebody owns. WHAT IT IS NOT: a bias test. THE HARNESS MEASURES NOTHING. There is no fairness metric, no test rig and no population in this repository; every number below was produced by the adopter's rig and is READ here as a declaration. A green gate means the measurements exist, are bound to the pin that ships, and sit under a threshold their owner set — never that the model is fair. A rig that measures the wrong thing produces a clean record, and no gate here can tell.",
+  "_binding_comment": "The one property this gate holds that a filled-in slot does not: an evaluation names the model_id and prompt_version it was RUN AGAINST, and the gate compares them to the pin in docs/governance/model-manifest.json. A retrain that moves the pin therefore invalidates its own fairness evidence — the record goes stale and the gate fails naming the role. That is the 'measured again on every material retrain' half of the objective, and it is mechanical. The other half — whether the disparity measured is the disparity that matters — is the adopter's and is not claimed.",
+  "_proxy_comment": "ADOPT: `proxy_risk` on each attribute is prose the model-risk function writes, and it is the field most likely to be the real finding. Dropping a protected attribute from the feature set does not remove it from the model; a postcode, a device, a salutation or a transaction pattern can carry it. Nothing here detects a proxy — this field records that somebody looked, and what they concluded.",
+  "metric": "ADOPT: the disparity metric every measurement below is expressed in — e.g. demographic-parity-difference, equal-opportunity-difference, disparate-impact-ratio. ONE metric per file, so the numbers are comparable and the threshold means one thing. Which metric is right is a decision with real consequences and it is the adopter's; the gate only enforces that a metric is named and that every measurement uses this one.",
+  "threshold": {
+    "max_disparity": "ADOPT: the number above which a measurement is a failure, expressed in the metric named above. A threshold nobody can fail is not a threshold — but the gate takes no view on the VALUE, only that it is a real number, that an owner set it, and that the measurements are held against it.",
+    "_direction_comment": "The shipped rule is `disparity <= max_disparity`. A ratio metric (disparate impact, where 1.0 is parity and LOWER is worse) inverts that, so declare `direction: \"floor\"` on this block and the gate compares `>=` instead. Get this wrong and a failing model reads green — which is why the field is explicit rather than inferred from the metric name.",
+    "direction": "ceiling"
+  },
+  "owner": "ADOPT: the identity id (docs/governance/identities.json) of the human who OWNS this threshold — model-risk or a second line, never a builder and never an agent. The gate resolves them: an unresolvable owner, an agent, or somebody inside `builders` means the threshold belongs to nobody, and a threshold that belongs to nobody is a number in a file.",
+  "material_retrain": "ADOPT: what counts as a material retrain for this institution — the change that obliges a re-measurement rather than a refresh. Prose, read by a human, never parsed. It is recorded here because the pin comparison below can only catch a retrain that MOVED THE PIN; a retrain that ships under the same pin string is invisible to every gate in this repository and this sentence is what a reviewer is meant to check it against.",
+  "protected_attributes": [
+    {
+      "attribute": "ADOPT: the attribute — e.g. age-band, sex, nationality-group. Name the attribute, not the individual: this register must never become a place where personal data is stored.",
+      "basis": "ADOPT: why this attribute is protected here — the statute, regulation or institutional policy that names it. An attribute with no basis is a choice nobody has to defend; an attribute the law names and this file omits is the gap this register exists to make visible.",
+      "measured_by": "ADOPT: how membership was determined for the measurement population — declared, inferred, or proxied. An INFERRED attribute carries its own error, and a disparity measured across a badly inferred attribute is a number about the inference, not the model.",
+      "proxy_risk": "ADOPT: what in the feature set could carry this attribute even though it is not a feature, and what was done about it. See _proxy_comment — nothing here detects a proxy."
+    }
+  ],
+  "evaluations": [
+    {
+      "_comment": "ADOPT: one entry per model ROLE in docs/governance/model-manifest.json whose output materially affects a customer outcome. A role in the manifest with no entry here is UNCOVERED and the gate says so by name once the capability compiles — silence is not a pass.",
+      "role": "ADOPT: the model role, matching `models[].role` in the manifest exactly. An entry naming a role that does not exist is a measurement of nothing.",
+      "evaluated_model_id": "ADOPT: the model_id this measurement was run against — must equal the manifest pin that ships, or the record is stale evidence for a model nobody measured.",
+      "evaluated_prompt_version": "ADOPT: likewise the prompt_version. A prompt change is a model change: the same weights behind a different instruction can move an outcome across a protected group, which is why this is pinned and not assumed.",
+      "ran_at": "ADOPT: ISO date the measurement was taken (YYYY-MM-DD).",
+      "population": {
+        "dataset_version": "ADOPT: the identified population the disparity was measured on. An unidentified population makes the number unreproducible, which makes it a claim.",
+        "representativeness": "ADOPT: why this population represents the people the model decides about, and where it does not. A disparity measured on a convenience sample is a disparity in the sample. Prose; the gate reads that it is present and non-empty and takes no view on whether it is true."
+      },
+      "disparities": {
+        "_comment": "ADOPT: one number per attribute in `protected_attributes`, in the metric named at the top. Every registered attribute must appear — a missing one is an attribute nobody measured, and the gate names it rather than averaging over it. The value is a number: a string, a 'pass', or a narrative is not a measurement."
+      },
+      "report": {
+        "ref": "ADOPT: path to the measurement REPORT artifact — the output of your rig, not this summary. A declared number is not evidence.",
+        "sha256": "ADOPT: sha256 of that artifact. The gate re-hashes it: a report that has moved under its own summary is the failure mode this field exists to catch."
+      }
+    }
+  ]
+}

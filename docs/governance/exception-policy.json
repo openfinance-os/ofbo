@@ -1,0 +1,7 @@
+{
+  "_comment": "ADOPT (rc.37 · flow-plan Phase 3.6): the exception-register policy, mounted as docs/governance/exception-policy.json and owned by the second line. scripts/exception-register-check.mjs projects EVERY open exception in the repository — envelope exemptions and assurance risk-acceptances — into one register, warns before each expires, and fails on concentration. Shipped ready to use: no placeholder needs replacing.",
+  "concentration_limit": 3,
+  "_concentration_note": "More than this many OPEN exceptions against one control is a systemic gap wearing N hats, and the gate fails. The value may be LOWERED here and never raised: 3 is the shipped floor, and a knob that could loosen a control below what the bundle ships is the one thing this method does not build. Tighten it to 1 if your second line wants every exception to be singular.",
+  "_warning_bands_note": "Expiry warnings fire at 30, 14 and 7 days. They are NOTICES — the hard block stays exactly where it was, at expiry. What the bands remove is the overnight green-to-blocked surprise, which is how a renewal ends up being rushed rather than considered.",
+  "_renewal_note": "A renewal is a NEW exception with a fresh second-line signature, not an edited expiry date. The register aggregates per owner and per control precisely so that the fourth renewal of the same exemption is visible as what it is."
+}

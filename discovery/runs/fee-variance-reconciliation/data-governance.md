@@ -33,6 +33,10 @@ Cited controls resolve: **CTRL-DQ-003** (Data Quality Dashboard & Monitoring), *
 (Cross-System Data Reconciliation), **CTRL-DQ-008** (Data Refresh & Currency Monitoring),
 **CTRL-DQ-012** (Risk Data-to-Source Reconciliation).
 
+The direction answers **OB-INT-BCBS239-OFBO-001**, derived from the register's exact
+BCBS239-P3-002, BCBS239-P3-003, and BCBS239-P3-004 source records. Institutional applicability
+must be re-verified before a bank pilot.
+
 ## Residual-risk verdict (D6)
 
 - **Residual rating after controls:** Very Low (the register computes DR-1.1-003 High→Very Low,

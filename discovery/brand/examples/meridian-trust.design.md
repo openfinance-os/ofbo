@@ -8,6 +8,9 @@ banner: "DEMO — Meridian Trust · synthetic, non-production"
 
 # Brand profile — Meridian Trust (a second, mounted brand)
 
+> **Identifiers.** Gate ids (`D1`–`D9`, `Q1`–`Q5`) and run-level ids (`S-001` signal,
+> `T-1` theme, `H1` hypothesis) are expanded in `discovery/GLOSSARY.md`.
+
 This is **not OFBO**. It is a deliberately contrasting brand mounted behind the *same seam*
 to prove the discovery harness is solution-agnostic: identical token **names**, different
 **values** (royal-purple + serif here vs OFBO's blue + Inter). The renderer and gate D7 read

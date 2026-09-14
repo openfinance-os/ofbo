@@ -1,0 +1,1537 @@
+{
+  "_comment": "ADOPT: the control state of record (replaces any hand-graded scorecard). Five states: absent | defined | mechanically-validated | platform-enforced | organisationally-enforced — each state demands receipts (scripts/control-catalog-check.mjs fails the build on an overstated entry). As shipped, the bundle's gates grade mechanically-validated; platform-enforced is YOURS to claim once branch protection is active with a negative bypass test recorded in activation_evidence. Execution fields (read by core/gate-runner.mjs): `lane` pr|release|scheduled, `always` = tamper-detection core that never skips in its lane, `paths` = prefixes that implicate the control on a diff (no paths = runs by default), `execute:false` = library/composed control enforced via another gate. `depends_on` = control_ids that must finish first (rc.40 — the runner runs a bounded-concurrency pool in topological waves; real ids only, cycles refused). Skipping is always RECORDED, never silent, and so is a cache hit (`pass-cached` with its key).",
+  "controls": [
+    {
+      "control_id": "HG-0001",
+      "objective": "Four-eyes merge: the agent proposes, a human disposes; no self-merge",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/activation-runbook.md",
+      "note": "Becomes platform-enforced only when branch protection is active — record the rejected direct-push probe as activation_evidence"
+    },
+    {
+      "control_id": "HG-0002",
+      "objective": "Immutable control plane: guardrails cannot be changed without Code Owner review; placeholder owners rejected",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/control-plane-check.mjs",
+      "test_ref": "scripts/control-plane-check.test.mjs",
+      "lane": "pr",
+      "always": true
+    },
+    {
+      "control_id": "CATALOG",
+      "objective": "The control catalog itself cannot overstate a control's state",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/control-catalog-check.mjs",
+      "test_ref": "scripts/control-catalog-check.test.mjs",
+      "lane": "pr",
+      "always": true
+    },
+    {
+      "control_id": "IDENTITY-REGISTRY",
+      "objective": "Approvals resolve to human registry identities; agents approve nothing; second-line ∩ builders = ∅",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/identity-registry-check.mjs",
+      "test_ref": "scripts/identity-registry-check.test.mjs",
+      "lane": "pr",
+      "always": true
+    },
+    {
+      "control_id": "CHANGE-ENVELOPE",
+      "objective": "Every governed change is classified by a human with authority, plan-reconciled at execution, and advances states only with receipts",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "always": true
+    },
+    {
+      "control_id": "Q1B",
+      "objective": "Test integrity: a red bar goes green by fixing the code, never by weakening the test",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/test-integrity-check.mjs",
+      "test_ref": "scripts/test-integrity-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "execute": false,
+      "execute_note": "needs --base <merge-base>; CI invokes it directly with the PR base",
+      "gate_family": "Q"
+    },
+    {
+      "control_id": "Q4-SECRETS",
+      "objective": "No secret-shaped content in the tree OR the reachable git history",
+      "owner_role": "security",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/secrets-scan.mjs",
+      "test_ref": "scripts/secrets-scan.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "gate_family": "Q"
+    },
+    {
+      "control_id": "HG-0007",
+      "objective": "Waist gate: no feature enters delivery without a gate-green discovery hand-off",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/discovery-link-check.mjs",
+      "test_ref": "scripts/discovery-link-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/backlog.yaml",
+        "discovery/"
+      ]
+    },
+    {
+      "control_id": "HG-0009",
+      "objective": "Develop diverges before delivery converges: a Solution Direction Record names at least three directions, the criteria they were judged on, and the one chosen",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/develop-direction-check.mjs",
+      "test_ref": "scripts/develop-direction-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/develop/",
+        "docs/backlog.yaml"
+      ],
+      "note": "2.1.0 — HG-0009 was a decision with no mechanism since 1.11; a record naming one direction dressed as a choice passed everything. Structural like the D gates: it checks that the shape of a decision exists, never that the decision was right"
+    },
+    {
+      "control_id": "AGENT-OUTPUT",
+      "objective": "Every reviewer and assurance agent emits one schema (loom.agent-output/v1), says INSUFFICIENT_EVIDENCE when its register is absent, carries confidence and evidence refs on every finding, and is a role in the model manifest; the eval fixtures beside the schema validate as a specification of that behaviour",
+      "owner_role": "model-validator",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/agent-output-check.mjs",
+      "test_ref": "scripts/agent-output-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        ".claude/agents/",
+        "docs/governance/model-manifest.json"
+      ],
+      "note": "2.1.0 (plan phase 5) — holds the CONTRACT around the prompt, not the prompt: definitions declare the schema, fixtures validate, emitting agents are inventoried. Structural in CI; --run is the seam for an adopter's eval rig and exits 2 until one is wired, because an unrun eval is not a pass"
+    },
+    {
+      "control_id": "OBLIGATIONS",
+      "objective": "Every regulatory obligation the institution answers to is registered with a source, an owner, a verification date, and the risks and controls that answer it; D6 cites obligations, not regulations from memory",
+      "owner_role": "compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/obligations-check.mjs",
+      "test_ref": "scripts/obligations-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/obligations.json",
+        "docs/governance/data-risk-register/",
+        "docs/governance/identities.json"
+      ],
+      "note": "2.1.0 (plan phase 3) — the register is the spine that turns risk → control into obligation → risk → control → maturity. The gate holds shape and resolution; whether the entries are the right obligations, correctly cited, is compliance's — an illustrative entry fails under a regulated profile so the shipped example cannot pass for a real register"
+    },
+    {
+      "control_id": "D-GATES",
+      "objective": "Discovery runs are evidence-traced, register-mapped, brand-real and stakeholder-tested (D1–D9)",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "discovery/gates/validate.mjs",
+      "test_ref": "discovery/gates/validate.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "discovery/"
+      ],
+      "execute": false,
+      "execute_note": "runs per discovery run directory; CI iterates discovery/runs/*",
+      "gate_family": "D"
+    },
+    {
+      "control_id": "DATA-LC",
+      "objective": "Every data category declares classification, lawful basis, bounded retention, erasure disposition, residency",
+      "owner_role": "data-protection",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/data-lifecycle-check.mjs",
+      "test_ref": "scripts/data-lifecycle-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/data-lifecycle.json"
+      ]
+    },
+    {
+      "control_id": "OPS-LOOP",
+      "objective": "Run→Discovery: operational signals are triaged, owned, traceable — and MANDATORY once anything is in production",
+      "owner_role": "operations",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/operations-signal-check.mjs",
+      "test_ref": "scripts/operations-signal-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/operations-signal.json",
+        "docs/governance/changes/"
+      ]
+    },
+    {
+      "control_id": "Q2-SAST",
+      "objective": "SAST output is real SARIF from a named tool and clears the severity policy",
+      "owner_role": "security",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/sast-check.mjs",
+      "test_ref": "scripts/sast-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/evidence/"
+      ],
+      "gate_family": "Q"
+    },
+    {
+      "control_id": "HG-0006",
+      "objective": "Every model role is pinned, tiered, evaluated against its pin with a sealed report, independently validated, and (at high tier) declares runtime monitoring, suspension thresholds and a fallback; a model whose output carries DOMAIN significance additionally names a resolvable human <domain>-model-validator outside the build line, and a compiled plan requiring a domain capability cannot be satisfied by a manifest that never declares that domain",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/model-provenance-check.mjs",
+      "test_ref": "scripts/model-provenance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/model-manifest.json",
+        "docs/governance/evidence/"
+      ],
+      "note": "The domain limb is strictly additive — a model that declares no `domains` never reaches it — and it verifies COMPOSITION and BINDING only: WHO signed, that they hold the derived <domain>-model-validator role, are not an agent, and signed against the pin that ships. Whether the determination is sound belongs to the accountable body (for Shari'ah, the internal Shari'ah supervision committee); no agent in this harness authors or approves one"
+    },
+    {
+      "control_id": "PA-GATES",
+      "objective": "PA1/PA2: a product cannot enter Develop or reach launch without the compiled sections and resolvable control-function approvals",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/product-approval-check.mjs",
+      "test_ref": "scripts/product-approval-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "profiles/"
+      ],
+      "gate_family": "PA1"
+    },
+    {
+      "control_id": "A-GATES",
+      "objective": "Architecture assurance A1–A5 with threat→control→test traceability; material open findings block delivery",
+      "owner_role": "security",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/architecture-assurance-check.mjs",
+      "test_ref": "scripts/architecture-assurance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "profiles/"
+      ],
+      "gate_family": "A"
+    },
+    {
+      "control_id": "POLICY-COMPILER",
+      "objective": "A change's risk classification compiles its required gates, approvers and evidence; higher tiers only add (monotonic)",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "core/policy-compiler.mjs",
+      "test_ref": "core/policy-compiler.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "profiles/",
+        "core/"
+      ],
+      "execute": false,
+      "execute_note": "enforced via change-envelope-check's recompile-and-reconcile"
+    },
+    {
+      "control_id": "HG-0003",
+      "objective": "Release evidence is a sealed, commit-bound, semantically-verified hash chain with a MANDATORY external anchor; release_commit must be a real commit that exists in this repository and is an ancestor of HEAD (a non-git context records the check as not-performable, never as a pass), and a plan-only evidence type (brainkit-provenance, shariah-attestation) is demanded and semantically verified only where a compiled plan names it; when a compiled plan requires `external_record` and a provider is mounted, the manifest's external_record id must resolve at that provider and hold the same anchor (2.1.0, decision K9)",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/evidence-seal-check.mjs",
+      "test_ref": "scripts/evidence-seal-check.test.mjs",
+      "lane": "release"
+    },
+    {
+      "control_id": "RELEASE-SUBJECT",
+      "objective": "The release binds to an immutable artifact digest: a real source commit, a digest-pinned artifact and the trusted builder that produced it; symbolic subjects and mutable (tag-pinned) uris are rejected",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/release-subject-check.mjs",
+      "test_ref": "scripts/release-subject-check.test.mjs",
+      "lane": "release",
+      "paths": [
+        "docs/governance/release-subject.json"
+      ],
+      "note": "The gate proves the subject is coherent and internally consistent (mechanically-validated); that the artifact was actually built by that builder from that commit is the platform's signed provenance, cross-checked by release-attestation-check and observed live in WS2. Mandatory-when-compiled: a null artifact fails once a governed change is in production"
+    },
+    {
+      "control_id": "RELEASE-ATTESTATION",
+      "objective": "Source, artifact, product evaluations and the sealed anchor all name ONE immutable artifact digest — dissolving the commit self-reference (F1): evidence cannot be reused for another build, and a commit-only eval that predates the artifact cannot pass",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/release-attestation-check.mjs",
+      "test_ref": "scripts/release-attestation-check.test.mjs",
+      "lane": "release",
+      "paths": [
+        "docs/governance/release-subject.json",
+        "docs/governance/evidence/",
+        "docs/governance/product-evals.json"
+      ],
+      "note": "Cross-binding verifier (mechanically-validated): it proves the RECORDS agree on the digest and the anchor is authentically signed. Live observation of the registry and the running deployment is the platform's (WS2). Mandatory-when-compiled: a production release with no artifact-bound subject fails",
+      "depends_on": [
+        "RELEASE-SUBJECT",
+        "HG-0003"
+      ],
+      "depends_on_note": "rc.40: depends_on RELEASE-SUBJECT + HG-0003 — it cross-binds what those two prove, so reading their verdicts first is the order the release lane always assumed and never stated. The runner turns it into a wave."
+    },
+    {
+      "control_id": "Q4-SUPPLY",
+      "objective": "The release carries a real SBOM, an in-policy dependency audit, and builder-bound provenance",
+      "owner_role": "security",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/supply-chain-check.mjs",
+      "test_ref": "scripts/supply-chain-check.test.mjs",
+      "lane": "release",
+      "gate_family": "Q"
+    },
+    {
+      "control_id": "OPS-READINESS",
+      "objective": "R1–R6 operational readiness with freshness windows: an expired DR exercise, undrilled rollback or untested kill-switch blocks production; a drill is a signed observation (refused negative test, non-builder observer, registered signature) — bare dates are deprecated. R3b (rc.39) adds progressive delivery: a declared ramp with increasing traffic, bake time and watched SLOs, and an automated rollback trigger tested inside a 90-day window",
+      "owner_role": "operations",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/operational-readiness-check.mjs",
+      "test_ref": "scripts/operational-readiness-check.test.mjs",
+      "lane": "release",
+      "gate_family": "R",
+      "note": "Mandatory-when-compiled at R3b: progressive_delivery is optional for a service nobody is ramping and REQUIRED the moment a compiled plan asks for the exposure_control capability (regulated-bank declares it at high tier). The ramp's feature_flag_ref and the exposure register name the SAME switch, so “we can turn it off” is one claim rather than two about two switches"
+    },
+    {
+      "control_id": "PROD-AUTH",
+      "objective": "Production authorization is compound: PA2 + R-gate-green readiness + second-line hold released + anchored, issuer-verified evidence at high tiers",
+      "owner_role": "accountable-executive",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/services/"
+      ]
+    },
+    {
+      "control_id": "RELEASE-HOLD",
+      "objective": "The second line can hold any release; a missing hold means HELD (fail closed); builders and agents cannot release it",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/"
+      ]
+    },
+    {
+      "control_id": "ATTESTATION",
+      "objective": "An evidence anchor counts only when signed by a registry issuer and cryptographically verified (ed25519 in-process; platform mechanisms report UNVERIFIED-HERE until wired)",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "core/attestations.mjs",
+      "test_ref": "core/attestations.test.mjs",
+      "lane": "release",
+      "execute": false,
+      "execute_note": "library — enforced via change-envelope-check at production states"
+    },
+    {
+      "control_id": "GATE-RUNNER",
+      "objective": "Risk-proportionate execution: lanes + diff scoping from this catalog, run as a bounded-concurrency pool in depends_on waves with a per-gate timeout, with every skip and every cache hit recorded, never silent",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "core/gate-runner.mjs",
+      "test_ref": "core/gate-runner.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "the runner itself — CI invokes it per lane"
+    },
+    {
+      "control_id": "GATE-CACHE",
+      "objective": "A gate result may be reused only when its inputs are PROVABLY identical: mechanism digest + arguments + canonical catalog entry + every file under the declared path scope + the compiled plan_hash set; always-on tamper checks, unscoped controls and the release/deploy lanes are never cached, only passes are stored, and every hit is recorded as pass-cached with its key",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "core/gate-cache.mjs",
+      "test_ref": "core/gate-cache.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "library — enforced via the gate runner, which decides cacheability per mechanism and records the reason either way",
+      "note": "rc.40 · flow-plan Phase 6.2. The cache cannot turn a fail into a pass: a failure is never stored, and a stale key simply misses. `--no-cache` disables it; the run record states which it was."
+    },
+    {
+      "control_id": "HOOK-PII",
+      "objective": "PII-shaped literals are blocked at write time — synthetic data only, everywhere",
+      "owner_role": "data-protection",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": ".claude/hooks/pii-guard.sh"
+    },
+    {
+      "control_id": "HOOK-SPEC",
+      "objective": "The API contract cannot change inside a feature branch — spec-only PRs",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": ".claude/hooks/spec-tripwire.sh"
+    },
+    {
+      "control_id": "HOOK-TEST",
+      "objective": "Test-disabling edits are blocked at write time (defence in depth with Q1B)",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": ".claude/hooks/test-tripwire.sh"
+    },
+    {
+      "control_id": "HOOK-SHARIAH-TERM",
+      "objective": "Interest/APR wording is blocked at write time on DECLARED Islamic customer-facing prose surfaces (defence in depth with SHARIAH-SUBSTANCE)",
+      "owner_role": "shariah-compliance",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": ".claude/hooks/shariah-term-guard.sh",
+      "note": "A hook row on the HOOK-PII/HOOK-SPEC/HOOK-TEST shape: no gate_family and no lane, so the gate runner never spawns it — the enforcement is the runtime's pre-write hook, and the merge-time reader of the same ground is SHARIAH-SUBSTANCE (scripts/shariah-emission-check.mjs, SE-R07). Scope comes from .claude/hooks/shariah-surfaces.txt, which ships EMPTY: with no declared surface the guard is a no-op, so a conventional adopter never meets this control. It makes NO Shari'ah determination — it checks vocabulary on a surface the institution itself declared. Scholars decide Shari'ah. Claude Code-specific, like every hook here; where a runtime lacks the pre-write hook the CI gate is the enforcement of record (GUARDRAIL-POLICY says so and is checked)"
+    },
+    {
+      "control_id": "CI-CATALOG",
+      "objective": "Every gate the CI workflow runs has an entry in this catalog — the state of record cannot omit a control that is actually enforced, and the risk-proportionate gate runner cannot silently drop a gate the explicit workflow runs",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/ci-catalog-check.mjs",
+      "test_ref": "scripts/ci-catalog-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "The closure gate over the catalog itself. core/gate-runner.mjs selects ONLY catalogued controls, so an uncatalogued CI gate is a gate that vanishes the moment an adopter switches to the runner — this makes that divergence a build failure. Declared report-only tools (token-report) are exempted by an explicit, printed list, never silently"
+    },
+    {
+      "control_id": "RESIDENCY",
+      "objective": "No floor exists without a signed residency record: §11 carries two signatures resolving to registry identities holding data-protection and risk-second-line, never an agent, never a builder, and never one person holding both roles — and live floor artifacts while it is unsigned is the exact state the record forbids",
+      "owner_role": "data-protection",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/residency-check.mjs",
+      "test_ref": "core/residency.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "Factory Floor WS0 · Decision D0.1 / prerequisite P1. `always` because the failure it names is the ABSENCE of a record beside the PRESENCE of a floor — a state no diff announces. rc.36: the record of decision is the SIGNED docs/governance/residency-approval.json (verified through the approval-attestation core); the markdown table (docs/governance/residency-review.md) remains one release as a deprecated fallback with a printed migration notice. residency-example/ is the worked instance"
+    },
+    {
+      "control_id": "FLOOR-ONLY",
+      "objective": "Catalog-C floor forms carry their write-class banner and the PII rule at the point of authoring, and a floor-only note never crosses into discovery/runs/ — the catalog where people write prose about people is the one nothing else ever reads",
+      "owner_role": "data-protection",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/floor-only-check.mjs",
+      "test_ref": "scripts/floor-only-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "floor/catalog-c/",
+        "discovery/runs/"
+      ],
+      "note": "Factory Floor WS3 · D3.3. Silent where no floor is adopted. The gate checks the template's banner and the boundary crossing — it cannot read meaning, so unstructured disclosure inside a floor note stays a human control (core/floor-project.mjs states the limit)"
+    },
+    {
+      "control_id": "FLOOR-KEEPER",
+      "objective": "Floor keepers hold no grant on the container where approval fields live (separation by grant, not by promise), and a paused or degraded floor is represented as paused rather than silently stale",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/floor-keeper-check.mjs",
+      "test_ref": "scripts/floor-keeper-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "Factory Floor WS6 · D6.3 + D6.4. `always` because both halves are FRESHNESS judgements — a stale keeper record and a missing degradation observation are failures a diff never touches. Silent where no floor is adopted"
+    },
+    {
+      "control_id": "APPROVAL-SURFACE",
+      "objective": "A floor approvals page matches the COMPILED control plan for its change — one section per compiled role, evidence in and out of the approver's reach, people resolving through the P6 map — and catalog-B decision-routed forms keep the section list of the git template they mirror",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/approval-surface-check.mjs",
+      "test_ref": "scripts/approval-surface-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "floor/approvals/",
+        "floor/catalog-b/",
+        "docs/governance/changes/",
+        "docs/governance/identity-map.json"
+      ],
+      "note": "Factory Floor WS5 · D5.1 + D5.4. The surface is where a human actually approves; a page that has drifted from the compiled plan collects the wrong signatures. Catalog B ships DECLARED, NOT ACTIVE — WS5's entry gate has not passed"
+    },
+    {
+      "control_id": "PROJECTION-CAPABILITY",
+      "objective": "The floor projector's CREDENTIAL is observed — by a live negative probe, signed by an observer outside the subject's write authority — to be unable to write git; a declared read-only scope is documentation, a refused write is a control",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/projection-capability-check.mjs",
+      "test_ref": "scripts/projection-capability-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "Factory Floor WS1 acceptance. `always` because the probe's FRESHNESS is the control — an observation that has gone stale is exactly the privilege creep this gate exists to catch, and no diff announces it. The adapter-contract pattern, same shape as platform-activation-check"
+    },
+    {
+      "control_id": "FREEZE-STAMP",
+      "objective": "A discovery artifact frozen from a floor page still hashes to the digest its freeze stamp names — the frozen file a D-gate reads cannot be edited in place afterwards",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/freeze-stamp-check.mjs",
+      "test_ref": "scripts/freeze-stamp-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "discovery/runs/"
+      ],
+      "note": "Factory Floor WS4 · D4.1. Silent where no run carries stamps — an adopter who has not adopted the floor freezes nothing and their hand-authored runs are unaffected"
+    },
+    {
+      "control_id": "FLOOR-DRIFT",
+      "objective": "A floor page edited after its freeze cannot carry a NEW claim into the record — drift blocks claims dated at or after the instant it was observed, and never reaches back to a record already merged",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/drift-check.mjs",
+      "test_ref": "scripts/drift-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "discovery/runs/",
+        "docs/governance/floor-drift/"
+      ],
+      "note": "Factory Floor WS4 · D4.2, the other side of D4.1's seam. Drift ALONE does not fail the build — it is reported on every run including green ones; only a new claim against a drifted page fails",
+      "depends_on": [
+        "FREEZE-STAMP"
+      ],
+      "depends_on_note": "rc.40: depends_on FREEZE-STAMP — drift is measured against a stamp whose integrity FREEZE-STAMP is what establishes."
+    },
+    {
+      "control_id": "TEMPLATE-PARITY",
+      "objective": "The guided floor form cannot drift from the git template it produces — each floor/templates/*.json is regenerated from its markdown source and any difference, including a stale source_digest, fails",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/template-parity-check.mjs",
+      "lane": "pr",
+      "paths": [
+        "floor/templates/",
+        "discovery/templates/",
+        "delivery/templates/"
+      ],
+      "note": "Factory Floor WS3 · D3.1. rc.26: the regression suite this entry previously had to admit was missing now exists — renamed section, stale source_digest, hand-edited definition, missing source, and determinism of the generator itself. `--fix` regenerates.",
+      "test_ref": "scripts/template-parity-check.test.mjs"
+    },
+    {
+      "control_id": "IDENTITY-MAP",
+      "objective": "The P6 join — surface person id → IdP subject → registry identity — is sound and current: no service identities, no forbidden fields, unique both ways, and a fresh second-line reconciliation observation that the map still holds",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/identity-map-check.mjs",
+      "test_ref": "scripts/identity-map-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "Factory Floor P6 · D0.4. Closes approval-attestations' first stated residual: a compromised bridge holding a valid assertion for subject A could otherwise name registry identity B and every other check would pass. `always` because the reconciliation's freshness is the control. The RESOLUTION half runs per-approval inside product-approval-check"
+    },
+    {
+      "control_id": "ADAPTER-EVIDENCE",
+      "objective": "One adapter, one control: each evidence stream maps to exactly one catalog control, and a DECLARED adapter is never counted as an ACTIVE one",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/adapter-evidence-check.mjs",
+      "test_ref": "scripts/adapter-evidence-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/adapters/"
+      ],
+      "note": "Factory Floor WS5 · D5.3. The third of the three adapter-facing gates: adapter-check is well-formedness, platform-activation-check is the forge observation, this one is the arithmetic that keeps the streams separate"
+    },
+    {
+      "control_id": "HG-0004",
+      "objective": "Least-privilege agent identity, vaulted secrets, no shared credentials",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/identity-and-secrets-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "HG-0005",
+      "objective": "Environment promotion with rehearsed rollback and change-ticket linkage",
+      "owner_role": "operations",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/security-testing-and-resilience-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "HG-0010",
+      "objective": "A named accountable executive with cease-use authority over the harness",
+      "owner_role": "accountable-executive",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/governance-and-accountability-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "OPERATING-MODEL",
+      "objective": "A high-tier bank change is governed by one internally consistent operating-model record joining accountable executive, mandate, board oversight, change control, rollback and cease-use, RACI, protected IAM bindings and independent re-performance",
+      "owner_role": "accountable-executive",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/operating-model-check.mjs",
+      "test_ref": "scripts/operating-model-check.test.mjs",
+      "doc_ref": "docs/governance/runbooks/governance-and-accountability-runbook.md",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/operating-model.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "PA2",
+      "adopter_side": true,
+      "note": "NEW AT 2.4.0, and only mechanically validated. The governance runbook previously proposed this seam and admitted that no gate checked the RACI. The high-tier regulated-bank profile now compiles operating_model; the gate requires one accountable executive with a mandate and regulator/controlled-function reference, standing committee oversight, production ticket and promotion controls, a complete nine-activity RACI, four IAM enforcement bindings, cease-use ownership and an internal-audit re-performance route through the external evidence provider. OM-R12 states the boundary on every run: the gate validates declarations and identity joins. It does not appoint a person, convene a committee, inspect IAM, refuse a deployment, trip a kill switch, connect Kosli or perform an audit. HG-0010, WORM-EVIDENCE, SUPERVISED-PILOT and LIVE-EXAM keep their honest defined/absent grades until institution evidence exists."
+    },
+    {
+      "control_id": "HG-0011",
+      "objective": "Residency-controlled model traffic, pre-egress DLP, attested execution",
+      "owner_role": "security",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/data-protection-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "MRM-FN",
+      "objective": "An organisationally-separate model-risk function owning validation and runtime monitoring",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/model-risk-operating-model-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "AI-INCIDENT",
+      "objective": "A rehearsed response path for a deployed model that harms: detection off the runtime metrics the model manifest already declares, suspension held by the model-risk function, customer notification, remediation, and purification where the harm generated income",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "defined",
+      "doc_ref": "docs/governance/runbooks/ai-incident-runbook.md",
+      "adopter_side": true,
+      "note": "Moves bank-grade-gap cluster B's 'AI incident runbook' from Absent to Defined, and no further. THE HARNESS HOLDS NO INCIDENT DETECTION — it reads records: a manifest that DECLARES which metrics are monitored, a log that RECORDS a signal somebody else wrote, a purification record that STATES an amount left. Nothing here watches a live model, evaluates a production output, pages a human or moves money, so a period with no incident record is uncovered here, not clean. Each mechanical step in the runbook is gated by a control that already exists (HG-0006, OPS-LOOP, PURIFICATION, ASSURANCE-CYCLE, HG-0003); this row is the organisational path they hang on, and running it is the adopter's. The runtime-guardrails provider role (adapters/providers/runtime-guardrails/) names the enforcement point that would produce the denials this path assumes — selecting one does not change this grade"
+    },
+    {
+      "control_id": "2L-CHALLENGE",
+      "objective": "An independent second-line challenge FUNCTION (people, mandate, veto)",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "absent",
+      "note": "The release-hold MECHANISM ships (RELEASE-HOLD); the organisationally-separate function operating it is the adopter's — organisationally-enforced is theirs to claim. See docs/governance/runbooks/independent-assurance-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "3L-AUDIT",
+      "objective": "Internal-audit read access and independent re-performance of the evidence assessment",
+      "owner_role": "internal-audit",
+      "line": 3,
+      "state": "absent",
+      "note": "Requires an adopter's audit function and external WORM store — see docs/governance/runbooks/independent-assurance-runbook.md",
+      "adopter_side": true
+    },
+    {
+      "control_id": "DECISION-LOG",
+      "objective": "A replayable, append-only hash chain of agent decisions and tool use — contiguous, tamper-evident, reconstructable",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/decision-log-check.mjs",
+      "test_ref": "scripts/decision-log-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/decision-log.json"
+      ],
+      "note": "Integrity ships (mechanically-validated); CAPTURE — writing entries as the agent works — is the adopter's harness wiring, so this is not yet platform-enforced",
+      "gate_family": "decision-log"
+    },
+    {
+      "control_id": "ASSURANCE-CYCLE",
+      "objective": "A signed continuous-assurance cycle record (six lifecycle steps) with an unresolved-findings register, confirmed by a second-line human",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/assurance-cycle-check.mjs",
+      "test_ref": "scripts/assurance-cycle-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/assurance-cycles/"
+      ],
+      "gate_family": "assurance-cadence"
+    },
+    {
+      "control_id": "PLATFORM-ACTIVATION",
+      "objective": "A control graduates to platform-enforced only on a fresh, independently-signed observation that the live platform mechanism is active AND refused a negative bypass test; the observer is outside the agent's write authority; a platform-enforced catalog claim without such a receipt fails",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/platform-activation-check.mjs",
+      "test_ref": "scripts/platform-activation-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/platform-activation/",
+        "docs/governance/control-catalog.json"
+      ],
+      "note": "The gate VERIFIES observations (mechanically-validated): the observation is signed, independent, bypass-tested and fresh. Producing and signing the observation through an institution-controlled, read-only live-platform workflow is the adopter's; `loom activate` verifies the resulting record. The bundle ships ZERO platform-enforced controls, so graduation passes trivially here and the negative test proves an overstated claim fails"
+    },
+    {
+      "control_id": "ACTIVATION-READINESS",
+      "objective": "A bank adoption cannot claim readiness for a supervised AI pilot until one reference change joins four independent owners, the platform baseline's verified bypass observations, an active external-record provider, the operating model, AI governance, fairness, contestability and the pilot state machine",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/activation-readiness-check.mjs",
+      "test_ref": "scripts/activation-readiness-check.test.mjs",
+      "doc_ref": "docs/governance/runbooks/adopter-activation-pack.md",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/activation-plan.json",
+        "docs/governance/platform-activation/",
+        "docs/governance/provider-selection.json",
+        "docs/governance/adapters/",
+        "docs/governance/operating-model.json",
+        "docs/governance/ai-governance.json",
+        "docs/governance/fairness-evaluations.json",
+        "docs/governance/decision-contestability.json",
+        "docs/governance/pilot-record.json",
+        "docs/governance/identities.json"
+      ],
+      "adopter_side": true,
+      "note": "The gate coordinates existing evidence and adds no substitute ledger. activating is a non-blocking work list; ready-for-pilot and later states fail closed. Platform status is derived only from fresh, independently signed observations whose bypass tests were rejected. The external-record join requires the selected adapter to have every activation field completed and explicitly carries its integration, tamper, audit-access and retention assessments. A green result still observes no platform, customer, transaction, appointment or audit itself."
+    },
+    {
+      "control_id": "CONFIG-RECONCILIATION",
+      "objective": "The live control-plane configuration is continuously reconciled against the approved baseline; a removed required check, weakened CODEOWNERS, re-enabled force-push, widened workflow token, swapped OIDC issuer, or an AI identity added to an approval group is drift that fails the gate and suspends routine auto-merge",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/config-reconciliation-check.mjs",
+      "test_ref": "scripts/config-reconciliation-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/config-baseline.json",
+        "docs/governance/platform-activation/",
+        "docs/governance/identities.json"
+      ],
+      "note": "The gate reconciles records (mechanically-validated): baseline vs observed vs registry. The CURRENT observation is produced and signed by the adopter's independent live-platform workflow, then verified by `loom activate`. On drift, the routine-change gate fails closed via routine-envelope.suspended, and the WS2.3 controller — gating auto-merge on this gate — does not merge"
+    },
+    {
+      "control_id": "ROUTINE-CONTROLLER",
+      "objective": "Auto-merge is enabled by a trusted bot identity DISJOINT from the coding agent, only for a qualifying routine PR with config-reconciliation green, and every decision is written to the evidence record",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "defined",
+      "doc_ref": "docs/governance/routine-controller.yml",
+      "adopter_side": true,
+      "note": "The reference controller workflow ships (routine-controller.yml): it runs routine-qualified + config-reconciliation under a separated bot token and enables auto-merge only on both green. Running it with a real, separated bot identity and a merge-queue ruleset is the adopter's — platform-enforced is theirs to claim once the separated identity and ruleset are active and a bypass is recorded"
+    },
+    {
+      "control_id": "ASSURANCE-CASE",
+      "objective": "A runtime signal from a declared source opens a governed case that runs the lifecycle (assess → map controls → run tests → assemble evidence → second-line decision → remediation) within its SLA; a runtime breach records a containment action (suspend autonomy, block release, rollback, model fallback) and an overdue open breach blocks unless the second line risk-accepts it",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/assurance-case-check.mjs",
+      "test_ref": "scripts/assurance-case-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/assurance-cases/",
+        "docs/governance/assurance-sla.json"
+      ],
+      "note": "Operationalises the signal→action half of continuous assurance (closes F8). The Loom validates and reconciles the case; the accountable decision stays human (the second line's). Signal ingestion from the eight adapter sources is the adopter's orchestrator wiring"
+    },
+    {
+      "control_id": "ADAPTERS",
+      "objective": "Enterprise adapters map external systems to catalog controls via signed evidence envelopes, keeping the core vendor-neutral",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/adapter-check.mjs",
+      "test_ref": "scripts/adapter-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/adapters/"
+      ]
+    },
+    {
+      "control_id": "PROVIDER-SELECTION",
+      "objective": "Every provider role a compiled plan requires has exactly one selected, mounted provider — the institution chooses, the harness never defaults",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/provider-selection-check.mjs",
+      "test_ref": "scripts/provider-selection-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/provider-selection.json",
+        "docs/governance/adapters/"
+      ],
+      "note": "Mandatory-when-compiled: silent where nothing is selected and no plan requires a provider capability; PS-R06 fires the moment one does"
+    },
+    {
+      "control_id": "RECORD-PROVENANCE",
+      "objective": "Every record envelope still in the tree — queued in .loom/record-outbox/ or kept beside the sealed evidence — passes the provenance rules PR1–PR6: a tool produced it, its actor is not its author, it is not narrated past intent, acceptance is human, its timestamps hold, and the CI runner that produced it is named; the same rules run inside core/external-record.mjs before anything is posted",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/provenance-check.mjs",
+      "test_ref": "scripts/provenance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        ".loom/record-outbox/",
+        "docs/governance/evidence/"
+      ],
+      "note": "Mandatory-when-present: inert with no envelopes (the honest state of an adopter with no provider mounted), and every envelope is checked the moment one exists"
+    },
+    {
+      "control_id": "RECORD-POLICY",
+      "objective": "The external record's route policy and record types are COMPILED from the control catalog and never hand-written: when docs/governance/record-policy.json or record-types.json exists it must be what the current catalog compiles to (catalog sha256 + body), so the provider's policy can never be a second gate list (decision K3)",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/record-policy-compile.mjs",
+      "mechanism_args": [
+        "--verify"
+      ],
+      "test_ref": "scripts/record-policy-compile.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/control-catalog.json",
+        "docs/governance/record-policy.json"
+      ],
+      "note": "Inert until a policy is compiled"
+    },
+    {
+      "control_id": "RECORD-TYPES",
+      "objective": "The external record's record types (one per gate family, schema and pass condition as data) are COMPILED from the control catalog: when docs/governance/record-types.json exists it must be what the current catalog compiles to (decision K3)",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/record-types-compile.mjs",
+      "mechanism_args": [
+        "--verify"
+      ],
+      "test_ref": "scripts/record-policy-compile.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/control-catalog.json",
+        "docs/governance/record-types.json"
+      ],
+      "note": "Inert until types are compiled; tested beside the policy compiler"
+    },
+    {
+      "control_id": "HG-0013",
+      "objective": "Graduated autonomy: a routine change auto-merges only inside a second-line-owned, expiring envelope; an absolute floor keeps the control plane, contract, auth and migrations out of the lane; anything else re-evaluates to human merge",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/routine-change-check.mjs",
+      "test_ref": "scripts/routine-change-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/routine-envelope.json",
+        "docs/governance/routine-claim.json"
+      ],
+      "note": "The gate validates that a claimed routine change fits the envelope (mechanically-validated). Platform-enforced is the adopter's: a merge-queue/ruleset that auto-merges only with this gate among the passing required checks, with the out-of-envelope rejection recorded as activation_evidence"
+    },
+    {
+      "control_id": "PRODUCT-EVAL",
+      "objective": "Evals-as-product-management: a released product links its discovery hand-off, scores every D1 success measure green, and carries a fresh sealed eval run against the shipping commit; a regression or a stale eval blocks the release",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/product-eval-check.mjs",
+      "test_ref": "scripts/product-eval-check.test.mjs",
+      "lane": "release",
+      "paths": [
+        "docs/governance/product-evals.json",
+        "docs/governance/evidence/"
+      ],
+      "note": "The gate enforces a fresh, discovery-linked, sealed eval (mechanically-validated); the eval RIG that scores each measure is the adopter's to build",
+      "gate_family": "product-eval"
+    },
+    {
+      "control_id": "BRAINKIT",
+      "objective": "Institutional conformance: a governed change in a BrainKit-enabled repository binds to an approved, sealed, owner-accountable, source-grounded Institutional BrainKit; a draft/expired/retired or tampered BrainKit, an unresolved owner, a stale D7 compatibility projection, or a plan pinning the wrong BrainKit digest blocks the change. Institutionally conformant, not regulatorily compliant",
+      "owner_role": "institutional-context-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/brainkit-check.mjs",
+      "test_ref": "scripts/brainkit-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "institution/brainkit/",
+        "discovery/brand/design.md",
+        "profiles/institutions/"
+      ],
+      "note": "Mandatory-when-compiled: enforced when a change's compiled plan carries the brainkit-conformance family (an institution profile is in the envelope); a dormant, adopt-pending BrainKit that no change pins is skipped. The BrainKit CONTENT is the institution's to author and approve — the gate enforces its integrity, not its correctness",
+      "gate_family": "brainkit-conformance"
+    },
+    {
+      "control_id": "GUARDRAIL-POLICY",
+      "objective": "Guardrail coverage is explicit and runtime-neutral: the policy names only protections that exist, marks every uncovered runtime honestly, and acknowledges any blocking guardrail enforced nowhere — the Loom never implies equivalent enforcement where a runtime lacks the hook",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/guardrail-policy-check.mjs",
+      "test_ref": "scripts/guardrail-policy-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "guardrails/"
+      ],
+      "note": "The gate proves the policy is honest and the capability matrix (guardrails/README.md, doc-integrity-gated) tracks it. The local hooks are Claude Code-specific; the CI gates are the enforcement of record where a runtime lacks a hook. Hostile scenarios (PII literal, test weakening) are driven through the real adapters in the test"
+    },
+    {
+      "control_id": "ADOPTION-STATE",
+      "objective": "Adoption is a five-stage state machine (installed → configured → validated → platform → organisation) projected from the control catalog; a signed adoption report cannot be produced while any mandatory item is adopt-pending, and an agent cannot certify its own adoption",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/adoption-attest.mjs",
+      "test_ref": "scripts/adoption-status.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "adopter tool (loom status / attest-adoption), run on demand — not a per-PR merge gate (a reference repo is intentionally adopt-pending). The gate ships mechanically-validated; producing the signed report is the adopter's",
+      "note": "loom status projects the stage matrix + the unresolved-marker inventory; attest-adoption refuses to accept a signed report while adopt-pending (closes F7). Report creation and signature are adopter-side"
+    },
+    {
+      "control_id": "BRAINKIT-REGISTRY",
+      "objective": "The BrainKit estate registry is consistent (semver versions, sha256 digests, acknowledged adoptions) and — the point — no repository may run a REVOKED release: an unsafe institutional context can be withdrawn across the whole estate",
+      "owner_role": "institutional-context-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/brainkit-registry-check.mjs",
+      "test_ref": "scripts/brainkit-registry-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/brainkit-registry.json"
+      ],
+      "note": "rc.8 shipped digest-pinned single-repo distribution; this adds the estate view + revocation as DATA + a verifier (no live service — the public repo ships schemas and the fictional Meridian example). The registry answers which repos use a release, which controls changed, which products need re-evaluation, and whether an unsafe release can be revoked"
+    },
+    {
+      "control_id": "COMPREHENSION",
+      "objective": "Review is not understanding: a change selected by tier (high/critical), by an always-comprehend capability its plan compiles, or by the second line's deterministic medium-tier sample carries a human-authored comprehension record — summary, critical-path walkthrough, a named human owner who can explain it, reviewer challenge questions, architecture/failure-mode explanation, a replay of the agent decision log, and reported metrics — so delivery throughput cannot outrun institutional understanding",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/comprehension-check.mjs",
+      "test_ref": "scripts/comprehension-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/approval-sla.json"
+      ],
+      "note": "Mandatory-when-compiled: a high/critical change that lacks the record fails, and a low/medium one needs none UNLESS the second line configured it. rc.41 adds two selections the second line owns in approval-sla.json's `comprehension` block: a DETERMINISTIC medium-tier sample (FNV-1a over the change id — never Math.random, so the same change selects the same way for the author, the reviewer and CI) and `always_comprehend_capabilities`, which selects at any tier for domain-material surfaces. An ABSENT block behaves exactly as rc.15 did; a `medium_sample_rate` of 0 is a decision and is REPORTED as a notice on every run rather than left invisible; a malformed rate FAILS rather than degrading to a file that looks configured and samples nothing. approval-sla.json is in the path scope so that editing the policy re-runs the gate. Metrics are REPORTED, never gated on their values — the objective is understanding, not throttling AI output. The decision-log replay is the rc.6 replayable log's second consumer"
+    },
+    {
+      "control_id": "DOC-INTEGRITY",
+      "objective": "Generated docs (copy table, scorecard) cannot drift from their source of truth — drift fails the build",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/doc-integrity-check.mjs",
+      "test_ref": "scripts/doc-integrity-check.test.mjs",
+      "lane": "pr"
+    },
+    {
+      "control_id": "ID-LEGIBILITY",
+      "objective": "A reader never meets an identifier they cannot resolve: a Loom-owned markdown file expands the first use of each id family or links the glossary, and a Factory Floor decision id carries the word Decision so it cannot be misread as a discovery gate",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/id-legibility-check.mjs",
+      "test_ref": "scripts/id-legibility-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "discovery/",
+        "delivery/",
+        "floor/",
+        "docs/governance/",
+        ".claude/skills/"
+      ],
+      "note": "Scoped to Loom-owned trees on purpose — an adopter's own docs never opted into this vocabulary and must not fail their build for labelling a diagram D1. Checks the FIRST use per file, not every use: expanding all of them would bloat the prose, which is the opposite of the point"
+    },
+    {
+      "control_id": "COMPILED-REQUIREMENTS",
+      "objective": "The compiler's per-change requirements are aggregated as one source of truth the runner and gates read",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "core/compiled-requirements.mjs",
+      "test_ref": "core/compiled-requirements.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "library — enforced via the gate runner and the mandatory-when-compiled gates"
+    },
+    {
+      "control_id": "SCORECARD-GEN",
+      "objective": "The bank-grade scorecard is a projection of the control catalog, not hand-maintained prose",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/generate-scorecard.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "library — enforced via the doc-integrity gate"
+    },
+    {
+      "control_id": "WORM-EVIDENCE",
+      "objective": "External WORM + RFC-3161 timestamped evidence retention, independently examinable",
+      "owner_role": "internal-audit",
+      "line": 3,
+      "state": "absent",
+      "adopter_side": true,
+      "note": "The evidence-seal gate makes the bundle tamper-evident and anchor-checkable; the immutable store + timestamping authority are the adopter's (independent-assurance-runbook.md)"
+    },
+    {
+      "control_id": "DAST-PENTEST",
+      "objective": "Dynamic application security testing and penetration testing",
+      "owner_role": "security",
+      "line": 1,
+      "state": "absent",
+      "adopter_side": true,
+      "note": "Add as gates / scheduled assurance; the bundle stops at SAST/SCA output validation (security-testing-and-resilience-runbook.md)"
+    },
+    {
+      "control_id": "SUPERVISED-PILOT",
+      "objective": "A supervised production pilot on real, bounded, reversible scope",
+      "owner_role": "accountable-executive",
+      "line": 1,
+      "state": "absent",
+      "adopter_side": true,
+      "note": "STILL ABSENT AT 2.0.0, AND DELIBERATELY. This control is an EVENT — a pilot that ran, in production, on real customers — and no file makes an event have happened. 2.0.0 built the INSTRUMENT beside it (PILOT-CONDUCT, scripts/pilot-record-check.mjs): a declared pilot is now bounded, staged, observed, reversible and unable to conclude while the playbook's adversarial rows are unexercised. That is a different control and it is graded separately. GRADING THIS ONE ON THE INSTRUMENT WOULD BE THE EXACT SUBSTITUTION THE CATALOG'S GRAMMAR EXISTS TO PREVENT: a green gate over an empty pilot is still an empty pilot, and every other state in this file would be worth less if this row were bought with a JSON template. It closes when a pilot has run and its independent report exists — not before, and not by anything a repository can contain"
+    },
+    {
+      "control_id": "PILOT-CONDUCT",
+      "objective": "A DECLARED pilot is governable: it stays inside published caps, advances only by recorded stage exits somebody outside the build team approved, is observed at a stated cadence by a second line that is not running it, carries a rollback route somebody drilled before production exposure, and cannot declare an exit while any adversarial row in the playbook carrying a live obligation is unexercised",
+      "owner_role": "accountable-executive",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/pilot-record-check.mjs",
+      "test_ref": "scripts/pilot-record-check.test.mjs",
+      "doc_ref": "docs/governance/runbooks/pilot-playbook.md",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/pilot-record.json",
+        "docs/governance/runbooks/pilot-playbook.md",
+        "docs/governance/identities.json"
+      ],
+      "adopter_side": true,
+      "note": "NEW AT 2.0.0, and it is the instrument for SUPERVISED-PILOT rather than a substitute for it — read that row too. THE RULE THAT EARNS THE GRADE is PL-R08, a join rather than a field check: the gate parses the adversarial table in runbooks/pilot-playbook.md ITSELF — not a copy of it — and requires an exercise entry for every AX row whose status carries `live`. Adding a row to the playbook creates an outstanding obligation on the running pilot the moment it is written, and the pilot cannot reach `concluded` while any remain. The playbook's own exit criterion ('every live row exercised at least once') was, until now, tracked in NO FILE AT ALL — the same defect discovery-sync.json exists to fix: a debt nobody wrote down is a debt nobody pays. While the pilot is `active` the outstanding rows are a NOTICE, because a pilot in flight is supposed to have them; that is what it is for. Around the join: stage monotonicity (a pilot that jumped from synthetic rehearsal to a production cohort skipped the criteria staging exists to test), numeric caps, no financial execution before stage 4, a drilled rollback once production exposure begins, an observer and an accountable executive who resolve to humans outside `builders`, risk acceptance reserved to the executive alone, and an independent report whose author is not a builder. ARMED BY CONTENT, NOT PRESENCE and not by a compiled capability — a pilot is not a property of any change's control plan, so nothing can compile it; `status: active` is the adopter's declaration and the gate is inert until it is set, so mounting the template can never fail anybody. THE HARNESS RUNS NOTHING AND OBSERVES NOTHING: every date, exercise, observation and finding is human-written and read as a declaration, and a pilot that went badly and was recorded tidily passes every rule here. PL-R14 says so as a notice on every armed run"
+    },
+    {
+      "control_id": "LIVE-EXAM",
+      "objective": "A live regulator examination of the method in production",
+      "owner_role": "accountable-executive",
+      "line": 1,
+      "state": "absent",
+      "adopter_side": true,
+      "note": "The proof the method has not yet earned — adoption is not regulatory certification"
+    },
+    {
+      "control_id": "REAL-PII-SURFACE",
+      "objective": "The real-PII control surface: KMS, field encryption, tokenization, access logging",
+      "owner_role": "data-protection",
+      "line": 2,
+      "state": "absent",
+      "adopter_side": true,
+      "note": "The harness is synthetic-only by design; the real-data surface is the adopter's (data-protection-runbook.md). rc.46: a provider role (adapters/providers/real-data-controls/) now names the alternatives — encrypt-in-place vs tokenisation — so an institution moving to real data records a CHOICE instead of inheriting the synthetic-only posture by silence. Selecting a provider does not change this grade; only platform-asserted key custody, access logs and an OBSERVED denial would"
+    },
+    {
+      "control_id": "AI-FAIRNESS",
+      "objective": "Fairness and bias testing of a model whose output affects a customer outcome: declared protected attributes, a measured disparity across them on a representative population, a threshold somebody owns, and a re-test on every material retrain",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/fairness-evaluation-check.mjs",
+      "test_ref": "scripts/fairness-evaluation-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/fairness-evaluations.json",
+        "docs/governance/model-manifest.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "product-eval",
+      "adopter_side": true,
+      "note": "MOVED FROM ABSENT AT 2.0.0, AND ONLY TO mechanically-validated. Everything the rc.46 note said the harness cannot do it still cannot do: it holds NO fairness metric, no test rig and no population, measures no disparity, and cannot detect a proxy. Every number it reads was produced by the adopter's rig and is taken as a declaration — a rig measuring the wrong thing produces a record this gate passes. What changed is that a slot became a JOIN: an evaluation names the model_id and prompt_version it was run against and the gate compares them to the pin in the model manifest, so A RETRAIN THAT MOVES THE PIN INVALIDATES ITS OWN FAIRNESS EVIDENCE (FR-R08) — the mechanical half of 're-tested on every material retrain', and the thing an eval slot could never hold. Alongside it: coverage in both directions (a covered-tier model with no measurement is named, FR-R06), a register whose attributes each carry a legal basis, a threshold with an EXPLICIT direction (a ratio metric fails LOW, and inferring that from the metric name is how a failing model reads green), an owner who resolves to a human outside `builders`, and a report artifact re-hashed. Mandatory-when-compiled on `fairness_evaluation`: inert for a repository whose plans never ask, fail-closed from the first run for one that does. A GREEN GATE MEANS THE RECORD EXISTS, IS BOUND TO THE PIN THAT SHIPS AND SITS UNDER A THRESHOLD ITS OWNER SET — never that the model is fair. What stays adopter-side is what always was: the rig, the representative population, and whether the metric chosen is the one that matters"
+    },
+    {
+      "control_id": "AI-GOVERNANCE",
+      "objective": "A consumer-impacting AI system is automatically routed and bound to accountable ownership, meaningful human oversight, a non-AI alternative, bilingual disclosure, monitoring, incident response, privacy/security review, third-party assessment and stress-test evidence",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/ai-governance-check.mjs",
+      "test_ref": "scripts/ai-governance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/ai-governance.json",
+        "docs/governance/model-manifest.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/",
+        "profiles/jurisdictions/uae-bank.json",
+        "profiles/products/ai-decision-system.json"
+      ],
+      "gate_family": "PA2",
+      "adopter_side": true,
+      "note": "NEW AT 2.4.0, and only mechanically validated. The UAE jurisdiction profile automatically includes ai-decision-system for a medium-or-higher new/material product change with model_involved=true, so omission of the AI profile can no longer produce a lighter route. The gate then joins each implicated model role to the shipping model/prompt pin, an accountable-executive outside builders, human-in/on-the-loop intervention, a customer review path and non-AI alternative, Arabic and English disclosure surfaces, runtime metrics and incident runbook, privacy/security and outsourcing assessments, and a re-hashed stress-test report. AG-R15 states the boundary on every run: the harness observes none of these controls in production. Platform enforcement, operational effectiveness and consumer outcomes remain the institution's evidence. Regulatory basis: CBUAE Guidance Note on Consumer Protection and Responsible Adoption and Use of AI and ML by LFIs, issued 11 February 2026, sections 2 and 4 through 9"
+    },
+    {
+      "control_id": "AI-EXPLAINABILITY",
+      "objective": "Explainability and contestability of an automated decision: a reason the affected customer can be given, a route by which they can challenge it, and a human with the authority to act on the challenge",
+      "owner_role": "model-risk",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/decision-contestability-check.mjs",
+      "test_ref": "scripts/decision-contestability-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/decision-contestability.json",
+        "docs/governance/model-manifest.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "PA2",
+      "adopter_side": true,
+      "note": "MOVED FROM ABSENT AT 2.0.0, AND ONLY TO mechanically-validated. The rc.46 note called what shipped 'a REQUIREMENT TO SAY' — the ai-decision-system profile compiles an `explainability-and-contestability` PA2 section and product-approval-check verifies it is present and approved. The hole was that the section was joined to nothing: A PLAN COULD SATISFY IT IN PROSE WHILE A MODEL SHIPPED THAT THE PROSE NEVER MENTIONED. CT-R02 is that join — a covered-tier role in the model manifest with no declared contest route is named. Around it: where the reason actually appears (a reason that exists only in a log is not a reason anybody was given), what the shown reason is DERIVED from (the field most often quietly false — a reason composed from a rules layer that did not make the decision is a plausible sentence about a different process, and the gate cannot tell), a bounded response time, an authority who resolves to a human who is neither an agent nor a builder, and somewhere overturns are recorded so the runtime monitoring can see them. STILL TRUE, AND REPORTED AS A NOTICE ON EVERY RUN FOR EVERY SURFACE (CT-R11): no gate here generates a reason code, judges whether a reason is intelligible to the person who received it, delivers anything to a customer, or routes a contest. The explanation surface and the contest path are the adopter's runtime; this control holds that they were DESIGNED and named, never that they work. At 2.4.0 the UAE product-change omission boundary is closed: `uae-bank` automatically compiles `ai-decision-system` for medium-or-higher new/material product changes with `model_involved=true`, and fairness and contestability scope to the implicated `model_roles`. Other jurisdictions and non-product software changes retain explicit profile applicability and the regulated-bank model-risk route."
+    },
+    {
+      "control_id": "SELF-CLAIMS",
+      "objective": "The bundle is held to the claims it makes about itself: prose may not cite a gate that does not exist, a CI-proven claim must name the negative test that backs it or scope itself to the part it covers, and a CLI may not advertise a flag it does not implement",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/self-claims-check.mjs",
+      "test_ref": "scripts/self-claims-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "rc.26, extended rc.32. Every defect the rc.18–rc.25 review found was one shape — a claim and its evidence drifting apart, in both directions — and each was fixed by hand after a human noticed. This makes the class mechanical, in the method's own idiom: observed, not declared. Bundle-only (it reads this repository's workflow and layout) and inert in an adopted tree. Uncredited inversions are REPORTED, never failed: the checklist enumerates attacks, not gates, so forcing one row per inversion would manufacture rows nobody meant to write. C5 (rc.32) was added because this gate MISSED a defect of its own class: rc.29 documented a `--reconcile` flag in discovery-sync-check.mjs and never wrote it, so passing it changed nothing while the operator believed a sync point had been stamped. C1 could not see it — the cited script existed; only its advertised behaviour did not. The rule is narrow on purpose: a flag counts as documented only on a comment line that names its own file, so prose about git or a sibling script is not a claim. Zero false positives across the 61 flag-documenting scripts, and it catches the rc.29 blob from git history — pinned as a test"
+    },
+    {
+      "control_id": "DISCOVERY-SYNC",
+      "objective": "The bundle's copy of the discovery machinery cannot diverge from its openfinance-os/ofbo upstream unnoticed: a change here that is not declared as a port owed fails the build, and the outstanding debt is counted on every run",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/discovery-sync-check.mjs",
+      "test_ref": "scripts/discovery-sync-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "rc.29, corrected rc.31. The discovery machinery exists twice — here as the generic harness, in ofbo as the instantiation it was extracted from — and CLAUDE.md carried a standing 'must track upstream fixes (no automated sync)' note with nothing behind it. The adoption dry-run proves the tree still WORKS, never that it still MATCHES; seven files had diverged across four workstreams before anyone measured it. This counts the debt instead of remembering it. HONEST LIMIT, printed on every run including a clean one: it can only see THIS side, and never reports the trees as agreeing. Only `--upstream <checkout> --reconcile`, which has actually seen ofbo, may record an upstream digest, move a shared base, or set a seen-only state. That rule is CONDITIONAL and enforced by checkClaims: rc.29 shipped it as a fixed assertion that last_reconciled is null, which would have turned the build red the first time anyone did the reconciliation correctly. Bundle-only and inert in an adopted tree"
+    },
+    {
+      "control_id": "EXCEPTION-REGISTER",
+      "objective": "Every open exception to a control — envelope exemptions and assurance risk-acceptances alike — is projected into ONE register: expiry warnings at 30/14/7 days ahead of the existing hard block, aggregation per owner and per control, and a build failure on an expired exception or on more than the limit open against a single control",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/exception-register-check.mjs",
+      "test_ref": "scripts/exception-register-check.test.mjs",
+      "lane": "scheduled",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/assurance-cycles/",
+        "docs/governance/exception-policy.json"
+      ],
+      "note": "The individual blocks already existed (the envelope gate blocks an expired exemption, the assurance gate an expired risk-acceptance); what did not exist was the VIEW, so nobody could see what was about to expire or where exceptions were piling up. Warnings NEVER fail — the deadline is unmoved, only the surprise is removed. Concentration DOES fail: 4 open exceptions against one control is one control the organisation has stopped operating, recorded 4 times. The limit ships at 3 and docs/governance/exception-policy.json may lower it, never raise it"
+    },
+    {
+      "control_id": "CHANGE-PATTERN",
+      "objective": "A standard change rides a second-line-approved pre-approved pattern only while every condition holds: unexpired, never builder-approved, matcher-matched on path and size, compiling the EXACT pre-approved plan hash, enrolled in the post-hoc sample — and a selected sample owes a completed second-line review",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "core/change-patterns.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "profiles/"
+      ],
+      "note": "Re-prices approval from per-instance to per-envelope; it never removes one. Any failed condition drops coverage and the change takes the FULL route, so the fallback direction is always toward more control. Platform-enforced is the adopter's: an auto-merge ruleset that admits a covered standard change only with this gate among the passing checks, with the matcher-miss rejection recorded as activation_evidence"
+    },
+    {
+      "control_id": "EMERGENCY-RETROSPECTIVE",
+      "objective": "An emergency change may reach production with receipts still owed, under a named second-line authorization and a bounded retrospective deadline; every deferred receipt is reported on every run and ALL of them fail the build the moment the deadline passes still outstanding",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/"
+      ],
+      "note": "The ITIL emergency path, built so it cannot become a waiver: the emergency class must be declared before the state is used, the authoriser is held to the release hold's own rule (second-line human), and the deadline may not exceed the shipped ceiling from the authorization"
+    },
+    {
+      "control_id": "UAT-ACCEPTANCE",
+      "objective": "Before permission to launch is asked for, the business has accepted what was built: a uat-signoff.json beside the envelope, status accepted, by a non-builder human holding a business role, bound to the 40-hex commit exercised — and at production authorization that commit is the release subject's",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/release-subject.json"
+      ],
+      "note": "2.1.0 (plan phase 4.1) — the uat-accepted state between delivery-complete and permission-to-launch. delivery-complete was the builders' word; this is the business's, and CODEOWNERS keeps the builders from writing it"
+    },
+    {
+      "control_id": "DPIA",
+      "objective": "A change flagged personal_data carries a data-protection impact assessment as a RECORD at PA1: categories that resolve in the data-lifecycle register, purpose, lawful basis, necessity, residency, risks each with a mitigation, signed by a data-protection human outside the builders group",
+      "owner_role": "data-protection",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/product-approval-check.mjs",
+      "test_ref": "scripts/product-approval-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/data-lifecycle.json",
+        "profiles/"
+      ],
+      "note": "2.1.0 (plan phase 4.2) — mandatory-when-compiled through the `dpia` capability the base profile attaches to the personal_data flag. Retires the prose pdpl-and-residency passport section: a paragraph could satisfy that. What the gate proves is that the assessment exists, is complete and was signed by the right function; adequacy of the mitigations is the function's judgement"
+    },
+    {
+      "control_id": "MODEL-OUTSOURCING",
+      "objective": "Every external model provider a change relies on is an assessed outsourcing before permission to develop: the manifest role carries an outsourcing assessment, prompt-data residency terms, an exit plan and an independent assessor; a change naming a model role nobody inventoried fails; an external provider with flags.third_party unset fails",
+      "owner_role": "compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/product-approval-check.mjs",
+      "test_ref": "scripts/product-approval-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/model-manifest.json"
+      ],
+      "note": "2.1.0 (plan phase 4.4) — an LLM provider is a third party under the outsourcing rules like any other, and the manifest's provider field was where that fact hid. Kosli, or any evidence platform, is a third party under the same rule in its own register entry"
+    },
+    {
+      "control_id": "POST-IMPL-REVIEW",
+      "objective": "A change in production owes a post-implementation review on the retrospective's clock: a due date bounded from the moment it went live, a NOTICE while open, a FINDING the moment it passes with no completed review, and a second-line human on the completed record",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/"
+      ],
+      "note": "2.1.0 (plan phase 4.5) — the emergency retrospective mechanism, applied to every change that goes live. Runs on the pr lane like the retrospective, so a change past its review date turns the tree red rather than waiting for a scheduled run nobody reads"
+    },
+    {
+      "control_id": "THREAT-MODEL-MEDIUM",
+      "objective": "A medium-tier change owes its A2 threat model — section complete, every threat traced to a control and a test, no material finding open — without the full A1–A5 gate; the envelope gate requires the artifact from in-delivery",
+      "owner_role": "information-security",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/architecture-assurance-check.mjs",
+      "test_ref": "scripts/architecture-assurance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "profiles/"
+      ],
+      "note": "2.1.0 (plan phase 4.6) — compiled by the `threat_model` capability at medium in the base profile. Threat modelling used to stop at the A gate's tier, and \"medium\" was where a software change with real attackers went unmodelled"
+    },
+    {
+      "control_id": "REG-NOTIFICATION",
+      "objective": "Every high or critical operations signal states its regulator-notification position: required with an authority, a deadline, a sent_at and the regulator's reference — or not required, with a rationale. A missed deadline with nothing sent fails; a late notification is recorded, never blocked",
+      "owner_role": "compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/operations-signal-check.mjs",
+      "test_ref": "scripts/operations-signal-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/operations-signal.json"
+      ],
+      "note": "2.1.0 (plan phase 4.7) — the block is a record of what was sent and when; whether the determination was right is compliance's. The floor intake carries the adjudicator's determination through verbatim"
+    },
+    {
+      "control_id": "FLAG-CORROBORATION",
+      "objective": "The envelope flags that decide which conditional profile rules fire are cross-checked against the repository's own governance data — the data-lifecycle register, the model manifest, the passport's third-parties analysis — and a contradicted flag is a finding, not a silent tier reduction",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/change-envelope-check.mjs",
+      "test_ref": "scripts/change-envelope-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/changes/",
+        "docs/governance/data-lifecycle.json",
+        "docs/governance/model-manifest.json"
+      ],
+      "note": "Flags cannot be verified in general; they CAN be contradicted. Where the corroborating record is absent the gate reports NOT VERIFIED rather than passing quietly"
+    },
+    {
+      "control_id": "RELEASE-TRAIN",
+      "objective": "What is in a release is a governed enumeration: a change belongs to at most one train, one commit has at most one train, every named change is governed, and the train is released by a second-line human — and only a valid train narrows the required evidence to the changes actually shipping",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/evidence-seal-check.mjs",
+      "test_ref": "core/release-trains.test.mjs",
+      "lane": "release",
+      "paths": [
+        "docs/governance/release-trains/",
+        "docs/governance/evidence/"
+      ],
+      "note": "Per-change PA2 is untouched; what is taken once per train is the release-LEVEL act. An invalid train is not honoured at all — the derivation falls back to the repository-wide union, which is more evidence, never less"
+    },
+    {
+      "control_id": "APPROVAL-DELEGATION",
+      "objective": "A deputy inherits an approver role only inside an expiring window granted by an independent second-line human who is neither party, and inherits every disjointness rule with it; an optional role quorum may only ever raise the number of distinct holders required, and must be satisfiable",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/identity-registry-check.mjs",
+      "test_ref": "scripts/identity-registry-check.test.mjs",
+      "lane": "pr",
+      "always": true,
+      "note": "Removes the single-named-human bus factor without touching separation of duties: delegation moves WHO may approve inside a signed window, quorum moves HOW MANY must. A lapsed delegation is inert and is reported on every run rather than left in the file to be quietly renewed"
+    },
+    {
+      "control_id": "ENVIRONMENTS",
+      "objective": "The promotion ladder is declared data, not prose: one root and no cycles, every environment naming its purpose, its data classification, its url and the identity entitled to promote INTO it — with an approval-required environment promoted into by a non-builder human, personal data never behind an unattended promotion, and the terminal environment always requiring approval",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/environments-check.mjs",
+      "test_ref": "scripts/environments-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/environments.json",
+        "docs/governance/identities.json"
+      ],
+      "note": "Replaces three <!-- ADOPT --> comments in skills/release/SKILL.md that told an adopter to “name your pre-production environment” and could never be checked. Absence is silence (an estate may be declared later); an INCOHERENT declared estate is not, and a ladder still carrying the shipped template's example.invalid URLs prints a NOTICE on every run rather than reading green as somebody's real estate"
+    },
+    {
+      "control_id": "EXPOSURE-CONTROL",
+      "objective": "Exposure is separated from deploy and governed: every feature flag defaults OFF, belongs to a governed change, names a human owner and a kill path, sits at one of the pilot playbook's six cohort stages, and EXPIRES — and every change whose compiled plan requires the exposure_control capability names at least one flag",
+      "owner_role": "product-owner",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/feature-flag-check.mjs",
+      "test_ref": "scripts/feature-flag-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/feature-flags.json",
+        "docs/governance/changes/",
+        "docs/governance/identities.json"
+      ],
+      "note": "Mandatory-when-compiled, exactly like the data-risk register: a repository doing no staged exposure is SILENT, and the requirement arrives from the profile (regulated-bank declares exposure_control at high tier), never from a CI flag. An EXPIRED flag fails and 30/14/7-day notices precede it; a flag whose owning change is closed or superseded fails as stale exposure machinery, which is how flag debt becomes visible instead of permanent"
+    },
+    {
+      "control_id": "DEPLOYED-DIGEST",
+      "objective": "What is deployed IS what was authorized, and it went out the way the service declared it would: the deployed digest equals the release subject's artifact digest, and the recorded stages replay the declared progressive-delivery ramp in order, at the declared traffic, each having baked at least its declared time",
+      "owner_role": "platform-admin",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/deployed-digest-check.mjs",
+      "test_ref": "scripts/deployed-digest-check.test.mjs",
+      "lane": "deploy",
+      "paths": [
+        "docs/governance/deployments/",
+        "docs/governance/release-subject.json",
+        "docs/governance/services/",
+        "docs/governance/environments.json"
+      ],
+      "note": "The DEPLOY LANE'S FIRST CONTROL — it is what retires rc.33's empty-lane guard for `deploy` (the guard itself stands: an empty lane is still a hole). Everything upstream binds an immutable artifact digest and nothing compared it to what actually ran; a rebuild of the same source is a different artifact and was not the one evaluated. Reading a clock here is not telemetry gating: the DECLARED bake is compared with the OBSERVED bake, which is a control being verified, not a duration being judged"
+    },
+    {
+      "control_id": "SHARIAH-GOV",
+      "objective": "The Shari'ah committee's composition and appointment provenance are recorded, agree with the identity registry in both directions, and carry a majority quorum; internal Shari'ah audit is not outsourced; and every projected product structure is bound to an ACTIVE ruling in the decision register",
+      "owner_role": "shariah-compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/shariah-governance-check.mjs",
+      "test_ref": "scripts/shariah-governance-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/issc-register.json",
+        "docs/governance/shariah-rulings.json",
+        "docs/governance/shariah-structures/",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "assurance-cadence",
+      "note": "The primary reader of the `shariah_governance` capability. Mandatory-when-compiled and INERT otherwise: a repository whose plans never require that capability reads nothing and says nothing, so a conventional adopter is never failed by a Shari'ah control. It rides `assurance-cadence` because that is the family the Islamic-product profile compiles from medium, which keeps the gate on the route whenever an Islamic change is in flight regardless of the diff; docs/governance/changes/ is in the path scope for the same reason from the other side — the change that ARMS this gate is a compiled plan. It verifies COMPOSITION, PROVENANCE and BINDING records only: it answers no Shari'ah question, cannot tell a genuine approval reference from a well-formed invention, and a green result over a substantively wrong ruling is possible by design. Scholars decide Shari'ah; no agent authors or approves a ruling"
+    },
+    {
+      "control_id": "SHARIAH-SUBSTANCE",
+      "objective": "Islamic product data is structure-conformant where it is emitted: no interest field or category inside an IsShariaCompliant subtree, no product silent about IsShariaCompliant (the Standard defaults it FALSE), no ShariaStructure outside the fixed enum, no Gradual ownership transfer without a BuyoutSchedule, no contractual ibra' on a Murabaha, no guaranteed return on a participatory structure, and no interest/APR terminology in declared customer-facing prose",
+      "owner_role": "shariah-compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/shariah-emission-check.mjs",
+      "test_ref": "scripts/shariah-emission-check.test.mjs",
+      "lane": "pr",
+      "note": "The second reader of the `shariah_governance` capability: SHARIAH-GOV reads the governance records, this reads the other end — the fixtures and specs where the structure stops being a claim and becomes bytes. Mandatory-when-compiled and INERT otherwise: no docs/governance/shariah-surfaces.json and no compiled requirement means it reads nothing and says nothing, so a conventional adopter is never failed by a Shari'ah control. NO PATH SCOPE IS DECLARED, deliberately — the surfaces are adopter-declared (fixture globs, spec paths, content roots) and are not knowable at catalogue time, so a path scope would silently skip the gate on exactly the diffs that change an Islamic fixture; with no scope the runner runs it by default. It rules on NO Shari'ah question: it checks conformance to structures the committee already approved and to an enum the published Standard already fixes, and the most this plane ever claims is structure-conformant, never Shari'ah-compliant. It reads files in the repository, never production — an undeclared surface is UNCHECKED here, not clean. Scholars decide Shari'ah"
+    },
+    {
+      "control_id": "PURIFICATION",
+      "objective": "Income that must never be booked is disposed of, provably: every purification record binds to a shariah-non-compliance signal in the operations log, states a positive amount and currency, names who computed it (an agent may) and a NON-AGENT shariah-compliance or shariah-committee identity who approved its disposal, cites an on-disk PA2 purification-of-non-compliant-income method, and — once donated — carries donation evidence dated at or after the breach was opened",
+      "owner_role": "shariah-compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/purification-check.mjs",
+      "test_ref": "scripts/purification-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/purification/",
+        "docs/governance/operations-signal.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "assurance-cadence",
+      "note": "Mandatory-when-compiled and INERT otherwise: a repository with no purification records, nothing routed to purification and no plan requiring `shariah_governance` never sees it fire. The moment a compiled plan does require it, a purification-routed signal with no answering record FAILS and names the change id. It rides `assurance-cadence`, the family the Islamic-product profile already compiles, which makes it unskippable whenever an Islamic change is in flight regardless of the diff. THE HARNESS READS JSON RECORDS: it proves the record exists, is complete, and is bound to a breach and to an approved PA2 method — never that the money actually moved, and never that the income was or was not permissible. Computing an amount is arithmetic and an agent may do it; approving its disposal is human Shari'ah authority and an agent may not. Scholars decide Shari'ah"
+    },
+    {
+      "control_id": "PROFIT-DISTRIBUTION",
+      "objective": "Every recorded profit-distribution run to investment accountholders is governance-complete: a bounded period and a stated allocation basis, a disclosed mudarib share within 0..1, EVERY profit-equalisation or investment-risk reserve movement carrying its own committee approval reference, a disclosure reference where the distributed rate diverges materially from the expected rate, and an approval resolving to a non-agent human holding shariah-compliance or (at registry quorum) shariah-committee",
+      "owner_role": "shariah-compliance",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/profit-distribution-check.mjs",
+      "test_ref": "scripts/profit-distribution-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/profit-distribution/",
+        "docs/governance/profit-distribution.json",
+        "docs/governance/shariah-rulings.json",
+        "docs/governance/identities.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "assurance-cadence",
+      "note": "The deposit-side twin of PURIFICATION, and the third reader of `shariah_governance`. Mandatory-when-compiled and INERT otherwise: no distribution records and no compiling plan means silence, and PD-R09 names the change id the moment one requires it. RETURNS ON THESE STRUCTURES ARE EXPECTED, NEVER GUARANTEED — the gate never asks the distributed rate to meet the expected one, because a gate that did would be demanding a guaranteed return on a deposit; it asks only that a material divergence was disclosed. It reads the governance RECORD of a run, not its arithmetic: it does not read the ledger, cannot recompute an allocation or a weightage table, cannot tell an approved smoothing from a managed one, and cannot tell you a quarter went unrecorded. A movement is approved here because a committee reference is recorded against it, never because this file judged it permissible. Scholars decide Shari'ah"
+    },
+    {
+      "control_id": "KNOWLEDGE-CURRENCY",
+      "objective": "Every external rule base this repository is built against is a pin — named publisher, named edition, accountable owner_role, and a re-verification bound that has not lapsed — and a pin's check_ref names a job that exists",
+      "owner_role": "risk-second-line",
+      "line": 2,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/knowledge-staleness-check.mjs",
+      "test_ref": "scripts/knowledge-staleness-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/knowledge-pins.json",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "assurance-cadence",
+      "note": "NOT AN ISLAMIC MECHANISM — pinning is generic, and the shipped template's non-Islamic row is there to prove it. Mandatory-when-compiled on the `knowledge_currency` capability (the Islamic-product profile and the institution template both declare it from medium): no pins file and no compiling change is INERT, and the shipped template's untouched rows are NOTICES, so a conventional adopter never fails on this. IT READS DATES OUT OF A JSON FILE and never fetches a publisher — there is no network call anywhere in the harness — so it cannot tell you the pinned edition is still the current one, and `last_verified` can be bumped by hand in the same commit that would otherwise have failed. Running each pin's check_ref on a schedule and confirming it in the assurance stream (ASSURANCE-CYCLE, step 6) is what makes the date mean anything. A stale pin is a TRUE finding; a fresh pin is a claim about the record, not the world. It takes no view on the CONTENT of any rule base"
+    },
+    {
+      "control_id": "EVIDENCE-RETENTION",
+      "objective": "Every evidence type this repository produces — sealed into a release bundle or required by a compiled control plan — is named in a retention policy with a positive retention period or an explicit justification, and every immutable-archive claim says WHERE that archive is",
+      "owner_role": "internal-audit",
+      "line": 3,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/evidence-retention-check.mjs",
+      "test_ref": "scripts/evidence-retention-check.test.mjs",
+      "lane": "pr",
+      "paths": [
+        "docs/governance/evidence-retention.json",
+        "docs/governance/evidence/",
+        "docs/governance/changes/"
+      ],
+      "gate_family": "assurance-cadence",
+      "note": "HG-0003 makes the release bundle tamper-EVIDENT for exactly as long as it exists and nothing said how long that is; an examination reaches back years. NOT AN ISLAMIC CONTROL — retention is generic and the rows in the shipped template that have nothing to do with Islamic finance are there to prove it. Mandatory-when-compiled on the `evidence_retention` capability: no policy and no compiling change is INERT rather than a vacuous green, and the requirement arrives from a profile, never from a CI flag. THE HARNESS RECORDS THE POLICY AND DOES NOT HOLD THE EVIDENCE — the WORM store, the retention lock and the timestamping authority are the adopter's platform (see WORM-EVIDENCE, line 3, adopter_side), so `immutable_archive: true` is a claim this gate reads and can never confirm a byte was written against. An archive claim with no named archive is a FINDING once the capability compiles and a NOTICE otherwise, so a repository that has not yet chosen a store is not failed for the shipped template's silence; a row for evidence this repository does not produce is reported, never enforced, which is also what keeps the Islamic rows dormant for a conventional adopter"
+    },
+    {
+      "control_id": "OFBO-Q1B",
+      "objective": "OFBO's established merge-base test-integrity gate remains catalogued while CI invokes it directly",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/test-integrity.mjs",
+      "test_ref": "scripts/test/test-integrity.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "OFBO CI invokes this existing merge-base-aware control directly; the portable Loom Q1B mechanism runs alongside it after activation"
+    },
+    {
+      "control_id": "OFBO-DOC-INTEGRITY",
+      "objective": "OFBO current-state documentation links and ADR numbering remain internally consistent",
+      "owner_role": "engineering",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/doc-link-check.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "OFBO CI invokes the existing documentation-integrity control directly in Q2b"
+    },
+    {
+      "control_id": "OFBO-ADR-NUMBERING",
+      "objective": "ADR numbers are reserved across concurrent pull requests",
+      "owner_role": "enterprise-architect",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/adr-number-check.mjs",
+      "test_ref": "scripts/test/adr-number-check.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "OFBO CI invokes this GitHub-aware cross-PR control directly in Q2c"
+    },
+    {
+      "control_id": "OFBO-ADR-AMENDMENT",
+      "objective": "Changes to accepted ADRs carry an explicit amendment record",
+      "owner_role": "enterprise-architect",
+      "line": 1,
+      "state": "mechanically-validated",
+      "mechanism_ref": "scripts/adr-amendment-check.mjs",
+      "test_ref": "scripts/test/adr-amendment-check.test.mjs",
+      "lane": "pr",
+      "execute": false,
+      "execute_note": "OFBO CI invokes this repository-specific ADR control directly in Q2c"
+    }
+  ]
+}

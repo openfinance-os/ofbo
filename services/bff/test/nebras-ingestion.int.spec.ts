@@ -15,7 +15,7 @@ const url = process.env.DATABASE_URL
 if (!url) throw new Error('integration tests require DATABASE_URL')
 
 const TENANCY = { bankId: '11111111-1111-4111-8111-111111111111', channel: 'internal_retail' }
-const PERIOD = '2026-09' // a period the shared DB won't otherwise touch
+const PERIOD = '2099-02' // deliberately outside current-period seed data and other integration fixtures
 
 const ROWS = [
   { channel: 'internal_retail', line_type: 'payment_settlement', fee: { amount: 250, currency: 'AED' } },

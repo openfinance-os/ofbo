@@ -1,0 +1,15 @@
+{
+  "_comment": "ADOPT: the exposure seam (rc.39 · flow-plan Phase 5.2) — mounted as docs/governance/feature-flags.json and validated by scripts/feature-flag-check.mjs. THIS IS THE FILE THAT SEPARATES DEPLOY FROM EXPOSURE. A deploy puts a binary on a host; exposure puts behaviour in front of a customer. Conflating them is the single biggest structural drag in regulated delivery, because it forces the compound production authorization to be a DEPLOY gate — so nothing ships until everything is approved. Declare the flag and the authorization becomes an EXPOSURE gate: the code ships continuously, dark, and the human hold stays exactly where the risk is. Each entry: flag_key (the key your flag platform actually reads), change_id (the governed change this exposure belongs to — it must resolve under docs/governance/changes/), default MUST be false (a flag that defaults on is not an exposure control, it is a deploy wearing one), owner (a registry identity, human, who can be woken up), kill_path (the exact route to turn it off — the same mechanism service-readiness names as the kill switch, so the R3 drill and this flag are the same lever), cohort_stage (one of the six stages in governance/runbooks/pilot-playbook.md, so 'how exposed is this' has one vocabulary across the method), and expires (an exposure control with no end date is a permanent branch in production — an EXPIRED flag is a finding, and 30/14/7-day warnings precede it). The gate is silent for a repository that declares no flags, and MANDATORY the moment a compiled plan requires the exposure_control capability (regulated-bank declares it at high tier).",
+  "flags": [
+    {
+      "flag_key": "credit.decisioning.enabled",
+      "change_id": "ADOPT: the governed change_id this exposure belongs to (e.g. CHG-2026-0042)",
+      "default": false,
+      "owner": "ADOPT: a human registry identity who owns this exposure (e.g. po-fatima)",
+      "kill_path": "ADOPT: the exact route to turn it off (e.g. flag console → credit.decisioning.enabled → off; drains to the manual underwriting queue). Name the SAME lever as the service's kill_switch.mechanism",
+      "cohort_stage": "controlled-internal",
+      "expires": "ADOPT: ISO date this flag is removed — an exposure control with no end date is a permanent branch in production",
+      "notes": "ADOPT: what is behind the flag and what 'on' means for a customer"
+    }
+  ]
+}

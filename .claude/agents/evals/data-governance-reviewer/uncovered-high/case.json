@@ -1,0 +1,1 @@
+{ "register_mounted": true, "expect_verdict": "FAIL", "why": "A data-governance.md that cites a High inherent risk and no control against it, with an 'Uncovered risks' section left empty. D6 passes (ids resolve, a verdict exists); the reviewer must not." }

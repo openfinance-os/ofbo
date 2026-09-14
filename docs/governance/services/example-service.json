@@ -1,0 +1,78 @@
+{
+  "_comment": "ADOPT: one file per service at docs/governance/services/<service-id>.json (Loom 2.0 §7.4, R1–R6). A drill is a SIGNED OBSERVATION (rc.36, flow-plan Phase 2.4): observed_at + what the drill showed + a negative_test the mechanism REFUSED (result must be \"rejected\") + an observer_identity OUTSIDE the builders group + an ed25519 attestation by a registered issuer over the record's canonical hash minus the attestation (scripts/operational-readiness-check.mjs exports drillHash). The placeholders below are deliberately unadoptable — this template FAILS the gate until you have actually run each drill and recorded it. A bare ISO-date string is still accepted for THIS release with a printed deprecation NOTICE; it disappears next release. Freshness windows: BCP/DR 365d, rollback 180d, kill-switch 90d, capacity 365d.",
+  "service_id": "credit-origination",
+  "criticality": "critical",
+  "owner": "ops-dana",
+  "on_call": "sre-rotation-payments (PagerDuty PD-CRED)",
+  "rto_minutes": 240,
+  "rpo_minutes": 15,
+  "bcp_dr": {
+    "plan_ref": "runbooks/credit-origination-dr.md",
+    "last_exercised": {
+      "observed_at": "ADOPT: ISO date of your last DR exercise",
+      "observation": { "note": "ADOPT: what the exercise demonstrated (e.g. failover to the secondary region in 47m; RPO held at 11m)" },
+      "negative_test": { "attempted": "ADOPT: the probe the mechanism must refuse (e.g. promotion of a stale replica)", "result": "ADOPT: must be \"rejected\"", "tested_at": "ADOPT: ISO timestamp" },
+      "observer_identity": "ADOPT: a registry identity OUTSIDE the builders group",
+      "attestation": { "issuer": "ADOPT: a registered ed25519 issuer (attestation-issuers.json)", "signature": "ADOPT: base64 ed25519 over drillHash(record)" }
+    }
+  },
+  "rollback": {
+    "procedure_ref": "runbooks/credit-origination-rollback.md",
+    "last_drilled": {
+      "observed_at": "ADOPT: ISO date of your last rollback drill",
+      "observation": { "note": "ADOPT: what the drill demonstrated (e.g. rolled back to vN-1 in 6m; limits reconciled)" },
+      "negative_test": { "attempted": "ADOPT: the probe the mechanism must refuse (e.g. writes against the rolled-back schema)", "result": "ADOPT: must be \"rejected\"", "tested_at": "ADOPT: ISO timestamp" },
+      "observer_identity": "ADOPT: a registry identity OUTSIDE the builders group",
+      "attestation": { "issuer": "ADOPT: a registered ed25519 issuer (attestation-issuers.json)", "signature": "ADOPT: base64 ed25519 over drillHash(record)" }
+    }
+  },
+  "kill_switch": {
+    "owner": "ops-dana",
+    "mechanism": "feature flag credit.decisioning.enabled → manual underwriting queue",
+    "last_tested": {
+      "observed_at": "ADOPT: ISO date of your last kill-switch test",
+      "observation": { "note": "ADOPT: what flipping it showed (e.g. decisioning drained to the manual queue in 90s)" },
+      "negative_test": { "attempted": "ADOPT: the probe the mechanism must refuse (e.g. traffic routed through the killed path)", "result": "ADOPT: must be \"rejected\"", "tested_at": "ADOPT: ISO timestamp" },
+      "observer_identity": "ADOPT: a registry identity OUTSIDE the builders group",
+      "attestation": { "issuer": "ADOPT: a registered ed25519 issuer (attestation-issuers.json)", "signature": "ADOPT: base64 ed25519 over drillHash(record)" }
+    }
+  },
+  "_progressive_delivery_comment": "ADOPT (rc.39 · flow-plan Phase 5.3) — R3b: HOW this service reaches customers. Optional for a service that is not doing staged exposure; MANDATORY the moment a compiled plan requires the exposure_control capability (regulated-bank declares it at high tier). strategy: canary | blue-green | ring. stages: strictly increasing traffic_pct ending at 100, each with a bake_minutes and the slo_refs it watches while baking. automated_rollback.trigger_slo must be one of those SLOs — a trigger on a signal the rollout does not observe never fires — and last_tested is a SIGNED OBSERVATION in the same shape as the drills above, on a 90-day window: an automated rollback nobody has fired is a configuration, not a control. feature_flag_ref must name the same key as the entry in docs/governance/feature-flags.json, so 'we can turn it off' is ONE claim rather than two about two switches.",
+  "progressive_delivery": {
+    "strategy": "canary",
+    "stages": [
+      { "name": "internal", "traffic_pct": 1, "bake_minutes": 60, "slo_refs": ["decision-latency-p99", "decision-error-rate"] },
+      { "name": "capped-cohort", "traffic_pct": 10, "bake_minutes": 240, "slo_refs": ["decision-latency-p99", "decision-error-rate", "manual-referral-rate"] },
+      { "name": "expanded", "traffic_pct": 50, "bake_minutes": 720, "slo_refs": ["decision-latency-p99", "decision-error-rate", "manual-referral-rate"] },
+      { "name": "full", "traffic_pct": 100, "bake_minutes": 0, "slo_refs": ["decision-latency-p99", "decision-error-rate"] }
+    ],
+    "automated_rollback": {
+      "trigger_slo": "decision-error-rate",
+      "last_tested": {
+        "observed_at": "ADOPT: ISO date you last FIRED the automated rollback trigger (90-day window)",
+        "observation": { "note": "ADOPT: what firing it showed (e.g. error-rate breach at 12% traffic auto-reverted to vN-1 in 90s; no manual step)" },
+        "negative_test": { "attempted": "ADOPT: the probe the mechanism must refuse (e.g. ramp advanced past the next stage while the trigger SLO was breaching)", "result": "ADOPT: must be \"rejected\"", "tested_at": "ADOPT: ISO timestamp" },
+        "observer_identity": "ADOPT: a registry identity OUTSIDE the builders group",
+        "attestation": { "issuer": "ADOPT: a registered ed25519 issuer (attestation-issuers.json)", "signature": "ADOPT: base64 ed25519 over drillHash(record)" }
+      }
+    },
+    "feature_flag_ref": "credit.decisioning.enabled"
+  },
+  "capacity": {
+    "stress_test_ref": "perf/credit-origination-stress.md",
+    "last_run": {
+      "observed_at": "ADOPT: ISO date of your last stress test",
+      "observation": { "note": "ADOPT: what the run showed (e.g. 2.4x peak sustained for 1h; p99 within SLO)" },
+      "negative_test": { "attempted": "ADOPT: the probe the mechanism must refuse (e.g. load beyond the declared ceiling)", "result": "ADOPT: must be \"rejected\" (e.g. shed, not served degraded-silently)", "tested_at": "ADOPT: ISO timestamp" },
+      "observer_identity": "ADOPT: a registry identity OUTSIDE the builders group",
+      "attestation": { "issuer": "ADOPT: a registered ed25519 issuer (attestation-issuers.json)", "signature": "ADOPT: base64 ed25519 over drillHash(record)" }
+    }
+  },
+  "third_parties": [
+    { "name": "credit bureau", "continuity": "cached scores degrade-to-manual after 15m outage", "exit_strategy": "secondary bureau contract, 90-day migration runbook" }
+  ],
+  "reconciliation": "daily limits-vs-ledger reconciliation; breaks page operations",
+  "failed_transaction_recovery": "idempotent limit commands; replay from audit trail after recovery",
+  "complaints_readiness": "care scripts + remediation matrix published; complaints tagged to product PRD-017",
+  "regulatory_notification_triggers": "customer-impacting outage > 2h, or any data incident, per incident runbook"
+}

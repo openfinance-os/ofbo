@@ -1,0 +1,12 @@
+{
+  "_comment": "ADOPTER: the standing pre-authorization for the routine-change lane (HG-0013), mounted as docs/governance/routine-envelope.json and OWNED in CODEOWNERS by the second line (a CONTROL_TARGET — the agent uses it, never edits it). It lets a NARROW class of low-risk changes auto-merge without per-change human review, for a BOUNDED time. A routine change INHERITS this envelope instead of being individually classified — approval moves from per-change to per-envelope, it never disappears. Anything outside it RE-EVALUATES to the normal human-merge lane. The FLOOR denylist in scripts/routine-change-check.mjs is ABSOLUTE and beats every field here: no envelope can authorize a change to the control plane, the API contract, auth, or migrations. Keep the scope tight — widen it only with a second-line decision, and let it expire.",
+  "envelope_id": "RTE-2026-Q3",
+  "owner": "ADOPT-second-line-human-id",
+  "expires": "2026-09-30",
+  "allowed_classes": ["dependency-patch", "lint-fix", "doc-fix"],
+  "path_allow": ["docs/", "CHANGELOG.md", "package-lock.json", "pnpm-lock.yaml"],
+  "path_deny": ["docs/governance/"],
+  "max_diff_lines": 40,
+  "required_green_gates": ["Q1", "Q1b", "Q2", "Q4-SECRETS"],
+  "merge_mode": "envelope-approved"
+}

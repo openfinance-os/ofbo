@@ -37,7 +37,7 @@ try {
   process.exit(0)
 }
 
-const isTestFile = (f) => /\.spec\.tsx?$|\.e2e\.ts$|(^|\/)tests?\//.test(f)
+const isTestFile = (f) => /\.(spec|test)\.(ts|tsx|js|jsx|mjs|cjs)$|\.e2e\.ts$|(^|\/)tests?\//.test(f)
 const DISABLER = /\b(it|test|describe)\.(skip|only|todo)\b|\b(it|test)\.fails\b|\b(xit|xdescribe)\(/
 const ASSERTION = /\bexpect\(|\bassert\b/
 

@@ -1,0 +1,137 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "handoff",
+  "title": "Delivery hand-off",
+  "stage": "handoff",
+  "write_class": "born-on-the-floor",
+  "source": "discovery/templates/handoff.md",
+  "source_digest": "sha256:b78ce530246466452456a92fe45c4fab0d2135f4db2b975d1095c8246cfb9976",
+  "gates": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "D7",
+    "D8",
+    "D9"
+  ],
+  "guidance": "The boundary object (canon §6). Delivery-ready iff gates D1–D9 (Problem framing through Validation loop) are green and this contains **no** delivery design (no endpoints/schemas/stories/tech). Problem in, solution authored later.",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green",
+        "frozen"
+      ]
+    },
+    {
+      "name": "Frozen at",
+      "type": "text",
+      "required": false,
+      "read_only": true,
+      "help": "Commit sha of the merged snapshot. Empty until the first freeze."
+    },
+    {
+      "name": "Version",
+      "type": "text",
+      "required": false,
+      "read_only": true
+    },
+    {
+      "name": "Drift",
+      "type": "select",
+      "required": false,
+      "read_only": true,
+      "options": [
+        "none",
+        "draft ahead of record"
+      ],
+      "help": "Never blocks. It says the draft and the record have diverged."
+    }
+  ],
+  "sections": [
+    {
+      "name": "Problem (from `problem-statement.md`)",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Problem",
+        "Target user",
+        "Success measures",
+        "Explicitly out of scope"
+      ]
+    },
+    {
+      "name": "Data-governance position (from `data-governance.md`, D6)",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Residual-risk verdict",
+        "Conditions delivery inherits"
+      ],
+      "gates": [
+        "D6"
+      ]
+    },
+    {
+      "name": "Direction, made tangible (from `prototype.md`)",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Prototype",
+        "Validated framing hypotheses",
+        "Open questions for Develop"
+      ]
+    },
+    {
+      "name": "Funding position (from `business-case.md`, where the institution requires one)",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Decision requested / recorded",
+        "Total-cost-of-change band delivery must land inside"
+      ]
+    },
+    {
+      "name": "Gate status",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Gate",
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9"
+      ]
+    },
+    {
+      "name": "What delivery owns now",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    }
+  ]
+}

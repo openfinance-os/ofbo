@@ -35,3 +35,8 @@ Run `node discovery/gates/validate.mjs <runDir>` first. Then review the run's ar
 
 For each finding: `FAIL <#> — <artifact:section> — <one-sentence issue>`. Quote the offending
 line. End with `VERDICT: PASS` or `VERDICT: FAIL (<n>)`. Detection only.
+
+The machine-readable companion output MUST conform to `loom.agent-output/v1`. Include
+`register_state`; when the discovery run or its required register is absent or not mounted,
+return `INSUFFICIENT_EVIDENCE` with a reason rather than a PASS/FAIL judgment. Include
+`confidence`, and attach non-empty `evidence_refs` to every finding.

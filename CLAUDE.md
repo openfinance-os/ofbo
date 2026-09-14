@@ -1,5 +1,10 @@
 # Open Finance Back Office (OFBO) — Build Conventions
 
+The Loom Institutional BrainKit is mounted at `institution/brainkit/`; read
+`institution/brainkit/repository-instructions.md` before changing code, PRDs, ADRs, interfaces,
+prototypes, reports, or evidence packs. Its current `draft` state is provisional and never
+authorises an institutional decision.
+
 Bank-neutral back office for UAE Open Finance (CBUAE / Al Tareq / Nebras), for a bank operating both the LFI and TPP-of-record roles. Spec canon: `docs/PRD_Open_Finance_Back_Office.md` + `specs/backoffice-openapi.yaml`. The OpenAPI contract is ground truth — if the spec is wrong, change the spec via PR first, then the tests, then the code.
 
 ## Stack (defaults — change only via an ADR in docs/adrs/)

@@ -427,3 +427,30 @@ jobs:
       - run: pnpm test:integration
       # Gate: every table with rows must emit lineage, save documented gaps.
       - run: pnpm --filter @ofbo/db lineage:gate
+
+  loom-adoption:
+    name: Loom 2.4.1 adoption integrity (not pilot readiness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: Adopted machinery smoke
+        run: node --test core/policy-compiler.test.mjs core/gate-runner.test.mjs core/layering.test.mjs
+      - name: Catalog and provenance integrity
+        run: |
+          node scripts/control-catalog-check.mjs
+          node scripts/ci-catalog-check.mjs --ci .github/workflows/ci.yml
+          node scripts/provenance-check.mjs
+          node scripts/record-policy-compile.mjs --verify
+          node scripts/record-types-compile.mjs --verify
+      - name: Brownfield adoption controls
+        run: |
+          node scripts/control-plane-check.mjs
+          node scripts/discovery-link-check.mjs
+          node scripts/adapter-check.mjs
+          node scripts/provider-selection-check.mjs
+          node scripts/activation-readiness-check.mjs

@@ -8,7 +8,7 @@ run: "<slug>"
 # Synthesis — <slug>
 
 > Discover (converge). Cluster signals into themes; every theme traces to ≥1 signal id from
-> `research-log.md` (gate D5). State the prioritisation method explicitly.
+> `research-log.md` (gate D5 — Synthesis integrity). State the prioritisation method explicitly.
 
 ## Themes
 
@@ -18,7 +18,7 @@ run: "<slug>"
 
 ## Prioritisation
 
-- **Method:** <e.g. impact × reach ÷ effort; state it — D5 requires a named method>
+- **Method:** <e.g. impact × reach ÷ effort; state it — gate D5 requires a named method>
 - **Result:**
 
 | Theme | Impact | Reach | Effort | Score | Rank |

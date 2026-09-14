@@ -1,0 +1,21 @@
+{
+  "_comment": "ADOPTER: the product-outcome eval seam (meso ring), mounted as docs/governance/product-evals.json and CODEOWNERS-owned by the product owner. Each product links the discovery hand-off whose success measures (D1) it scores, records the score for every measure, and carries a passing eval RUN AGAINST THE SHIPPING COMMIT with a sealed report. A regression on any measure, or an eval bound to a different commit, blocks the release (scripts/product-eval-check.mjs). The eval RIG — how you actually score a measure — is yours to build; the gate enforces that a release cannot claim product-green without a fresh, discovery-linked, sealed eval. An ABSENT file is OK (not every repo is product-bearing); a PRESENT file binds every product it lists.",
+  "products": [
+    {
+      "product_id": "ADOPT-PRD-ID",
+      "discovery": "ADOPT-discovery-run-slug",
+      "success_measures": [
+        { "id": "SM-1", "statement": "ADOPT: the success measure copied from the hand-off (D1)", "threshold": "ADOPT: e.g. p95 < 5s", "result": "pass", "threshold_met": true }
+      ],
+      "eval": {
+        "evaluated_commit": "ADOPT-40-char-sha-of-the-shipping-commit",
+        "dataset_version": "ADOPT",
+        "runner_version": "ADOPT",
+        "ran_at": "ADOPT-ISO-8601",
+        "result": "pass",
+        "threshold_met": true,
+        "report": { "ref": "docs/governance/evidence/product-eval.json", "sha256": "ADOPT-64-hex-sha256-of-the-report" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "profile": "meridian-trust",
+  "kind": "institution",
+  "version": "1.0.0",
+  "_comment": "NEUTRAL FICTIONAL EXAMPLE (Loom 2.0-rc.8 WS3/WS10). Meridian Trust is an invented institution — it carries NO real policy, brand, regulatory interpretation or approval authority. An institution profile is how a repository's governed changes bind to the institution's approved BrainKit (institution/brainkit/): every change must conform to institutional identity, terminology, architecture principles and technology policy, be approved by the institutional-context-owner, and carry brainkit-provenance evidence. Institution profiles compose ON TOP OF base + jurisdiction + product profiles — they only ever ADD requirements, never loosen them. Once an envelope names this profile in required_profiles, the brainkit-conformance gate and brainkit-provenance evidence are mandatory-when-compiled (they apply at the low tier, so they cover every tier). A generic repository that names no institution profile is unaffected. `brainkit.path` is the pinned BrainKit this profile binds; the policy compiler folds the live BrainKit package digest into the plan's profile binding, so a BrainKit revision makes a stored plan stale and forces recompilation. This is a public example: real institutional profiles will normally live in a private repository.",
+  "brainkit": {
+    "brainkit_id": "meridian-trust-brainkit",
+    "institution_id": "meridian-trust",
+    "path": "institution/brainkit/manifest.json",
+    "release_digest": "sha256:229b58a17cdfb58f7585e816c93a1613d1cb0e3ee3daa24f30e789d8dfc6047d"
+  },
+  "requirements": {
+    "low": {
+      "gates": ["brainkit-conformance"],
+      "approver_roles": ["institutional-context-owner"],
+      "evidence": ["brainkit-provenance"]
+    }
+  },
+  "conditional": [
+    { "when": "customer_facing", "adds": { "pa2_sections": ["brand-identity-conformance"] } },
+    { "when": "architecture_material", "adds": { "pa1_sections": ["architecture-principles-conformance"] } }
+  ]
+}

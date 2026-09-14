@@ -1,0 +1,52 @@
+{
+  "_comment": "ADOPT: the SR-* decision register — mounted as docs/governance/shariah-rulings.json. THIS IS THE DECISION RECORD, and it is the system of record inside this repository for what the Shari'ah body actually determined: fatwas, ISSC sitting minutes, and references to the binding local authority's resolutions. Everything else in the Shari'ah plane points at a row here. An agent may READ a ruling and CITE it by id — that is the whole of its permission. An agent may NEVER author a ruling, alter one, change its status, or approve one; scholars decide Shari'ah, and a register an agent can write is a committee made out of a file (HG-0014). It is CONTROL-PLANE DATA: own this path in CODEOWNERS by the Shari'ah secretariat, a group the coding agent's identity is not a member of, and reconcile it against the system of record named in docs/governance/provider-selection.json (adapters/providers/shariah-governance/). Silent for a repository that declares no rulings; MANDATORY the moment a compiled plan requires the shariah_governance capability, which only an Islamic product or institution profile compiles.",
+  "_what_a_row_is_not": "A row is a POINTER plus provenance, never a restatement of the ruling. `subject` is a one-line label so a human can find the record; the ruling itself lives at `evidence_path` under the secretariat's control. Summarising a fatwa into this file is how a paraphrase acquires the authority of the original — the harness has no way to detect that the summary drifted from the determination, so it must never hold one.",
+  "_status_note": "`superseded` and `withdrawn` are not the same failure. A superseded ruling names its replacement (the replacement's `supersedes` carries the old id), so a change bound to it can be re-bound to something. A WITHDRAWN ruling leaves nothing behind: every change still citing it is unbound, and that is the point of distinguishing them — the gate can tell 'this moved' from 'this is gone'.",
+  "_structures_note": "`sharia_structures` uses the Open Finance UAE v2.1 `ShariaStructure` spelling (single 'a', deliberately) so a row and a wire payload can be compared without a translation table. That enum is EXACTLY {Ijara, ServiceIjara, Murabaha, Musharaka, Tawarruq}. It is narrower than the products an ISSC actually rules on — a Mudarabah deposit pool, a Wakala investment account, an Istisna facility are real and the enum cannot express them. Record the true structure name here anyway and leave the wire representation to the mapping evidence; the gap is a documented gap in the standard, and inventing an enum value to close it produces a payload no counterparty can read.",
+  "rulings": [
+    {
+      "ruling_id": "SR-0001",
+      "type": "fatwa",
+      "subject": "ADOPT: one line naming what was determined (e.g. 'Commodity purchase-and-sale sequencing for the consumer Murabaha facility') — a label, not the ruling",
+      "product_ids": ["ADOPT: the product ids this ruling governs, as they appear in your product register"],
+      "sharia_structures": ["Murabaha"],
+      "issued_by": "ADOPT: the registry id of the COMMITTEE or its secretariat — never an individual scholar. One member's signature is a member's opinion; the quorum in docs/governance/identities.json is what makes it the committee's decision",
+      "issued_at": "ADOPT: RFC 3339 date the ruling was issued",
+      "hsa_refs": ["ADOPT: reference(s) to the binding higher-authority resolution this ruling rests on, where one applies"],
+      "aaoifi_refs": ["ADOPT: the standard-setter's standard number(s) cited, with the edition pinned in docs/governance/knowledge-pins.json"],
+      "status": "active",
+      "supersedes": null,
+      "evidence_path": "ADOPT: path or reference to the signed ruling itself, in the secretariat's store — this register points at it and does not contain it"
+    },
+    {
+      "ruling_id": "SR-0002",
+      "type": "issc-minute",
+      "subject": "ADOPT: e.g. 'Early-settlement rebate treatment — discretionary, not contractual'",
+      "product_ids": ["ADOPT: product id(s)"],
+      "sharia_structures": ["Murabaha"],
+      "issued_by": "ADOPT: registry id of the committee/secretariat",
+      "issued_at": "ADOPT: RFC 3339 date of the sitting",
+      "hsa_refs": [],
+      "aaoifi_refs": [],
+      "status": "active",
+      "supersedes": null,
+      "evidence_path": "ADOPT: reference to the minute in the minute book",
+      "note": "A worked reason this type exists separately from `fatwa`: a rebate on early settlement (ibra') is at the committee's DISCRETION and is not a contractual entitlement. A minute recording that discretion is the authority for how the system may behave — and a system that hard-codes the rebate as a term has turned a discretion into a promise without anyone ruling that it may. The harness cannot see that; it can insist the minute exists, is attributable and is cited."
+    },
+    {
+      "ruling_id": "SR-0003",
+      "type": "hsa-resolution-ref",
+      "subject": "ADOPT: e.g. 'Adoption of the standard-setter's Shari'ah standards as the institution's baseline'",
+      "product_ids": [],
+      "sharia_structures": [],
+      "issued_by": "ADOPT: registry id of the committee/secretariat that FILED this reference — the resolution is the authority's, the filing is yours",
+      "issued_at": "ADOPT: RFC 3339 date the resolution was adopted by the institution",
+      "hsa_refs": ["ADOPT: the authority's resolution reference"],
+      "aaoifi_refs": [],
+      "status": "active",
+      "supersedes": null,
+      "evidence_path": "ADOPT: reference to the filed copy",
+      "note": "An institution-wide row with no product_ids. It exists so a product-level ruling can cite the baseline it rests on rather than re-deriving it, and so a change to the baseline is a visible event with a date rather than a shift nobody recorded."
+    }
+  ]
+}

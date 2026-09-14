@@ -5,18 +5,20 @@ design_profile: discovery/brand/design.md
 run: "<slug>"
 fidelity: low
 wireframe: "wireframe.html"
+design_canvas: "<the /design canvas URL the wireframe was drafted on, or none>"
 ---
 
 # Prototype brief — <slug>
 
 > Define (*make tangible*). A **disposable, low-fidelity** wireframe that visualises how the
-> direction *could* look, to test the framing before delivery. Gates D8 (this brief + a
+> direction *could* look, to test the framing before delivery. Gates D8 — Tangibility (this brief + a
 > brand-conformant `wireframe.html` exist) and D4/§4 (validation fidelity, not a delivery
 > spec). The wireframe renders against `design.md` (D7).
 
 ## What this prototype tests
 
-The framing hypotheses (from `problem-statement.md`) this wireframe makes tangible:
+The framing hypotheses (`H1`, `H2`, … — "H" for hypothesis) from `problem-statement.md` that
+this wireframe makes tangible:
 
 | Hypothesis | Screen/region that tests it | What a positive reaction looks like |
 |---|---|---|
@@ -44,4 +46,7 @@ Record reactions as new signals back in `research-log.md`.
 
 ## Wireframe
 
-Generated asset: `wireframe.html` (must carry `<!-- brand-profile: discovery/brand/design.md@v1 -->`).
+Drafted with `/design` (options, canvas edits, stakeholder walkthrough — URL in `design_canvas:`
+above), then transcribed into `specs/wireframe.prototype.json` and rendered. Generated asset:
+`wireframe.html` (must carry `<!-- brand-profile: discovery/brand/design.md@v1 -->`). The
+committed asset is the record; the canvas is the draft.

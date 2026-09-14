@@ -7,13 +7,18 @@ run: "<slug>"
 
 # Problem statement — <slug>
 
-> Define (converge). The single problem worth solving. Gates D1 (framing), D3 (scope),
-> D4 (no solutioning — name the problem, not the build).
+> Define (converge). The single problem worth solving. Gates D1 (Problem framing), D3 (Scope & stakeholders),
+> D4 (No-solutioning boundary — name the problem, not the build).
 
 ## The problem (falsifiable)
 
 > For **<target user, synthetic persona>** who **<situation / job-to-be-done>**, today
 > **<problem>**, which causes **<consequence>**. We know this from **<signal ids>**.
+
+## Strategic intent
+
+- `SI-nn` from `institution/brainkit/strategy.md`, or **none recorded** — say which. No gate reads
+  this line; the decision authority does.
 
 ## Target user
 

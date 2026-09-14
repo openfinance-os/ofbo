@@ -23,3 +23,8 @@ Default scope: the diff of the current branch against `main` (`git diff main...H
 ## Output format
 
 For each finding: `FAIL <rule #> — <file>:<line> — <one-sentence violation> — <rule cited>`. Order by severity (PII and audit mutability first). End with a verdict line: `VERDICT: PASS` or `VERDICT: FAIL (<n> findings)`. Do not propose fixes unless asked — your job is detection.
+
+The machine-readable companion output MUST conform to `loom.agent-output/v1`. Include
+`register_state`; when the required policy or control register is absent or not mounted, return
+`INSUFFICIENT_EVIDENCE` with a reason rather than a PASS/FAIL judgment. Include `confidence`,
+and attach non-empty `evidence_refs` to every finding.

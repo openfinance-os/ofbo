@@ -1,0 +1,65 @@
+{
+  "profile": "standard",
+  "kind": "base",
+  "_comment": "The NON-BANK base profile (rc.26). Until now `regulated-bank` was the only base, which made the floor of the profile system a bank: a team building software with AI under ordinary engineering discipline had to adopt a bank's approver set to adopt anything. That is a positioning accident, not a design decision — the warp (four-eyes merge, the waist gate, spec-first, quality gates, no self-merge) is what makes the method work, and none of it is banking-specific. This profile is that warp and nothing more. Requirements are CUMULATIVE by tier: the compiler unions everything at or below the envelope's tier, so higher tiers only add. WHAT IS DELIBERATELY ABSENT: PA1/PA2 product approval, the A-series architecture assurance, R-series operational readiness, second-line hold, external anchoring, and every control-function approver role. Those are not 'advanced' — they are what a REGULATED institution owes its regulator, and asserting them here would be the same overstatement this method exists to refuse. If you are a regulated entity, use `regulated-bank`; it is a strictly stronger profile, not a different one. ADOPT: tighten to your policy; you cannot loosen a lower tier from a higher one. INVARIANT, asserted by profiles.test.mjs: at every tier `standard` requires a SUBSET of what `regulated-bank` requires. If it ever required something the bank profile does not, a regulated adopter would miss a control an unregulated one gets — which is incoherent, and the fastest way to make the profile system untrustworthy. Add to regulated-bank first, then here.",
+  "requirements": {
+    "low": {
+      "gates": [
+        "D",
+        "Q"
+      ],
+      "approver_roles": [
+        "engineering"
+      ],
+      "evidence": [
+        "tests",
+        "reviews"
+      ],
+      "pa1_sections": [],
+      "pa2_sections": []
+    },
+    "medium": {
+      "gates": [],
+      "approver_roles": [
+        "product-owner"
+      ],
+      "evidence": [
+        "control-plane"
+      ],
+      "pa1_sections": [],
+      "pa2_sections": []
+    },
+    "high": {
+      "gates": [
+        "product-eval"
+      ],
+      "approver_roles": [
+        "information-security"
+      ],
+      "evidence": [
+        "sast",
+        "dependency-audit"
+      ],
+      "pa1_sections": [],
+      "pa2_sections": [],
+      "capabilities": {
+        "sca": {
+          "required": true
+        }
+      }
+    },
+    "critical": {
+      "gates": [],
+      "approver_roles": [
+        "accountable-executive"
+      ],
+      "evidence": [
+        "sbom",
+        "provenance"
+      ],
+      "pa1_sections": [],
+      "pa2_sections": []
+    }
+  },
+  "conditional": []
+}

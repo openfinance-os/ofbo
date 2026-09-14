@@ -9,7 +9,7 @@ import { parseTokens, tokenResolver } from './tokens.mjs';
 import { parseBrand, checkVisualOoxml } from '../gates/brand.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const OFBO = resolve(ROOT, 'discovery/brand/design.md');
+const BRAND = resolve(ROOT, 'discovery/brand/design.md');
 const MERIDIAN = resolve(ROOT, 'discovery/brand/examples/meridian-trust.design.md');
 const t = (p) => tokenResolver(parseTokens(p).tokens);
 
@@ -26,10 +26,10 @@ test('zip round-trips a STORED entry', () => {
 });
 
 for (const fmt of ['xlsx', 'docx', 'pptx']) {
-  const brandTokens = parseBrand(OFBO);
+  const brandTokens = parseBrand(BRAND);
 
   test(`${fmt}: valid package, marker embedded, D7-conformant`, () => {
-    const buf = BUILDERS[fmt](SPECS[fmt], t(OFBO));
+    const buf = BUILDERS[fmt](SPECS[fmt], t(BRAND));
     assert.ok(Buffer.isBuffer(buf));
     const parts = readZip(buf);
     assert.ok(parts['[Content_Types].xml'], 'has content types');
@@ -38,10 +38,10 @@ for (const fmt of ['xlsx', 'docx', 'pptx']) {
   });
 
   test(`${fmt}: deterministic (byte-identical on rebuild)`, () => {
-    assert.deepEqual(BUILDERS[fmt](SPECS[fmt], t(OFBO)), BUILDERS[fmt](SPECS[fmt], t(OFBO)));
+    assert.deepEqual(BUILDERS[fmt](SPECS[fmt], t(BRAND)), BUILDERS[fmt](SPECS[fmt], t(BRAND)));
   });
 
-  test(`${fmt}: brand seam swaps — Meridian output fails D7 against OFBO tokens`, () => {
+  test(`${fmt}: brand seam swaps — Meridian output fails D7 against the demo tokens`, () => {
     const meridian = BUILDERS[fmt](SPECS[fmt], t(MERIDIAN));
     assert.equal(checkVisualOoxml(`out${EXT[fmt]}`, meridian, parseBrand(MERIDIAN)).length, 0, 'conformant to its own brand');
     assert.ok(checkVisualOoxml(`out${EXT[fmt]}`, meridian, brandTokens).length > 0, 'rejected by the other brand');
@@ -49,13 +49,13 @@ for (const fmt of ['xlsx', 'docx', 'pptx']) {
 }
 
 test('xlsx header uses the brand primary fill', () => {
-  const buf = BUILDERS.xlsx(SPECS.xlsx, t(OFBO));
+  const buf = BUILDERS.xlsx(SPECS.xlsx, t(BRAND));
   const styles = readZip(buf)['xl/styles.xml'].toString('utf8');
   assert.ok(styles.includes('FF1F4DB8'), 'brand primary as ARGB fill');
 });
 
 test('content is XML-escaped (no injection)', () => {
-  const buf = BUILDERS.docx({ title: 'T', sections: [{ heading: '<x>', blocks: [{ p: 'a & b <z>' }] }] }, t(OFBO));
+  const buf = BUILDERS.docx({ title: 'T', sections: [{ heading: '<x>', blocks: [{ p: 'a & b <z>' }] }] }, t(BRAND));
   const doc = readZip(buf)['word/document.xml'].toString('utf8');
   assert.ok(!doc.includes('<z>'), 'raw tag escaped');
   assert.ok(doc.includes('&amp;') && doc.includes('&lt;z&gt;'));

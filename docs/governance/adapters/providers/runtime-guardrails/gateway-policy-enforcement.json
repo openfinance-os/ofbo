@@ -1,0 +1,44 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `runtime-guardrails` role — the gateway shape: one policy-enforcement point on the network path in front of the model and tool endpoints. It closes a specific hole: 'the agent is guarded at runtime' is otherwise a sentence nobody owns, and the only thing that could evidence it is the agent's own account of what it declined to do — which is the assertion the control exists to remove. The gateway is outside every workload, so its decision log is not written by the thing it constrains. Read adapters/providers/runtime-guardrails/README.md before choosing: the harness cannot see this fire, only that it was chosen and that a denial was recorded when probed. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your gateway, and wire the fetch that fills activation_evidence.",
+  "role": "runtime-guardrails",
+  "provider": "gateway-policy-enforcement",
+  "adapter_id": "gateway-policy-enforcement",
+  "system": "ai-gateway",
+  "satisfies_control": "AI-INCIDENT",
+  "capability": "Input/output filtering, tool-use allowlisting and terminology/PII screening applied at a network chokepoint in front of the model and tool endpoints, with allow and DENY decisions logged by the gateway itself",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes. Neither line argues for or against — they are the trade being accepted.",
+    "strength": "One enforcement point to configure, secure and read: the policy bundle has a single digest, the decision log has a single origin, and no workload can write to either. Policy changes apply to every caller at once rather than at each service's redeploy cadence",
+    "limitation": "IT ENFORCES ONLY WHAT IS ROUTED THROUGH IT. A caller with direct credentials to the model or tool endpoint is unenforced and leaves no denial to find, so the real control is the network policy that makes the gateway the only path — which this adapter does not evidence. Record the egress restriction alongside it, or the log describes the traffic that agreed to be inspected"
+  },
+  "evidence": {
+    "kind": "runtime-guardrail-decisions",
+    "envelope_fields": [
+      "enforcement_point_id",
+      "policy_bundle_id",
+      "policy_bundle_digest",
+      "protected_routes",
+      "window_start",
+      "window_end",
+      "decisions_allowed",
+      "decisions_denied",
+      "denial_categories",
+      "fail_mode",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "NO SHIPPED GATE READS THIS ARTIFACT, and `gate_mechanism` is null rather than naming one. AI-INCIDENT is catalogued `defined` — a runbook, not a mechanism — so there is nothing to name, and a gate id that does not resolve would be exactly the implied-coverage defect this role exists to refuse: worse than the gap, because it reads as closed. What the harness DOES see is that a provider was selected (PS-R06) and whether activation_evidence is still placeholders (adapter-check.mjs). It never reads a decision log. So the reconciliation below is the ADOPTER'S, performed by the fetch that fills activation_evidence: bind the log to the policy that was actually loaded, not to the policy in the repository — a bundle edited in git and never rolled out is the gap it closes. fail_mode is carried because a gateway that fails OPEN under load has no enforcement at exactly the moment it is needed, and that is a property of the deployment, not of the policy text. WHAT A GATE WOULD TAKE, so the gap is costed rather than merely admitted: this envelope committed as a signed observation under docs/governance/adapter-evidence/ naming AI-INCIDENT, asserted by an issuer outside the coding agent's write scope, with the denial as a required negative — plus a serving-path enforcement mechanism in core/floor-adapters.mjs SEAM_MECHANISMS, which carries none today (a forge setting and a human decision are the only two), and a gate that reads it. Until all three exist, match_on is a specification for your fetch, not a comparison CI performs.",
+    "gate_artifact": "docs/governance/evidence/runtime-guardrail-decisions.json",
+    "gate_mechanism": null,
+    "reconciled_by": "the adopter's fetch and negative probe — no gate in this harness",
+    "match_on": ["policy_bundle_digest", "enforcement_point_id", "decisions_denied"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real gateway read + the negative probe. The negative probe is the decisive one — decisions_allowed proves traffic, never enforcement. Only a denial you provoked and then found in the platform's own log shows the guardrail bit.",
+    "fetched_at": "ADOPT: timestamp of your gateway decision-log read",
+    "asserted_by": "ADOPT: the gateway/service identity that emits the decision log — must NOT be the agent being constrained",
+    "negative_probe": "ADOPT: 'denied-and-logged' once you have sent a policy-violating request, confirmed it was refused, and found that denial in the gateway's log",
+    "bypass_probe": "ADOPT: 'rejected' once you have tested that a call to the model or tool endpoint that skips the gateway is refused by network policy"
+  }
+}

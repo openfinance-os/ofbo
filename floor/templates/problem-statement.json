@@ -1,0 +1,111 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "problem-statement",
+  "title": "Problem statement",
+  "stage": "define",
+  "write_class": "born-on-the-floor",
+  "source": "discovery/templates/problem-statement.md",
+  "source_digest": "sha256:b92c5a517186779c0d9ce82e4f89921add46fda10a1b43bfa113fec8ae9918c9",
+  "gates": [
+    "D1",
+    "D3",
+    "D4"
+  ],
+  "guidance": "Define (converge). The single problem worth solving. Gates D1 (Problem framing), D3 (Scope & stakeholders), D4 (No-solutioning boundary — name the problem, not the build).",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green",
+        "frozen"
+      ]
+    },
+    {
+      "name": "Frozen at",
+      "type": "text",
+      "required": false,
+      "read_only": true,
+      "help": "Commit sha of the merged snapshot. Empty until the first freeze."
+    },
+    {
+      "name": "Version",
+      "type": "text",
+      "required": false,
+      "read_only": true
+    },
+    {
+      "name": "Drift",
+      "type": "select",
+      "required": false,
+      "read_only": true,
+      "options": [
+        "none",
+        "draft ahead of record"
+      ],
+      "help": "Never blocks. It says the draft and the record have diverged."
+    }
+  ],
+  "sections": [
+    {
+      "name": "The problem (falsifiable)",
+      "required": true,
+      "kind": "rich_text",
+      "help": "For **<target user, synthetic persona>** who **<situation / job-to-be-done>**, today **<problem>**, which causes **<consequence>**. We know this from **<signal ids>**."
+    },
+    {
+      "name": "Strategic intent",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    },
+    {
+      "name": "Target user",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    },
+    {
+      "name": "Success measures",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Measure",
+        "Baseline (today)",
+        "Target",
+        "How measured"
+      ]
+    },
+    {
+      "name": "Constraints (boundaries, not solutions)",
+      "required": true,
+      "kind": "rich_text",
+      "help": ""
+    },
+    {
+      "name": "Stakeholders & scope (D3)",
+      "required": true,
+      "kind": "table",
+      "help": "",
+      "columns": [
+        "Stakeholder",
+        "In/out of scope",
+        "Why"
+      ],
+      "gates": [
+        "D3"
+      ]
+    }
+  ]
+}

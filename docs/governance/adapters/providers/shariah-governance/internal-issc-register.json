@@ -1,0 +1,43 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `shariah-governance` role — the in-house alternative, for institutions whose ISSC secretariat keeps the register itself (a board-secretariat system, a minute book, a governance share). It closes a specific hole: governance/identities.template.json gives every ISSC seat a `reconciliation_source` of docs/governance/issc-register.json, and that file sits inside the repository the coding agent can write. An agent that adds a sixth seat, or edits an hsa_approval_ref to match a signature, makes a committee out of a file. This provider makes the register an EXPORT the secretariat asserts, reconciled against the file the gate reads. It rules on nothing: Shari'ah is decided by the scholars whose names the register carries — the register only says who they are and under what approval they sit. To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/, point it at your secretariat's system, and wire the export that fills activation_evidence.",
+  "role": "shariah-governance",
+  "provider": "internal-issc-register",
+  "adapter_id": "internal-issc-register",
+  "system": "internal-board-secretariat",
+  "satisfies_control": "SHARIAH-GOV",
+  "capability": "The institution's own ISSC register — seats, HSA approval references, appointment instruments, and the resolutions an approval cites — exported by the secretariat that maintains it, for reconciliation against the register the gate reads",
+  "role_fit": {
+    "_comment": "Stated plainly so the choice is made with open eyes. Neither line argues for or against — they are the trade being accepted.",
+    "strength": "ISSC minutes and appointment instruments never leave the institution, which is usually non-negotiable for a body that sits under confidentiality; the secretariat that files the resolution is the same desk that exports it, so there is no second copy of the committee's record to disagree with the first",
+    "limitation": "IT IS SELF-ASSERTED, and calling it a system of record does not change that. The export and the repository can share a maintainer, so the separation must be MANUFACTURED: the export must run under a secretariat identity the coding agent cannot assume, and write to a store the agent cannot edit. Absent that, docs/governance/issc-register.json is the agent's word for who sits on the committee — which is exactly the hole the role exists to close"
+  },
+  "evidence": {
+    "kind": "shariah-governance-register",
+    "envelope_fields": [
+      "committee_id",
+      "seat_count",
+      "member_ids",
+      "hsa_approval_refs",
+      "appointment_instrument_refs",
+      "appointment_dates",
+      "resolution_refs",
+      "minutes_refs",
+      "quorum_rule",
+      "effective_from",
+      "exported_by",
+      "fetched_at"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "Reconcile on the composition AND its provenance. Matching seat_count alone passes a register where one scholar was quietly swapped for another; matching member_ids alone passes a seat whose approval reference was edited to fit a signature already collected.",
+    "gate_artifact": "docs/governance/issc-register.json",
+    "gate_mechanism": "scripts/shariah-governance-check.mjs",
+    "match_on": ["member_ids", "seat_count", "hsa_approval_refs", "appointment_instrument_refs"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from a real export + the tamper probe. The tamper probe is the decisive one — it proves the RECONCILIATION bites, not that an export ran. A register that reconciles against a file the same identity wrote proves nothing at all.",
+    "fetched_at": "ADOPT: timestamp of your register export",
+    "exported_by": "ADOPT: the secretariat identity that owns the register — must NOT be assumable by the coding agent",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that editing docs/governance/issc-register.json away from the exported register (add a seat, change an approval reference) fails the build"
+  }
+}

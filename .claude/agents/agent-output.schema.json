@@ -1,0 +1,39 @@
+{
+  "$id": "loom.agent-output/v1",
+  "_comment": "The one output shape every Loom reviewer and assurance agent emits (2.1.0, hardening plan row 5.1). Until now agent output was a line format a human retyped into a decision; a register-less run still produced a verdict, findings carried no confidence and no citation field anyone checked, and the reviewer agents sat outside the method's own model-risk rules. This schema is what scripts/agent-output-check.mjs validates fixtures and agent definitions against. The human-readable lines stay — a person reads them — and the JSON block follows them, so a downstream consumer (the Kosli seam, the operations-signal log, an examiner's query) reads one shape. It is deliberately small: a schema an agent can hold in its prompt.",
+  "type": "object",
+  "required": ["schema", "agent", "prompt_version", "model", "inputs_read", "register_state", "verdict", "confidence", "findings"],
+  "properties": {
+    "schema": { "const": "loom.agent-output/v1" },
+    "agent": { "type": "string", "enum": ["change-watch", "risk-reviewer", "model-risk-reviewer", "data-governance-reviewer", "discovery-boundary-reviewer", "hard-stop-reviewer", "contract-conformance-reviewer", "shariah-conformance-reviewer"] },
+    "prompt_version": { "type": "string", "minLength": 1, "_comment": "the agent definition's version — the prompt_version pinned for this role in docs/governance/model-manifest.json" },
+    "model": { "type": "string", "minLength": 1, "_comment": "the model_id pinned for this role in docs/governance/model-manifest.json; 'unknown' is a finding, not a value" },
+    "inputs_read": { "type": "array", "items": { "type": "string", "minLength": 1 }, "_comment": "every file or command the verdict rests on, repo-relative" },
+    "register_state": { "type": "string", "enum": ["mounted", "absent", "not-applicable"], "_comment": "whether the register this agent judges against (data-risk register, obligations, model manifest, knowledge pins) was present. absent ⇒ verdict MUST be INSUFFICIENT_EVIDENCE" },
+    "verdict": { "type": "string", "enum": ["PASS", "FAIL", "CONFORMANT", "NON_CONFORMANT", "ACCEPTABLE", "ESCALATE", "CLEAR", "HORIZON", "INSUFFICIENT_EVIDENCE"] },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"], "_comment": "how far the evidence read supports the verdict — low when the judgement leaned on prose rather than a record" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "subject", "issue", "evidence_refs"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "_comment": "the agent's own numbering (FAIL 3, WATCH 2, ASSESS 1) or a rule id" },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low", "info"] },
+          "subject": { "type": "string", "minLength": 1, "_comment": "what the finding is about: a DR-*/CTRL-*/OB-* id, a file:section, a model role, a package@version" },
+          "issue": { "type": "string", "minLength": 1 },
+          "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "object", "required": ["file"], "properties": { "file": { "type": "string", "minLength": 1 }, "locator": { "type": "string" } } }, "_comment": "at least one: the record the finding rests on. A finding with no evidence is an opinion and does not go in this array" },
+          "route": { "type": "string", "enum": ["spec-fix", "register", "discovery", "accepted", "assess", "check", "human"], "_comment": "the operations-signal vocabulary, where the agent routes (change-watch, risk-reviewer)" },
+          "residual_moved": { "type": "boolean" }
+        }
+      }
+    },
+    "reason": { "type": "string", "_comment": "REQUIRED when verdict is INSUFFICIENT_EVIDENCE: what was missing and what would make the judgement possible" }
+  },
+  "invariants": [
+    "register_state == 'absent' ⇒ verdict == 'INSUFFICIENT_EVIDENCE' and reason is present",
+    "verdict == 'INSUFFICIENT_EVIDENCE' ⇒ findings may name what is missing but carry no PASS-implying claim",
+    "every findings[].evidence_refs[].file appears in inputs_read",
+    "verdict in {PASS, CONFORMANT, ACCEPTABLE, CLEAR} ⇒ no finding of severity critical or high"
+  ]
+}

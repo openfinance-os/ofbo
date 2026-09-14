@@ -1,0 +1,43 @@
+{
+  "_comment": "PROVIDER PLUG-IN for the `external-record` role — the FIRST of several; the institution chooses (decision K9, kosli-seam.md). Kosli holds the record of every gate result, decision and seal anchor outside the tree the coding agent edits, one trail per change envelope. The harness talks to it ONLY through the official `kosli` CLI (core/kosli-cli.mjs, decision K7) via core/providers/kosli.mjs, and unit tests run against the record-and-replay double core/kosli-fake.mjs (decision K8). To adopt: record the choice in docs/governance/provider-selection.json, copy this file to docs/governance/adapters/kosli.json, fill `config`, put KOSLI_API_TOKEN in the CI runner's secrets (never in this file, never on argv), and run the first integration run to fill activation_evidence. The surface every method relies on is docs/kosli-surface.md.",
+  "role": "external-record",
+  "provider": "kosli",
+  "adapter_id": "kosli-external-record",
+  "system": "kosli",
+  "satisfies_control": "HG-0003",
+  "capability": "A record of every gate result, decision and evidence-seal anchor, held by the platform outside the repository — asserted by Kosli, resolvable by id, and never rewritable from the tree the agent edits",
+  "config": {
+    "_comment": "ADOPT: org and host are the CLI's --org/--host. flows: one trail per change envelope in `delivery`, one per discovery run in `discovery` (F2). The token is NOT here: KOSLI_API_TOKEN in the runner environment only. KOSLI_BIN may point the harness at a pinned binary (or at the fake in CI).",
+    "org": "ADOPT: your Kosli organisation name",
+    "host": "https://app.kosli.com",
+    "flows": {
+      "delivery": "loom-delivery",
+      "discovery": "loom-discovery"
+    }
+  },
+  "evidence": {
+    "kind": "external-record",
+    "envelope_fields": [
+      "schema",
+      "kind",
+      "subject",
+      "commit",
+      "produced_at",
+      "actor",
+      "payload_digest",
+      "attestation"
+    ]
+  },
+  "reconciliation": {
+    "_comment": "The seal gate holds the id; the provider proves the platform holds the same record. Reconcile on the record id AND on the anchor inside it — an id that resolves to a record carrying a different anchor is a finding, not a pass.",
+    "gate_artifact": "docs/governance/evidence/manifest.json",
+    "gate_mechanism": "scripts/evidence-seal-check.mjs",
+    "match_on": ["external_record.id", "anchor"]
+  },
+  "activation_evidence": {
+    "_comment": "ADOPT: fill from the first integration run against your org (docs/integration-run.md) — a real `begin trail`, a real `attest generic`, the id read back with `get trail`, and the tamper probe. The tamper probe is the decisive one: it proves the seal gate REFUSES an unknown id, not that the API answered.",
+    "integration_run_at": "ADOPT: timestamp of the run",
+    "runner_identity": "ADOPT: the least-privilege service account that holds KOSLI_API_TOKEN — must NOT be the coding agent's identity, and must be write-only for the attest step (decision K5)",
+    "tamper_probe": "ADOPT: 'rejected' once you have tested that a manifest naming a record id Kosli does not hold fails scripts/evidence-seal-check.mjs"
+  }
+}

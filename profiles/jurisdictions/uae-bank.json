@@ -1,0 +1,74 @@
+{
+  "profile": "uae-bank",
+  "kind": "jurisdiction",
+  "_comment": "UAE jurisdiction profile — CBUAE product governance (Consumer Protection Standards: comprehensive product approval, inherent-risk assessment, documented control-function sign-off; Operational Risk Art. 11: new/materially changed products and systems). Pure data, composed over regulated-bank; authored with the open-finance-uae skill as reference, never a runtime dependency.",
+  "requirements": {
+    "medium": {
+      "gates": [],
+      "approver_roles": [],
+      "evidence": [],
+      "pa1_sections": [
+        "cbuae-notification-assessment"
+      ],
+      "pa2_sections": [
+        "key-facts-statement",
+        "arabic-and-accessibility",
+        "vulnerable-customer-treatment"
+      ]
+    },
+    "high": {
+      "pa2_sections": [
+        "consumer-protection-conformance",
+        "emiratisation-of-disclosures"
+      ]
+    }
+  },
+  "_automatic_profiles_comment": "2.4.0 — a UAE new or materially changed product that declares a model in its decision path automatically compiles the ai-decision-system profile. This closes the profile-omission gap: the classifier supplies facts, and jurisdiction policy derives the route. It is intentionally narrower than every use of a model — internal engineering assistants remain under the regulated-bank model-risk conditional unless they are part of a product change. The rule implements the CBUAE February 2026 consumer-AI guidance scope (AI/ML use bearing on consumers); an institution may add broader automatic rules, never delete this one while claiming this shipped profile unchanged.",
+  "automatic_profiles": [
+    {
+      "profile": "ai-decision-system",
+      "when": {
+        "flags_all": ["model_involved"],
+        "change_types": ["new-product", "material-product-change"],
+        "minimum_tier": "medium"
+      }
+    }
+  ],
+  "conditional": [
+    {
+      "when": "islamic",
+      "adds": {
+        "approver_roles": [
+          "shariah-committee"
+        ],
+        "pa1_sections": [
+          "shariah-applicability"
+        ],
+        "pa2_sections": [
+          "shariah-approval"
+        ],
+        "pa1_approver_roles": [
+          "shariah-committee"
+        ]
+      }
+    },
+    {
+      "_comment": "Open Finance in this market carries a MANDATED customer-experience regime — the AlTareq brand and CX rules for consent screens, payment buttons and progress indication, with screen certification. It is attached to the JURISDICTION and not to products/open-finance deliberately: every market with an Open Finance regime has a CX regime, and they are different regimes. Putting this in the product profile would export one market's brand rules to all of them; putting it here means another market's jurisdiction profile carries its own, and the product profile stays market-neutral.",
+      "when": "open_finance",
+      "adds": {
+        "pa2_sections": [
+          "altareq-cx-conformance"
+        ]
+      }
+    },
+    {
+      "_comment": "2.1.0 (hardening plan 4.2 · 4.4). The personal_data conditional that compiled a prose `pdpl-and-residency` section is RETIRED: the base profile now compiles the `dpia` capability on that flag, and the DPIA record carries residency as a field the gate reads. The third_party conditional binds the CBUAE Outsourcing Regulation's assessment at PA1 — a materiality assessment, the notification or non-objection position, and the exit plan — for every outsourcing the change introduces or relies on. An LLM provider is one of these (the model manifest's third_party block is where the per-provider assessment lives, and scripts/product-approval-check.mjs requires it); so is an evidence platform such as Kosli.",
+      "when": "third_party",
+      "adds": {
+        "pa1_sections": [
+          "cbuae-outsourcing-assessment"
+        ]
+      }
+    }
+  ]
+}

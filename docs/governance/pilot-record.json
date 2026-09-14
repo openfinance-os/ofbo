@@ -1,0 +1,70 @@
+{
+  "_comment": "ADOPT: the record of a supervised production pilot — mounted as docs/governance/pilot-record.json and read by scripts/pilot-record-check.mjs. WHAT THIS FILE IS: where a declared pilot says what stage it is at, what bounds it, who is watching, how it is reversed, and which adversarial rows from runbooks/pilot-playbook.md have actually been exercised. WHAT IT IS NOT: a pilot. THE HARNESS RUNS NOTHING AND OBSERVES NOTHING. Every date, every exercise and every finding below was written by a human; the gate reads them. A pilot that went badly and was recorded tidily passes every rule here.",
+  "_arming_comment": "THIS GATE ARMS ON CONTENT, NOT PRESENCE — deliberately different from the mandatory-when-compiled capability idiom used elsewhere. A pilot is not a property of any one change's control plan, so there is nothing for a plan to compile. The declaration is `status`: while it is the shipped ADOPT marker or `not-started`, the gate is INERT and every rule below is a notice. Setting it to `active` is the adopter's explicit act, and from that moment every rule is a finding. Mounting this template can never fail anybody, which is the property rc.46 established and this file keeps.",
+  "status": "ADOPT: not-started | active | concluded. `not-started` (or this unreplaced marker) means no pilot is declared and the gate is silent. `active` arms every rule. `concluded` additionally demands the exit criteria — every `live` row exercised, an independent report, findings dispositioned, a second-line confirmation.",
+  "pilot_id": "ADOPT: a short id for this pilot, cited by the evidence it produces.",
+  "stage": "ADOPT: the current stage NUMBER, 1-6, per the playbook's staged cohorts — 1 synthetic rehearsal, 2 controlled internal users, 3 staff/customer beta (no financial execution), 4 capped production cohort, 5 expanded cohort, 6 normal operation. The gate enforces that you cannot sit at stage N without a recorded exit for every stage below it: a pilot that jumped from rehearsal to a production cohort is the failure mode the staging exists to prevent.",
+  "stage_exits": [
+    {
+      "_comment": "ADOPT: one entry per stage COMPLETED. A stage with no exit entry was not exited, whatever the stage number above says.",
+      "stage": 1,
+      "exited_on": "ADOPT: ISO date (YYYY-MM-DD).",
+      "exit_evidence": "ADOPT: what shows the stage's criteria were met — a path, a run id, a report reference. Prose the gate reads for presence, never for truth.",
+      "approved_by": "ADOPT: the identity id (docs/governance/identities.json) who authorised the advance. Must resolve to a human who is not an agent and not in `builders` — the team running the pilot does not decide the pilot may widen."
+    }
+  ],
+  "scope_bound": {
+    "_comment": "ADOPT: what makes this pilot BOUNDED. The playbook's first characteristic is capped exposure; these are the caps. The gate reads that they are STATED — it has no way to observe whether they held. ZERO IS A REAL ANSWER and often the correct one: a stage-1 synthetic rehearsal has no customers and moves no money, and stage 2 is internal users with no external customers. What the gate refuses is an absent or non-numeric cap (an unstated ceiling is not a bound) and a ZERO cap at a stage where the exposure demonstrably exists — customers from stage 3, transaction value from stage 4.",
+    "max_customers": "ADOPT: a number >= 0 — the cohort ceiling. 0 through stages 1-2; a real number from stage 3, where real users first appear.",
+    "max_transaction_value": "ADOPT: a number >= 0 in your reporting currency, or the value cap that applies; state the currency in `scope_note`. 0 through stage 3, which the playbook defines as having NO financial execution; a real number from stage 4.",
+    "scope_note": "ADOPT: what the pilot covers and — more usefully — what it explicitly does not. 'Not autonomous core posting on day one' is the playbook's example.",
+    "financial_execution": "ADOPT: true or false. False through stage 3 by the playbook's own staging: a staff/customer beta has real users and NO financial execution. The gate reports a pilot that claims financial execution before stage 4."
+  },
+  "reversibility": {
+    "_comment": "ADOPT: reversible is a pilot characteristic, and an untested rollback is a plan rather than a route.",
+    "route": "ADOPT: how this pilot is reversed — the kill-switch, the flag, the manual fallback queue. Name the mechanism, not the intention.",
+    "drilled_on": "ADOPT: ISO date the rollback was last actually exercised. A pilot at stage 4 or above with no drill date is a finding: capped production exposure with an unexercised rollback is the case the R3 drill exists for.",
+    "drill_evidence": "ADOPT: what the drill produced — a run id, a report, an incident-style timeline."
+  },
+  "supervision": {
+    "_comment": "ADOPT: the playbook requires EMBEDDED second-line oversight — Risk/Compliance observing directly, not reading a post-hoc report. This block is what makes 'supervised' checkable at all.",
+    "second_line_observer": "ADOPT: the identity id of the human observing. Must resolve, must not be an agent, must not be in `builders`. A pilot supervised by the team running it is unsupervised.",
+    "accountable_executive": "ADOPT: the identity id of the executive holding cease-use authority over the harness (HG-0010). The one who can stop it.",
+    "observation_cadence_days": "ADOPT: a positive number — how often the observer is due to record an observation.",
+    "observations": [
+      {
+        "_comment": "ADOPT: one entry per observation actually made. An `active` pilot whose most recent observation is older than the cadence is REPORTED — the harness cannot know why, and a stale log is the visible part of an unsupervised pilot.",
+        "observed_on": "ADOPT: ISO date.",
+        "by": "ADOPT: identity id — normally the second-line observer.",
+        "note": "ADOPT: what was observed. Read for presence, never for content."
+      }
+    ]
+  },
+  "exercises": [
+    {
+      "_comment": "ADOPT: one entry per adversarial row from runbooks/pilot-playbook.md that has been exercised live. THE GATE READS THE PLAYBOOK ITSELF and requires an entry for every row whose status carries **live** before the pilot may be `concluded`. Adding a row to the playbook therefore creates an obligation here rather than a note somebody has to remember.",
+      "ax": "ADOPT: the row id, e.g. AX-01. An id that is not in the playbook is an exercise of nothing.",
+      "exercised_on": "ADOPT: ISO date.",
+      "outcome": "ADOPT: held | failed | partial. `failed` and `partial` are NOT blocked — a pilot exists to find these, and a pilot reporting that every control held on first contact is the least believable record there is. What the gate requires is that a non-held outcome has a matching entry in `findings`.",
+      "evidence": "ADOPT: what shows the exercise happened — a run id, a log excerpt reference, an incident record. A declared exercise with no evidence is a claim."
+    }
+  ],
+  "findings": [
+    {
+      "_comment": "ADOPT: one entry per material finding. Every `failed` or `partial` exercise must appear here, and the pilot may not conclude while any finding is neither resolved nor risk-accepted.",
+      "id": "ADOPT: a short id.",
+      "ax": "ADOPT (when the finding came from an adversarial exercise): the AX row id it came from. This is what links a `failed` or `partial` exercise to its finding — set it here, or set `finding` to this id on the exercise. An unlinked non-held exercise is a finding the record dropped.",
+      "summary": "ADOPT: what was found.",
+      "disposition": "ADOPT: open | resolved | risk-accepted.",
+      "resolved_by": "ADOPT: identity id, for `resolved`.",
+      "risk_accepted_by": "ADOPT: identity id, for `risk-accepted` — must be the accountable executive named above. Risk acceptance is that role's act and nobody else's; a finding accepted by the build team is an unresolved finding with better paperwork."
+    }
+  ],
+  "exit": {
+    "_comment": "ADOPT: filled only when `status` becomes `concluded`. The playbook's exit criteria, made mechanical where they can be.",
+    "independent_report": "ADOPT: path to the pilot report.",
+    "report_author": "ADOPT: identity id of its author — must resolve and must NOT be in `builders`. 'Independent' is the whole content of the criterion.",
+    "second_line_confirmation": "ADOPT: identity id of the second-line human confirming the control set OPERATED — not that the templates exist. The gate checks who signed; whether they were right is not a property of a JSON file.",
+    "internal_audit_reperformance": "ADOPT (optional): reference to internal audit's independent re-performance for at least one release. Its absence is REPORTED and never blocks — audit's schedule is not the pilot's to command, and pretending otherwise would push adopters to fabricate the field."
+  }
+}

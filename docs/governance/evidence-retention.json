@@ -1,0 +1,80 @@
+{
+  "_comment": "ADOPT: per-evidence-type retention — mounted as docs/governance/evidence-retention.json. The release evidence bundle is sealed and hash-chained (HG-0003, scripts/evidence-seal-check.mjs), which makes it tamper-EVIDENT for as long as it exists. Nothing said how long that is. A Shari'ah examination reaches back years — an examiner asks which ruling authorised the structure a facility written four years ago was booked under, and 'the pipeline retained it for ninety days' is not an answer — and the same is true of a model-risk review, a data-protection complaint, or an audit of a change nobody remembers. So AN EVIDENCE TYPE WITH NO BOUNDED RETENTION ENTRY IS A GAP, reported as uncovered rather than assumed to inherit something sensible. THE HARNESS RECORDS THE POLICY. The immutable archive itself — a WORM store, a time-stamping authority, a retention lock nobody can shorten — is the institution's platform, outside this repository and outside anything a gate here can verify. `immutable_archive: true` is a CLAIM about that platform; the harness reads the claim and can never confirm it.",
+  "_not_the_same_file_as_data_lifecycle": "docs/governance/data-lifecycle.json governs CUSTOMER DATA: what the institution holds about people, why it may, and when it must be erased. This file governs EVIDENCE ABOUT CHANGES: who approved what, against which ruling, on which commit. They pull in opposite directions and both are right — a right-to-erasure request bites on the first, a statutory record-keeping hold bites on the second, and an approval record naming a human contains personal data that is subject to both. Where they disagree, the longer statutory hold wins and THE DISAGREEMENT MUST BE WRITTEN DOWN in the `justification` below rather than resolved silently by whichever job runs first.",
+  "_shortening_is_a_governed_change": "Retention is only a control if it cannot be quietly reduced. This file sits under docs/governance/ and is CODEOWNERS-owned; shortening a period is a reviewed change with a reason, not a config tweak. A period lengthened needs no ceremony.",
+  "default_retention_years": 7,
+  "_default_note": "The floor for any evidence type not named below — it exists so an unnamed type is retained rather than dropped, NOT so types can go unnamed. A type falling through to the default is reported: the default is a safety net, and a safety net that is load-bearing is a missing entry.",
+  "types": {
+    "provenance": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: the trail from a shipped artifact back to the commit, the change and the approvals. If anything is retained, this is — every other record is read through it."
+    },
+    "control-plane": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: proof of what the guardrails were at the time. A control-plane record dropped means a past change can no longer be judged against the rules it was actually built under, only against today's."
+    },
+    "reviews": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: who reviewed, and what they saw. Personal data by construction — reconcile against data-lifecycle.json and name the statutory hold that keeps it."
+    },
+    "tests": {
+      "retention_years": 3,
+      "immutable_archive": false,
+      "justification": "ADOPT: shorter deliberately — a test result's value decays with the code it tested. Lengthen it if your regulator asks what was verified at release rather than what was approved."
+    },
+    "sast": {
+      "retention_years": 3,
+      "immutable_archive": false,
+      "justification": "ADOPT: security-testing output. Retained long enough to show a finding's remediation, not indefinitely."
+    },
+    "sbom": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: what was actually in the artifact. Needed years later when a component's vulnerability is disclosed and the question is which releases carried it — the one evidence type whose value INCREASES with age."
+    },
+    "dependency-audit": {
+      "retention_years": 3,
+      "immutable_archive": false,
+      "justification": "ADOPT: severity counts as asserted at the time. The SBOM is the durable record; this is the verdict against it."
+    },
+    "lineage": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: where data came from and where it went. Retention here is usually set by the data regulator, not by the delivery process."
+    },
+    "model-provenance": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: which model and prompt version decided, and against which evaluation. A model decision challenged years later is unanswerable without this."
+    },
+    "product-eval": {
+      "retention_years": 5,
+      "immutable_archive": false,
+      "justification": "ADOPT: the outcome measures a change was justified by. Retained so a claimed benefit can be re-read against what happened."
+    },
+    "external-anchor": {
+      "retention_years": 10,
+      "immutable_archive": false,
+      "justification": "ADOPT: the third-party time-stamp or anchor that makes the seal examinable by someone outside the institution. It must OUTLIVE what it anchors — an anchor that expires before its evidence leaves a chain nobody external can attest to."
+    },
+    "brainkit-provenance": {
+      "retention_years": 7,
+      "immutable_archive": false,
+      "justification": "ADOPT: which institutional context version a change was built against, and from which approved sources. Answers 'what did the agent believe was policy at the time'."
+    },
+    "sharia-structure-mapping": {
+      "retention_years": 10,
+      "immutable_archive": false,
+      "justification": "ADOPT: the mapping from the implemented product to the approved contract structure. Long, because a Shari'ah examination reaches back over the LIFE OF THE FACILITY — an Ijara or diminishing-Musharaka arrangement can run for decades, and the mapping is what shows the executed structure was the approved one. Delete this row and shariah-attestation if you run no Islamic product."
+    },
+    "shariah-attestation": {
+      "retention_years": 10,
+      "immutable_archive": false,
+      "justification": "ADOPT: the approval assertions of the Shari'ah committee, the compliance function and internal Shari'ah audit, bound to the plan hash they signed. THE LONGEST HOLD IN THE FILE, and the reason this template exists: the question an examiner asks is which committee, under what approval, ruled on the structure a customer is still paying for — and the answer is only as durable as this row. It names people and must therefore be reconciled against data-lifecycle.json; the statutory hold is what keeps it."
+    }
+  },
+  "_immutable_archive_ships_false": "Every type ships `immutable_archive: false`, and that is a statement about THIS FILE rather than advice about your archive. The gate refuses a true claim that names no archive, on the ground that a claim about a store nobody located is not a control — so a template shipping `true` with no ref would assert, on every adopter's behalf and before they had read a line, that ten kinds of evidence sit in a WORM store the harness has never reached. Set it true on the entries you can actually name, and add `archive_ref` there or `immutable_archive_ref` once for the whole file. Retention years are shipped as a starting point; the archive claim is yours to earn."
+}

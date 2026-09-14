@@ -1,0 +1,40 @@
+{
+  "_comment": "ADOPT: the AI-system governance register for models whose outputs materially affect a consumer. Mounted as docs/governance/ai-governance.json and read by scripts/ai-governance-check.mjs. It joins the shipping model pin to accountable ownership, human oversight, bilingual disclosure, monitoring, incident response and stress-test evidence. It does not run the model, observe production, judge an explanation or prove that an intervention works. A green gate means the control design is complete, pinned and evidenced — never that the runtime honoured it.",
+  "_regulatory_basis": "CBUAE Guidance Note on Consumer Protection and Responsible Adoption and Use of AI and ML by LFIs, issued 11 February 2026: sections 2 Governance and Accountability, 4 Transparency and Explainability, 5 Data Quality Privacy and Security, 6 Continuous Monitoring and Review, 7 Human Oversight and Consumer Protection, and 9 Outsourcing and Third-Party Risk. The institution's obligations register remains the source of record for its legal interpretation.",
+  "schema": "loom.ai-governance/v1",
+  "systems": [
+    {
+      "role": "ADOPT: model role, exactly matching docs/governance/model-manifest.json",
+      "model_id": "ADOPT: shipping model pin",
+      "prompt_version": "ADOPT: shipping prompt pin",
+      "use_case": "ADOPT: what the system decides or materially influences for a consumer",
+      "consumer_impact": "material-decision",
+      "accountable_owner": "ADOPT: identity id of a human holding accountable-executive, outside builders",
+      "human_oversight": {
+        "mode": "human-in-the-loop",
+        "operator_role": "ADOPT: role trained and authorised to review or intervene",
+        "intervention_path": "ADOPT: how the operator pauses, rejects or overrides the AI outcome",
+        "alternative_arrangement": "ADOPT: the non-AI route available when the customer requests it",
+        "customer_review_path": "ADOPT: where the customer asks for human review",
+        "overrides_recorded_in": "ADOPT: immutable or controlled record feeding model monitoring"
+      },
+      "disclosure": {
+        "english_surface": "ADOPT: exact screen, letter or script where AI use is disclosed in English",
+        "arabic_surface": "ADOPT: exact screen, letter or script where AI use is disclosed in Arabic"
+      },
+      "monitoring": {
+        "metrics": [
+          "ADOPT: outcome quality, drift, override and consumer-harm indicators"
+        ],
+        "review_every_days": "ADOPT: positive integer",
+        "incident_runbook": "ADOPT: path or controlled reference for the AI incident path"
+      },
+      "privacy_security_assessment": "ADOPT: DPIA, threat model or controlled assessment reference covering this AI use",
+      "third_party_assessment": "ADOPT: outsourcing assessment reference when the model provider is external; otherwise omit",
+      "stress_test": {
+        "ref": "ADOPT: path to adversarial, robustness and unsafe-output test report",
+        "sha256": "ADOPT: sha256 of that report; the gate re-hashes it"
+      }
+    }
+  ]
+}

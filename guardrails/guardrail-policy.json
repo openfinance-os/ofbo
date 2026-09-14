@@ -1,0 +1,252 @@
+{
+  "_comment": "The neutral guardrail policy (Loom 2.0-rc.13 · WS4). The Loom is distributed as a Claude Code plugin marketplace, so its local pre-write guardrails (hooks/) are Claude Code-specific. This policy states, per guardrail and per runtime, EXACTLY what is enforced where — and where it is NOT — so the Loom never implies equivalent protection on a runtime that lacks the hook. States: `enforced` (a local mechanism blocks it at the point of action) · `ci-backstop` (no local block, but a CI gate catches it before merge — the enforcement of record) · `uncovered` (no mechanism; an honest gap, which must be acknowledged with known_gap:true if the decision is `block`). scripts/guardrail-policy-check.mjs verifies every enforced/ci-backstop state names an EXISTING mechanism and every uncovered state names none — no implied coverage. The capability matrix in README.md is generated from this file and gated by doc-integrity.",
+  "_runtimes_comment": "`production-agents` is the SERVING path — an agent answering a customer at request time. Every other runtime here is build-time: the hooks fire on a coding agent's tool call, the CI gates run on a pull request, git hooks run at commit. None of them execute when a deployed agent handles a request, so an institution running agents in the serving path has no coverage from this bundle at all. Declaring the runtime forces every guardrail to say so in a row an adopter reads, instead of leaving the column absent — where silence reads as coverage. Each production-agents note names the adopter-side serving-layer control that WOULD cover it (output filter, egress allowlist at the model gateway, deploy-gate provenance); see adapters/providers/runtime-guardrails/README.md. The harness reads JSON records; it never watches production, so it can never move a cell in this column to `enforced` on its own evidence.",
+  "schema_version": "1.0",
+  "runtimes": [
+    "claude-code",
+    "github-actions",
+    "local-git",
+    "production-agents"
+  ],
+  "events": [
+    "before-file-write",
+    "before-shell-execution",
+    "before-contract-modification",
+    "before-test-modification",
+    "before-network-egress",
+    "before-commit",
+    "before-pr-creation",
+    "before-customer-decision"
+  ],
+  "guardrails": [
+    {
+      "id": "pii-literal",
+      "event": "before-file-write",
+      "decision": "block",
+      "description": "PII-shaped literals (Emirates ID, IBAN) are blocked — synthetic data only",
+      "coverage": {
+        "claude-code": {
+          "state": "enforced",
+          "mechanism": ".claude/hooks/pii-guard.sh",
+          "note": "2.1.0: bound to Write|Edit|MultiEdit|NotebookEdit AND Bash — the command string is scanned, so a heredoc or `sed -i` carrying a real ID is denied at the same point a Write would be; before this the file-tool matcher was a complete bypass. Normalisation strips every non-alphanumeric character (underscore, slash and concatenation no longer evade). A write that never passes through a tool call — a subprocess the agent's own code spawns — is still outside the hook, which is why github-actions is the backstop."
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/secrets-scan.mjs",
+          "note": "catches the secret-shaped subset in tree + history; not a full PII scanner"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped — wire pii-guard as a pre-commit hook to cover this runtime"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "pii-guard is a build-time PreToolUse hook and does not execute in the serving path; a deployed agent that emits a real Emirates ID or IBAN to a customer is stopped by nothing in this bundle. Adopter-side: an output filter / PII screen at the model gateway, whose denials the platform logs"
+        }
+      }
+    },
+    {
+      "id": "test-integrity",
+      "event": "before-test-modification",
+      "decision": "block",
+      "description": "Test-disabling edits (it.skip/.only/.todo/.fails/xit, commented-out assertions) are blocked",
+      "coverage": {
+        "claude-code": {
+          "state": "enforced",
+          "mechanism": ".claude/hooks/test-tripwire.sh",
+          "note": "2.1.0: scope widened to colocated *.test.* files (the Jest/Vitest default was outside the old list), __tests__/, and the Python/Go/JVM conventions; the markers cover bracket access, x-/f-prefixed cases, the options object, skip decorators, block-commented and tautological assertions. Still a session-side defence in depth — scripts/test-integrity-check.mjs (Q1b) is the control of record."
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/test-integrity-check.mjs"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "build-time only; a serving agent edits no test file, so there is nothing here to block. What is genuinely uncovered is the join: nothing proves the deployed agent was built by the pipeline whose tests ran. Adopter-side: signed-image provenance checked at the deploy gate"
+        }
+      }
+    },
+    {
+      "id": "contract-freeze",
+      "event": "before-contract-modification",
+      "decision": "block",
+      "description": "The API contract cannot change inside a feature branch — spec changes take the spec lane",
+      "coverage": {
+        "claude-code": {
+          "state": "enforced",
+          "mechanism": ".claude/hooks/spec-tripwire.sh",
+          "note": "2.1.0: bound to the Bash tool as well — a shell command that names a contract path and carries a write signal (redirection, sed -i, mv/cp/rm, a scripting runtime, a heredoc) is denied on feature/* and claude/* branches; reads are not. Every known spelling of the contract path (yaml/yml/json) is covered; a contract kept under another name needs the ADOPT line in spec-tripwire.sh."
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/control-plane-check.mjs",
+          "note": "the contract path is a CODEOWNERS-owned control target — a change requires Code Owner review"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "spec-tripwire is a build-time PreToolUse hook and does not execute in the serving path; a deployed agent calling outside the frozen contract, or a tool schema that drifted from it, is unstopped here. Adopter-side: a tool-use allowlist at the model gateway pinned to the approved contract"
+        }
+      }
+    },
+    {
+      "id": "control-plane-freeze",
+      "event": "before-file-write",
+      "decision": "block",
+      "description": "The agent cannot edit its own guardrails (gates, workflows, governance data, CODEOWNERS)",
+      "coverage": {
+        "claude-code": {
+          "state": "uncovered",
+          "note": "no local hook blocks control-plane writes — the agent can PROPOSE the edit; CI + Code Owner review is what prevents it merging"
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/control-plane-check.mjs"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "control-plane-check runs on a pull request and does not execute in the serving path; a serving identity that can reach the repo or the deploy pipeline routes around it entirely. Adopter-side: least-privilege serving credentials plus an egress allowlist at the model gateway, so the request-time identity cannot reach the control plane at all"
+        }
+      }
+    },
+    {
+      "id": "brainkit-immutability",
+      "event": "before-file-write",
+      "decision": "block",
+      "description": "Institutional BrainKit content cannot be altered by a builder without the context owner",
+      "coverage": {
+        "claude-code": {
+          "state": "uncovered",
+          "note": "no local hook; institution/ is proposed like any file and blocked at merge"
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/brainkit-check.mjs"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "brainkit-check reads the repo tree in CI and does not execute in the serving path; an agent that retrieves institution/ content into a prompt can restate it wrongly at request time and nothing here reads what it said. Adopter-side: retrieval from a read-only store plus a terminology/output screen at the model gateway"
+        }
+      }
+    },
+    {
+      "id": "network-egress",
+      "event": "before-network-egress",
+      "decision": "block",
+      "description": "Unauthorized network/data egress during a build or agent session",
+      "known_gap": true,
+      "coverage": {
+        "claude-code": {
+          "state": "uncovered",
+          "note": "Claude Code ships no default network-egress hook; use a sandbox/allowlist at the runtime boundary"
+        },
+        "github-actions": {
+          "state": "uncovered",
+          "note": "the bundle ships no egress gate; enforce with an egress-controlled runner (allowlist) or a network policy — adopter-side"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "not a git-level concern"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "the same gap one runtime further out: nothing in the bundle constrains what a deployed agent calls at request time. Adopter-side: an egress allowlist at the model gateway (or a sidecar policy-enforcement point) whose denials are recorded by the platform, never by the agent being constrained — see adapters/providers/runtime-guardrails/"
+        }
+      }
+    },
+    {
+      "id": "parser-fail-closed",
+      "event": "before-file-write",
+      "decision": "block",
+      "description": "A guard that cannot parse its input (jq missing) or load its own configuration must DENY, never silently pass",
+      "coverage": {
+        "claude-code": {
+          "state": "enforced",
+          "mechanism": ".claude/hooks/pii-guard.sh",
+          "note": "every hook emits a deny decision when jq is absent (rc.10); since F3 moved the PII shapes into hooks/pii-patterns.json, pii-guard also denies when that file is missing, unparseable, empty or carries a malformed row — deleting the pattern file is the cheapest attack on the guard and must not look like a clean run"
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/control-plane-check.mjs",
+          "note": "CI gates run under Node with no jq dependency; a parse failure exits non-zero and blocks"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "fail-closed is a property of the shipped hooks and CI gates and says nothing about a serving-path filter. Adopter-side: a gateway that DENIES when its policy engine is unreachable — an output filter that fails open is exactly the defect this row exists to name"
+        }
+      }
+    },
+    {
+      "id": "shariah-terminology",
+      "event": "before-file-write",
+      "decision": "block",
+      "description": "Interest/APR wording in customer-facing prose on a DECLARED Islamic surface is blocked — the return there is a profit or a rental, never interest",
+      "_comment": "DORMANT BY DEFAULT, and that is the design, not a weakness. Scope comes entirely from .claude/hooks/shariah-surfaces.txt (ships EMPTY) and, at merge time, from the adopter's declared emission surfaces; an institution with no Islamic product declares none and never meets this row. READ THE MATRIX CELL WITH THE NOTE BELOW IT: this schema's three states (enforced · ci-backstop · uncovered) have no word for 'installed but dormant until the adopter opts in', so `claude-code` reads `enforced` and its note carries the qualification — as shipped that hook blocks nothing. Note what BOTH mechanisms rule on: NOTHING. Neither makes a Shari'ah determination. They check vocabulary on a surface the institution itself declared Islamic — scholars decide Shari'ah, and a green run here means the conventional word was not used, never that the copy is right and never 'Shari'ah-compliant'. The honest word for what any gate in this bundle can show is structure-conformant.",
+      "coverage": {
+        "claude-code": {
+          "state": "enforced",
+          "mechanism": ".claude/hooks/shariah-term-guard.sh",
+          "note": "ENFORCED ONLY WITHIN THE ADOPTER-DECLARED SCOPE, AND THAT SCOPE SHIPS EMPTY. .claude/hooks/shariah-surfaces.txt carries no entries as delivered, so on a fresh install this hook reads the path being written, finds no declared surface above it, and ALLOWS — it blocks nothing until an adopter lists a path, and a conventional adopter lists none. The state reads `enforced` because the schema offers no state for 'installed but dormant until opted in'; the point-of-action block in the legend is what happens inside a declared surface, not on an unadopted repository. Within one, fenced/backticked spans and PascalCase, camelCase and snake_case identifiers stripped before matching — a mapping layer must be able to name a standard's InterestRate field. English terms only: a vetted non-English list is compliance-owned adopter content, not engineering guesswork"
+        },
+        "github-actions": {
+          "state": "ci-backstop",
+          "mechanism": "scripts/shariah-emission-check.mjs",
+          "note": "SE-R07 is the enforcement of record — it reads every declared prose surface in the tree, not one write, so a term introduced with the hook uninstalled is still caught at merge. Also dormant until an Islamic product exists, but unlike the hook it activates from the COMPILED PLAN rather than from a file somebody remembered to edit: once a plan requires shariah_governance, an absent or empty surfaces declaration is SE-R00, so this backstop cannot be disarmed by declaring nothing"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "no pre-commit hook shipped — wire shariah-term-guard as a pre-commit hook to cover this runtime"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "both mechanisms are build-time and read files in the repository; neither executes in the serving path. An agent that GENERATES customer copy at request time — a chat answer describing an Islamic product's return as interest — is stopped by nothing in this bundle, and that is the likeliest place this defect now reaches a customer. Adopter-side: a terminology screen at the model gateway, whose denials the platform logs (see adapters/providers/runtime-guardrails/). The harness reads JSON records; it never watches production, so this cell cannot become enforced on the harness's own evidence"
+        }
+      }
+    },
+    {
+      "id": "agent-customer-decision",
+      "event": "before-customer-decision",
+      "decision": "block",
+      "description": "A production agent may not finalise a customer-affecting decision without the compiled human-oversight path",
+      "known_gap": true,
+      "_comment": "The honest 'coverage unknown' row. Where a compiled plan requires human_oversight (profiles/products/ai-decision-system.json), the harness can read that the requirement was chosen and approved — it cannot read whether the deployed agent honoured it on any given request, because it reads JSON records and does not watch production. Every runtime is therefore `uncovered`: claiming a ci-backstop here would sell a plan declaration as a request-time control, which is the precise substitution this policy exists to prevent.",
+      "coverage": {
+        "claude-code": {
+          "state": "uncovered",
+          "note": "no pre-write hook can see a request-time decision — the coding agent is not the decider"
+        },
+        "github-actions": {
+          "state": "uncovered",
+          "note": "CI can read that a compiled plan named human_oversight and that an approver signed it; it cannot see whether the deployed agent took the human step. Recording that as a backstop would claim coverage the harness does not have"
+        },
+        "local-git": {
+          "state": "uncovered",
+          "note": "not a git-level concern"
+        },
+        "production-agents": {
+          "state": "uncovered",
+          "note": "no mechanism ships. Adopter-side: a serving-path enforcement point that refuses to finalise a customer-affecting action without the human step the compiled plan required, and records the refusal in a log the PLATFORM asserts — an agent that writes its own 'I was not permitted to do that' record is the defect, not the control"
+        }
+      }
+    }
+  ]
+}

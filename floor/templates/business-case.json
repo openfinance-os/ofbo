@@ -1,0 +1,161 @@
+{
+  "_comment": "GENERATED from the git template named in `source` — do not hand-edit. Regenerate with `node scripts/template-parity-check.mjs --fix`; the gate fails when this file and its source disagree, so the guided form on the floor cannot drift from the artifact the gates read.",
+  "schema": "loom.floor-template/v1",
+  "artifact": "business-case",
+  "title": "Business case",
+  "stage": "handoff",
+  "write_class": "decision-routed",
+  "source": "discovery/templates/business-case.md",
+  "source_digest": "sha256:25c1ec77ac2d3affe9539980dba6101aac54d233cb53094df43666dba0f9da5c",
+  "gates": [
+    "D1",
+    "D2",
+    "D4",
+    "D6",
+    "D9"
+  ],
+  "guidance": "**Identifiers.** Gate ids (`D1`–`D9`) and run-level ids (`S-001` signal, `H1` hypothesis) are expanded in `discovery/GLOSSARY.md`. `SI-*` is a strategic intent from the institutional intake, where one exists.",
+  "properties": [
+    {
+      "name": "Run",
+      "type": "title",
+      "required": true,
+      "help": "The discovery run this artifact belongs to."
+    },
+    {
+      "name": "Status",
+      "type": "select",
+      "required": true,
+      "options": [
+        "draft",
+        "in review",
+        "gate-green"
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "1. The problem, and the intent it serves",
+      "required": true,
+      "kind": "fields",
+      "help": "Quote, do not restate. The problem is frozen in `problem-statement.md`; a business case that re-frames it has left the run.",
+      "fields": [
+        "Problem (D1)",
+        "Target user",
+        "Strategic intent",
+        "Evidence base (D2)"
+      ]
+    },
+    {
+      "name": "2. The case for acting, and the case for not",
+      "required": true,
+      "kind": "table",
+      "help": "**\"Do nothing\" is a mandatory row** — the cost of the problem continuing is the baseline every benefit is measured against, and it is the row most often left out. The other rows are *ways of framing the response*, not solution options: what is compared here is scope and timing, not mechanism. A row that names a technology, a vendor or a system design fails D4.",
+      "columns": [
+        "#",
+        "Option",
+        "What it means for the target user",
+        "Cost of this option, per year",
+        "Why it was set aside / kept"
+      ],
+      "gates": [
+        "D4"
+      ]
+    },
+    {
+      "name": "3. Benefits — the D1 success measures, valued",
+      "required": true,
+      "kind": "table",
+      "help": "**The rule that keeps this honest:** a benefit that is not a D1 success measure is not a benefit of *this* problem. Either it belongs in the problem statement (re-freeze the run) or it is dropped. The `product-eval-check` gate later scores every D1 measure against the shipping commit, so what is written here is what will be measured, by construction.",
+      "columns": [
+        "D1 measure",
+        "Baseline → target",
+        "Value driver",
+        "Value (ADOPT: currency)",
+        "From when",
+        "Measured how (→ `docs/governance/product-evals.json`)",
+        "Confidence"
+      ],
+      "fields": [
+        "Benefits finance does not count (ADOPT: from intake block H)",
+        "Dis-benefits",
+        "What the stakeholder reaction said about these (D9, stage 2)"
+      ],
+      "gates": [
+        "D1"
+      ]
+    },
+    {
+      "name": "4. Total cost of change",
+      "required": true,
+      "kind": "table",
+      "help": "A **band**, not a figure: discovery knows the shape of the change, not its build. One-off and recurring, separately. The build row is the one the Loom can later instrument (the token ledger, `token-report`); every other row is a human estimate and says so. **The rows most often under-counted are marked ▲.**",
+      "columns": [
+        "Cost line",
+        "One-off (band)",
+        "Recurring / yr (band)",
+        "Basis of estimate",
+        "Owner role",
+        "Confidence"
+      ]
+    },
+    {
+      "name": "5. Financial summary *(stage 2)*",
+      "required": true,
+      "kind": "table",
+      "help": "Use the institution's mandated method (ADOPT: from intake block H). If there is none, say so and show payback only — do not invent a hurdle rate.",
+      "columns": [
+        "Measure",
+        "Value (at the band's midpoint)",
+        "Method / assumption"
+      ]
+    },
+    {
+      "name": "6. Risk and governance position",
+      "required": true,
+      "kind": "fields",
+      "help": "Cite; do not re-assess. The positions below are held elsewhere and this case inherits them.",
+      "fields": [
+        "Data-governance verdict (D6)",
+        "Product approval (PA1/PA2), if compiled for this change",
+        "Dependencies",
+        "Assumptions that would change the answer"
+      ]
+    },
+    {
+      "name": "7. Exposure and first value *(stage 2)*",
+      "required": true,
+      "kind": "fields",
+      "help": "",
+      "fields": [
+        "Staged rollout expected",
+        "First value date",
+        "Kill criteria"
+      ]
+    },
+    {
+      "name": "8. Benefits realisation",
+      "required": true,
+      "kind": "table",
+      "help": "Someone owns each measure after launch, and there is a date on which someone looks.",
+      "columns": [
+        "D1 measure",
+        "Owner role",
+        "First review",
+        "Subsequent cadence",
+        "Where the number will come from"
+      ]
+    },
+    {
+      "name": "9. Roster — who this goes to",
+      "required": true,
+      "kind": "table",
+      "help": "This table is the **roster**, not the approval. The decision is recorded in `decision_record` (front-matter) as an ADR or decision envelope merged by a human other than the proposer. Names resolve through `docs/governance/identities.json`; roles only here.",
+      "columns": [
+        "Role",
+        "Function",
+        "Consulted / decides"
+      ]
+    }
+  ]
+}

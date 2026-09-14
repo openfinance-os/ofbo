@@ -1,0 +1,403 @@
+{
+  "schema": "loom.intake-questions/v1",
+  "_comment": "The single question bank behind institution-intake and the questionnaire. The HTML is GENERATED from this file (node intake/build-questionnaire.mjs); scripts/intake-check.mjs fails when they disagree. Every question carries the BrainKit home a SOURCED answer lands in. Add questions here, never in the HTML.",
+  "dispositions": {
+    "SOURCED": "An answer with a reference to a document, register or signed decision. Only these reach a BrainKit section.",
+    "CLAIMED": "An answer with no reference. Goes to the gap register with the respondent's role as owner.",
+    "UNKNOWN": "No answer. Goes to the gap register for escalation."
+  },
+  "blocks": [
+    {
+      "id": "A",
+      "title": "Identity and brand",
+      "home": "identity/design.md",
+      "role": "head of brand / communications"
+    },
+    {
+      "id": "B",
+      "title": "Terminology",
+      "home": "terminology.md",
+      "role": "head of architecture / data office"
+    },
+    {
+      "id": "C",
+      "title": "Architecture principles",
+      "home": "architecture.md",
+      "role": "head of architecture"
+    },
+    {
+      "id": "D",
+      "title": "Technology policy and radar",
+      "home": "technology-policy.json",
+      "role": "CTO office / platform lead"
+    },
+    {
+      "id": "E",
+      "title": "Decision rights",
+      "home": "governance.md + docs/governance/identities.json",
+      "role": "risk, second line"
+    },
+    {
+      "id": "F",
+      "title": "Strategic intents",
+      "home": "strategy.md",
+      "role": "head of strategy / product"
+    },
+    {
+      "id": "G",
+      "title": "Regulated context",
+      "home": "pointers only — the D6 data-risk register and obligations register",
+      "role": "risk, second line / data protection"
+    },
+    {
+      "id": "H",
+      "title": "Investment and the business case",
+      "home": "business-case.md ADOPT markers",
+      "role": "finance / investment committee secretary"
+    },
+    {
+      "id": "I",
+      "title": "Working the Loom",
+      "home": "residency record · floor · facilitator",
+      "role": "data protection / operations / the facilitator"
+    }
+  ],
+  "questions": [
+    {
+      "id": "A1",
+      "block": "A",
+      "prompt": "Is there a brand guideline? Where does it live, who owns it, and when was it last approved?",
+      "hint": "The document is the answer. A colour someone remembers is a claim.",
+      "type": "text",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "A2",
+      "block": "A",
+      "prompt": "Are colour, typography, logo and spacing available as tokens, or only as pictures in a PDF?",
+      "hint": "Tokens can be projected into the D7 brand seam directly; pictures have to be transcribed and re-approved.",
+      "type": "text",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "A3",
+      "block": "A",
+      "prompt": "Are there tone-of-voice rules, or a list of words the institution never uses about itself?",
+      "hint": "Voice rules become the renderer's copy constraints.",
+      "type": "textarea",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "A4",
+      "block": "A",
+      "prompt": "Which output media must look institutional: documents, decks, spreadsheets, web, wireframes?",
+      "hint": "Everything the harness renders for a human reads design.md.",
+      "type": "text",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "A5",
+      "block": "A",
+      "prompt": "Is there a right-to-left or multi-language requirement?",
+      "hint": "The brand seam carries lang and dir; the renderer mirrors layout from them.",
+      "type": "text",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "A6",
+      "block": "A",
+      "prompt": "Who signs off a new template today, and how long does it take?",
+      "hint": "This is a decision right; it also lands in block E.",
+      "type": "text",
+      "home": "identity/design.md"
+    },
+    {
+      "id": "B1",
+      "block": "B",
+      "prompt": "Is there a glossary, a data dictionary, or an adopted regulatory vocabulary? Where?",
+      "hint": "The binding vocabulary every artifact uses.",
+      "type": "text",
+      "home": "terminology.md"
+    },
+    {
+      "id": "B2",
+      "block": "B",
+      "prompt": "Which words are contested internally (two departments, two meanings)?",
+      "hint": "A contested term stays a claim until one side's document wins.",
+      "type": "textarea",
+      "home": "terminology.md"
+    },
+    {
+      "id": "B3",
+      "block": "B",
+      "prompt": "Which product and customer terms are legally defined and must never be paraphrased?",
+      "hint": "These are copied exactly, never reworded by the agent.",
+      "type": "textarea",
+      "home": "terminology.md"
+    },
+    {
+      "id": "C1",
+      "block": "C",
+      "prompt": "Are there written architecture principles, or an architecture review board with a charter?",
+      "hint": "Principles every ADR must conform to.",
+      "type": "text",
+      "home": "architecture.md"
+    },
+    {
+      "id": "C2",
+      "block": "C",
+      "prompt": "What are the binding constraints: data residency, integration patterns, hosting posture, identity provider?",
+      "hint": "Constraints, not preferences. Regulated constraints point at the D6 register rather than repeating it.",
+      "type": "textarea",
+      "home": "architecture.md"
+    },
+    {
+      "id": "C3",
+      "block": "C",
+      "prompt": "What makes a change architecture-material here? What fires a review?",
+      "hint": "Becomes the architecture_material trigger in the institution profile.",
+      "type": "textarea",
+      "home": "architecture.md"
+    },
+    {
+      "id": "C4",
+      "block": "C",
+      "prompt": "Which reference architectures or mandated patterns exist, and where are they?",
+      "hint": "",
+      "type": "text",
+      "home": "architecture.md"
+    },
+    {
+      "id": "D1",
+      "block": "D",
+      "prompt": "The no-fly zone: which technologies must not be introduced, and what is the approved rationale for each?",
+      "hint": "Forbidden without a written reason is a claim, not a policy.",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "D2",
+      "block": "D",
+      "prompt": "The allowed set: the standard language, runtime, data platform and cloud, and the document that says so.",
+      "hint": "",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "D3",
+      "block": "D",
+      "prompt": "The consult set: which technologies need whose sign-off before use?",
+      "hint": "",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "D4",
+      "block": "D",
+      "prompt": "Which internal or external standards has the institution adopted?",
+      "hint": "By reference.",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "D5",
+      "block": "D",
+      "prompt": "Is there a curated package mirror or hardened-libraries supplier? Does the resolver fall back to the public index? Who owns the resolver configuration?",
+      "hint": "An unenforced registry is the honest answer if that is the case.",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "D6",
+      "block": "D",
+      "prompt": "The radar: what is being assessed, trialled, adopted or held, by whom, decided when, and re-decided when?",
+      "hint": "One line per technology: name, ring, owner role, since, review-by or exit-by.",
+      "type": "textarea",
+      "home": "technology-policy.json"
+    },
+    {
+      "id": "E1",
+      "block": "E",
+      "prompt": "Who decides product scope, architecture, risk acceptance, data-protection questions, brand exceptions, technology exceptions, and release to production?",
+      "hint": "One decision per line with the accountable authority and who is consulted.",
+      "type": "textarea",
+      "home": "governance.md + docs/governance/identities.json"
+    },
+    {
+      "id": "E2",
+      "block": "E",
+      "prompt": "Where are those decision rights written: a delegated-authorities matrix, committee terms of reference?",
+      "hint": "",
+      "type": "text",
+      "home": "governance.md + docs/governance/identities.json"
+    },
+    {
+      "id": "E3",
+      "block": "E",
+      "prompt": "How does a decision escalate when authority is unclear?",
+      "hint": "",
+      "type": "textarea",
+      "home": "governance.md + docs/governance/identities.json"
+    },
+    {
+      "id": "E4",
+      "block": "E",
+      "prompt": "Which humans hold the roles the Loom needs: product owner, engineering, risk second line, compliance, legal, operations, data protection, accountable executive, institutional-context owner?",
+      "hint": "Roles only here; names go in the identity registry. A role with no human is a gap.",
+      "type": "textarea",
+      "home": "governance.md + docs/governance/identities.json"
+    },
+    {
+      "id": "E5",
+      "block": "E",
+      "prompt": "Who is the second human who merges what the facilitator proposes?",
+      "hint": "It is never the facilitator.",
+      "type": "text",
+      "home": "governance.md + docs/governance/identities.json"
+    },
+    {
+      "id": "F1",
+      "block": "F",
+      "prompt": "What are the stated strategic intents for the current planning horizon, and where are they written?",
+      "hint": "Strategy paper, board pack, OKR set. Each intent gets a stable id (SI-01…).",
+      "type": "textarea",
+      "home": "strategy.md"
+    },
+    {
+      "id": "F2",
+      "block": "F",
+      "prompt": "For each intent: the owner role and the measure the institution already tracks.",
+      "hint": "",
+      "type": "textarea",
+      "home": "strategy.md"
+    },
+    {
+      "id": "F3",
+      "block": "F",
+      "prompt": "Which intents are explicitly not being pursued this cycle?",
+      "hint": "A problem that serves a parked intent should know it.",
+      "type": "textarea",
+      "home": "strategy.md"
+    },
+    {
+      "id": "G1",
+      "block": "G",
+      "prompt": "Which regulators and regimes apply, in which jurisdictions?",
+      "hint": "Pointers only. The register holds the content.",
+      "type": "textarea",
+      "home": "pointers only — the D6 data-risk register and obligations register"
+    },
+    {
+      "id": "G2",
+      "block": "G",
+      "prompt": "Does a data-risk register exist? Who owns it? When was it last reconciled against the regulation?",
+      "hint": "",
+      "type": "text",
+      "home": "pointers only — the D6 data-risk register and obligations register"
+    },
+    {
+      "id": "G3",
+      "block": "G",
+      "prompt": "Does an obligations register exist, with an owner per obligation?",
+      "hint": "",
+      "type": "text",
+      "home": "pointers only — the D6 data-risk register and obligations register"
+    },
+    {
+      "id": "G4",
+      "block": "G",
+      "prompt": "Is there a jurisdiction profile per market, or one market only?",
+      "hint": "",
+      "type": "text",
+      "home": "pointers only — the D6 data-risk register and obligations register"
+    },
+    {
+      "id": "H1",
+      "block": "H",
+      "prompt": "Who approves funding for change, at what thresholds? One stage or two?",
+      "hint": "",
+      "type": "textarea",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "H2",
+      "block": "H",
+      "prompt": "What financial method is mandated: hurdle rate, horizon, NPV / IRR / payback, currency?",
+      "hint": "If none, say so. The business case then shows payback only.",
+      "type": "text",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "H3",
+      "block": "H",
+      "prompt": "Which benefit categories does finance recognise, and which does it refuse?",
+      "hint": "",
+      "type": "textarea",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "H4",
+      "block": "H",
+      "prompt": "How are benefits tracked after launch today, and by whom? Does anyone go back?",
+      "hint": "",
+      "type": "textarea",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "H5",
+      "block": "H",
+      "prompt": "Which non-build costs does the institution routinely under-count: organisational change, training, legal and contractual work, control-function time, operations and run, decommissioning?",
+      "hint": "",
+      "type": "textarea",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "H6",
+      "block": "H",
+      "prompt": "Is there an existing business-case template? Where?",
+      "hint": "If so, the Loom's template is filled from it, never the other way round.",
+      "type": "text",
+      "home": "business-case.md ADOPT markers"
+    },
+    {
+      "id": "I1",
+      "block": "I",
+      "prompt": "Where may institutional and personal data live? Is a collaboration workspace already approved for it?",
+      "hint": "",
+      "type": "textarea",
+      "home": "residency record · floor · facilitator"
+    },
+    {
+      "id": "I2",
+      "block": "I",
+      "prompt": "Who would sign the residency record: data protection and risk second line, two different people, neither a builder?",
+      "hint": "Roles only.",
+      "type": "text",
+      "home": "residency record · floor · facilitator"
+    },
+    {
+      "id": "I3",
+      "block": "I",
+      "prompt": "Which workspace tool would a Factory Floor project into, if any?",
+      "hint": "",
+      "type": "text",
+      "home": "residency record · floor · facilitator"
+    },
+    {
+      "id": "I4",
+      "block": "I",
+      "prompt": "Who is the facilitator? Do they have Claude Code and the plugin today?",
+      "hint": "Role only.",
+      "type": "text",
+      "home": "residency record · floor · facilitator"
+    },
+    {
+      "id": "I5",
+      "block": "I",
+      "prompt": "What is the institution's PII rule for interview notes and meeting notes?",
+      "hint": "If there is none, the floor's catalog-C banner is the rule until one is written, and that is a gap.",
+      "type": "textarea",
+      "home": "residency record · floor · facilitator"
+    }
+  ]
+}

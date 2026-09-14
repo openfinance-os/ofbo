@@ -1,0 +1,20 @@
+# Declared Islamic customer-facing PROSE surfaces — the scope of .claude/hooks/shariah-term-guard.sh.
+#
+# THIS FILE SHIPS EMPTY, AND THAT IS THE CORRECT STATE FOR MOST ADOPTERS. With no entries the term
+# guard is a NO-OP: it reads the path being written, finds no declared surface above it, and allows.
+# A conventional institution never opts a surface in and therefore never sees this control at all.
+# Islamic governance in this harness is mandatory-when-compiled, never mandatory-by-default.
+#
+# ADOPT: one repository-relative path PREFIX per line. Matching is a literal prefix test, not a glob:
+#   docs/product/islamic/
+#   apps/web/src/content/islamic/
+#   content/legal/takaful/
+#
+# Scope it to surfaces that carry COPY A CUSTOMER READS. This list is not a source tree. A directory
+# of application code that happens to sit under an "islamic" folder will produce noise, and a noisy
+# pre-write hook is a hook somebody turns off — which is a worse outcome than never having shipped it.
+#
+# What this list does NOT do: it makes no Shari'ah determination and confers no compliance. It states
+# where an interest/APR word in customer copy is a defect worth stopping at the keystroke. Scholars
+# decide Shari'ah. The gate that reads the same ground more thoroughly, at merge time, is
+# scripts/shariah-emission-check.mjs (SE-R07); this hook is only the fast path.

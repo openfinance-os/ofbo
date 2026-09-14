@@ -1,0 +1,212 @@
+{
+  "profile": "regulated-bank",
+  "kind": "base",
+  "_comment": "The base regulated-bank profile (Loom 2.0 §2). Requirements are CUMULATIVE by tier: the compiler unions everything at or below the envelope's tier, so higher tiers only add. Gates: D = discovery D1-D9, PA1/PA2 = product approval, A = architecture assurance A1-A5, Q = delivery Q-gates, R = operational readiness (1.12). Capabilities are MANDATORY-WHEN-COMPILED: naming one here is what makes its gate bite, so `sca` and `hardened_runtime` at high tier mean a high-tier change must have CHOSEN a provider for each role (adapters/providers/roles.json) — not activated it, chosen it. They sit at high because that is where the evidence they govern already sits: a tier that must produce a dependency-audit should have said who asserts it, and one whose agent runtime is unaccounted for has not met HG-0011's attested-execution limb. `exposure_control` (rc.39 · flow-plan Phase 5.2) joins them for the same reason: at high tier the compound production authorization is holding something that can hurt a customer, and a change that cannot state HOW it is exposed — a flag defaulting off, an owner, a kill path, a cohort stage, an end date — has only one exposure mode, which is all of it at once. Requiring it makes scripts/feature-flag-check.mjs and the progressive_delivery block in service readiness both bite; neither is a new approval. ADOPT: tighten to your policy; you cannot loosen a lower tier from a higher one.",
+  "requirements": {
+    "low": {
+      "gates": [
+        "D",
+        "Q"
+      ],
+      "approver_roles": [
+        "product-owner",
+        "engineering"
+      ],
+      "evidence": [
+        "tests",
+        "reviews"
+      ],
+      "pa1_sections": [],
+      "pa2_sections": []
+    },
+    "medium": {
+      "gates": [
+        "PA1",
+        "PA2"
+      ],
+      "approver_roles": [
+        "risk-second-line",
+        "compliance",
+        "legal",
+        "operations"
+      ],
+      "evidence": [
+        "control-plane",
+        "model-provenance",
+        "lineage"
+      ],
+      "pa1_sections": [
+        "classification",
+        "target-market",
+        "inherent-risks",
+        "regulatory-obligations",
+        "ownership"
+      ],
+      "pa2_sections": [
+        "pricing-conduct",
+        "disclosures",
+        "financial-crime",
+        "finance-prudential",
+        "complaints-remediation",
+        "post-launch-monitoring"
+      ],
+      "capabilities": {
+        "data_risk_register": {
+          "required": true,
+          "minimum_version": "3.1",
+          "institution_owned": true
+        },
+        "threat_model": {
+          "required": true
+        }
+      },
+      "_threat_model_comment": "2.1.0 (hardening plan 4.6): a MEDIUM software change owes its threat model (A2: threat → control → test) without the full A1–A5 gate. The A gate stays at high; `threat_model` is mandatory-when-compiled, so scripts/architecture-assurance-check.mjs evaluates A2 alone for a medium plan and the change-envelope gate requires architecture-assurance.json from in-delivery. A change too small to have attackers is a documentation change, and that tier is low."
+    },
+    "high": {
+      "gates": [
+        "A",
+        "product-eval",
+        "assurance-cadence"
+      ],
+      "approver_roles": [
+        "information-security",
+        "accountable-executive"
+      ],
+      "evidence": [
+        "sast",
+        "sbom",
+        "dependency-audit",
+        "provenance",
+        "product-eval"
+      ],
+      "pa1_sections": [
+        "data-and-models",
+        "third-parties"
+      ],
+      "pa2_sections": [
+        "security-privacy-residency",
+        "model-validation",
+        "operational-readiness"
+      ],
+      "_evidence_retention_comment": "An examination arrives years after the change it asks about, and the evidence either still exists or the answer is lost. `evidence_retention` requires the institution to state, per evidence type, how long it keeps the record and whether the store is immutable. It is required HERE rather than left to the adopter because a capability no profile can require is a control nothing can arm — decorative, which is the defect this release spent itself removing. The harness reads the POLICY; whether the archive actually retains anything is the institution's platform and is named as unverifiable in the gate.",
+      "capabilities": {
+        "model_risk": {
+          "required": true,
+          "minimum_tier": "medium"
+        },
+        "sca": {
+          "required": true
+        },
+        "hardened_runtime": {
+          "required": true
+        },
+        "exposure_control": {
+          "required": true
+        },
+        "evidence_retention": {
+          "required": true,
+          "institution_owned": true
+        },
+        "external_record": {
+          "required": true
+        },
+        "operating_model": {
+          "required": true,
+          "institution_owned": true
+        }
+      },
+      "_external_record_comment": "2.1.0 (hardening plan 2.2, decision K9): a high-tier change must name where the record of its gate results lives OUTSIDE the tree the agent edits (role `external-record`, adapters/providers/roles.json). Kosli is the first provider; the seam is core/external-record.mjs. With no provider selected PS-R06 fires; with one mounted, scripts/evidence-seal-check.mjs requires the manifest's external_record id to resolve at the provider."
+    },
+    "critical": {
+      "gates": [
+        "R",
+        "second-line-hold"
+      ],
+      "approver_roles": [
+        "board-or-cab"
+      ],
+      "evidence": [
+        "external-anchor"
+      ],
+      "pa1_sections": [
+        "regulatory-notification"
+      ],
+      "pa2_sections": [
+        "regulatory-clearance"
+      ]
+    }
+  },
+  "_patterns_comment": "PRE-APPROVED CHANGE PATTERNS (rc.38 · flow-plan Phase 4.3), read by core/change-patterns.mjs and enforced by scripts/change-envelope-check.mjs. A pattern moves an approval from per-instance to per-envelope: a second-line human approves the SHAPE of a change once, and every change matching that shape rides it instead of re-collecting the same signatures for the same route. It is not a waiver and it is not a lower tier — the plan a matching change compiles is IDENTICAL, and the pattern names its hash so that this is checkable rather than asserted. Five conditions hold it up and every one fails closed: the pattern EXPIRES; a builder cannot approve one; the compiled plan_hash must equal pre_compiled_plan_hash; a matcher miss (path or size) takes the FULL route; and each riding change enrols in the post-hoc sample, a selected sample owing a completed second-line review. ADOPT: this is a WORKED EXAMPLE. pre_compiled_plan_hash is the hash the bundled CHG-2026-0055 compiles in THIS tree; in your repository the same envelope compiles a different hash because your profiles differ, so recompile the change you intend to pre-approve and paste ITS hash here — or delete this block, which costs you nothing. `patterns` is deliberately excluded from the profile binding digest; see core/policy-compiler.mjs resolveBindings for why a pattern could not otherwise name a real route.",
+  "patterns": [
+    {
+      "pattern_id": "dependency-patch",
+      "objective": "Patch-level dependency bumps inside a service, with no contract, schema, control-plane or auth surface moving",
+      "matcher": {
+        "paths": [
+          "package-lock.json",
+          "services/**/package-lock.json",
+          "services/**/requirements.txt"
+        ],
+        "max_diff_lines": 60
+      },
+      "pre_compiled_plan_hash": "07ade801379be8d2e4ea8de028dff55b966a8160808472a5eb327da4e4ec44c8",
+      "approved_by": "risk-lena",
+      "approved_at": "2026-07-22",
+      "_expires_comment": "ADOPT: a real pattern's window is short — 90 days is normal, and re-reading it is the point. The date here is far out ON PURPOSE: a shipped fixture with a 90-day expiry is a build that turns red on a calendar, and a check that turns red on a calendar gets deleted rather than renewed. The bundle's CI proves BOTH directions per run by restamping this field, so the expiry is exercised without being load-bearing on the date.",
+      "expires": "2030-01-01",
+      "sampling_rate": 0.1
+    }
+  ],
+  "conditional": [
+    {
+      "when": "model_involved",
+      "adds": {
+        "gates": [
+          "decision-log"
+        ],
+        "approver_roles": [
+          "model-validator"
+        ],
+        "evidence": [
+          "model-provenance"
+        ],
+        "pa2_sections": [
+          "model-validation"
+        ]
+      }
+    },
+    {
+      "when": "personal_data",
+      "adds": {
+        "approver_roles": [
+          "data-protection"
+        ],
+        "pa2_sections": [
+          "security-privacy-residency"
+        ],
+        "_real_data_comment": "`real_data_controls` hangs on the personal_data FLAG, not on a risk tier, and the distinction is the whole point. The harness is synthetic-only by design and a repository that starts carrying real customer data does not announce it — but a high-risk change on synthetic fixtures owes nobody a key-custody story, while ANY change touching real personal data does. This flag is also one of the three the change-envelope gate corroborates against the data lifecycle register, so it cannot be dodged by leaving a box unticked. The institution records which platform controls stand between real data and the people and agents who touch it; the harness cannot verify any of them operate, and refuses only to let a change ship that never named them.",
+        "capabilities": {
+          "real_data_controls": {
+            "required": true,
+            "institution_owned": true
+          },
+          "dpia": {
+            "required": true
+          }
+        },
+        "_dpia_comment": "2.1.0 (hardening plan 4.2): a change flagged personal_data compiles `dpia` — scripts/product-approval-check.mjs then requires a dpia.json beside the envelope at PA1 (categories that resolve in the data-lifecycle register, purpose, lawful basis, residency, necessity, risks each with a mitigation, signed by a data-protection human outside the builders group). It replaces the prose pdpl-and-residency passport section the UAE profile used to compile: a paragraph could satisfy that, a record cannot be satisfied by a paragraph."
+      }
+    },
+    {
+      "when": "third_party",
+      "adds": {
+        "pa1_sections": [
+          "third-parties"
+        ],
+        "pa2_sections": [
+          "third-party-continuity"
+        ]
+      }
+    }
+  ]
+}
