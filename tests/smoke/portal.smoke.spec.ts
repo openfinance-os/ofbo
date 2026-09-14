@@ -67,6 +67,16 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
    * It is also the end-to-end check for the whole sign-in chain: a reachable database, a
    * successful High-class audit write, a session cookie. Any of those failing lands on
    * `/?error=…`, which this reads back and reports by name.
+   *
+   * INCLUDING the super admin, deliberately. PRD §2 guardrail (a) bars ASSIGNING the role to a
+   * service account or automation, and nothing here assigns anything: this posts the same
+   * pre-provisioned walkthrough token the screen offers every demo visitor, which guardrail (f)
+   * exists to sanction for the demo profile this suite runs against. Skipping it would leave the
+   * one button that was actually reported broken as the one button nothing checks.
+   *
+   * Nothing is asserted about the cookie's VALUE — a session token is not something to print into
+   * a CI log on failure. Its presence and `HttpOnly` flag are the properties that matter, so those
+   * are what the assertion carries.
    */
   it('signs in every persona the screen offers, not just the first', async () => {
     const html = await (await fetch(PORTAL)).text()
@@ -79,9 +89,10 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
     expect(tokens.length, 'the sign-in screen must offer at least two persona sign-in buttons').toBeGreaterThan(1)
 
     for (const token of tokens) {
+      const trace = crypto.randomUUID()
       const res = await fetch(`${PORTAL}/api/login`, {
         method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-fapi-interaction-id': trace },
         body: new URLSearchParams({ token }),
         redirect: 'manual'
       })
@@ -91,7 +102,12 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
       const persona = token.split(':')[1] ?? token
       expect(res.status, `sign-in for ${persona} must redirect`).toBe(303)
       expect(location, `sign-in for ${persona} must reach the dashboard, got ${location}`).toMatch(/\/dashboard$/)
-      expect(res.headers.get('set-cookie') ?? '', `sign-in for ${persona} must set a session cookie`).toMatch(/HttpOnly/i)
+      // The cookie's PRESENCE and HttpOnly flag, never its value — see above.
+      const sessionCookie = /httponly/i.test(res.headers.get('set-cookie') ?? '')
+      expect(sessionCookie, `sign-in for ${persona} must set an HttpOnly session cookie`).toBe(true)
+      // CLAUDE.md requires x-fapi-interaction-id propagated end to end, and this is the only
+      // end-to-end assertion over the sign-in path — so it is the one that should pin it.
+      expect(res.headers.get('x-fapi-interaction-id'), `sign-in for ${persona} must echo the trace id`).toBe(trace)
     }
   }, 60_000)
 })

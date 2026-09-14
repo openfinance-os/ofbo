@@ -75,10 +75,12 @@ vi.mock('@ofbo/db', async (importOriginal) => {
   return { ...actual, PgAuditEmitter: RecordingEmitter, PgAuditReader: RecordingReader }
 })
 
+/** Scopes are what the §2 matrix grants this persona, nothing more — inert on every path here,
+ *  but a fixture that grants beyond the matrix is the precedent the next reader copies. */
 const PRINCIPAL = {
   subject: 'ops-analyst-01',
   persona: 'operations-analyst',
-  scopes: ['audit:read'],
+  scopes: ['platform:operations:read', 'platform:operations:write', 'certification:read'],
   superadmin: false
 }
 const TRACE = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
