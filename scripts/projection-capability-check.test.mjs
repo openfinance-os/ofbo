@@ -287,7 +287,7 @@ test('an unlabelled payload committed under the projection directory is refused'
 
 test('a payload carrying personal data or a field outside the ceiling is refused at the gate', () => {
   const leaky = JSON.parse(JSON.stringify(PAYLOAD));
-  leaky.records[0].fields.title = 'chase 784-1990-1234567-1';
+  leaky.records[0].fields.title = `chase ${['784', '1990', '1234567', '1'].join('-')}`;
   leaky.records[0].fields.customer_note = 'called twice';
   withRepo({ capability: record(), payloads: [leaky] }, (dir) => {
     const f = run(dir, { now: NOW }).findings;

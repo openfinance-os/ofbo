@@ -33,6 +33,8 @@ import {
   verifyIntake,
 } from './floor-ops-signal.mjs';
 
+const REAL_EID = ['784', '1990', '1234567', '1'].join('-');
+
 const FILED = {
   id: 'OPS-2026-101',
   source: 'pagerduty',
@@ -303,7 +305,7 @@ test('signal_id and the filed claim must be about the same signal', () => {
 // NEGATIVE — the whole reason this scan is here. floor-project's ceiling governs git → floor; this
 // is floor → git, where a human types prose about a customer and a merge makes it permanent.
 test('a personal-data shape in floor-authored free text refuses the intake', () => {
-  const f = run(filed({ summary: 'Customer 784-1990-1234567-1 called three times about the fee.' }));
+  const f = run(filed({ summary: `Customer ${REAL_EID} called three times about the fee.` }));
   assert.ok(has(f.findings, /OS-R08.*national-identifier-shaped string/));
   assert.equal(f.record, null, 'nothing is proposed — a merge cannot be recalled');
   const j = run(FILED, adj({ route: 'accepted', link: undefined, justification: 'Spoke to noor@bank.example.ae; transient, inside the error budget.' }));

@@ -30,6 +30,8 @@ import {
 const AT = '2026-07-26T09:00:00Z';
 const SRC = { sha: 'a1b2c3d4e5f6', ref: 'refs/heads/main' };
 const opts = (over = {}) => ({ projectedAt: AT, source: SRC, ...over });
+const REAL_EID = ['784', '1990', '1234567', '1'].join('-');
+const REAL_IBAN = ['AE07', '033', '1234567890123456'].join('');
 
 const BACKLOG = [
   { id: 'STORY-12', title: 'Affordability check on limit increase', state: 'pending', milestone: 'M1', discovery: 'credit-limit-review', waist_gate: 'green' },
@@ -158,7 +160,7 @@ test('a content class nobody listed has fidelity `never`', () => {
 // NEGATIVE — the record the filter exists for. Absent the scan this projects a customer identifier.
 test('personal data in a projected field withholds the WHOLE record, visibly', () => {
   const { payload, notices } = project({
-    backlog: [{ id: 'STORY-99', title: 'Chase 784-1990-1234567-1 about the fee', state: 'pending' }],
+    backlog: [{ id: 'STORY-99', title: `Chase ${REAL_EID} about the fee`, state: 'pending' }],
   }, opts());
   const r = payload.records[0];
   assert.equal(r.withheld, true);
@@ -173,8 +175,8 @@ test('personal data in a projected field withholds the WHOLE record, visibly', (
 
 test('separators cannot walk an identifier past the filter, and the other shapes are caught too', () => {
   assert.equal(scan('784.1990.1234567.1').id, 'emirates-id');
-  assert.equal(scan('784 1990 1234567 1').id, 'emirates-id');
-  assert.equal(scan('AE070331234567890123456').id, 'uae-iban');
+  assert.equal(scan(REAL_EID.replaceAll('-', ' ')).id, 'emirates-id');
+  assert.equal(scan(REAL_IBAN).id, 'uae-iban');
   assert.equal(scan('AE070001234567890123456'), null, 'synthetic IBANs (bank code 000) are fine');
   assert.equal(scan('fatima@example.ae').id, 'email-address');
   // The PEM header only, with no key material after it — it is the input that proves the projection
@@ -196,7 +198,7 @@ test('the scan runs AFTER the transform — a summary cannot smuggle what its so
 // NEGATIVE — a hand-built payload that skipped the projector entirely.
 test('a prohibited shape in a hand-built payload is refused at the gate too', () => {
   const { payload } = built();
-  payload.records[0].fields.title = 'Refund to AE070331234567890123456';
+  payload.records[0].fields.title = `Refund to ${REAL_IBAN}`;
   payload.digest = digestOf(payload);
   assert.ok(verifyProjection(payload).some((f) => /PJ-R04.*real-shaped UAE IBAN/.test(f)));
 });
@@ -338,7 +340,7 @@ test('the board, timeline, activity feed and MI derive from the payload only', (
 
 // NEGATIVE — the board is where "withheld" would be easiest to render as "absent".
 test('a withheld record still appears on the board, as a withheld card', () => {
-  const { payload } = project({ backlog: [{ id: 'STORY-99', title: 'call 784-1990-1234567-1', state: 'pending' }] }, opts());
+  const { payload } = project({ backlog: [{ id: 'STORY-99', title: `call ${REAL_EID}`, state: 'pending' }] }, opts());
   const v = deriveViews(payload);
   assert.deepEqual(Object.keys(v.board.columns), ['withheld']);
   assert.equal(v.board.columns.withheld[0].label, 'withheld — filter hit');

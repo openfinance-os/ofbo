@@ -37,8 +37,10 @@ that the gate was right.
 Agents read the record through `core/record-mcp.mjs`, a read-only MCP server the plugin mounts as
 `loom-record` (adopters add `{"command":"node","args":["core/record-mcp.mjs"]}` to their
 `.mcp.json`). `scripts/record-audit.mjs <CHG>` renders one audit page per change from the record
-joined to the sealed bundle. `node demo/run-demo.mjs` walks the whole seam against the fake in
-fifteen steps; `--real` runs it against an org and writes `docs/integration-run.md`.
+joined to the sealed bundle. The source bundle's demo is not copied into an adopted repository.
+Here, the selected provider's live integration and tamper-probe results belong in the mounted
+adapter declaration's `activation_evidence`, with the corresponding references tracked by the
+activation plan.
 
 ## Providers here
 
@@ -47,7 +49,7 @@ fifteen steps; `--real` runs it against an org and writes `docs/integration-run.
 | Record unit | one trail per change envelope; one attestation per gate result, decision or seal anchor |
 | Id | the `attestation_id` Kosli assigns, read back with `get trail --output json` |
 | Transport | the official CLI only (`core/kosli-cli.mjs`); auth via `KOSLI_API_TOKEN` in the runner, never on argv |
-| Verified surface | `docs/kosli-surface.md` — every adapter method cites a row |
+| Verified surface | `core/providers/kosli.mjs` and `core/kosli-cli.mjs` — the mounted adapter and its CLI boundary |
 
 ## To adopt
 

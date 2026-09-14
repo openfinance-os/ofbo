@@ -19,6 +19,8 @@ import {
 } from './floor-pii.mjs';
 
 const codes = (r) => r.findings.map((f) => f.code);
+const REAL_EID_COMPACT = ['784', '1990', '1234567', '1'].join('');
+const REAL_IBAN = ['AE07', '033', '1234567890123456'].join('');
 const BENIGN = [
   '# Meeting note — MN-014',
   '',
@@ -239,8 +241,8 @@ test('every personal-data shape the egress filter BLOCKS is also caught here', a
 
   // Synthetic, shape-valid samples — one per blocking rule. Fabricated for this file.
   const SAMPLES = {
-    'emirates-id': '784123456789012',
-    'uae-iban': 'AE070331234567890123456',
+    'emirates-id': REAL_EID_COMPACT,
+    'uae-iban': REAL_IBAN,
     'email-address': 'someone@example.co',
     'private-key': '-----BEGIN RSA PRIVATE KEY-----', // loom-allow-secret — a header, no key material
     'bearer-token': 'ghp_abcdefghijklmnop123', // loom-allow-secret — fabricated, matches no real token

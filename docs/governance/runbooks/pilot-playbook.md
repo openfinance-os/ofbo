@@ -33,7 +33,7 @@ Choose a change that is meaningful but bounded:
 ## Adversarial checklist — attack → the control that catches it
 
 Each row names the mechanism that rejects the attack and its status. **CI-proven** means a
-negative bypass test in `.github/workflows/validate.yml` demonstrates the rejection on every
+negative bypass test in `.github/workflows/ci.yml` demonstrates the rejection on every
 commit; **live** means the bundle enforces the repo-side half and the adopter must exercise
 the platform/organisational half in the pilot.
 

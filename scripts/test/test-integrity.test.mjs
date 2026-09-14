@@ -34,7 +34,7 @@ test('OFBO Q1b rejects a newly skipped test on an implementation change', () => 
     const result = spawnSync(process.execPath, ['test-integrity.mjs'], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, BASE_REF: 'HEAD~1', GITHUB_HEAD_REF: 'feature/BACKOFFICE-999-check' },
+      env: { ...process.env, GITHUB_BASE_REF: '', BASE_REF: 'HEAD~1', GITHUB_HEAD_REF: 'feature/BACKOFFICE-999-check' },
     });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /introduces a test-disabling marker/);
@@ -53,7 +53,7 @@ test('OFBO Q1b accepts a strengthened test alongside an implementation change', 
     const result = spawnSync(process.execPath, ['test-integrity.mjs'], {
       cwd,
       encoding: 'utf8',
-      env: { ...process.env, BASE_REF: 'HEAD~1', GITHUB_HEAD_REF: 'feature/BACKOFFICE-999-check' },
+      env: { ...process.env, GITHUB_BASE_REF: '', BASE_REF: 'HEAD~1', GITHUB_HEAD_REF: 'feature/BACKOFFICE-999-check' },
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /no weakening detected/);

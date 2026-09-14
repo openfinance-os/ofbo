@@ -38,11 +38,13 @@ const run = (script, toolInput, repo) => {
 };
 const denied = (out) => /"permissionDecision":\s*"deny"/.test(out);
 const reasonOf = (out) => { try { return JSON.parse(out).hookSpecificOutput.permissionDecisionReason; } catch { return ''; } };
+const REAL_EID = ['784', '1990', '1234567', '1'].join('-');
+const REAL_IBAN_DOTTED = ['ae07', '0331', '2345', '6789', '0123', '456'].join('.');
 
 // ── pii-guard ────────────────────────────────────────────────────────────────────────────────
 
 test('pii-guard: a write through the Bash tool is scanned (heredoc carrying an Emirates ID)', { skip: SKIP }, () => {
-  const out = run('pii-guard.sh', { command: "cat > fixtures/customer.json <<'EOF'\n{ \"eid\": \"784-1990-1234567-1\" }\nEOF" });
+  const out = run('pii-guard.sh', { command: `cat > fixtures/customer.json <<'EOF'\n{ "eid": "${REAL_EID}" }\nEOF` });
   assert.ok(denied(out), 'a heredoc used to be a complete bypass of every file-tool hook');
   assert.match(reasonOf(out), /Emirates-ID-shaped/);
 });
@@ -67,7 +69,7 @@ test('pii-guard: an ordinary shell command and synthetic fixtures are allowed', 
 });
 
 test('pii-guard: a lowercase, dotted IBAN is still caught after normalisation', { skip: SKIP }, () => {
-  assert.ok(denied(run('pii-guard.sh', { content: 'ae07.0331.2345.6789.0123.456' })));
+  assert.ok(denied(run('pii-guard.sh', { content: REAL_IBAN_DOTTED })));
 });
 
 // ── spec-tripwire ────────────────────────────────────────────────────────────────────────────

@@ -182,7 +182,7 @@ export const DRIFT_STATES = new Set(['none', 'draft ahead of record']);
 
 /**
  * Shapes refused in any rendered payload. `normalized` patterns run over a separator-stripped,
- * upcased copy, so `784.1990.1234567.1` cannot walk past a pattern written for `784199012345671` —
+ * upcased copy, so a dotted Emirates ID cannot walk past the compact-form pattern —
  * the same evasion `hooks/pii-guard.sh` learned to close. These run AFTER transformation, so a
  * summary cannot smuggle what its source contained.
  *

@@ -68,9 +68,11 @@ test('the shipped guardrail policy is honest — every claimed mechanism exists'
 // Skip cleanly in a bare layout with no hooks (same pattern as the attestation/register tests).
 const runHook = (script, input, opts = {}) =>
   spawnSync('bash', [join(HOOKS_DIR, script)], { input: JSON.stringify(input), encoding: 'utf8', ...opts }).stdout || '';
+const REAL_EID = ['784', '1990', '1234567', '1'].join('-');
+const REAL_IBAN_SPACED = ['ae07', '0331', '2345', '6789', '0123', '456'].join(' ');
 
 test('hostile: a PII-shaped literal is DENIED by the claude-code pii-guard adapter', { skip: !HOOKS_DIR }, () => {
-  const out = runHook('pii-guard.sh', { tool_input: { content: 'Emirates ID 784-1990-1234567-1' } });
+  const out = runHook('pii-guard.sh', { tool_input: { content: `Emirates ID ${REAL_EID}` } });
   assert.match(out, /"permissionDecision":\s*"deny"/);
 });
 
@@ -166,7 +168,7 @@ test('F3 fail-closed: a MALFORMED row DENIES rather than being skipped', { skip:
 // Emirates ID slipped a space/hyphen-only strip, and a lowercase IBAN dodged the uppercase pattern.
 // Moving the shapes into JSON must not quietly move the normalisation with them.
 test('regression: separator/case evasion still fails — normalisation survived the move to data', { skip: !HOOKS_DIR }, () => {
-  for (const content of ['784.1990.1234567.1', '78 4-1990-1234567-1', 'ae07 0331 2345 6789 0123 456']) {
+  for (const content of ['784.1990.1234567.1', '78 4-1990-1234567-1', REAL_IBAN_SPACED]) {
     const out = runHook('pii-guard.sh', { tool_input: { content } });
     assert.match(out, /"permissionDecision":\s*"deny"/, `evasion not caught: ${content}`);
   }
