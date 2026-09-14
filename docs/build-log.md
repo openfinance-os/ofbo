@@ -5093,3 +5093,37 @@ smoke suite's token parser is pinned to the markup `PersonaLoginList` actually r
 what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal worker is the
 remedy, and it is NOT an alternative to this change: no configuration makes a socket survive a
 request boundary on Workers.
+
+---
+
+## 2026-09-14 — BACKOFFICE-103: the Q4 dependency gate went red on main without a commit
+
+Found while driving BACKOFFICE-102's PR to green: `Q4 — security review + dependency scan` failed
+with 2 critical and 7 high. Not that PR's doing — its dependency graph is byte-identical to main's,
+and the same command reproduces the same 24 findings on main's own lockfile. `pnpm audit` queries a
+LIVE advisory database against a lockfile that has not moved since 2026-08-29, so main and every
+open PR were blocked by advisories published in the intervening fortnight.
+
+**Two of them are critical and in the portal we ship.** `next@15.5.22` carries GHSA-p293-qw3h-jr36
+(unauthenticated RCE on Windows-hosted servers) and GHSA-2xp9-vwfh-vxw4 (unauthenticated RCE in the
+Image Optimization API via AVIF), both patched in 15.5.24. Alongside them: `sharp` (libheif),
+`browserslist` (OOM and a prototype write), and four `fast-uri` host-confusion/SSRF advisories.
+
+**The repo's own convention handled all four, so nothing was invented.** `next` is a direct
+dependency, so it moves in `apps/portal/package.json` (→ `^15.5.25`) — which the overridesNote
+already says is where a direct dependency belongs. `sharp` was already inside its `^0.35.0` floor
+and a lockfile refresh lifted it. `browserslist` and `fast-uri` are pinned BELOW the patch by their
+parents (`next > styled-jsx > @babel/helper-compilation-targets`, and `ajv` under
+`@modelcontextprotocol/sdk`), which is exactly what the `pnpm.overrides` dependency-scan floors
+exist for — one new floor, one raised, both documented with their advisory and pinning parent as
+the note requires.
+
+**Evidence.** `pnpm audit --prod --audit-level=high` exits 0 (14 findings remain, all low/moderate,
+which the gate does not block on) · unit 1833/1833 · portal integration 6/6 on a real PostgreSQL 16
+· typecheck 11/11 · ESLint clean · `pnpm build` green · **`opennextjs-cloudflare build` green**,
+which is the check that matters for a Next bump and which `next build` alone does not prove — the
+demo deploys through the OpenNext adapter, not through `next start`.
+
+**Carried on BACKOFFICE-102's branch**, not its own, because the session was pinned to one branch.
+It is a self-contained commit touching only `package.json`, `apps/portal/package.json` and the
+lockfile, and cherry-picks cleanly if a reviewer would rather land it on main first.

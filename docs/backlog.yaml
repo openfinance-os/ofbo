@@ -418,6 +418,50 @@ milestones:
           which is what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal
           worker is the remedy for that, and it is NOT an alternative to this fix - no configuration
           makes a socket survive a request boundary on Workers.
+      - id: BACKOFFICE-103
+        title: Q4 dependency scan red on main - two critical Next.js advisories and four fast-uri
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a merge-blocking CI gate that went red on main without a commit, because
+          `pnpm audit` queries a LIVE advisory database against a lockfile that has not moved since
+          2026-08-29. Found while driving BACKOFFICE-102's PR to green.
+        note: >-
+          Q4's production dependency scan (`pnpm audit --prod --audit-level=high`) failed with 2
+          critical + 7 high. NOT caused by the PR it surfaced on: the dependency graph there is
+          byte-identical to main's, and the same command reproduces the same 24 findings on main's
+          own lockfile. Every open PR and main itself were blocked by it.
+
+          FOUR ADVISORY CLUSTERS, all in shipped (production) paths.
+
+          next 15.5.22: two CRITICAL unauthenticated RCEs (GHSA-p293-qw3h-jr36 on Windows-hosted
+          servers, GHSA-2xp9-vwfh-vxw4 in the Image Optimization API via AVIF). Patched >=15.5.24.
+
+          sharp 0.35.3 via next: libheif vulnerabilities (GHSA-rgj7-g3m4-5g8c). Patched >=0.35.4,
+          already inside the existing ^0.35.0 override floor, so a lockfile refresh lifted it.
+
+          browserslist 4.28.2 via next > styled-jsx > @babel/helper-compilation-targets: OOM and
+          prototype-write (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g). Patched >=4.28.7. The parent
+          pins it, so it needed a NEW override floor.
+
+          fast-uri 3.1.5 via ajv under @modelcontextprotocol/sdk: four host-confusion / SSRF
+          advisories. Patched >=3.1.6. Already had an override floor; it just sat at ^3.1.5.
+
+          The repo's own convention handled all four: direct dependencies bumped in their own
+          package.json (next), parent-pinned transitives raised via the documented pnpm.overrides
+          dependency-scan floors. No new mechanism invented.
+        acceptance:
+          - `pnpm audit --prod --audit-level=high` exits 0 - no high or critical in shipped deps.
+          - Each new or raised override floor is documented in the overridesNote with its advisory
+            and the parent that pins it, per the convention already written there.
+          - The portal still builds for its deployment target, not just for `next build`.
+        progress: >-
+          DONE, carried on BACKOFFICE-102's branch rather than its own because the session was pinned
+          to one branch. It is a self-contained commit and cherry-picks cleanly if a reviewer prefers
+          it on main first. Evidence: audit exits 0 (14 findings remain, all low/moderate, which the
+          gate does not block on); unit 1833/1833; portal integration 6/6; typecheck 11/11; ESLint
+          clean; `pnpm build` green; `opennextjs-cloudflare build` green - the deploy path, which
+          `next build` alone does not prove.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
