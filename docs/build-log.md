@@ -5038,3 +5038,58 @@ Evidence after the fixes: unit 1681/1681 · integration 216/216 on a pristine Po
 Q4.5 PASSED, allowed gaps none · typecheck 11/11 · ESLint clean · docs:check clean · the governed
 export re-verified against a live BFF with `raw_document_ref` and the `s3://` locator absent and the
 digest still recomputing.
+
+---
+
+## 2026-09-14 — BACKOFFICE-102: sign-in was refused on a healthy demo, by a pool that outlived its request
+
+Reported by the repository owner, in the only terms that matter: clicking the super-admin login
+button on https://backoffice.openfinance-os.org/ produced `/?error=service_unavailable`. Not that
+persona — every one of them, and not only that button.
+
+**The cause is the previous fix, applied to the wrong runtime.** BACKOFFICE-84 removed a per-request
+`pg.Pool` that nothing ever closed, and replaced it with ONE pool memoised at module scope, reasoning
+that module scope is per-isolate in a Worker and therefore a pool's correct lifetime. It is a pool's
+correct lifetime. It is not a lifetime this runtime allows. The portal is deployed as a Cloudflare
+Worker (OpenNext), and a Worker may not use an I/O object created in another request's context — and
+a connection pool is precisely an object that holds sockets open for the next caller. So the first
+sign-in an isolate served opened a connection and succeeded, and every sign-in after it reached
+across a request boundary and was refused: "Cannot perform I/O on behalf of a different request".
+Sign-in fails closed on an audit write it cannot perform — correctly, per CLAUDE.md — so what the
+operator saw was `service_unavailable` on a deployment with nothing else wrong with it. The same
+memoised reader backs the dashboard's recent-actions panel, whose caller swallows the error, so that
+panel had been rendering empty and saying nothing.
+
+**The rule was already written down in the tree that broke it.** `services/bff/src/worker.ts`:
+"Pg clients are constructed per request and closed after the response — Workers forbid reusing I/O
+objects across requests." The portal now follows it rather than restating it: `withAuditSink` /
+`withAuditSource` construct one client per unit of work and close it in `finally`. Closing is what
+makes per-request safe this time — the original defect was never the construction, it was that
+nothing handed the connections back.
+
+**Why it reached a user at all.** `tests/smoke/portal.smoke.spec.ts` asserted that the sign-in SCREEN
+renders, and never pressed a button, so a deployment on which nobody could sign in passed the deploy
+gate green. It now signs in as every persona the screen offers, in sequence — in sequence because the
+defect was absent on the first sign-in an isolate served, so a single login would have walked straight
+past it — and reports the failing persona by name.
+
+**One thing the hard-stop reviewer found next door, fixed here.** `recordSignInFailure` caught a
+throwing WRITE but not a throwing client CONSTRUCTION — and it runs inside the route's own `catch`,
+so anything escaping it turns the 303 back to the sign-in screen into an unhandled 500, losing the
+very explanation the operator needs. Harmless while the client was built once per process; per-
+request construction attempts it on every refusal, so the catch moved outward to cover both. The
+success path keeps the opposite answer, which is the point: a sign-in that cannot be recorded is
+refused, a refusal that cannot be recorded is reported and swallowed.
+
+**Evidence, by mutation rather than by assertion count.** The new unit spec
+(`apps/portal/test/portal-db-lifetime.spec.ts`) fails 5 of 7 against the module-scope pool it
+replaces. The integration spec was strengthened at both ends and catches both directions on a real
+PostgreSQL 16: "expected 1 to be +0" when a client is retained after the response, "expected 26 to be
+less than or equal to 2" when the close is removed. With the fix: portal unit 561/561, portal
+integration 6/6 on a real PostgreSQL 16, repo unit 1833/1833, ESLint clean, typecheck 11/11. The
+smoke suite's token parser is pinned to the markup `PersonaLoginList` actually renders.
+
+**Parked (latency, not correctness).** The portal now pays a connect per audited operation, which is
+what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal worker is the
+remedy, and it is NOT an alternative to this change: no configuration makes a socket survive a
+request boundary on Workers.

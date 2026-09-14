@@ -51,4 +51,47 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
     ).toBe(true)
   })
 
+  /**
+   * BACKOFFICE-102 — the gate that was missing.
+   *
+   * This suite asserted that the sign-in SCREEN renders, and nothing more, so a deployment on
+   * which no persona could actually sign in passed the pipeline green and reached the next
+   * visitor. That is what happened: every button answered `/?error=service_unavailable` while
+   * every assertion above stayed true.
+   *
+   * So the smoke suite now presses the buttons. Every persona the screen offers, in sequence,
+   * because the defect it exists to catch was not present on the FIRST sign-in a Worker isolate
+   * served — it was the second and every one after it, reusing a connection that belonged to an
+   * earlier request. A single sign-in would have passed straight through it.
+   *
+   * It is also the end-to-end check for the whole sign-in chain: a reachable database, a
+   * successful High-class audit write, a session cookie. Any of those failing lands on
+   * `/?error=…`, which this reads back and reports by name.
+   */
+  it('signs in every persona the screen offers, not just the first', async () => {
+    const html = await (await fetch(PORTAL)).text()
+    // Deduplicated: the same hidden input appears in both the HTML and the RSC payload, and each
+    // persona is to be signed in once.
+    const tokens = [...new Set([...html.matchAll(/name="token"[^>]*?value="([^"]+)"/g)].map((m) => m[1]!))]
+    // The screen is the source of the persona list, so a parse that finds nothing would leave this
+    // test passing without signing anyone in. TWO is the floor rather than one: a single sign-in
+    // cannot see a defect that only appears on the second request an isolate serves.
+    expect(tokens.length, 'the sign-in screen must offer at least two persona sign-in buttons').toBeGreaterThan(1)
+
+    for (const token of tokens) {
+      const res = await fetch(`${PORTAL}/api/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token }),
+        redirect: 'manual'
+      })
+      const location = res.headers.get('location') ?? ''
+      // The token is `demo-token:<persona>` — the persona is what the failure message must name,
+      // so a red pipeline says which button is broken without anyone opening the demo.
+      const persona = token.split(':')[1] ?? token
+      expect(res.status, `sign-in for ${persona} must redirect`).toBe(303)
+      expect(location, `sign-in for ${persona} must reach the dashboard, got ${location}`).toMatch(/\/dashboard$/)
+      expect(res.headers.get('set-cookie') ?? '', `sign-in for ${persona} must set a session cookie`).toMatch(/HttpOnly/i)
+    }
+  }, 60_000)
 })

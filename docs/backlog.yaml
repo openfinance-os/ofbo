@@ -367,6 +367,57 @@ milestones:
             Option 2, no code changes and the ADR says it is deliberately not a precedent.
           - The spec header and services/bff/src/consents/nebras-sla.ts both cite ADR 0034 and both
             say the question is open; whichever way it lands, they say what was decided instead.
+      - id: BACKOFFICE-102
+        title: Portal sign-in fails with service_unavailable - a Pg pool held across Worker requests
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a production defect on the hosted demo, reported by the repository owner
+          ("clicking the super admin login button creates an error"). No product question for a
+          discovery run to answer.
+        note: >-
+          SYMPTOM. Every persona button on https://backoffice.openfinance-os.org/ returned
+          /?error=service_unavailable while the site itself was healthy and the sign-in screen
+          rendered normally.
+
+          CAUSE. BACKOFFICE-84 fixed a per-request pool that was never closed by memoising ONE
+          pool at module scope, on the reasoning that module scope is per-isolate in a Worker and
+          therefore a pool's correct lifetime. It is a pool's correct lifetime and the wrong one
+          for this runtime: the portal is deployed as a Cloudflare Worker (OpenNext,
+          apps/portal/wrangler.toml), and a Worker may not use an I/O object created in another
+          request's context. A pg.Pool is exactly that - it keeps sockets alive and hands an idle
+          one back on the next connect(). So the first sign-in an isolate served worked and every
+          one after it was refused ("Cannot perform I/O on behalf of a different request"). Sign-in
+          fails closed on an audit write it cannot perform, so the operator saw service_unavailable.
+          The same memoised reader backs the dashboard audit panel, which rendered empty for the
+          same reason and said nothing.
+
+          The rule was already written down in the tree it was broken in:
+          services/bff/src/worker.ts says "Pg clients are constructed per request and closed after
+          the response - Workers forbid reusing I/O objects across requests". The portal did not
+          follow it.
+
+          WHY IT REACHED A USER. tests/smoke/portal.smoke.spec.ts asserted that the sign-in SCREEN
+          renders and never pressed a button, so a deployment on which nobody could sign in passed
+          the deploy gate green.
+        acceptance:
+          - The portal builds its Pg client per unit of work and closes it before returning, so no
+            connection crosses a request boundary and none accumulates - both halves asserted at
+            once (apps/portal/test/portal-db-lifetime.spec.ts against the module, and
+            apps/portal/test/portal-pool.int.spec.ts against a real server's connection count).
+          - The deploy smoke suite signs in as every persona the screen offers, in sequence, so a
+            sign-in that fails on the second request in an isolate fails the pipeline rather than
+            the next visitor.
+        progress: >-
+          DONE. Verified by mutation, not by assertion count: the unit lifetime spec fails 5/7
+          against the module-scope pool it replaces, and the integration spec fails on a real
+          Postgres both ways - "expected 1 to be +0" when the pool is retained, "expected 26 to be
+          less than or equal to 2" when the close is removed.
+
+          FOLLOW-UP, latency not correctness: the portal now pays a connect per audited operation,
+          which is what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal
+          worker is the remedy for that, and it is NOT an alternative to this fix - no configuration
+          makes a socket survive a request boundary on Workers.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
