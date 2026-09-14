@@ -5127,3 +5127,39 @@ demo deploys through the OpenNext adapter, not through `next start`.
 **Carried on BACKOFFICE-102's branch**, not its own, because the session was pinned to one branch.
 It is a self-contained commit touching only `package.json`, `apps/portal/package.json` and the
 lockfile, and cherry-picks cleanly if a reviewer would rather land it on main first.
+
+---
+
+## 2026-09-14 — BACKOFFICE-104: a test that owned a period until the calendar caught up with it
+
+The second gate to go red on main without a commit, found in the same pass as BACKOFFICE-103.
+`services/bff/test/nebras-ingestion.int.spec.ts:18` pins `const PERIOD = '2026-09'` with the comment
+"a period the shared DB won't otherwise touch". True when written; false from 2026-09-01, because
+`packages/db/src/seed.ts:151` writes `nebras_report_aggregate` rows for `to_char(now(),'YYYY-MM')` —
+the CURRENT month. The moment the calendar reached the hardcoded period, `pnpm db:seed` started
+filling it.
+
+**The assertion queried on `period` alone**, so it read the seed's rows as its own: four line types
+where it expected two (`nebras_fees`, `tpp_aas_pass_through`, and a second `payment_settlement`).
+That single failure takes down TWO gates — Q3 integration, and Q4.5, which runs the same suite
+before its own check. Worth stating precisely because it is easy to misread as a lineage problem:
+**Q4.5's lineage gate itself passes** (56 tables covered, no gaps, verified locally); only its
+integration step failed.
+
+**The fix is a scope, not a new date.** The seed writes channel `external_tpp_aas`; the test writes
+`internal_retail`; the table's key is `UNIQUE(bank_id, period, channel, line_type)` and the test's
+own comment says the aggregate is "per channel×line_type". The query was missing the channel the
+test had already committed to. `AND channel = $2` selects exactly the rows the test wrote, keeps
+every assertion at full strength, and cannot expire again — picking another hardcoded month would
+only reset the same fuse for whoever is on call in that month.
+
+**Evidence, both directions on a freshly migrated and seeded database:** without the fix 226/227,
+failing exactly as CI did; with it 227/227. Q1b test-integrity: no weakening detected.
+
+**On venue, stated rather than glossed.** CLAUDE.md routes a genuine test defect to its own
+`feature/BACKOFFICE-NN-testfix-<slug>` branch, precisely so a test edit can never be smuggled into a
+story branch to reach green. That is where this belongs. The session was pinned to a single branch
+and could not open one, so it rides BACKOFFICE-102's branch as a separate, clearly-labelled commit
+that reverts or cherry-picks on its own — and is flagged to the reviewer rather than folded in
+quietly. The rule's purpose is intact: this strengthens an over-broad query rather than relaxing an
+assertion, and the gate that polices the difference agrees.

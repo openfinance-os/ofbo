@@ -462,6 +462,45 @@ milestones:
           gate does not block on); unit 1833/1833; portal integration 6/6; typecheck 11/11; ESLint
           clean; `pnpm build` green; `opennextjs-cloudflare build` green - the deploy path, which
           `next build` alone does not prove.
+      - id: BACKOFFICE-104
+        title: Q3 and Q4.5 red on main - a test's period-isolation assumption expired on the calendar
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a test-isolation defect that became live without a commit, found while
+          driving BACKOFFICE-102's PR to green. No product question for a discovery run to answer.
+        note: >-
+          services/bff/test/nebras-ingestion.int.spec.ts:18 pins `const PERIOD = '2026-09'` with the
+          comment "a period the shared DB won't otherwise touch". That was true when it was written
+          and stopped being true on 2026-09-01, because packages/db/src/seed.ts:151 writes
+          nebras_report_aggregate rows for `to_char(now(),'YYYY-MM')` - the CURRENT month. From the
+          moment the calendar reached the hardcoded period, `pnpm db:seed` put its own rows in it.
+
+          The test's assertion queried on `period` ALONE, so it read the seed's rows as its own and
+          failed with four line types where it expected two (nebras_fees, tpp_aas_pass_through and
+          a second payment_settlement, from the seed). It takes TWO gates down - Q3 integration and
+          Q4.5, which runs the same integration suite before its lineage check - on main and on
+          every open PR. Q4.5's own lineage gate passes; only the suite step failed.
+
+          THE FIX IS A SCOPE, NOT A NEW DATE. The seed writes channel 'external_tpp_aas'; the test
+          writes 'internal_retail'; the table's key is UNIQUE(bank_id, period, channel, line_type)
+          and the test's own comment says the aggregate is "per channel x line_type". The query was
+          simply missing the channel it had already committed to. Adding `AND channel = $2` selects
+          exactly the rows the test wrote, keeps every assertion at full strength, and cannot expire
+          again - where picking another hardcoded month only resets the same fuse.
+        acceptance:
+          - The assertion can only be satisfied by rows the test under test wrote, not by the seed.
+          - The full integration suite is green on a freshly migrated and seeded database.
+          - The fix does not weaken any assertion - Q1b test-integrity agrees.
+        progress: >-
+          DONE, carried on BACKOFFICE-102's branch. CLAUDE.md routes a genuine test defect to its
+          own `feature/BACKOFFICE-NN-testfix-<slug>` branch and that is where this belongs; the
+          session was pinned to a single branch and could not open one, so it is a separate,
+          clearly-labelled commit that reverts or cherry-picks on its own. Flagged for the reviewer
+          rather than folded in quietly.
+
+          Evidence, both directions on a fresh database: without the fix 226/227 with exactly the
+          CI failure; with it 227/227. Q1b test-integrity reports no weakening.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
