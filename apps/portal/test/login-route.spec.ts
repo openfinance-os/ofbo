@@ -1,8 +1,7 @@
-import { describe, expect, it, beforeAll, afterEach } from 'vitest'
+import { describe, expect, it, beforeAll } from 'vitest'
 import { POST as login } from '../src/app/api/login/route.js'
 import { POST as logout } from '../src/app/api/logout/route.js'
 import { TOKEN_COOKIE } from '../src/lib/cookies.js'
-import { resetAuditPools } from '../src/lib/portal.js'
 
 /**
  * Route handlers exercised through the REAL entry point, with the real demo (sim) IdP adapter and
@@ -20,10 +19,6 @@ import { resetAuditPools } from '../src/lib/portal.js'
 beforeAll(() => {
   process.env.DEPLOY_PROFILE = 'demo'
   delete process.env.DATABASE_URL
-})
-
-afterEach(() => {
-  resetAuditPools()
 })
 
 /** A real UUID — what the header is documented to carry, and what the route propagates. */

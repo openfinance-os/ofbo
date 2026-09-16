@@ -51,4 +51,63 @@ describe('demo portal (Cloudflare Worker, OpenNext)', () => {
     ).toBe(true)
   })
 
+  /**
+   * BACKOFFICE-102 — the gate that was missing.
+   *
+   * This suite asserted that the sign-in SCREEN renders, and nothing more, so a deployment on
+   * which no persona could actually sign in passed the pipeline green and reached the next
+   * visitor. That is what happened: every button answered `/?error=service_unavailable` while
+   * every assertion above stayed true.
+   *
+   * So the smoke suite now presses the buttons. Every persona the screen offers, in sequence,
+   * because the defect it exists to catch was not present on the FIRST sign-in a Worker isolate
+   * served — it was the second and every one after it, reusing a connection that belonged to an
+   * earlier request. A single sign-in would have passed straight through it.
+   *
+   * It is also the end-to-end check for the whole sign-in chain: a reachable database, a
+   * successful High-class audit write, a session cookie. Any of those failing lands on
+   * `/?error=…`, which this reads back and reports by name.
+   *
+   * INCLUDING the super admin, deliberately. PRD §2 guardrail (a) bars ASSIGNING the role to a
+   * service account or automation, and nothing here assigns anything: this posts the same
+   * pre-provisioned walkthrough token the screen offers every demo visitor, which guardrail (f)
+   * exists to sanction for the demo profile this suite runs against. Skipping it would leave the
+   * one button that was actually reported broken as the one button nothing checks.
+   *
+   * Nothing is asserted about the cookie's VALUE — a session token is not something to print into
+   * a CI log on failure. Its presence and `HttpOnly` flag are the properties that matter, so those
+   * are what the assertion carries.
+   */
+  it('signs in every persona the screen offers, not just the first', async () => {
+    const html = await (await fetch(PORTAL)).text()
+    // Deduplicated: the same hidden input appears in both the HTML and the RSC payload, and each
+    // persona is to be signed in once.
+    const tokens = [...new Set([...html.matchAll(/name="token"[^>]*?value="([^"]+)"/g)].map((m) => m[1]!))]
+    // The screen is the source of the persona list, so a parse that finds nothing would leave this
+    // test passing without signing anyone in. TWO is the floor rather than one: a single sign-in
+    // cannot see a defect that only appears on the second request an isolate serves.
+    expect(tokens.length, 'the sign-in screen must offer at least two persona sign-in buttons').toBeGreaterThan(1)
+
+    for (const token of tokens) {
+      const trace = crypto.randomUUID()
+      const res = await fetch(`${PORTAL}/api/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-fapi-interaction-id': trace },
+        body: new URLSearchParams({ token }),
+        redirect: 'manual'
+      })
+      const location = res.headers.get('location') ?? ''
+      // The token is `demo-token:<persona>` — the persona is what the failure message must name,
+      // so a red pipeline says which button is broken without anyone opening the demo.
+      const persona = token.split(':')[1] ?? token
+      expect(res.status, `sign-in for ${persona} must redirect`).toBe(303)
+      expect(location, `sign-in for ${persona} must reach the dashboard, got ${location}`).toMatch(/\/dashboard$/)
+      // The cookie's PRESENCE and HttpOnly flag, never its value — see above.
+      const sessionCookie = /httponly/i.test(res.headers.get('set-cookie') ?? '')
+      expect(sessionCookie, `sign-in for ${persona} must set an HttpOnly session cookie`).toBe(true)
+      // CLAUDE.md requires x-fapi-interaction-id propagated end to end, and this is the only
+      // end-to-end assertion over the sign-in path — so it is the one that should pin it.
+      expect(res.headers.get('x-fapi-interaction-id'), `sign-in for ${persona} must echo the trace id`).toBe(trace)
+    }
+  }, 60_000)
 })

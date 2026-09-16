@@ -5038,3 +5038,128 @@ Evidence after the fixes: unit 1681/1681 · integration 216/216 on a pristine Po
 Q4.5 PASSED, allowed gaps none · typecheck 11/11 · ESLint clean · docs:check clean · the governed
 export re-verified against a live BFF with `raw_document_ref` and the `s3://` locator absent and the
 digest still recomputing.
+
+---
+
+## 2026-09-14 — BACKOFFICE-102: sign-in was refused on a healthy demo, by a pool that outlived its request
+
+Reported by the repository owner, in the only terms that matter: clicking the super-admin login
+button on https://backoffice.openfinance-os.org/ produced `/?error=service_unavailable`. Not that
+persona — every one of them, and not only that button.
+
+**The cause is the previous fix, applied to the wrong runtime.** BACKOFFICE-84 removed a per-request
+`pg.Pool` that nothing ever closed, and replaced it with ONE pool memoised at module scope, reasoning
+that module scope is per-isolate in a Worker and therefore a pool's correct lifetime. It is a pool's
+correct lifetime. It is not a lifetime this runtime allows. The portal is deployed as a Cloudflare
+Worker (OpenNext), and a Worker may not use an I/O object created in another request's context — and
+a connection pool is precisely an object that holds sockets open for the next caller. So the first
+sign-in an isolate served opened a connection and succeeded, and every sign-in after it reached
+across a request boundary and was refused: "Cannot perform I/O on behalf of a different request".
+Sign-in fails closed on an audit write it cannot perform — correctly, per CLAUDE.md — so what the
+operator saw was `service_unavailable` on a deployment with nothing else wrong with it. The same
+memoised reader backs the dashboard's recent-actions panel, whose caller swallows the error, so that
+panel had been rendering empty and saying nothing.
+
+**The rule was already written down in the tree that broke it.** `services/bff/src/worker.ts`:
+"Pg clients are constructed per request and closed after the response — Workers forbid reusing I/O
+objects across requests." The portal now follows it rather than restating it: `withAuditSink` /
+`withAuditSource` construct one client per unit of work and close it in `finally`. Closing is what
+makes per-request safe this time — the original defect was never the construction, it was that
+nothing handed the connections back.
+
+**Why it reached a user at all.** `tests/smoke/portal.smoke.spec.ts` asserted that the sign-in SCREEN
+renders, and never pressed a button, so a deployment on which nobody could sign in passed the deploy
+gate green. It now signs in as every persona the screen offers, in sequence — in sequence because the
+defect was absent on the first sign-in an isolate served, so a single login would have walked straight
+past it — and reports the failing persona by name.
+
+**One thing the hard-stop reviewer found next door, fixed here.** `recordSignInFailure` caught a
+throwing WRITE but not a throwing client CONSTRUCTION — and it runs inside the route's own `catch`,
+so anything escaping it turns the 303 back to the sign-in screen into an unhandled 500, losing the
+very explanation the operator needs. Harmless while the client was built once per process; per-
+request construction attempts it on every refusal, so the catch moved outward to cover both. The
+success path keeps the opposite answer, which is the point: a sign-in that cannot be recorded is
+refused, a refusal that cannot be recorded is reported and swallowed.
+
+**Evidence, by mutation rather than by assertion count.** The new unit spec
+(`apps/portal/test/portal-db-lifetime.spec.ts`) fails 5 of 7 against the module-scope pool it
+replaces. The integration spec was strengthened at both ends and catches both directions on a real
+PostgreSQL 16: "expected 1 to be +0" when a client is retained after the response, "expected 26 to be
+less than or equal to 2" when the close is removed. With the fix: portal unit 561/561, portal
+integration 6/6 on a real PostgreSQL 16, repo unit 1833/1833, ESLint clean, typecheck 11/11. The
+smoke suite's token parser is pinned to the markup `PersonaLoginList` actually renders.
+
+**Parked (latency, not correctness).** The portal now pays a connect per audited operation, which is
+what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal worker is the
+remedy, and it is NOT an alternative to this change: no configuration makes a socket survive a
+request boundary on Workers.
+
+---
+
+## 2026-09-14 — BACKOFFICE-103: the Q4 dependency gate went red on main without a commit
+
+Found while driving BACKOFFICE-102's PR to green: `Q4 — security review + dependency scan` failed
+with 2 critical and 7 high. Not that PR's doing — its dependency graph is byte-identical to main's,
+and the same command reproduces the same 24 findings on main's own lockfile. `pnpm audit` queries a
+LIVE advisory database against a lockfile that has not moved since 2026-08-29, so main and every
+open PR were blocked by advisories published in the intervening fortnight.
+
+**Two of them are critical and in the portal we ship.** `next@15.5.22` carries GHSA-p293-qw3h-jr36
+(unauthenticated RCE on Windows-hosted servers) and GHSA-2xp9-vwfh-vxw4 (unauthenticated RCE in the
+Image Optimization API via AVIF), both patched in 15.5.24. Alongside them: `sharp` (libheif),
+`browserslist` (OOM and a prototype write), and four `fast-uri` host-confusion/SSRF advisories.
+
+**The repo's own convention handled all four, so nothing was invented.** `next` is a direct
+dependency, so it moves in `apps/portal/package.json` (→ `^15.5.25`) — which the overridesNote
+already says is where a direct dependency belongs. `sharp` was already inside its `^0.35.0` floor
+and a lockfile refresh lifted it. `browserslist` and `fast-uri` are pinned BELOW the patch by their
+parents (`next > styled-jsx > @babel/helper-compilation-targets`, and `ajv` under
+`@modelcontextprotocol/sdk`), which is exactly what the `pnpm.overrides` dependency-scan floors
+exist for — one new floor, one raised, both documented with their advisory and pinning parent as
+the note requires.
+
+**Evidence.** `pnpm audit --prod --audit-level=high` exits 0 (14 findings remain, all low/moderate,
+which the gate does not block on) · unit 1833/1833 · portal integration 6/6 on a real PostgreSQL 16
+· typecheck 11/11 · ESLint clean · `pnpm build` green · **`opennextjs-cloudflare build` green**,
+which is the check that matters for a Next bump and which `next build` alone does not prove — the
+demo deploys through the OpenNext adapter, not through `next start`.
+
+**Carried on BACKOFFICE-102's branch**, not its own, because the session was pinned to one branch.
+It is a self-contained commit touching only `package.json`, `apps/portal/package.json` and the
+lockfile, and cherry-picks cleanly if a reviewer would rather land it on main first.
+
+---
+
+## 2026-09-14 — BACKOFFICE-104: a test that owned a period until the calendar caught up with it
+
+The second gate to go red on main without a commit, found in the same pass as BACKOFFICE-103.
+`services/bff/test/nebras-ingestion.int.spec.ts:18` pins `const PERIOD = '2026-09'` with the comment
+"a period the shared DB won't otherwise touch". True when written; false from 2026-09-01, because
+`packages/db/src/seed.ts:151` writes `nebras_report_aggregate` rows for `to_char(now(),'YYYY-MM')` —
+the CURRENT month. The moment the calendar reached the hardcoded period, `pnpm db:seed` started
+filling it.
+
+**The assertion queried on `period` alone**, so it read the seed's rows as its own: four line types
+where it expected two (`nebras_fees`, `tpp_aas_pass_through`, and a second `payment_settlement`).
+That single failure takes down TWO gates — Q3 integration, and Q4.5, which runs the same suite
+before its own check. Worth stating precisely because it is easy to misread as a lineage problem:
+**Q4.5's lineage gate itself passes** (56 tables covered, no gaps, verified locally); only its
+integration step failed.
+
+**The fix is a scope, not a new date.** The seed writes channel `external_tpp_aas`; the test writes
+`internal_retail`; the table's key is `UNIQUE(bank_id, period, channel, line_type)` and the test's
+own comment says the aggregate is "per channel×line_type". The query was missing the channel the
+test had already committed to. `AND channel = $2` selects exactly the rows the test wrote, keeps
+every assertion at full strength, and cannot expire again — picking another hardcoded month would
+only reset the same fuse for whoever is on call in that month.
+
+**Evidence, both directions on a freshly migrated and seeded database:** without the fix 226/227,
+failing exactly as CI did; with it 227/227. Q1b test-integrity: no weakening detected.
+
+**On venue, stated rather than glossed.** CLAUDE.md routes a genuine test defect to its own
+`feature/BACKOFFICE-NN-testfix-<slug>` branch, precisely so a test edit can never be smuggled into a
+story branch to reach green. That is where this belongs. The session was pinned to a single branch
+and could not open one, so it rides BACKOFFICE-102's branch as a separate, clearly-labelled commit
+that reverts or cherry-picks on its own — and is flagged to the reviewer rather than folded in
+quietly. The rule's purpose is intact: this strengthens an over-broad query rather than relaxing an
+assertion, and the gate that polices the difference agrees.

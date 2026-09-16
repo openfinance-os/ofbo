@@ -70,7 +70,7 @@ describe('Nebras ingestion — snapshot + aggregate persistence under RLS + line
     expect(snaps.rows.every((r) => r.warm_export_state === 'exported' && r.warm_object_key)).toBe(true)
 
     // aggregates materialized per channel×line_type
-    const aggs = await admin.query(`SELECT line_type, total_fee_minor, line_count, freshness FROM nebras_report_aggregate WHERE period = $1 ORDER BY line_type`, [PERIOD])
+    const aggs = await admin.query(`SELECT line_type, total_fee_minor, line_count, freshness FROM nebras_report_aggregate WHERE period = $1 AND channel = $2 ORDER BY line_type`, [PERIOD, TENANCY.channel])
     expect(aggs.rows.map((r) => r.line_type)).toEqual(['lfi_access_log', 'payment_settlement'])
     const payment = aggs.rows.find((r) => r.line_type === 'payment_settlement')!
     expect(Number(payment.total_fee_minor)).toBe(500)

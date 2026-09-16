@@ -62,46 +62,64 @@ function resolveIdp(deps: PortalDeps): IdentityProviderPort {
 }
 
 /**
- * ONE pool per process, not one per request.
+ * ONE Pg client per request, CLOSED before that request's work returns.
  *
- * `PgAuditEmitter`'s constructor creates a `pg.Pool`, and these resolvers used to call it on every
- * sign-in and every dashboard render. Nothing ever called `close()`, so each request left a pool
- * holding connections open until they idled out, and under any sustained traffic they accumulated
- * until the pooler refused new ones.
+ * Two different defects meet here, and only this lifetime avoids both.
  *
- * What that looked like on the hosted demo: sign-in worked, then failed for every persona for
- * several minutes, then recovered — and because `api/login/route.ts` reported any failure as
- * `invalid_token`, it presented as an auth problem rather than an exhausted connection pool.
- * Measured 12/12 succeeding, then 0/12 failing, with the failures returning in ~550ms against
- * ~1700ms for a success: the fast-fail signature of a refused connection, not a slow query.
+ * The first was a pool built per request and never closed: each one held its connections open
+ * until they idled out, and under sustained traffic they accumulated until the pooler refused new
+ * ones. On the hosted demo that presented as sign-in working, then failing for every persona for
+ * minutes, then recovering — 12/12 succeeding, then 0/12 failing, the failures returning in ~550ms
+ * against ~1700ms for a success: the fast-fail signature of a refused connection.
  *
- * Memoised on the URL so a changed DATABASE_URL still builds a new pool, and so tests that inject
- * `deps` are unaffected. Module scope is the right lifetime here: it is per-isolate in a Worker
- * and per-process locally, which is exactly the scope a connection pool should have.
+ * The fix for that memoised ONE pool at module scope, reasoning that module scope is per-isolate
+ * in a Worker and therefore the right lifetime for a pool. It is the right lifetime for a pool and
+ * the wrong one for this runtime. The portal is deployed as a Cloudflare Worker (OpenNext,
+ * apps/portal/wrangler.toml), and a Worker may not touch an I/O object created in another
+ * request's context — "Cannot perform I/O on behalf of a different request". A `pg.Pool` is
+ * exactly that: it keeps sockets alive and hands an idle one back on the next `connect()`. So the
+ * first sign-in an isolate served opened a connection and succeeded, and every sign-in after it
+ * reused that socket across a request boundary and was refused — sign-in fails closed on an audit
+ * write it cannot perform, so the operator got `/?error=service_unavailable` on a healthy
+ * deployment, for every persona, until the isolate recycled. The same pool backs the dashboard's
+ * audit panel, which silently rendered empty for the same reason.
+ *
+ * The BFF worker had already written the rule down: "Pg clients are constructed per request and
+ * closed after the response — Workers forbid reusing I/O objects across requests"
+ * (services/bff/src/worker.ts). This is that rule, applied here rather than restated — construct
+ * per unit of work, close in `finally`. Closing is what makes per-request safe this time: the
+ * original leak was never the construction, it was that nothing ever handed the connections back.
+ *
+ * The cost is a connect per audited operation, which is what the BFF pays on every request and
+ * what auditing every sign-in costs on this runtime. A pooled connection at the edge is available
+ * — the BFF's Hyperdrive binding — and is the follow-up for the latency, NOT for the correctness:
+ * no configuration makes a socket survive a request boundary here.
  */
-let cachedSink: { url: string; sink: AuditSink } | undefined
-let cachedSource: { url: string; source: AuditSource } | undefined
-
-function resolveAuditSink(deps: PortalDeps): AuditSink | null {
-  if (deps.auditSink !== undefined) return deps.auditSink
+async function withAuditSink<T>(deps: PortalDeps, fn: (sink: AuditSink | null) => Promise<T>): Promise<T> {
+  // An injected sink belongs to its caller: used, never closed. `null` is an explicit "no sink".
+  if (deps.auditSink !== undefined) return fn(deps.auditSink)
   const url = process.env.DATABASE_URL
-  if (!url) return null
-  if (cachedSink?.url !== url) cachedSink = { url, sink: new PgAuditEmitter(url, TENANCY) }
-  return cachedSink.sink
+  if (!url) return fn(null)
+  const emitter = new PgAuditEmitter(url, TENANCY)
+  try {
+    return await fn(emitter)
+  } finally {
+    // A teardown failure must not rewrite the outcome of the work: the regulated write has either
+    // committed or already thrown, and whether the socket came back cleanly changes neither.
+    await emitter.close().catch(() => undefined)
+  }
 }
 
-function resolveAuditSource(deps: PortalDeps): AuditSource | null {
-  if (deps.auditSource !== undefined) return deps.auditSource
+async function withAuditSource<T>(deps: PortalDeps, fn: (source: AuditSource | null) => Promise<T>): Promise<T> {
+  if (deps.auditSource !== undefined) return fn(deps.auditSource)
   const url = process.env.DATABASE_URL
-  if (!url) return null
-  if (cachedSource?.url !== url) cachedSource = { url, source: new PgAuditReader(url, TENANCY) }
-  return cachedSource.source
-}
-
-/** Drop the memoised pools — for tests that swap DATABASE_URL between cases. */
-export function resetAuditPools(): void {
-  cachedSink = undefined
-  cachedSource = undefined
+  if (!url) return fn(null)
+  const reader = new PgAuditReader(url, TENANCY)
+  try {
+    return await fn(reader)
+  } finally {
+    await reader.close().catch(() => undefined)
+  }
 }
 
 /**
@@ -207,22 +225,32 @@ export async function recordSignInFailure(
   persona: string | null,
   deps: PortalDeps = {}
 ): Promise<void> {
-  const sink = resolveAuditSink(deps)
-  if (!sink) return
+  // The catch is OUTSIDE the sink, covering building the client as well as writing through it.
+  //
+  // This function runs inside the route's own `catch` — it is called while a sign-in is already
+  // being refused — so anything it throws escapes the handler and turns a 303 back to the sign-in
+  // screen into an unhandled 500. The operator would then lose the reason their sign-in was
+  // refused BECAUSE the trail was unavailable, which is the failure this function exists to
+  // record. Constructing the client is I/O configuration and can fail on its own (a malformed
+  // DATABASE_URL), and per-request construction means it is attempted on every refusal rather than
+  // once per process, so "the write threw" is no longer the only way this can go wrong.
   try {
-    await sink.record({
-      event_type: 'signin_failure',
-      // No principal is established — that is what failed. The BFF writes the same 'unknown'
-      // placeholder rather than echoing an unverified token or subject back into the trail.
-      acting_principal: 'unknown',
-      acting_persona: persona,
-      reason,
-      trace_id: traceId,
-      superadmin_marker: false,
-      // The status the BROWSER received, not the one the event type implies. This route answers a
-      // form POST with a 303 in every outcome; the emitter's default would stamp 401 on a response
-      // no caller ever got, into a trail with no deletion path.
-      response_status: SIGN_IN_RESPONSE_STATUS
+    await withAuditSink(deps, async (sink) => {
+      if (!sink) return
+      await sink.record({
+        event_type: 'signin_failure',
+        // No principal is established — that is what failed. The BFF writes the same 'unknown'
+        // placeholder rather than echoing an unverified token or subject back into the trail.
+        acting_principal: 'unknown',
+        acting_persona: persona,
+        reason,
+        trace_id: traceId,
+        superadmin_marker: false,
+        // The status the BROWSER received, not the one the event type implies. This route answers
+        // a form POST with a 303 in every outcome; the emitter's default would stamp 401 on a
+        // response no caller ever got, into a trail with no deletion path.
+        response_status: SIGN_IN_RESPONSE_STATUS
+      })
     })
   } catch (e) {
     signInLog('signin_failure_unaudited', {
@@ -234,36 +262,37 @@ export async function recordSignInFailure(
 }
 
 export async function recordSignIn(principal: PortalPrincipal, traceId: string, deps: PortalDeps = {}): Promise<boolean> {
-  const sink = resolveAuditSink(deps)
-  if (!sink) {
-    // An absent sink cannot throw, so it reports instead: there is no audit row, and the caller
-    // turns that into a refused sign-in.
-    //
-    // Announced for EVERY reason it happens, not just the one that looks dangerous. The caller
-    // refuses the sign-in either way, so this is not what protects the trail — it is what makes a
-    // misconfigured deployment diagnosable instead of merely broken. An operator seeing sign-in
-    // fail everywhere needs the reason in the log, which is the same lesson as the rest of this
-    // story.
-    signInLog('signin_unaudited_no_sink', {
-      trace_id: traceId,
+  return withAuditSink(deps, async (sink) => {
+    if (!sink) {
+      // An absent sink cannot throw, so it reports instead: there is no audit row, and the caller
+      // turns that into a refused sign-in.
+      //
+      // Announced for EVERY reason it happens, not just the one that looks dangerous. The caller
+      // refuses the sign-in either way, so this is not what protects the trail — it is what makes
+      // a misconfigured deployment diagnosable instead of merely broken. An operator seeing
+      // sign-in fail everywhere needs the reason in the log, which is the same lesson as the rest
+      // of this story.
+      signInLog('signin_unaudited_no_sink', {
+        trace_id: traceId,
+        acting_persona: principal.persona,
+        reason: deps.auditSink === null
+          ? 'the caller injected a null audit sink — the sign-in was NOT written to the audit trail'
+          : 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
+      })
+      return false
+    }
+    await sink.record({
+      event_type: 'signin_success',
+      acting_principal: principal.subject,
       acting_persona: principal.persona,
-      reason: deps.auditSink === null
-        ? 'the caller injected a null audit sink — the sign-in was NOT written to the audit trail'
-        : 'DATABASE_URL is not configured — the sign-in was NOT written to the audit trail'
+      reason: null,
+      trace_id: traceId,
+      superadmin_marker: principal.superadmin,
+      // Same reason as the failure path: a successful sign-in is a 303 to /dashboard, not a 200.
+      response_status: SIGN_IN_RESPONSE_STATUS
     })
-    return false
-  }
-  await sink.record({
-    event_type: 'signin_success',
-    acting_principal: principal.subject,
-    acting_persona: principal.persona,
-    reason: null,
-    trace_id: traceId,
-    superadmin_marker: principal.superadmin,
-    // Same reason as the failure path: a successful sign-in is a 303 to /dashboard, not a 200.
-    response_status: SIGN_IN_RESPONSE_STATUS
+    return true
   })
-  return true
 }
 
 /** Recent High-class events for this principal — the "audit visible" surface. */
@@ -272,11 +301,12 @@ export async function recentAudit(
   deps: PortalDeps = {},
   opts: { excludeEventTypes?: readonly string[]; limit?: number } = {}
 ): Promise<AuditEventSummary[]> {
-  const source = resolveAuditSource(deps)
-  if (!source) return []
-  return source.recent({
-    actingPrincipal: principal.subject,
-    limit: opts.limit ?? 10,
-    ...(opts.excludeEventTypes?.length ? { excludeEventTypes: [...opts.excludeEventTypes] } : {})
+  return withAuditSource(deps, async (source) => {
+    if (!source) return []
+    return source.recent({
+      actingPrincipal: principal.subject,
+      limit: opts.limit ?? 10,
+      ...(opts.excludeEventTypes?.length ? { excludeEventTypes: [...opts.excludeEventTypes] } : {})
+    })
   })
 }

@@ -367,6 +367,140 @@ milestones:
             Option 2, no code changes and the ADR says it is deliberately not a precedent.
           - The spec header and services/bff/src/consents/nebras-sla.ts both cite ADR 0034 and both
             say the question is open; whichever way it lands, they say what was decided instead.
+      - id: BACKOFFICE-102
+        title: Portal sign-in fails with service_unavailable - a Pg pool held across Worker requests
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a production defect on the hosted demo, reported by the repository owner
+          ("clicking the super admin login button creates an error"). No product question for a
+          discovery run to answer.
+        note: >-
+          SYMPTOM. Every persona button on https://backoffice.openfinance-os.org/ returned
+          /?error=service_unavailable while the site itself was healthy and the sign-in screen
+          rendered normally.
+
+          CAUSE. BACKOFFICE-84 fixed a per-request pool that was never closed by memoising ONE
+          pool at module scope, on the reasoning that module scope is per-isolate in a Worker and
+          therefore a pool's correct lifetime. It is a pool's correct lifetime and the wrong one
+          for this runtime: the portal is deployed as a Cloudflare Worker (OpenNext,
+          apps/portal/wrangler.toml), and a Worker may not use an I/O object created in another
+          request's context. A pg.Pool is exactly that - it keeps sockets alive and hands an idle
+          one back on the next connect(). So the first sign-in an isolate served worked and every
+          one after it was refused ("Cannot perform I/O on behalf of a different request"). Sign-in
+          fails closed on an audit write it cannot perform, so the operator saw service_unavailable.
+          The same memoised reader backs the dashboard audit panel, which rendered empty for the
+          same reason and said nothing.
+
+          The rule was already written down in the tree it was broken in:
+          services/bff/src/worker.ts says "Pg clients are constructed per request and closed after
+          the response - Workers forbid reusing I/O objects across requests". The portal did not
+          follow it.
+
+          WHY IT REACHED A USER. tests/smoke/portal.smoke.spec.ts asserted that the sign-in SCREEN
+          renders and never pressed a button, so a deployment on which nobody could sign in passed
+          the deploy gate green.
+        acceptance:
+          - The portal builds its Pg client per unit of work and closes it before returning, so no
+            connection crosses a request boundary and none accumulates - both halves asserted at
+            once (apps/portal/test/portal-db-lifetime.spec.ts against the module, and
+            apps/portal/test/portal-pool.int.spec.ts against a real server's connection count).
+          - The deploy smoke suite signs in as every persona the screen offers, in sequence, so a
+            sign-in that fails on the second request in an isolate fails the pipeline rather than
+            the next visitor.
+        progress: >-
+          DONE. Verified by mutation, not by assertion count: the unit lifetime spec fails 5/7
+          against the module-scope pool it replaces, and the integration spec fails on a real
+          Postgres both ways - "expected 1 to be +0" when the pool is retained, "expected 26 to be
+          less than or equal to 2" when the close is removed.
+
+          FOLLOW-UP, latency not correctness: the portal now pays a connect per audited operation,
+          which is what the BFF paid before its Hyperdrive binding. Binding Hyperdrive to the portal
+          worker is the remedy for that, and it is NOT an alternative to this fix - no configuration
+          makes a socket survive a request boundary on Workers.
+      - id: BACKOFFICE-103
+        title: Q4 dependency scan red on main - two critical Next.js advisories and four fast-uri
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a merge-blocking CI gate that went red on main without a commit, because
+          `pnpm audit` queries a LIVE advisory database against a lockfile that has not moved since
+          2026-08-29. Found while driving BACKOFFICE-102's PR to green.
+        note: >-
+          Q4's production dependency scan (`pnpm audit --prod --audit-level=high`) failed with 2
+          critical + 7 high. NOT caused by the PR it surfaced on: the dependency graph there is
+          byte-identical to main's, and the same command reproduces the same 24 findings on main's
+          own lockfile. Every open PR and main itself were blocked by it.
+
+          FOUR ADVISORY CLUSTERS, all in shipped (production) paths.
+
+          next 15.5.22: two CRITICAL unauthenticated RCEs (GHSA-p293-qw3h-jr36 on Windows-hosted
+          servers, GHSA-2xp9-vwfh-vxw4 in the Image Optimization API via AVIF). Patched >=15.5.24.
+
+          sharp 0.35.3 via next: libheif vulnerabilities (GHSA-rgj7-g3m4-5g8c). Patched >=0.35.4,
+          already inside the existing ^0.35.0 override floor, so a lockfile refresh lifted it.
+
+          browserslist 4.28.2 via next > styled-jsx > @babel/helper-compilation-targets: OOM and
+          prototype-write (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g). Patched >=4.28.7. The parent
+          pins it, so it needed a NEW override floor.
+
+          fast-uri 3.1.5 via ajv under @modelcontextprotocol/sdk: four host-confusion / SSRF
+          advisories. Patched >=3.1.6. Already had an override floor; it just sat at ^3.1.5.
+
+          The repo's own convention handled all four: direct dependencies bumped in their own
+          package.json (next), parent-pinned transitives raised via the documented pnpm.overrides
+          dependency-scan floors. No new mechanism invented.
+        acceptance:
+          - `pnpm audit --prod --audit-level=high` exits 0 - no high or critical in shipped deps.
+          - Each new or raised override floor is documented in the overridesNote with its advisory
+            and the parent that pins it, per the convention already written there.
+          - The portal still builds for its deployment target, not just for `next build`.
+        progress: >-
+          DONE, carried on BACKOFFICE-102's branch rather than its own because the session was pinned
+          to one branch. It is a self-contained commit and cherry-picks cleanly if a reviewer prefers
+          it on main first. Evidence: audit exits 0 (14 findings remain, all low/moderate, which the
+          gate does not block on); unit 1833/1833; portal integration 6/6; typecheck 11/11; ESLint
+          clean; `pnpm build` green; `opennextjs-cloudflare build` green - the deploy path, which
+          `next build` alone does not prove.
+      - id: BACKOFFICE-104
+        title: Q3 and Q4.5 red on main - a test's period-isolation assumption expired on the calendar
+        status: done
+        discovery_exempt: true
+        reason: >-
+          Not a feature - a test-isolation defect that became live without a commit, found while
+          driving BACKOFFICE-102's PR to green. No product question for a discovery run to answer.
+        note: >-
+          services/bff/test/nebras-ingestion.int.spec.ts:18 pins `const PERIOD = '2026-09'` with the
+          comment "a period the shared DB won't otherwise touch". That was true when it was written
+          and stopped being true on 2026-09-01, because packages/db/src/seed.ts:151 writes
+          nebras_report_aggregate rows for `to_char(now(),'YYYY-MM')` - the CURRENT month. From the
+          moment the calendar reached the hardcoded period, `pnpm db:seed` put its own rows in it.
+
+          The test's assertion queried on `period` ALONE, so it read the seed's rows as its own and
+          failed with four line types where it expected two (nebras_fees, tpp_aas_pass_through and
+          a second payment_settlement, from the seed). It takes TWO gates down - Q3 integration and
+          Q4.5, which runs the same integration suite before its lineage check - on main and on
+          every open PR. Q4.5's own lineage gate passes; only the suite step failed.
+
+          THE FIX IS A SCOPE, NOT A NEW DATE. The seed writes channel 'external_tpp_aas'; the test
+          writes 'internal_retail'; the table's key is UNIQUE(bank_id, period, channel, line_type)
+          and the test's own comment says the aggregate is "per channel x line_type". The query was
+          simply missing the channel it had already committed to. Adding `AND channel = $2` selects
+          exactly the rows the test wrote, keeps every assertion at full strength, and cannot expire
+          again - where picking another hardcoded month only resets the same fuse.
+        acceptance:
+          - The assertion can only be satisfied by rows the test under test wrote, not by the seed.
+          - The full integration suite is green on a freshly migrated and seeded database.
+          - The fix does not weaken any assertion - Q1b test-integrity agrees.
+        progress: >-
+          DONE, carried on BACKOFFICE-102's branch. CLAUDE.md routes a genuine test defect to its
+          own `feature/BACKOFFICE-NN-testfix-<slug>` branch and that is where this belongs; the
+          session was pinned to a single branch and could not open one, so it is a separate,
+          clearly-labelled commit that reverts or cherry-picks on its own. Flagged for the reviewer
+          rather than folded in quietly.
+
+          Evidence, both directions on a fresh database: without the fix 226/227 with exactly the
+          CI failure; with it 227/227. Q1b test-integrity reports no weakening.
       - id: BACKOFFICE-96
         title: List endpoints accept an over-maximum limit and unvalidated enum filters
         status: pending
