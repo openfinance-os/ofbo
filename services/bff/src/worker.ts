@@ -57,7 +57,7 @@ import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profilin
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 import { LfiCadenceMonitor } from './lfi-reports/service.js'
 import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
-import { closeDuplicateSessionSignals } from './risk-signals/session-signal-backlog.js'
+import { closeDuplicateSessionSignals, closeSupersededCadenceSignals } from './risk-signals/session-signal-backlog.js'
 import { redactingLog } from './telemetry.js'
 import { fils, SCHEME_RATE_CARD_2026_06_02, type RateCard } from '@ofbo/billing'
 import {
@@ -152,7 +152,10 @@ async function configuredBillingProfiles(url: string, env: WorkerEnv): Promise<A
     const bankIds = env.MULTITENANT_DEMO === 'true' ? await store.activeTenantBankIds() : [fallbackBankId]
     if (bankIds.length === 0) return [{ bankId: fallbackBankId, rateCard: SCHEME_RATE_CARD_2026_06_02 }]
     const tenantService = new BillingTenantService({ configurations: store })
-    return Promise.all(bankIds.map(async (bankId) => {
+    // AWAITED, not returned: a bare `return Promise.all(...)` lets the `finally` below close the
+    // pool while these reads are still using it, and the daily cron threw on every run from
+    // 2026-08-17 until this was caught (worker-scheduled.int.spec.ts).
+    return await Promise.all(bankIds.map(async (bankId) => {
       const configuration = await store.configuration(bankId)
       if (!configuration) {
         if (env.MULTITENANT_DEMO === 'true') throw new Error(`active billing tenant ${bankId} has no configuration`)
@@ -384,12 +387,14 @@ export default {
       } finally {
         await pool.end()
       }
-      // BACKOFFICE-80 — drain the pre-dedupe duplicate super-admin session signals, one bounded
-      // batch per tick (idempotent; a no-op once drained). Best-effort: warmth is this tick's job.
+      // BACKOFFICE-80 / -67 — drain the pre-dedupe duplicate super-admin session signals and the
+      // superseded LFI cadence signals, one bounded batch each per tick (idempotent; a no-op once
+      // drained). Best-effort: warmth is this tick's job.
       const signalStore = new PgRiskMetricsStore(url, tenancy)
       const signalAudit = new PgAuditEmitter(url, tenancy)
       try {
         await closeDuplicateSessionSignals({ store: signalStore, audit: signalAudit }, crypto.randomUUID())
+        await closeSupersededCadenceSignals({ store: signalStore, audit: signalAudit }, crypto.randomUUID())
       } catch (e) {
         redactingLog()('superadmin_session_signal_backlog_failed', { error_name: (e as Error).name })
       } finally {
@@ -448,7 +453,12 @@ export default {
     // BACKOFFICE-67 — flag any login-only Nebras LFI report overdue against its cadence
     // (ITSM ticket + lfi_report_cadence_missed Risk signal).
     const lfiReports = new PgComplianceReportStore(url, tenancy, lineage)
-    const lfiCadenceMonitor = new LfiCadenceMonitor({ reports: lfiReports, itsm, riskSignals })
+    const lfiCadenceMonitor = new LfiCadenceMonitor({
+      reports: lfiReports,
+      itsm,
+      riskSignals,
+      openDedupKeys: () => riskMetrics.openDedupKeys('lfi_report_cadence_missed')
+    })
     // BACKOFFICE-65 — predictive liability forecast (regulated AI artefact): raise a
     // predictive_liability_forecast signal per high-probability class (deduped vs open
     // liability refs); -36 threshold monitor remains the deterministic fallback.

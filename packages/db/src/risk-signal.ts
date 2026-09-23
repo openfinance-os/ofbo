@@ -388,6 +388,44 @@ export class PgRiskMetricsStore {
     })
   }
 
+  /**
+   * Dedup keys of OPEN signals of one type — what a daily monitor checks so it does not raise the
+   * same unresolved condition again every run (BACKOFFICE-67's cadence monitor did: 16 a day).
+   */
+  async openDedupKeys(signalType: string): Promise<Set<string>> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT DISTINCT signal_data->>'dedup_key' AS k FROM risk_signal
+          WHERE signal_type = $1 AND status = 'open' AND signal_data->>'dedup_key' IS NOT NULL`,
+        [signalType]
+      )
+      return new Set(res.rows.map((r) => r.k as string))
+    })
+  }
+
+  /**
+   * OPEN signals of one type superseded by a newer open signal with the same dedup key — the
+   * repeats a monitor wrote before it deduped. The newest per key stays open (it carries the most
+   * recent summary). Oldest first, bounded, for a batch job.
+   */
+  async supersededOpenSignalIds(signalType: string, limit: number): Promise<string[]> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT id FROM (
+           SELECT id, created_at,
+                  row_number() OVER (PARTITION BY signal_data->>'dedup_key' ORDER BY created_at DESC, id DESC) AS rn
+             FROM risk_signal
+            WHERE signal_type = $1 AND status = 'open' AND signal_data->>'dedup_key' IS NOT NULL
+         ) ranked
+         WHERE rn > 1
+         ORDER BY created_at, id
+         LIMIT $2`,
+        [signalType, Math.min(Math.max(limit, 1), 500)]
+      )
+      return res.rows.map((r) => r.id as string)
+    })
+  }
+
   async close(): Promise<void> {
     await this.pool.end()
   }

@@ -111,4 +111,17 @@ describe('LfiCadenceMonitor (BACKOFFICE-67 headless missed-cadence)', () => {
     expect(riskSignals.signals).toHaveLength(16)
     expect(riskSignals.signals.every((s) => s.signal_type === 'lfi_report_cadence_missed')).toBe(true)
   })
+
+  // The monitor runs daily. Without this it wrote 16 more open signals every day a report stayed
+  // overdue — 897 of them on the hosted demo — which the executive dashboard then paged through.
+  it('does not re-raise (ticket or signal) while an open signal for that report is still unresolved', async () => {
+    const itsm = new FakeItsm()
+    const riskSignals = new FakeRisk()
+    const openDedupKeys = async () => new Set(['lfi-cadence:payments', 'lfi-cadence:billing'])
+    const out = await new LfiCadenceMonitor({ reports: emptyReports, itsm, riskSignals, openDedupKeys }).check('trace-2')
+    expect(out.filter((r) => r.overdue)).toHaveLength(16) // still reported as overdue
+    expect(riskSignals.signals).toHaveLength(14)
+    expect(itsm.tickets).toHaveLength(14)
+    expect(out.find((r) => r.report_type === 'payments')).toMatchObject({ overdue: true, ticketed: false, signalled: false })
+  })
 })

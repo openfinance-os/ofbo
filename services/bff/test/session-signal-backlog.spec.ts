@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredRiskSignal } from '@ofbo/db'
-import { closeDuplicateSessionSignals, type SessionSignalBacklogStore } from '../src/risk-signals/session-signal-backlog.js'
+import { closeDuplicateSessionSignals, closeSupersededCadenceSignals, type SessionSignalBacklogStore } from '../src/risk-signals/session-signal-backlog.js'
 import { InMemoryHighClassAuditSink, SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE } from '../src/high-class-audit.js'
 
 const signal = (id: string, status = 'open'): StoredRiskSignal => ({
@@ -58,6 +58,34 @@ describe('BACKOFFICE-80 — duplicate super-admin session signal backlog', () =>
     expect(await closeDuplicateSessionSignals({ store: s, audit }, 't', 2)).toBe(1)
     expect(await closeDuplicateSessionSignals({ store: s, audit }, 't', 2)).toBe(0)
     expect(audit.events).toHaveLength(5)
+  })
+
+  it('drains superseded LFI cadence signals the same way, under its own system principal', async () => {
+    const rows = [signal('a1b2c3d4-0000-4000-8000-000000000031'), signal('a1b2c3d4-0000-4000-8000-000000000032')]
+    const seen: string[] = []
+    const store = {
+      async supersededOpenSignalIds(signalType: string, limit: number) {
+        seen.push(signalType)
+        return rows.filter((r) => r.status === 'open').slice(0, limit).map((r) => r.id)
+      },
+      async transitionSignalStatus(id: string, from: string, to: string) {
+        const row = rows.find((r) => r.id === id && r.status === from)
+        if (!row) return null
+        row.status = to
+        return row
+      }
+    }
+    const audit = new InMemoryHighClassAuditSink()
+    expect(await closeSupersededCadenceSignals({ store, audit }, 't')).toBe(2)
+    expect(seen).toEqual(['lfi_report_cadence_missed'])
+    expect(audit.events).toHaveLength(2)
+    expect(audit.events[0]).toMatchObject({
+      acting_principal: 'system:lfi-cadence-signal-dedupe',
+      scope_used: SYSTEM_ACTOR_SCOPE,
+      response_status: SYSTEM_ACTOR_RESPONSE_STATUS,
+      request_body: { reason: 'superseded_lfi_cadence_signal', to_status: 'closed_no_action' }
+    })
+    expect(await closeSupersededCadenceSignals({ store, audit }, 't')).toBe(0)
   })
 
   it('leaves a signal an analyst triaged in the meantime alone, and audits nothing for it', async () => {

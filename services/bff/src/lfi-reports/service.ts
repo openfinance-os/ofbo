@@ -187,6 +187,13 @@ export interface LfiCadenceMonitorDeps {
   reports: Pick<ReportStore, 'list'>
   itsm?: Pick<ItsmPort, 'createTicket'>
   riskSignals?: LfiRiskSignalSink
+  /**
+   * Dedup keys of this monitor's signals that are still OPEN. An overdue report whose signal is
+   * still awaiting triage is not raised again — the monitor runs daily, and without this it wrote
+   * 16 more open signals (and ITSM tickets) every day a report stayed overdue. Omit to raise every
+   * run (tests / no store).
+   */
+  openDedupKeys?: () => Promise<Set<string>>
   now?: () => Date
 }
 
@@ -210,11 +217,13 @@ export class LfiCadenceMonitor {
 
   async check(traceId: string): Promise<LfiCadenceMonitorResult[]> {
     const statuses = await computeCadence(this.deps.reports, this.now())
+    const open = (await this.deps.openDedupKeys?.()) ?? new Set<string>()
     const out: LfiCadenceMonitorResult[] = []
     for (const s of statuses) {
       let ticketed = false
       let signalled = false
-      if (s.overdue) {
+      const dedupKey = `lfi-cadence:${s.report_type}`
+      if (s.overdue && !open.has(dedupKey)) {
         const summary = `LFI report '${s.report_type}' (${s.cadence}) ingest is overdue — last ingested ${s.last_ingested_at ?? 'never'}, due by ${s.next_due_at}.`
         if (this.deps.itsm) {
           await this.deps.itsm.createTicket({ type: 'lfi_report_cadence_missed', severity: 'high', team: 'compliance', summary }, { trace_id: traceId })
@@ -227,7 +236,7 @@ export class LfiCadenceMonitor {
             acting_principal: RUN_PRINCIPAL,
             summary,
             trace_id: traceId,
-            dedup_key: `lfi-cadence:${s.report_type}`,
+            dedup_key: dedupKey,
             context: { report_type: s.report_type, cadence: s.cadence, last_ingested_at: s.last_ingested_at, next_due_at: s.next_due_at }
           })
           signalled = true
