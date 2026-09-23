@@ -4,7 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { getDashboardKpis } from '../src/lib/dashboard.js'
 import { DashboardOverview } from '../src/components/dashboard-overview.js'
-import { getDashboardCharts } from '../src/lib/dashboard.js'
+import { getDashboardCharts, dashboardReadCache, allPendingApprovals } from '../src/lib/dashboard.js'
 
 afterEach(cleanup)
 
@@ -298,6 +298,48 @@ describe('getDashboardCharts', () => {
     const f = mockFetch({ runs: [], breaks: [], pending: [], risk: null })
     const c = await getDashboardCharts('tok', deps(f))
     expect(c.riskSeverity).toEqual([])
+  })
+})
+
+/**
+ * One dashboard render reads each source ONCE. The KPI card and the severity chart used to follow
+ * the risk-signals cursor independently — two full crawls of the same list per render — and the
+ * page then read pending approvals twice more for the four-eyes panel and the nav badge. On the
+ * hosted demo every one of those is a Worker → BFF → Postgres round trip, and the super-admin
+ * dashboard took ~40s. A shared read cache makes the render pay for each list once.
+ */
+describe('dashboard read sharing', () => {
+  it('reads the risk-signal and pending-approval lists once per render when the readers share a cache', async () => {
+    const inner = mockFetch({
+      runs: [],
+      breaks: [],
+      pending: [[{ approval_request_id: approvalId(1) }], [{ approval_request_id: approvalId(2) }]],
+      risk: [[{ severity: 'info' }], [{ severity: 'critical' }]]
+    })
+    const calls: string[] = []
+    const f = (async (url: string) => (calls.push(String(url)), inner(url))) as unknown as typeof fetch
+    const reads = { ...deps(f), traceId: 'trace-1', shared: dashboardReadCache() }
+    const [kpis, charts, pending] = await Promise.all([
+      getDashboardKpis('tok', P, reads),
+      getDashboardCharts('tok', reads),
+      allPendingApprovals('tok', reads)
+    ])
+    expect(calls.filter((u) => u.includes('/risk-signals'))).toHaveLength(2) // two pages, one crawl
+    expect(calls.filter((u) => u.includes('/approvals/pending'))).toHaveLength(2)
+    // every reader still sees the complete set
+    expect(kpis.find((k) => k.key === 'open-risk-signals')!.value).toBe('2')
+    expect(kpis.find((k) => k.key === 'pending-approvals')!.value).toBe('2')
+    expect(charts.riskSeverity.find((b) => b.label === 'Critical')!.count).toBe(1)
+    expect(pending.items).toHaveLength(2)
+  })
+
+  it('without a shared cache each reader still reads for itself', async () => {
+    const inner = mockFetch({ runs: [], breaks: [], pending: [], risk: [{ severity: 'info' }] })
+    const calls: string[] = []
+    const f = (async (url: string) => (calls.push(String(url)), inner(url))) as unknown as typeof fetch
+    await getDashboardKpis('tok', P, deps(f))
+    await getDashboardCharts('tok', deps(f))
+    expect(calls.filter((u) => u.includes('/risk-signals'))).toHaveLength(2)
   })
 })
 

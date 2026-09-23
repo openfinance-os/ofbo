@@ -35,7 +35,33 @@ export interface DashboardDeps {
    * ONE id covers the whole render rather than one per request.
    */
   traceId?: string
+  /**
+   * Reads shared across the readers of ONE render (see `dashboardReadCache`). Absent → each reader
+   * reads for itself, which is what a caller composing a single reader wants.
+   */
+  shared?: DashboardReadCache
 }
+
+/**
+ * The lists more than one dashboard reader needs, read once per render.
+ *
+ * The KPI card and the severity chart each crawled every page of open risk signals, and the page
+ * read pending approvals three times (KPI, four-eyes panel, nav badge). Each read is a Worker → BFF
+ * → Postgres round trip on the hosted demo; the super-admin dashboard, the one persona entitled to
+ * every source, took ~40s. Holding the in-flight promise here means the second reader joins the
+ * first read instead of repeating it — and both readers see the same set, so they cannot disagree.
+ */
+export interface DashboardReadCache {
+  openRiskSignals?: Promise<{ signals: OpenRiskSignal[]; truncated: boolean }>
+  pendingApprovals?: Promise<{ items: PendingApproval[]; truncated: boolean }>
+}
+
+/** A fresh cache for one render — never share one across requests (it holds a token's reads). */
+export function dashboardReadCache(): DashboardReadCache {
+  return {}
+}
+
+type PendingApproval = Awaited<ReturnType<typeof listPendingApprovals>>['approvals'][number]
 
 /**
  * One trace id per dashboard render, resolved once and threaded into every reader.
@@ -121,16 +147,32 @@ async function reconKpis(token: string, deps: DashboardDeps, trace: string): Pro
   return out
 }
 
+/**
+ * Every pending four-eyes approval the caller can action, following the cursor (bounded by
+ * `MAX_PAGES`). Shared through `deps.shared` so the KPI, the four-eyes panel and the nav badge of
+ * one render read the queue once.
+ */
+export function allPendingApprovals(
+  token: string,
+  deps: DashboardDeps = {}
+): Promise<{ items: PendingApproval[]; truncated: boolean }> {
+  const read = () => {
+    const api = { ...deps, traceId: deps.traceId ?? crypto.randomUUID() }
+    // Sending no `limit` means the BFF applies the spec default of 50, so this card read "50" as
+    // though that were the queue. `listPendingApprovals` already returned `next_cursor`; the
+    // dashboard destructured it away.
+    return collectPages(async (cursor) => {
+      const page = await listPendingApprovals(token, cursor ? { cursor } : {}, api)
+      return { items: page.approvals, next: page.next_cursor }
+    }, MAX_PAGES)
+  }
+  if (!deps.shared) return read()
+  return (deps.shared.pendingApprovals ??= read())
+}
+
 /** Pending four-eyes the caller can action (dynamic scope → available to every persona). */
 async function approvalsKpi(token: string, deps: DashboardDeps, trace: string): Promise<Kpi[]> {
-  const api = { ...deps, traceId: trace }
-  // Sending no `limit` means the BFF applies the spec default of 50, so this card read "50" as
-  // though that were the queue. `listPendingApprovals` already returned `next_cursor`; the
-  // dashboard destructured it away.
-  const { items: approvals, truncated } = await collectPages(async (cursor) => {
-    const page = await listPendingApprovals(token, cursor ? { cursor } : {}, api)
-    return { items: page.approvals, next: page.next_cursor }
-  }, MAX_PAGES)
+  const { items: approvals, truncated } = await allPendingApprovals(token, { ...deps, traceId: trace })
   return [
     {
       key: 'pending-approvals',
@@ -184,7 +226,16 @@ export type OpenRiskSignalContractGuard = AssertContract<KeysConformToContract<O
  * One reader for both callers, so the KPI count and the severity buckets cannot disagree about
  * what "open" means.
  */
-async function openRiskSignals(
+function openRiskSignals(
+  token: string,
+  deps: DashboardDeps,
+  trace: string
+): Promise<{ signals: OpenRiskSignal[]; truncated: boolean }> {
+  if (!deps.shared) return readOpenRiskSignals(token, deps, trace)
+  return (deps.shared.openRiskSignals ??= readOpenRiskSignals(token, deps, trace))
+}
+
+async function readOpenRiskSignals(
   token: string,
   deps: DashboardDeps,
   trace: string

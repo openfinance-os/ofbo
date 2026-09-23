@@ -2,6 +2,7 @@ import { getAdapter, profileFromConfig, type IdentityProviderPort } from '@ofbo/
 import { mintScopes } from '@ofbo/bff/auth'
 import { redactingLog } from '@ofbo/bff/telemetry'
 import { PgAuditEmitter, PgAuditReader, type AuditEventSummary, type AuthSinkEvent } from '@ofbo/db'
+import { databaseUrl } from './database-url'
 
 /**
  * M1-PORTAL-SHELL server library. The portal is the demo-profile BFF first
@@ -91,14 +92,14 @@ function resolveIdp(deps: PortalDeps): IdentityProviderPort {
  * original leak was never the construction, it was that nothing ever handed the connections back.
  *
  * The cost is a connect per audited operation, which is what the BFF pays on every request and
- * what auditing every sign-in costs on this runtime. A pooled connection at the edge is available
- * — the BFF's Hyperdrive binding — and is the follow-up for the latency, NOT for the correctness:
- * no configuration makes a socket survive a request boundary here.
+ * what auditing every sign-in costs on this runtime. That connect now goes through the Hyperdrive
+ * binding when it is present (./database-url.ts), which pools the far side of it — the fix for the
+ * latency, NOT for the correctness: no configuration makes a socket survive a request boundary here.
  */
 async function withAuditSink<T>(deps: PortalDeps, fn: (sink: AuditSink | null) => Promise<T>): Promise<T> {
   // An injected sink belongs to its caller: used, never closed. `null` is an explicit "no sink".
   if (deps.auditSink !== undefined) return fn(deps.auditSink)
-  const url = process.env.DATABASE_URL
+  const url = databaseUrl()
   if (!url) return fn(null)
   const emitter = new PgAuditEmitter(url, TENANCY)
   try {
@@ -112,7 +113,7 @@ async function withAuditSink<T>(deps: PortalDeps, fn: (sink: AuditSink | null) =
 
 async function withAuditSource<T>(deps: PortalDeps, fn: (source: AuditSource | null) => Promise<T>): Promise<T> {
   if (deps.auditSource !== undefined) return fn(deps.auditSource)
-  const url = process.env.DATABASE_URL
+  const url = databaseUrl()
   if (!url) return fn(null)
   const reader = new PgAuditReader(url, TENANCY)
   try {

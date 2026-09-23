@@ -43,9 +43,53 @@ export class PgRiskSignalEmitter {
   }
 
   async record(event: RiskSignalSinkEvent): Promise<void> {
+    await this.write(event, null)
+  }
+
+  /**
+   * BACKOFFICE-80 — write the signal unless one with the same `dedup_key` already exists since
+   * `sinceIso`; returns whether it wrote. This is what makes "once per super-admin session" hold on
+   * the deployed BFF, which builds its app (and the guardrail's in-memory map) per request — so the
+   * memory never saw a previous request, and every super-admin read wrote another open signal.
+   *
+   * A transaction-scoped advisory lock on the key serialises the check-then-insert: the dashboard's
+   * first render fans out several requests at once, and without it each would see "none yet".
+   *
+   * `onFirst` runs under that lock, only when this call is the one that will write, and BEFORE the
+   * insert: its result is merged into `signal_data`, and if it throws the transaction rolls back and
+   * nothing is recorded. The super-admin guardrail raises its ITSM ticket here, so a durable "already
+   * raised" can never exist for a session whose ticket failed.
+   */
+  async recordOnce(
+    event: RiskSignalSinkEvent & { dedup_key: string },
+    sinceIso: string,
+    onFirst?: () => Promise<Record<string, unknown>>
+  ): Promise<boolean> {
+    return this.write(event, sinceIso, onFirst)
+  }
+
+  private async write(
+    event: RiskSignalSinkEvent,
+    dedupSince: string | null,
+    onFirst?: () => Promise<Record<string, unknown>>
+  ): Promise<boolean> {
     const c = await this.pool.connect()
     try {
       await c.query(beginAppTx(this.config.bankId))
+      if (dedupSince !== null && event.dedup_key) {
+        await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`risk_signal:${event.dedup_key}`])
+        const seen = await c.query(
+          `SELECT 1 FROM risk_signal
+            WHERE signal_type = $1 AND signal_data->>'dedup_key' = $2 AND created_at >= $3
+            LIMIT 1`,
+          [event.signal_type, event.dedup_key, dedupSince]
+        )
+        if (seen.rowCount) {
+          await c.query('COMMIT')
+          return false
+        }
+      }
+      const extra = onFirst ? await onFirst() : {}
       await c.query(
         `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, client_id, signal_data, nebras_liability_event_ref)
          VALUES ($1, $2, $3, $4, 'open', $5, $6::jsonb, $7)`,
@@ -55,7 +99,7 @@ export class PgRiskSignalEmitter {
           event.signal_type,
           event.severity,
           event.client_id ?? null,
-          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id, ...(event.dedup_key ? { dedup_key: event.dedup_key } : {}), ...(event.context ?? {}) }),
+          JSON.stringify({ acting_principal: event.acting_principal, summary: event.summary, trace_id: event.trace_id, ...(event.dedup_key ? { dedup_key: event.dedup_key } : {}), ...(event.context ?? {}), ...extra }),
           event.nebras_liability_event_ref ?? null
         ]
       )
@@ -66,6 +110,11 @@ export class PgRiskSignalEmitter {
     } finally {
       c.release()
     }
+    await this.emitLineage(event)
+    return true
+  }
+
+  private async emitLineage(event: RiskSignalSinkEvent): Promise<void> {
     // BCBS 239 (M1-LINEAGE-RISK-SIGNAL): lineage at write time. Best-effort by
     // design — the regulated write itself never depends on catalogue availability.
     try {
@@ -290,6 +339,53 @@ export class PgRiskMetricsStore {
       return res.rows[0] ?? null
     })
     return row ? toSignalRecord(row) : null
+  }
+
+  /**
+   * BACKOFFICE-80 — the transition, applied only if the signal is still in `from`. The backlog job
+   * reads candidates and then closes them; an analyst may triage one in between, and a blind
+   * `SET status` would overwrite their decision and audit a `from_status` that was no longer true.
+   */
+  async transitionSignalStatus(id: string, from: string, to: string): Promise<StoredRiskSignal | null> {
+    const row = await this.asApp(async (c) => {
+      const res = await c.query(
+        `UPDATE risk_signal SET status = $3 WHERE id = $1 AND status = $2
+         RETURNING id, signal_type, severity, status, client_id, channel, signal_data, nebras_liability_event_ref, created_at`,
+        [id, from, to]
+      )
+      return res.rows[0] ?? null
+    })
+    return row ? toSignalRecord(row) : null
+  }
+
+  /**
+   * BACKOFFICE-80 — open "super-admin session active" signals written BEFORE the durable dedupe
+   * (no `dedup_key`) that are not the earliest for their principal within an 8-hour bucket, the
+   * guardrail's session window. Oldest first, bounded, so a scheduled job can drain them in batches.
+   */
+  async duplicateSuperAdminSessionSignalIds(limit: number): Promise<string[]> {
+    return this.asApp(async (c) => {
+      const res = await c.query(
+        `SELECT id FROM (
+           SELECT id, created_at,
+                  row_number() OVER (
+                    PARTITION BY signal_data->>'acting_principal', floor(extract(epoch FROM created_at) / 28800)
+                    ORDER BY created_at, id
+                  ) AS rn
+             FROM risk_signal
+            WHERE signal_type = 'agent_anomaly'
+              AND severity = 'info'
+              AND status = 'open'
+              AND signal_data->>'summary' = 'super-admin session active'
+              AND signal_data->>'dedup_key' IS NULL
+         ) ranked
+         WHERE rn > 1
+         ORDER BY created_at, id
+         LIMIT $1`,
+        [Math.min(Math.max(limit, 1), 500)]
+      )
+      return res.rows.map((r) => r.id as string)
+    })
   }
 
   async close(): Promise<void> {

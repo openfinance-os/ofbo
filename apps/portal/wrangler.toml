@@ -29,3 +29,11 @@ service = "ofbo-bff"
 
 [observability]
 enabled = true
+
+# Hyperdrive — the SAME config the BFF binds (services/bff/wrangler.toml, 'ofbo-db'). The portal's
+# direct store I/O (sign-in audit write, dashboard audit panel) used DATABASE_URL, paying a fresh
+# connect + TLS handshake from the edge to the database region on every render. lib/database-url.ts
+# prefers env.HYPERDRIVE.connectionString and falls back to DATABASE_URL when this is absent.
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "06ae60ce3e704d0984e0e9062ec5a964"

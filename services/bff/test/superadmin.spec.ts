@@ -40,6 +40,70 @@ describe('BACKOFFICE-80 — super-admin guardrails (code-enforced)', () => {
     expect(riskSignals.signals[0]!.severity).toBe('info')
   })
 
+  // The deployed BFF builds a fresh app per request (services/bff/src/worker.ts), so the guardrail's
+  // own memory is gone by the next request. "Once per session" has to hold across app instances that
+  // share only the durable sink — or every super-admin request writes another open signal, and the
+  // dashboard that pages through open signals slows down with every click.
+  it('stays once-per-session across app instances that share only the durable sink (per-request Worker)', async () => {
+    const riskSignals = new InMemoryRiskSignalSink()
+    const tickets: unknown[] = []
+    const itsm = { createTicket: async (input: unknown) => (tickets.push(input), { ticket_id: `itsm-${tickets.length}` }) }
+    const perRequestApp = () => createApp({ idp, audit: new InMemoryAuthAuditSink(), superadmin: { itsm, riskSignals } })
+    await perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })
+    await perRequestApp().request('/back-office/analytics/risk-view', { headers: SA })
+    // the dashboard's first render fans its reads out in parallel — each its own Worker request
+    await Promise.all(Array.from({ length: 5 }, () => perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })))
+    expect(riskSignals.signals).toHaveLength(1)
+    expect(tickets).toHaveLength(1)
+  })
+
+  it('raises again once the session window has elapsed', async () => {
+    const riskSignals = new InMemoryRiskSignalSink()
+    const tickets: unknown[] = []
+    const itsm = { createTicket: async (input: unknown) => (tickets.push(input), { ticket_id: `itsm-${tickets.length}` }) }
+    const perRequestApp = () =>
+      createApp({ idp, audit: new InMemoryAuthAuditSink(), superadmin: { itsm, riskSignals, sessionTtlMs: 0 } })
+    await perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })
+    await new Promise((r) => setTimeout(r, 5))
+    await perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })
+    expect(riskSignals.signals).toHaveLength(2)
+    expect(tickets).toHaveLength(2)
+  })
+
+  // The dedupe is durable, so it must never record "raised" for a session whose ITSM ticket failed —
+  // otherwise every later request in the window returns early and the ticket is never raised.
+  it('a failed ITSM ticket records no signal, and the next request raises both', async () => {
+    const riskSignals = new InMemoryRiskSignalSink()
+    const tickets: unknown[] = []
+    let itsmUp = false
+    const itsm = {
+      createTicket: async (input: unknown) => {
+        if (!itsmUp) throw new Error('ITSM unavailable')
+        tickets.push(input)
+        return { ticket_id: `itsm-${tickets.length}` }
+      }
+    }
+    const perRequestApp = () => createApp({ idp, audit: new InMemoryAuthAuditSink(), superadmin: { itsm, riskSignals } })
+    await perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })
+    expect(riskSignals.signals).toHaveLength(0)
+    expect(tickets).toHaveLength(0)
+    itsmUp = true
+    await perRequestApp().request('/back-office/reconciliation/runs', { headers: SA })
+    expect(riskSignals.signals).toHaveLength(1)
+    expect(tickets).toHaveLength(1)
+    expect((riskSignals.signals[0] as unknown as Record<string, unknown>).itsm_ticket_id).toBe('itsm-1')
+  })
+
+  // The dedup key is persisted in a 5-year-retained store: it is the verified subject, never anything
+  // derived from the bearer credential.
+  it('keys the durable dedupe by the verified subject, not the bearer token', async () => {
+    const { app, riskSignals } = build()
+    await app.request('/back-office/reconciliation/runs', { headers: SA })
+    const key = riskSignals.signals[0]!.dedup_key!
+    expect(key).toBe(`superadmin_session:${riskSignals.signals[0]!.acting_principal}`)
+    expect(key).not.toContain('demo-token')
+  })
+
   it('ordinary personas raise neither ticket nor signal', async () => {
     const { app, tickets, riskSignals } = build()
     await app.request('/back-office/reconciliation/runs', {
