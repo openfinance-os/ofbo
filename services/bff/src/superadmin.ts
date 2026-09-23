@@ -28,7 +28,11 @@ export interface RiskSignalSink {
    * since `sinceIso`, and returns whether it wrote. Optional — a sink without it falls back to
    * `record`, deduped only by the guardrail's in-memory window.
    */
-  recordOnce?(event: RiskSignalEvent & { dedup_key: string }, sinceIso: string): Promise<boolean>
+  recordOnce?(
+    event: RiskSignalEvent & { dedup_key: string },
+    sinceIso: string,
+    onFirst?: () => Promise<Record<string, unknown>>
+  ): Promise<boolean>
 }
 
 
@@ -47,15 +51,6 @@ export function isServiceAccountSubject(subject: string): boolean {
   return SERVICE_ACCOUNT_RE.test(subject)
 }
 
-function fnv1a(input: string): string {
-  let h = 0x811c9dc5
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i)
-    h = Math.imul(h, 0x01000193)
-  }
-  return (h >>> 0).toString(16)
-}
-
 export class SuperAdminGuardrails {
   private readonly seenSessions = new Map<string, number>()
   private readonly sessionTtlMs: number
@@ -65,44 +60,56 @@ export class SuperAdminGuardrails {
   }
 
   /**
-   * Once per session (token, TTL-bounded): informational ITSM ticket + Risk signal.
+   * Once per principal per session window (TTL-bounded): informational ITSM ticket + Risk signal.
    *
    * The in-memory map alone is not enough: the deployed BFF builds its app per request
    * (services/bff/src/worker.ts), so the map is empty on every request and every super-admin read
    * wrote another open signal — 1,775 of them on the hosted demo, which the dashboard then paged
-   * through on every render. The durable `recordOnce` on the sink is the once-per-session check that
-   * survives the request boundary; the map just saves it a round trip within one app instance. The
-   * signal is written first and the ticket only when it was actually new, so both stay at one.
+   * through on every render. The durable `recordOnce` on the sink is the check that survives the
+   * request boundary; the map just saves it a round trip within one app instance.
+   *
+   * Keyed by the verified SUBJECT, never by anything derived from the bearer token: the key is
+   * persisted in a 5-year-retained store, and credential-derived material has no business there.
+   * The subject is already the signal's own `acting_principal`, so the key discloses nothing new,
+   * and two principals can never share one.
+   *
+   * The ITSM ticket is raised INSIDE `recordOnce`, under its lock and before the signal row commits.
+   * A failed ticket call therefore leaves no row behind and the next request retries both — the
+   * durable dedupe can never mark a session as raised when only half of the guardrail ran.
    */
-  async onSession(subject: string, tokenKey: string, traceId: string): Promise<void> {
-    const sessionKey = fnv1a(tokenKey) // never hold the raw bearer token
+  async onSession(subject: string, _tokenKey: string, traceId: string): Promise<void> {
     const nowMs = Date.now()
-    const seen = this.seenSessions.get(sessionKey)
+    const seen = this.seenSessions.get(subject)
     if (seen !== undefined && nowMs - seen < this.sessionTtlMs) return
-    this.seenSessions.set(sessionKey, nowMs)
     const signal: RiskSignalEvent & { dedup_key: string } = {
       signal_type: 'agent_anomaly',
       severity: 'info',
       acting_principal: subject,
       summary: 'super-admin session active',
       trace_id: traceId,
-      dedup_key: `superadmin_session:${sessionKey}`
+      dedup_key: `superadmin_session:${subject}`
+    }
+    const raiseTicket = async (): Promise<Record<string, unknown>> => {
+      const { ticket_id } = await this.deps.itsm.createTicket(
+        {
+          type: 'superadmin_session',
+          severity: 'low',
+          team: 'risk_compliance',
+          summary: `Informational: super-admin session active (${subject}) — anomalous by definition (BACKOFFICE-80)`
+        },
+        { trace_id: traceId }
+      )
+      return { itsm_ticket_id: ticket_id }
     }
     if (this.deps.riskSignals.recordOnce) {
       const sinceIso = new Date(nowMs - this.sessionTtlMs).toISOString()
-      if (!(await this.deps.riskSignals.recordOnce(signal, sinceIso))) return
+      await this.deps.riskSignals.recordOnce(signal, sinceIso, raiseTicket)
     } else {
+      await raiseTicket()
       await this.deps.riskSignals.record(signal)
     }
-    await this.deps.itsm.createTicket(
-      {
-        type: 'superadmin_session',
-        severity: 'low',
-        team: 'risk_compliance',
-        summary: `Informational: super-admin session active (${subject}) — anomalous by definition (BACKOFFICE-80)`
-      },
-      { trace_id: traceId }
-    )
+    // Only once both halves landed (or were already recorded) — a failure above is retried.
+    this.seenSessions.set(subject, nowMs)
   }
 }
 

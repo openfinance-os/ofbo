@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import pg from 'pg'
 import { applyMigrations } from '../src/apply.js'
 import { PgAuditEmitter } from '../src/audit.js'
-import { PgRiskSignalEmitter } from '../src/risk-signal.js'
+import { PgRiskMetricsStore, PgRiskSignalEmitter } from '../src/risk-signal.js'
 
 const url = process.env.DATABASE_URL
 if (!url) throw new Error('DATABASE_URL is required for integration tests')
@@ -93,6 +93,61 @@ describe('BACKOFFICE-80 — marker column, review view, risk-signal emitter', ()
       expect(await risk.recordOnce(event, new Date(Date.now() + 1000).toISOString())).toBe(true)
     } finally {
       await Promise.all(emitters.map((e) => e.close()))
+    }
+  })
+
+  it('recordOnce runs onFirst under the lock: a throw records nothing, a result lands in signal_data', async () => {
+    const key = `superadmin_session:${crypto.randomUUID()}`
+    const event = {
+      signal_type: 'agent_anomaly',
+      severity: 'info',
+      acting_principal: 'demo:platform-super-admin',
+      summary: 'super-admin session active',
+      trace_id: TRACE,
+      dedup_key: key
+    }
+    const since = new Date(Date.now() - 60_000).toISOString()
+    await expect(risk.recordOnce(event, since, async () => { throw new Error('ITSM unavailable') })).rejects.toThrow('ITSM unavailable')
+    const none = await admin.query(`SELECT count(*)::int AS n FROM risk_signal WHERE signal_data->>'dedup_key' = $1`, [key])
+    expect(none.rows[0].n).toBe(0)
+
+    let calls = 0
+    const onFirst = async () => (calls++, { itsm_ticket_id: 'itsm-42' })
+    expect(await risk.recordOnce(event, since, onFirst)).toBe(true)
+    expect(await risk.recordOnce(event, since, onFirst)).toBe(false)
+    expect(calls).toBe(1) // not raised again once the signal exists
+    const row = await admin.query(`SELECT signal_data FROM risk_signal WHERE signal_data->>'dedup_key' = $1`, [key])
+    expect(row.rows[0].signal_data.itsm_ticket_id).toBe('itsm-42')
+  })
+
+  it('finds pre-dedupe duplicates (all but the earliest per principal per 8h window) and closes only still-open ones', async () => {
+    const principal = `demo:sa-backlog-${crypto.randomUUID()}`
+    const insert = async (createdAt: string, extra: Record<string, unknown> = {}) =>
+      (await admin.query(
+        `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, signal_data, created_at)
+         VALUES ($1, 'internal_retail', 'agent_anomaly', 'info', 'open', $2::jsonb, $3) RETURNING id`,
+        [BANK, JSON.stringify({ acting_principal: principal, summary: 'super-admin session active', trace_id: 't', ...extra }), createdAt]
+      )).rows[0].id as string
+    // 8h buckets are epoch-aligned: 00:00–08:00 UTC is one window
+    const first = await insert('2001-01-01T01:00:00Z')
+    const dupA = await insert('2001-01-01T02:00:00Z')
+    const dupB = await insert('2001-01-01T03:00:00Z')
+    const nextWindow = await insert('2001-01-01T09:00:00Z')
+    const deduped = await insert('2001-01-01T01:30:00Z', { dedup_key: 'superadmin_session:x' })
+
+    const store = new PgRiskMetricsStore(url!, { bankId: BANK, channel: 'internal_retail' })
+    try {
+      const ids = await store.duplicateSuperAdminSessionSignalIds(500)
+      expect(ids).toEqual(expect.arrayContaining([dupA, dupB]))
+      expect(ids).not.toEqual(expect.arrayContaining([first]))
+      for (const kept of [first, nextWindow, deduped]) expect(ids).not.toContain(kept)
+
+      expect((await store.transitionSignalStatus(dupA, 'open', 'closed_no_action'))?.status).toBe('closed_no_action')
+      // already moved on → no-op, so an analyst's triage is never overwritten
+      expect(await store.transitionSignalStatus(dupA, 'open', 'closed_no_action')).toBeNull()
+      expect(await store.duplicateSuperAdminSessionSignalIds(500)).not.toContain(dupA)
+    } finally {
+      await store.close()
     }
   })
 })

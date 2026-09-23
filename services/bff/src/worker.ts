@@ -57,6 +57,8 @@ import { TppBehaviourProfiler, DemoTppActivitySource } from './risk/tpp-profilin
 import { CertExpiryMonitor, DemoCertChainSource } from './ops/cert-expiry.js'
 import { LfiCadenceMonitor } from './lfi-reports/service.js'
 import { CaapRegistrationRecorder, DemoCaapEventSource } from './risk/caap-audit.js'
+import { closeDuplicateSessionSignals } from './risk-signals/session-signal-backlog.js'
+import { redactingLog } from './telemetry.js'
 import { fils, SCHEME_RATE_CARD_2026_06_02, type RateCard } from '@ofbo/billing'
 import {
   BILLING_RATE_CARD_SOURCES,
@@ -257,10 +259,7 @@ export default {
     const billingRevenueAssuranceStore = url ? new PgBillingRevenueAssuranceStore(url, tenancy, lineage) : undefined
     const billingProfitabilityStore = url ? new PgBillingProfitabilityStore(url, tenancy) : undefined
     const tenantBillingStore = url ? new PgTenantBillingServiceStore(url) : undefined
-    // The tenant configuration only feeds the approval expiry window, and an approval is only ever
-    // opened by a mutating request. Reading it on every GET cost each read a database round trip
-    // before the handler ran — the dashboard alone issues a dozen reads per render.
-    const tenantConfiguration = tenantBillingStore && request.method !== 'GET' && request.method !== 'HEAD'
+    const tenantConfiguration = tenantBillingStore
       ? await tenantBillingStore.configuration(tenancy.bankId)
       : null
     const billingProfitabilityService = billingProfitabilityStore && audit
@@ -384,6 +383,17 @@ export default {
         await pool.query('SELECT 1')
       } finally {
         await pool.end()
+      }
+      // BACKOFFICE-80 — drain the pre-dedupe duplicate super-admin session signals, one bounded
+      // batch per tick (idempotent; a no-op once drained). Best-effort: warmth is this tick's job.
+      const signalStore = new PgRiskMetricsStore(url, tenancy)
+      const signalAudit = new PgAuditEmitter(url, tenancy)
+      try {
+        await closeDuplicateSessionSignals({ store: signalStore, audit: signalAudit }, crypto.randomUUID())
+      } catch (e) {
+        redactingLog()('superadmin_session_signal_backlog_failed', { error_name: (e as Error).name })
+      } finally {
+        await Promise.allSettled([signalStore.close(), signalAudit.close()])
       }
       return
     }
