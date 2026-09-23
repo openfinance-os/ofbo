@@ -257,7 +257,10 @@ export default {
     const billingRevenueAssuranceStore = url ? new PgBillingRevenueAssuranceStore(url, tenancy, lineage) : undefined
     const billingProfitabilityStore = url ? new PgBillingProfitabilityStore(url, tenancy) : undefined
     const tenantBillingStore = url ? new PgTenantBillingServiceStore(url) : undefined
-    const tenantConfiguration = tenantBillingStore
+    // The tenant configuration only feeds the approval expiry window, and an approval is only ever
+    // opened by a mutating request. Reading it on every GET cost each read a database round trip
+    // before the handler ran — the dashboard alone issues a dozen reads per render.
+    const tenantConfiguration = tenantBillingStore && request.method !== 'GET' && request.method !== 'HEAD'
       ? await tenantBillingStore.configuration(tenancy.bankId)
       : null
     const billingProfitabilityService = billingProfitabilityStore && audit

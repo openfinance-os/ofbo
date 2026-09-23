@@ -40,7 +40,9 @@ vi.mock('../src/lib/portal.js', () => ({
 
 vi.mock('../src/lib/dashboard.js', () => ({
   getDashboardKpis: async () => [],
-  getDashboardCharts: async () => ({ reconTrend: [], riskSeverity: [] })
+  getDashboardCharts: async () => ({ reconTrend: [], riskSeverity: [] }),
+  allPendingApprovals: async () => ({ items: [], truncated: false }),
+  dashboardReadCache: () => ({})
 }))
 vi.mock('../src/lib/approvals.js', () => ({ listPendingApprovals: async () => ({ approvals: [], next_cursor: null }) }))
 vi.mock('../src/lib/shell.js', () => ({ shellBadges: async () => ({}) }))

@@ -43,9 +43,39 @@ export class PgRiskSignalEmitter {
   }
 
   async record(event: RiskSignalSinkEvent): Promise<void> {
+    await this.write(event, null)
+  }
+
+  /**
+   * BACKOFFICE-80 — write the signal unless one with the same `dedup_key` already exists since
+   * `sinceIso`; returns whether it wrote. This is what makes "once per super-admin session" hold on
+   * the deployed BFF, which builds its app (and the guardrail's in-memory map) per request — so the
+   * memory never saw a previous request, and every super-admin read wrote another open signal.
+   *
+   * A transaction-scoped advisory lock on the key serialises the check-then-insert: the dashboard's
+   * first render fans out several requests at once, and without it each would see "none yet".
+   */
+  async recordOnce(event: RiskSignalSinkEvent & { dedup_key: string }, sinceIso: string): Promise<boolean> {
+    return this.write(event, sinceIso)
+  }
+
+  private async write(event: RiskSignalSinkEvent, dedupSince: string | null): Promise<boolean> {
     const c = await this.pool.connect()
     try {
       await c.query(beginAppTx(this.config.bankId))
+      if (dedupSince !== null && event.dedup_key) {
+        await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`risk_signal:${event.dedup_key}`])
+        const seen = await c.query(
+          `SELECT 1 FROM risk_signal
+            WHERE signal_type = $1 AND signal_data->>'dedup_key' = $2 AND created_at >= $3
+            LIMIT 1`,
+          [event.signal_type, event.dedup_key, dedupSince]
+        )
+        if (seen.rowCount) {
+          await c.query('COMMIT')
+          return false
+        }
+      }
       await c.query(
         `INSERT INTO risk_signal (bank_id, channel, signal_type, severity, status, client_id, signal_data, nebras_liability_event_ref)
          VALUES ($1, $2, $3, $4, 'open', $5, $6::jsonb, $7)`,
@@ -66,6 +96,11 @@ export class PgRiskSignalEmitter {
     } finally {
       c.release()
     }
+    await this.emitLineage(event)
+    return true
+  }
+
+  private async emitLineage(event: RiskSignalSinkEvent): Promise<void> {
     // BCBS 239 (M1-LINEAGE-RISK-SIGNAL): lineage at write time. Best-effort by
     // design — the regulated write itself never depends on catalogue availability.
     try {

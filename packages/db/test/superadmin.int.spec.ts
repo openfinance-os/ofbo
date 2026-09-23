@@ -69,4 +69,30 @@ describe('BACKOFFICE-80 — marker column, review view, risk-signal emitter', ()
     expect(r.rows).toHaveLength(1)
     expect(r.rows[0]).toMatchObject({ signal_type: 'agent_anomaly', severity: 'info', status: 'open' })
   })
+
+  it('recordOnce writes one signal per dedup key per window — even under a concurrent fan-out', async () => {
+    const key = `superadmin_session:${crypto.randomUUID()}`
+    const event = {
+      signal_type: 'agent_anomaly',
+      severity: 'info',
+      acting_principal: 'demo:platform-super-admin',
+      summary: 'super-admin session active',
+      trace_id: TRACE,
+      dedup_key: key
+    }
+    const since = new Date(Date.now() - 60_000).toISOString()
+    // one emitter per "request", as the Worker constructs them
+    const emitters = Array.from({ length: 5 }, () => new PgRiskSignalEmitter(url!, { bankId: BANK, channel: 'internal_retail' }))
+    try {
+      const inserted = await Promise.all(emitters.map((e) => e.recordOnce(event, since)))
+      expect(inserted.filter(Boolean)).toHaveLength(1)
+      expect(await risk.recordOnce(event, since)).toBe(false)
+      const r = await admin.query(`SELECT count(*)::int AS n FROM risk_signal WHERE signal_data->>'dedup_key' = $1`, [key])
+      expect(r.rows[0].n).toBe(1)
+      // a window that starts after the existing signal lets the next session raise again
+      expect(await risk.recordOnce(event, new Date(Date.now() + 1000).toISOString())).toBe(true)
+    } finally {
+      await Promise.all(emitters.map((e) => e.close()))
+    }
+  })
 })

@@ -18,10 +18,17 @@ export interface RiskSignalEvent {
   acting_principal: string
   summary: string
   trace_id: string
+  dedup_key?: string
 }
 
 export interface RiskSignalSink {
   record(event: RiskSignalEvent): Promise<void>
+  /**
+   * Durable once-per-window write: records the signal unless one with the same `dedup_key` exists
+   * since `sinceIso`, and returns whether it wrote. Optional — a sink without it falls back to
+   * `record`, deduped only by the guardrail's in-memory window.
+   */
+  recordOnce?(event: RiskSignalEvent & { dedup_key: string }, sinceIso: string): Promise<boolean>
 }
 
 
@@ -57,13 +64,36 @@ export class SuperAdminGuardrails {
     this.sessionTtlMs = deps.sessionTtlMs ?? 8 * 60 * 60 * 1000
   }
 
-  /** Once per session (token, TTL-bounded): informational ITSM ticket + Risk signal. */
+  /**
+   * Once per session (token, TTL-bounded): informational ITSM ticket + Risk signal.
+   *
+   * The in-memory map alone is not enough: the deployed BFF builds its app per request
+   * (services/bff/src/worker.ts), so the map is empty on every request and every super-admin read
+   * wrote another open signal — 1,775 of them on the hosted demo, which the dashboard then paged
+   * through on every render. The durable `recordOnce` on the sink is the once-per-session check that
+   * survives the request boundary; the map just saves it a round trip within one app instance. The
+   * signal is written first and the ticket only when it was actually new, so both stay at one.
+   */
   async onSession(subject: string, tokenKey: string, traceId: string): Promise<void> {
     const sessionKey = fnv1a(tokenKey) // never hold the raw bearer token
     const nowMs = Date.now()
     const seen = this.seenSessions.get(sessionKey)
     if (seen !== undefined && nowMs - seen < this.sessionTtlMs) return
     this.seenSessions.set(sessionKey, nowMs)
+    const signal: RiskSignalEvent & { dedup_key: string } = {
+      signal_type: 'agent_anomaly',
+      severity: 'info',
+      acting_principal: subject,
+      summary: 'super-admin session active',
+      trace_id: traceId,
+      dedup_key: `superadmin_session:${sessionKey}`
+    }
+    if (this.deps.riskSignals.recordOnce) {
+      const sinceIso = new Date(nowMs - this.sessionTtlMs).toISOString()
+      if (!(await this.deps.riskSignals.recordOnce(signal, sinceIso))) return
+    } else {
+      await this.deps.riskSignals.record(signal)
+    }
     await this.deps.itsm.createTicket(
       {
         type: 'superadmin_session',
@@ -73,13 +103,6 @@ export class SuperAdminGuardrails {
       },
       { trace_id: traceId }
     )
-    await this.deps.riskSignals.record({
-      signal_type: 'agent_anomaly',
-      severity: 'info',
-      acting_principal: subject,
-      summary: 'super-admin session active',
-      trace_id: traceId
-    })
   }
 }
 
