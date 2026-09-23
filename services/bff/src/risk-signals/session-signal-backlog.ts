@@ -26,6 +26,7 @@ import { SYSTEM_ACTOR_RESPONSE_STATUS, SYSTEM_ACTOR_SCOPE, type HighClassAuditSi
  */
 
 const RUN_PRINCIPAL = 'system:superadmin-session-signal-dedupe'
+const CADENCE_RUN_PRINCIPAL = 'system:lfi-cadence-signal-dedupe'
 const FROM_STATUS = 'open'
 const TO_STATUS = 'closed_no_action'
 
@@ -46,6 +47,36 @@ export async function closeDuplicateSessionSignals(
   batchSize = 100
 ): Promise<number> {
   const ids = await deps.store.duplicateSuperAdminSessionSignalIds(batchSize)
+  return closeEach(deps, ids, RUN_PRINCIPAL, 'duplicate_superadmin_session_signal', traceId)
+}
+
+export interface SupersededSignalStore {
+  supersededOpenSignalIds(signalType: string, limit: number): Promise<string[]>
+  transitionSignalStatus(id: string, from: string, to: string): Promise<StoredRiskSignal | null>
+}
+
+/**
+ * BACKOFFICE-67 — the same drain for `lfi_report_cadence_missed`. The cadence monitor raised a new
+ * open signal for every overdue report on every daily run (897 on the hosted demo) until it learned
+ * to skip a report whose signal is still open. Closes all but the NEWEST open signal per report —
+ * the one carrying the latest due date — with the same per-signal system-actor audit.
+ */
+export async function closeSupersededCadenceSignals(
+  deps: { store: SupersededSignalStore; audit: HighClassAuditSink },
+  traceId: string,
+  batchSize = 100
+): Promise<number> {
+  const ids = await deps.store.supersededOpenSignalIds('lfi_report_cadence_missed', batchSize)
+  return closeEach(deps, ids, CADENCE_RUN_PRINCIPAL, 'superseded_lfi_cadence_signal', traceId)
+}
+
+async function closeEach(
+  deps: { store: Pick<SessionSignalBacklogStore, 'transitionSignalStatus'>; audit: HighClassAuditSink },
+  ids: string[],
+  principal: string,
+  reason: string,
+  traceId: string
+): Promise<number> {
   let closed = 0
   for (const id of ids) {
     const updated = await deps.store.transitionSignalStatus(id, FROM_STATUS, TO_STATUS)
@@ -53,7 +84,7 @@ export async function closeDuplicateSessionSignals(
     if (!updated) continue
     await deps.audit.emit({
       event_type: 'risk_signal_status_changed',
-      acting_principal: RUN_PRINCIPAL,
+      acting_principal: principal,
       acting_persona: 'system',
       scope_used: SYSTEM_ACTOR_SCOPE,
       request_trace_id: traceId,
@@ -62,7 +93,7 @@ export async function closeDuplicateSessionSignals(
         signal_type: updated.signal_type,
         from_status: FROM_STATUS,
         to_status: TO_STATUS,
-        reason: 'duplicate_superadmin_session_signal'
+        reason
       },
       response_status: SYSTEM_ACTOR_RESPONSE_STATUS
     })

@@ -37,3 +37,10 @@ enabled = true
 [[hyperdrive]]
 binding = "HYPERDRIVE"
 id = "06ae60ce3e704d0984e0e9062ec5a964"
+# Required whenever a Hyperdrive binding exists: `opennextjs-cloudflare deploy` (and `wrangler dev`)
+# stand up a LOCAL proxy of the bindings, and wrangler refuses to build one without a local
+# connection string — which failed the #351 deploy with "no local hyperdrive connection string".
+# Only the local proxy reads this; the deployed Worker uses the Hyperdrive config above. It is the
+# same local-only Postgres URL CI uses (.github/workflows/ci.yml) — miniflare rejects a URL without
+# a password — and points at nothing reachable outside a developer machine or CI runner.
+localConnectionString = "postgresql://postgres:postgres@localhost:5432/ofbo"
